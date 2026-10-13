@@ -1,5 +1,6 @@
 {
   "port": 18790,
+  "remote": { "enabled": false, "port": 18791 },
   "allowed_origins": [],
   "ollama": {
     "enabled": true,

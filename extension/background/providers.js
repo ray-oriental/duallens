@@ -1,6 +1,6 @@
 // Model providers. `chat` is the function the translator/queue call:
 //   chat({ profile, model, messages, signal }) -> Promise<string>   (assistant text)
-// kinds: 'gateway' (local OpenAI-compatible gateway, never sends a key), 'openai' (user endpoint,
+// kinds: 'gateway' (optional pairing Bearer credential), 'openai' (user endpoint,
 // Bearer key), 'mock' (no network; deterministic fake for tests and demos).
 // Resolve keys from injected local secrets at request time. Legacy transient profile keys are
 // accepted as an adapter input, never stored, logged or included in error text.
@@ -34,6 +34,13 @@ export function isLocalHost(hostname) {
   return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
 }
 
+export function isPairingHost(hostname) {
+  const h = String(hostname).toLowerCase();
+  if (h === '127.0.0.1' || h === 'localhost') return true;
+  const m = /^100\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
+  return !!m && Number(m[1]) >= 64 && Number(m[1]) <= 127 && Number(m[2]) <= 255 && Number(m[3]) <= 255;
+}
+
 // Returns a human-readable problem string, or null when the profile can be used.
 export function profileProblem(profile) {
   if (!profile || typeof profile !== 'object') return '没有可用的模型配置';
@@ -48,6 +55,10 @@ export function profileProblem(profile) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return '接口地址必须以 http:// 或 https:// 开头';
   if (url.username || url.password || url.search || url.hash) return '接口地址不能包含凭据或查询参数';
   if (!profile.model) return '尚未选择模型';
+  if (profile.kind === 'gateway' && profile.apiKey) {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(profile.apiKey)) return '配对令牌格式无效';
+    if (url.protocol !== 'http:' || !isPairingHost(url.hostname)) return '配对令牌仅发送至回环或 Tailscale IPv4 网关';
+  }
   if (profile.kind === 'openai') {
     const key = String(profile.apiKey || '');
     if (/[^\x20-\x7e]/.test(key)) return 'API key 含有非法字符';
@@ -62,7 +73,7 @@ function endpoint(profile, path) {
 
 function headersFor(profile) {
   const h = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (profile.kind === 'openai' && profile.apiKey) h.Authorization = `Bearer ${String(profile.apiKey).trim()}`;
+  if (['openai', 'gateway'].includes(profile.kind) && profile.apiKey) h.Authorization = `Bearer ${String(profile.apiKey).trim()}`;
   if (isOpenRouter(profile)) h['X-Title'] = 'DualLens';
   return h;
 }
@@ -144,8 +155,8 @@ export function createProviders({ fetchImpl, getSecret = async id => {
   const noJson = new Set();
   async function withSecret(profile) {
     // apiKey is accepted only as a transient legacy adapter input, never stored here.
-    if (profile?.kind !== 'openai') return profile;
-    return { ...profile, apiKey: await getSecret(profile.id) || profile.apiKey || '' };
+    if (!['openai', 'gateway'].includes(profile?.kind)) return profile;
+    return { ...profile, apiKey: await getSecret(profile.id) || (profile.kind === 'openai' ? profile.apiKey : '') || '' };
   }
 
   async function request(profile, { url, method, body, timeoutMs, signal }) {

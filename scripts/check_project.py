@@ -19,10 +19,10 @@ import zipfile
 PROJECT = Path(__file__).resolve().parent.parent
 ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.woff2', '.ttf', '.ico', '.txt', '.wasm'}
 BLOCKED = {'.git', '.cache', '.duallens', 'private', 'runtime', 'reference', 'duallens-ref', 'node_modules', '__pycache__', 'venv', '.venv', 'credentials', 'secrets', 'backups'}
-GATEWAY_FILES = ('gateway/__init__.py', 'gateway/duallens_gateway.py', 'gateway/run_hermes_proxy.py', 'gateway/Install-Startup.ps1')
+GATEWAY_FILES = ('gateway/__init__.py', 'gateway/duallens_gateway.py', 'gateway/qrcodegen.py', 'gateway/QR-LICENSE.txt', 'gateway/run_hermes_proxy.py', 'gateway/Install-Startup.ps1')
 PUBLIC_FILES = ('README.md', 'LICENSE', 'SECURITY.md', 'AGENTS.md', 'CONTRIBUTING.md', 'requirements-dev.txt', 'package.json', '.gitignore', '.gitattributes', 'CHANGELOG.md')
 # Add user documentation only through an explicit reviewed list; private research is never included.
-PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md', 'docs/COMICS.md', 'docs/PRIVACY.md', 'docs/store/permissions.md')
+PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/SETUP-ALL-DEVICES.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md', 'docs/releases/v0.2.0.md', 'docs/COMICS.md', 'docs/PRIVACY.md', 'docs/store/permissions.md')
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
 VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store)-v\d+(?:\.\d+){0,3}\.zip')
