@@ -40,6 +40,7 @@
     {
       "resources": [
         "content/*.js",
+        "platform/*.js",
         "shared/*.js"
       ],
       "matches": [
