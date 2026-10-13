@@ -1,5 +1,5 @@
 import { createOverlay } from '../content/overlay.js';
-import { mountPrivateSettingsForm } from './private-form.js';
+import { mountSettingsForm } from '../ui/forms/index.js';
 import { deepActiveElement } from '../content/util.js';
 
 const CSS = `
@@ -22,7 +22,7 @@ button { min-height: 44px; min-width: 44px; padding: 8px 14px; border: 1px solid
 
 const node = (tag, text) => { const el = document.createElement(tag); if (text) el.textContent = text; return el; };
 
-export function createSettingsPanel({ store, platform, mountForm = mountPrivateSettingsForm }) {
+export function createSettingsPanel({ store, platform, mountForm = mountSettingsForm }) {
   let ui = null, mounted = null, previous = null;
   let generation = 0;
   function close() {

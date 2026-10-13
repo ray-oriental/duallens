@@ -14,6 +14,7 @@ export function createExtensionPlatform(api = globalThis.chrome) {
   };
   const platform = {
     kind: 'extension', coarse, syncArea, localArea,
+    promptSecret() { return null; },
     // HTTP is only available in the worker. Content uses translator() messaging.
     http(req) {
       if (typeof document !== 'undefined') return Promise.reject(new Error('HTTP requires the extension service worker'));

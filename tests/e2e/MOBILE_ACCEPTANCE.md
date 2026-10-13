@@ -44,9 +44,10 @@ also creates an OpenRouter preset with a fake key through the shared form and ch
    focused field is translated. Password fields must remain untouched; editing during a request must cancel replacement.
 7. Open settings from the ball and Tampermonkey menu. On the phone it should fill the viewport;
    target/address/model/save/test controls must remain usable with the keyboard open. Close/reopen;
-   any previously saved key must never be backfilled. Use paste or ordinary ASCII typing in the private
-   key editor attached to the shared form; autofill/composition is deliberately discarded. Confirm new input
-   shows only bullets, Save clears it, and a connection test after reopening still uses the saved key.
+   API key area must show only presence status and set/clear buttons. Setting a key must open a native
+   browser dialog with an empty default, not a webpage input; cancellation must preserve the old key.
+   Confirm Save persists it, Clear plus Save removes it, and a connection test after reopening uses the saved key.
+   Backup passphrases must also use native dialogs; confirm the installed manager runs the script in its isolated DOM sandbox.
 8. Confirm changes survive reload and propagate to another tab. Visit a long public page and scroll
    from top to the actual bottom; confirm new content is translated without repeated insertion or visible stalls.
 9. Only after separately authorizing a real provider test, configure your own service and test it.

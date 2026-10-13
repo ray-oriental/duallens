@@ -108,6 +108,18 @@ def fill_shadow(page, label, value):
     }""", {'label': label, 'value': value})
 
 
+def secret_prompt(page, selector, value):
+    handled = []
+    def handle(dialog):
+        check(dialog.type == 'prompt' and dialog.default_value == '', 'secret prompt must be native and never prefilled')
+        handled.append(True)
+        if value is None: dialog.dismiss()
+        else: dialog.accept(value)
+    page.once('dialog', handle)
+    click_shadow(page, selector)
+    check(len(handled) == 1, 'native secret dialog was not shown')
+
+
 def wait_done(page, selector='#p-plain'):
     page.wait_for_function('(s) => document.querySelector(s)?.querySelector(\'dl-t[data-dl-state="done"]\')', arg=selector)
 
@@ -170,16 +182,12 @@ def secret_transport_case(page, base):
     }""")
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
-    # beforeinput is prevented: the key never becomes the value of the connected DOM input.
-    page.evaluate("""() => {
-      const el=__platformFixture.elements('#apiKey')[0];
-      for(const data of 'sk-test-not-real')el.dispatchEvent(new InputEvent('beforeinput',{inputType:'insertText',data,cancelable:true,bubbles:true}));
-    }""")
-    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value.includes('sk-test')") is False, 'key leaked into DOM value')
+    check(page.evaluate("__platformFixture.elements('#apiKey').length") == 0, 'userscript rendered a key input')
+    secret_prompt(page, '#set-key', 'sk-test-not-real')
     click_shadow(page, 'button[type=submit]')
     page.wait_for_function("!!__platformFixture.data('duallens:local')?.secrets?.custom")
     check(page.evaluate("JSON.stringify(__platformFixture.data('duallens:local')['settings.core']).includes('sk-test')") is False, 'key leaked into public settings')
-    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '', 'key editor did not clear')
+    check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '已设置', 'saved key status missing')
     click_shadow(page, '#test')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
     page.keyboard.press('Escape'); command(page, '翻译 / 恢复当前页面'); wait_done(page)
@@ -215,10 +223,21 @@ def openrouter_profile_case(page, base):
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
     page.evaluate("() => {const e=__platformFixture.elements('#providerPreset')[0];e.value='openrouter';e.dispatchEvent(new Event('change',{bubbles:true}));}")
     click_shadow(page, '#add-profile')
-    page.wait_for_function("__platformFixture.elements('#profile')[0].value==='openrouter'&&!__platformFixture.elements('#apiKey')[0].disabled")
-    page.evaluate("__platformFixture.elements('#apiKey')[0].focus()")
-    page.keyboard.type('sk-test-not-real')
-    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '•' * len('sk-test-not-real'), 'secret editor must render bullets')
+    page.wait_for_function("__platformFixture.elements('#profile')[0].value==='openrouter'&&!__platformFixture.elements('#set-key')[0].disabled")
+    check(page.evaluate("__platformFixture.elements('input[type=password]').length") == 0, 'userscript rendered a secret/password input')
+    # A hostile page hooks composed keyboard/paste events and replaces its window.prompt.
+    # The product must continue calling the native binding captured in its sandbox.
+    page.evaluate("""() => {
+      window.__secretAudit={inputEvents:0,pagePromptCalls:0};
+      for(const name of ['beforeinput','input','paste','keydown'])document.addEventListener(name,e=>{
+        if(name!=='keydown'||e.key.length===1)__secretAudit.inputEvents++;
+      },true);
+      window.prompt=()=>{__secretAudit.pagePromptCalls++;throw new Error('Page prompt must not be used');};
+    }""")
+    secret_prompt(page, '#set-key', None)
+    check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '未设置', 'cancel changed empty key')
+    secret_prompt(page, '#set-key', 'sk-test-not-real')
+    check(page.evaluate("__secretAudit.inputEvents===0&&__secretAudit.pagePromptCalls===0"), 'key input reached page event listeners or page prompt')
     assert_secret_private(page)
     click_shadow(page, '#load-models')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('获取到 3'))")
@@ -234,11 +253,13 @@ def openrouter_profile_case(page, base):
     for key in ['settings', 'settings.core', 'settings.glossary', 'settings.sites']:
         check('sk-test-not-real' not in json.dumps(saved[key]), 'key in public GM setting: ' + key)
     assert_secret_private(page)
-    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '', 'secret draft did not clear after Save')
+    check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '已设置', 'saved key status missing')
     page.keyboard.press('Escape')
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
-    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '', 'stored key backfilled into field')
+    check(page.evaluate("__platformFixture.elements('#apiKey').length") == 0, 'stored key editor appeared on reopen')
+    secret_prompt(page, '#set-key', None)
+    check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '已设置', 'cancel changed saved key')
     click_shadow(page, '#test')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
     assert_secret_private(page)
@@ -246,8 +267,20 @@ def openrouter_profile_case(page, base):
     fill_shadow(page, '目标语言', 'ja'); click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'unedited key overwritten')
-    click_shadow(page, '#export')
+    secret_prompt(page, '#export', '')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('已导出'))")
+    assert_secret_private(page)
+    secret_prompt(page, '#export', 'e2e backup passphrase')
+    page.wait_for_function("__platformFixture.elements('#backupText')[0].value.startsWith('duallens-config:v1:')")
+    click_shadow(page, '#clear-key'); click_shadow(page, '#save')
+    page.wait_for_function("__platformFixture.data('duallens:local').secrets.openrouter.apiKey===''")
+    check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '未设置', 'clear status missing')
+    # Cancellation preserves the cleared state; native passphrase import restores the key.
+    secret_prompt(page, '#import-button', None)
+    check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == '', 'cancel import changed key')
+    secret_prompt(page, '#import-button', 'e2e backup passphrase')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('已导入'))")
+    check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'encrypted import lost key')
     assert_secret_private(page)
     calls = page.evaluate('__platformFixture.calls')
     check(all(c['anonymous'] for c in calls), 'GM requests sent page cookies')
@@ -255,7 +288,53 @@ def openrouter_profile_case(page, base):
     check(all(c['authCorrect'] for c in calls if c['method'] == 'POST'), 'saved/draft key not resolved by GM transport')
     page.keyboard.press('Escape')
     check(page.evaluate("__platformFixture.elements('.dl-settings').length") == 0, 'destroy left shared form attached')
-    return 'shared OpenRouter preset: draft/test/save/reopen/export, 3-model chain, key only in GM secrets, no DOM/window/localStorage key'
+    return 'native sandbox dialogs: set/cancel/clear/reopen, backup roundtrip; hostile page prompt/event hooks see no key; GM-only secrets'
+
+
+def isolated_prompt_case(page, base):
+    ready(page, base)
+    # Remove the main-world test app, then poison page.prompt before loading the product
+    # in a real Chromium isolated world. This covers hostile hooks predating boot.
+    page.evaluate("__platformFixture.settings({siteRules:{never:['127.0.0.1']}})")
+    page.wait_for_function("!__platformFixture.rect('.ball')")
+    page.evaluate("""() => {
+      window.__secretAudit={inputEvents:0,pagePromptCalls:0};
+      for(const name of ['beforeinput','input','paste','keydown'])document.addEventListener(name,()=>__secretAudit.inputEvents++,true);
+      window.prompt=()=>{__secretAudit.pagePromptCalls++;throw Error('Host page prompt intercepted');};
+    }""")
+    client = page.context.new_cdp_session(page)
+    frame_id = client.send('Page.getFrameTree')['frameTree']['frame']['id']
+    world = client.send('Page.createIsolatedWorld', {'frameId': frame_id, 'worldName': 'duallens-test-sandbox'})['executionContextId']
+    def evaluate(expression):
+        result = client.send('Runtime.evaluate', {'expression': expression, 'contextId': world, 'returnByValue': True, 'userGesture': True})
+        check('exceptionDetails' not in result, 'isolated userscript evaluation failed')
+        return result.get('result', {}).get('value')
+    def wait(expression):
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if evaluate(expression): return
+            page.wait_for_timeout(50)
+        check(False, 'isolated userscript condition timed out')
+    evaluate(STUB + '\n' + (REPO / 'dist/duallens.user.js').read_text(encoding='utf-8'))
+    wait("__platformFixture.hasCommand('DualLens 设置')")
+    evaluate("__platformFixture.command('DualLens 设置')")
+    wait("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    evaluate("__platformFixture.elements('#providerPreset')[0].value='openrouter';__platformFixture.elements('#add-profile')[0].click()")
+    wait("!__platformFixture.elements('#set-key')[0].disabled")
+    dialogs = []
+    def accept(dialog):
+        check(dialog.type == 'prompt' and dialog.default_value == '', 'isolated native dialog is prefilled or wrong type')
+        dialogs.append(True); dialog.accept('sk-test-not-real')
+    page.once('dialog', accept)
+    evaluate("__platformFixture.elements('#set-key')[0].click()")
+    check(dialogs == [True], 'isolated world did not show a native prompt')
+    evaluate("__platformFixture.elements('#model')[0].value='a/mock:free';__platformFixture.elements('#model')[0].dispatchEvent(new Event('change',{bubbles:true}));__platformFixture.elements('#save')[0].click()")
+    wait("__platformFixture.data('duallens:local').secrets?.openrouter?.apiKey==='sk-test-not-real'")
+    check(evaluate("__platformFixture.elements('input[type=password]').length===0"), 'isolated form rendered a password input')
+    check(page.evaluate("__secretAudit.inputEvents===0&&__secretAudit.pagePromptCalls===0"), 'host page intercepted isolated secret input')
+    assert_secret_private(page)
+    client.detach()
+    return 'unchanged bundle in Chromium isolated world; page.prompt poisoned before boot; native dialog and GM secret save succeed without page events'
 
 
 def mobile_cases(page, base):
@@ -339,6 +418,7 @@ def main():
     check(bundle.is_file(), 'build dist/duallens.user.js first')
     cases = [('desktop', 1280, 800, False, desktop_cases), ('secret_transport', 1280, 800, False, secret_transport_case),
              ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
+             ('isolated_prompt', 1280, 800, False, isolated_prompt_case),
              ('mobile_375', 375, 812, True, mobile_cases), ('tablet_800', 800, 1280, True, mobile_cases)]
     if args.only: cases = [c for c in cases if any(o in c[0] for o in args.only)]
     if not cases: print('no matching cases'); return 2

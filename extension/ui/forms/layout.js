@@ -30,7 +30,7 @@ export const FORM_CSS = `
 @media(max-width:599px) { .dl-settings { padding:8px; width:100%; } .dl-settings .grid { grid-template-columns:1fr; } .dl-settings section { padding:12px; } .dl-settings .savebar { padding:8px; } }
 `;
 
-export function drawLayout(root) {
+export function drawLayout(root, { secretDialog = false } = {}) {
   const doc = root.ownerDocument;
   const el = (tag, text, attrs = {}) => {
     const n = doc.createElement(tag); if (text) n.textContent = text;
@@ -76,8 +76,17 @@ export function drawLayout(root) {
   p.grid.append(el('p', '', { id: 'provider-description', class: 'hint wide' }), el('a', '服务商说明 / 获取 key', { id: 'key-link', class: 'wide', target: '_blank', rel: 'noopener noreferrer' }));
   field(p.grid, 'profileName', '服务名称');
   field(p.grid, 'baseUrl', '兼容 API 基础地址', 'url');
-  const key = field(p.grid, 'apiKey', 'API key（仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
-  key.parentElement.id = 'key-row';
+  if (secretDialog) {
+    const row = el('div', '', { id: 'key-row', class: 'wide' });
+    row.append(el('p', 'API key（仅存本机）'), el('p', '未设置', { id: 'key-status', role: 'status' }));
+    const controls = el('div', '', { class: 'actions' }); row.append(controls);
+    button(controls, 'set-key', '设置 key'); button(controls, 'clear-key', '清除 key');
+    row.append(el('p', '在浏览器原生对话框中输入；修改后点击保存。', { class: 'hint' }));
+    p.grid.append(row);
+  } else {
+    const key = field(p.grid, 'apiKey', 'API key（仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
+    key.parentElement.id = 'key-row';
+  }
   field(p.grid, 'model', '模型标识', 'text', [], { list: 'models', autocomplete: 'off' });
   p.grid.append(el('datalist', '', { id: 'models' }));
   const actions = el('div', '', { class: 'actions wide' }); p.grid.append(actions);
@@ -105,7 +114,8 @@ export function drawLayout(root) {
   field(backup.grid, 'cacheEnabled', '缓存译文', 'checkbox');
   field(backup.grid, 'maxEntries', '缓存条数上限', 'number'); field(backup.grid, 'ttlDays', '缓存有效天数', 'number');
   backup.box.append(el('p', '', { id: 'cache-stats' })); button(backup.box, 'cache-clear', '清空译文缓存');
-  field(backup.grid, 'backupPassword', '备份口令（留空则导出不含 key 的明文）', 'password', [], { autocomplete: 'new-password' });
+  if (secretDialog) backup.box.append(el('p', '导出或导入加密配置时，浏览器原生对话框会询问口令；导出口令留空则生成不含 key 的明文。', { class: 'hint' }));
+  else field(backup.grid, 'backupPassword', '备份口令（留空则导出不含 key 的明文）', 'password', [], { autocomplete: 'new-password' });
   field(backup.grid, 'backupText', '配置文本（加密文件可在设备之间搬运）', 'textarea');
   const ba = el('div', '', { class: 'actions' }); backup.box.append(ba);
   button(ba, 'export', '导出配置'); button(ba, 'import-button', '导入配置文本');

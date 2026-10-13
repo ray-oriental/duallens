@@ -85,6 +85,17 @@ test('settings equality ignores object key order but preserves chain/glossary ar
   assert.equal(settingsEqual({ style: 'plain' }, { style: 'muted' }), false);
 });
 
+test('userscript secret prompt uses only the injected sandbox binding, always with an empty default', async () => {
+  const gm = fakeGM(), calls = [];
+  const platform = createUserscriptPlatform(gm, { promptImpl(label, value) { calls.push([label, value]); return 'sk-test-not-real'; } });
+  await platform.ready;
+  assert.equal(platform.promptSecret('API key'), 'sk-test-not-real');
+  assert.deepEqual(calls, [['API key', '']]);
+  assert.equal(await platform.settingsStore.getSecret('openai'), '');
+  assert.equal(createUserscriptPlatform(fakeGM(), { promptImpl: () => null }).promptSecret('API key'), null);
+  assert.equal(createExtensionPlatform({ storage: { local: memoryArea(), onChanged: event() }, runtime: {} }).promptSecret('API key'), null);
+});
+
 test('userscript migrates the transitional GM namespace once and retains newer local secrets', async () => {
   const gm = fakeGM();
   gm.values.set('duallens:sync', { settings: { targetLang: 'ja', provider: { active: 'mock' } } });

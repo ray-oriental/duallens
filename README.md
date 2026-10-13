@@ -50,7 +50,7 @@ Android Chrome 当前没有本项目可安装的扩展或用户脚本版本。�
 ### 首选示例：OpenRouter 免费模型
 
 1. 打开设置，在服务预设中选择「OpenRouter」并添加配置。地址预填 `https://openrouter.ai/api/v1`。
-2. 在 [OpenRouter](https://openrouter.ai/keys) 获取你自己的 API key，填入密钥框。
+2. 在 [OpenRouter](https://openrouter.ai/keys) 获取你自己的 API key。扩展设置页使用密钥框；用户脚本点击「设置 key」，在浏览器原生对话框中输入。
 3. 手动点击「获取模型」：列表只选输入、输出价格都为 0 的模型，优先支持 JSON mode 的候选；可调整推荐的 2–3 个不同厂商免费模型组成的链。
 4. 点击「测试连接」，确认返回测试译文后「保存设置」。获取列表和测试是由你主动发起的网络请求；未保存的 key 只是临时草稿。
 
@@ -60,7 +60,7 @@ Android Chrome 当前没有本项目可安装的扩展或用户脚本版本。�
 
 可添加 DeepSeek、硅基流动、智谱、月之暗面、OpenAI、Google Gemini、Groq、交大、Ollama 或自定义预设。填写你有权使用的服务的 base URL（通常以 `/v1` 结尾）、模型名和 API key。交大预设直接使用你自己的 key，不依赖本机中转。接口需支持非流式 `/chat/completions` 和纯文本 messages。不支持 JSON mode 的端点可关闭该选项；400 格式错误也会去掉格式参数重试一次。备选链可跨服务配置。
 
-扩展 API key 只保存在当前浏览器的 `chrome.storage.local`；用户脚本只保存在 Tampermonkey 的 GM 私有存储。非机密扩展配置使用 `chrome.storage.sync`，超限时整组回退本机并显示「此设备未同步」。明文导出不含 key；只有主动填写口令的加密导出包含 key，可在设备之间搬配置。用户脚本密钥框输入显示圆点、保存清空、重开不回填已存 key。网页文本将发送给你选择的服务；在私密页面使用前应明确该服务的数据处理方式。
+扩展 API key 只保存在当前浏览器的 `chrome.storage.local`；用户脚本只保存在 Tampermonkey 的 GM 私有存储。非机密扩展配置使用 `chrome.storage.sync`，超限时整组回退本机并显示「此设备未同步」。明文导出不含 key；只有主动填写口令的加密导出包含 key，可在设备之间搬配置。用户脚本只显示 key 的已设置/未设置状态及设置、清除按钮；key 与备份口令均在原生对话框中输入，默认不回填旧值，取消保留原值，密钥修改点击保存后生效。网页文本将发送给你选择的服务；在私密页面使用前应明确该服务的数据处理方式。
 
 ### 本机网关与 Ollama（桌面端可选）
 
