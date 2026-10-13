@@ -10,7 +10,11 @@ import { createHandlers } from '../background/handlers.js';
 import { toErrorInfo } from '../shared/errors.js';
 import { looksLikeTarget } from '../shared/lang.js';
 
-export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse = false } = {}) {
+// Capture the native binding from the userscript's DOM sandbox before any awaits.
+// Never resolve window.prompt/unsafeWindow.prompt from the host-page realm.
+const sandboxPrompt = typeof prompt === 'function' ? prompt.bind(globalThis) : null;
+
+export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse = false, promptImpl = sandboxPrompt } = {}) {
   const localArea = createGMStorageArea(gm, 'duallens:local');
   // GM is private per-script storage, not browser sync. Both v2 areas share one record.
   const syncArea = localArea;
@@ -18,6 +22,7 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
     kind: 'userscript', coarse, syncArea, localArea,
     http: createGMHttp(gm.xmlhttpRequest),
     openSettings, valid: () => true,
+    promptSecret(label) { return promptImpl ? promptImpl(String(label), '') : null; },
     registerCommand(_id, label, handler) { gm.registerMenuCommand(label, handler); },
     async detectLanguage(text) {
       for (const lang of ['ja', 'ko', 'zh-CN', 'ru', 'ar', 'th', 'en']) {

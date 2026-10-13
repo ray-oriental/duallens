@@ -62,7 +62,7 @@ The browser uses headless=False plus --headless=new to load extensions. Headless
 
 ## Userscript runner
 
-`run_userscript_e2e.py` runs the unchanged generated userscript without an extension. A test-only GM transport/storage/menu stub and closed-shadow instrumentation exercise desktop translation, DOM-identical restore, translation-only, selection, shared settings and dynamic/SPA changes. Secret-transport and new OpenRouter-preset cases check bullet editing, no key backfill, local-only secrets, explicit mocked discovery/testing and no key in page storage/DOM/window properties.
+`run_userscript_e2e.py` runs the unchanged generated userscript without an extension. A test-only GM transport/storage/menu stub and closed-shadow instrumentation exercise desktop translation, DOM-identical restore, translation-only, selection, shared settings and dynamic/SPA changes. Secret-transport and OpenRouter-preset cases accept native prompts through Playwright dialog handlers, check set/cancel/clear/reopen and encrypted backups, and assert there are no secret input fields or key values in page storage/DOM/window properties. An additional case loads the unchanged bundle into a real Chromium isolated world after the host page overrides its prompt and installs document input listeners; neither hook may receive the key.
 
 Touch cases run at 375×812 and 800×1280 with a coarse pointer. They verify a cancellable 500ms hold, selection controls below the selection, floating-ball drag, focused-input translation, full-screen narrow settings and full long-page scroll/translation metrics. Reported long-task measurements are synthetic measurements, not guarantees for every website/device. The runner never makes a real model call and exits 1 on failure, 2 on an empty filter.
 

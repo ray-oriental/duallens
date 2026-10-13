@@ -77,8 +77,10 @@ Android Edge + Tampermonkey                         │
   比较设置时忽略对象键顺序、保留数组顺序；无实际变化时保留悬停译文。
 - `provider.chain = [{ profileId, model }, …]` 表示跨 profile 备选链；其首项与兼容 active/model 对齐。
   providers 与 translator 在请求时通过注入的 `getSecret` 读取密钥，不把 key 放进内容脚本配置。
-- 共享表单提供预设向导、免费模型发现、测试、站点规则、术语及加密备份。用户脚本通过私有输入适配器
-  在闭包中保管草稿，页面输入框只显示圆点，保存清空、重开不回填已存 key；关闭面板清理草稿与监听器。
+- 共享表单提供预设向导、免费模型发现、测试、站点规则、术语及加密备份。`platform.promptSecret(label)`
+  在用户脚本隔离沙箱中调用启动时捕获的原生 `prompt`，默认值永远为空，取消返回 null，不调用网页的 `window.prompt`。
+  用户脚本只显示 key 的已设置/未设置状态及设置、清除按钮，不渲染 key 或备份口令输入框；草稿留在闭包中，
+  点击保存才写入 GM secrets。扩展平台该方法返回 null，其独立 options 页面保留原有 password 表单。
   明文导出递归去掉机密；带口令时使用 PBKDF2-SHA256（310,000 次）与 AES-GCM，
   格式 `duallens-config:v1:<base64url(salt|iv|密文)>`。密钥与口令不进日志。
 
