@@ -11,6 +11,8 @@
 
 ## 下载与安装
 
+电脑 Chrome/Edge、第二台电脑、Android Edge + Tampermonkey、直连模型和可选网关配对，请看[全设备设置指南](docs/SETUP-ALL-DEVICES.md)。
+
 仅浏览器使用下载扩展包；需要本机网关或离线开发时下载 portable 完整源码包，或克隆本仓库。
 
 从 [Releases](https://github.com/ray-oriental/duallens/releases) 下载 `duallens-extension-v0.1.0.zip`，解压后：

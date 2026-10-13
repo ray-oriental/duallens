@@ -1,8 +1,12 @@
-"""Loopback-only OpenAI-compatible gateway. No prompts or credentials are logged."""
+"""OpenAI-compatible gateway; loopback by default, optional authenticated Tailscale listener."""
 from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import hmac
+import ipaddress
+import secrets
+import shutil
 import ctypes
 import json
 import os
@@ -22,6 +26,7 @@ HOME = Path.home() / ".duallens"
 MAX_BODY = 1024 * 1024
 DEFAULTS = {
     "port": 18790, "allowed_origins": [],
+    "remote": {"enabled": False, "port": 18791},
     "sjtu": {"enabled": False, "url": "http://127.0.0.1:18765", "models": ["deepseek-chat"]},
     "hermes": {"enabled": False, "url": "http://127.0.0.1:8645", "models": [
         "inclusionai/ling-3.1-flash", "meituan/longcat-2.0:free", "upstage/solar-mini4:free"]},
@@ -59,6 +64,139 @@ def config_load(home=HOME):
         except (OSError, ValueError, KeyError):
             raise ValueError("Missing extension identity; configure explicit allowed_origins") from None
     return conf
+
+def tailscale_identity():
+    """Ask the local Tailscale daemon; never accept a configured arbitrary bind address."""
+    exe = shutil.which("tailscale")
+    if not exe and os.name == "nt":
+        for candidate in (Path(r"D:\application\tailscale\tailscale.exe"),
+                          Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tailscale/tailscale.exe"):
+            if candidate.is_file():
+                exe = str(candidate)
+                break
+    if not exe:
+        raise ValueError("Tailscale is not installed or available")
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    try:
+        result = subprocess.run([exe, "ip", "-4"], capture_output=True, text=True, timeout=5, creationflags=flags)
+        addresses = result.stdout.strip().splitlines()
+        if result.returncode or len(addresses) != 1 or not is_tailscale_ip(addresses[0]):
+            raise ValueError("No local Tailscale IPv4 address")
+        name = ""
+        status = subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=5, creationflags=flags)
+        if not status.returncode:
+            data = json.loads(status.stdout)
+            candidate = data.get("Self", {}).get("DNSName", "").rstrip(".").lower()
+            if re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", candidate) and candidate.endswith(".ts.net"):
+                name = candidate
+        return addresses[0], name
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        raise ValueError("Tailscale IPv4 discovery failed; remote listener stays closed") from None
+
+def is_tailscale_ip(value):
+    try:
+        return ipaddress.ip_address(value) in ipaddress.ip_network("100.64.0.0/10")
+    except ValueError:
+        return False
+
+def read_remote_token(home):
+    path = home / "remote_token"
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 128:
+            return ""
+        token = path.read_text(encoding="ascii").strip()
+        return token if re.fullmatch(r"[A-Za-z0-9_-]{43}", token) else ""
+    except (OSError, UnicodeError):
+        return ""
+
+def pair(home=HOME, rotate=False, config=None, discover=tailscale_identity, output=print):
+    """Only this explicit terminal command displays the pairing credential."""
+    home.mkdir(parents=True, exist_ok=True)
+    path = home / "remote_token"
+    if path.is_symlink():
+        raise ValueError("remote_token must be a regular private file")
+    token = read_remote_token(home)
+    if rotate or not token:
+        token = secrets.token_urlsafe(32)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+        with os.fdopen(os.open(path, flags, 0o600), "w", encoding="ascii") as fh:
+            fh.write(token)
+        if os.name != "nt":
+            path.chmod(0o600)
+    conf = config or config_load(home)
+    urls = ["http://127.0.0.1:" + str(conf["port"]) + "/v1"]
+    try:
+        address, _ = discover()
+        if not is_tailscale_ip(address):
+            raise ValueError("Invalid Tailscale IPv4")
+        urls.append("http://" + address + ":" + str(conf["remote"]["port"]) + "/v1")
+    except ValueError:
+        output("Tailscale unavailable: USB pairing only.")
+    payload = json.dumps({"urls": urls, "token": token}, separators=(",", ":"))
+    text = "duallens-pair:v1:" + base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    # Import lazily so normal serving is independent of terminal rendering.
+    try:
+        from gateway.qrcodegen import QrCode
+    except ModuleNotFoundError:
+        from qrcodegen import QrCode
+    qr = QrCode.encode_text(text, QrCode.Ecc.LOW)
+    output("Pairing grants access to enabled backends. Keep this terminal private; pair --rotate revokes old tokens.")
+    output(text)
+    # Two square modules per terminal cell, with a four-module quiet zone.
+    for y in range(-4, qr.get_size() + 4):
+        output("\033[30;47m" + "".join("██" if qr.get_module(x, y) else "  " for x in range(-4, qr.get_size() + 4)) + "\033[0m")
+    return text
+
+def backend_status(config, request=None):
+    # Defined above the transport; resolve it at call time.
+    request = request or loopback_request
+    states = {}
+    for name in ("sjtu", "hermes", "ollama"):
+        try:
+            request(local_url(config[name]["url"]) + ("/health" if name == "sjtu" else "/v1/models"), timeout=2)
+            states[name] = True
+        except (GatewayError, OSError, ValueError):
+            states[name] = False
+    npm = Path(os.environ.get("APPDATA", str(Path.home() / "AppData/Roaming"))) / "npm/node_modules"
+    states["claude"] = (npm / "@anthropic-ai/claude-code/bin/claude.exe").is_file() or bool(shutil.which("claude"))
+    states["codex"] = (npm / "@openai/codex/bin/codex.js").is_file() or bool(shutil.which("codex"))
+    return states
+
+def setup(home=HOME, ask=input, output=print, probe=backend_status):
+    conf = config_load(home)
+    states = probe(conf)
+    for name, available in states.items():
+        output(name + (": available (login not checked)" if available else ": unavailable"))
+        answer = ask("Enable " + name + "? [y/N] ").strip().lower()
+        conf[name]["enabled"] = answer in ("y", "yes")
+    # Setup never enables remote access; explicit local config is required.
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "gateway.json").write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
+    output("Saved gateway.json. Restart gateway to apply; remote access was not enabled by setup.")
+
+def listener_reachable(address, port):
+    """TCP-only probe: does not read a token or consume an authentication failure."""
+    if not is_tailscale_ip(address) or isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        return False
+    try:
+        with socket.create_connection((address, port), timeout=2):
+            return True
+    except OSError:
+        return False
+
+def status(home=HOME, output=print, probe=backend_status, discover=tailscale_identity, listener=listener_reachable):
+    conf = config_load(home)
+    for name, available in probe(conf).items():
+        output(name + ": " + ("enabled" if conf[name]["enabled"] else "disabled") +
+               ", " + ("available (login not checked)" if available else "unavailable"))
+    try:
+        address, _ = discover()
+    except ValueError:
+        address = "unavailable"
+    reachable = listener(address, conf["remote"]["port"]) if conf["remote"]["enabled"] and is_tailscale_ip(address) else False
+    output("remote: " + ("configured enabled" if conf["remote"]["enabled"] else "disabled") +
+           ", Tailscale IPv4 " + address + ", port " + str(conf["remote"]["port"]) +
+           ("; TCP reachable (identity/auth not checked)" if reachable else "; no reachable configured listener"))
 
 def local_url(value):
     url = urllib.parse.urlsplit(value)
@@ -137,6 +275,7 @@ class Gateway:
         self.home, self.config, self.request = home, config or config_load(home), request
         self.lock = threading.Lock()
         self.cooldown, self.usage = {}, {}
+        self.auth_failures = {}
         self.limits = {name: threading.BoundedSemaphore(1 if name in ("claude", "codex") else 2)
                        for name in ("sjtu", "hermes", "ollama", "claude", "codex")}
         self.large_model_lock = threading.BoundedSemaphore(1)
@@ -146,6 +285,34 @@ class Gateway:
             self.usage = json.loads((self.home / "usage.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
+
+    def authenticate(self, ip, authorization, required=False):
+        if not required and not authorization:
+            return False
+        now = time.monotonic()
+        with self.lock:
+            failures, until = self.auth_failures.get(ip, ([], 0))
+            if until > now:
+                raise GatewayError(429, "pairing_rate_limited", "Pairing authentication cooling down", retry_seconds(until - now))
+            expected = read_remote_token(self.home)
+            supplied = authorization[0][7:] if len(authorization) == 1 and authorization[0].startswith("Bearer ") else ""
+            valid = bool(expected and supplied and hmac.compare_digest(expected.encode("ascii"), supplied.encode("utf-8")))
+            if valid:
+                return True
+            if required or authorization:
+                failures = [t for t in failures if t > now - 60] + [now]
+                until = now + 600 if len(failures) > 10 else 0
+                # Bound metadata memory; expired entries carry no authentication information.
+                if len(self.auth_failures) >= 4096 and ip not in self.auth_failures:
+                    self.auth_failures = {key: value for key, value in self.auth_failures.items()
+                                          if value[1] > now or (value[0] and value[0][-1] > now - 60)}
+                    if len(self.auth_failures) >= 4096:
+                        raise GatewayError(429, "pairing_rate_limited", "Pairing authentication capacity reached", 600)
+                self.auth_failures[ip] = (failures, until)
+                if until:
+                    raise GatewayError(429, "pairing_rate_limited", "Pairing authentication cooling down", 600)
+                raise GatewayError(401, "pairing_required", "Valid pairing token required")
+            return False
 
     def metadata(self, model, chars, started, status):
         record = {"at": int(time.time()), "model": model, "chars": chars,
@@ -334,13 +501,26 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
 
+    def __getattr__(self, name):
+        if name.startswith("do_"):
+            return self.unsupported
+        raise AttributeError(name)
+
     def guard(self):
         hosts = self.headers.get_all("Host", [])
-        if len(hosts) != 1 or hosts[0] not in ("127.0.0.1:" + str(self.server.server_port),
-                                              "localhost:" + str(self.server.server_port)):
-            raise GatewayError(403, "forbidden_host", "Loopback Host required")
+        remote = getattr(self.server, "remote", False)
+        paired = self.server.gateway.authenticate(self.client_address[0], self.headers.get_all("Authorization", []), required=remote)
+        allowed_hosts = getattr(self.server, "allowed_hosts", (
+            "127.0.0.1:" + str(self.server.server_port), "localhost:" + str(self.server.server_port)))
+        if len(hosts) != 1 or (hosts[0].lower() if remote else hosts[0]) not in allowed_hosts:
+            raise GatewayError(403, "forbidden_host", "Exact listener Host required")
         origins = self.headers.get_all("Origin", [])
         origin = origins[0] if origins else None
+        if paired:
+            if len(origins) > 1:
+                raise GatewayError(403, "forbidden_origin", "One Origin required")
+            self.allowed_origin = origin
+            return
         if len(origins) > 1 or (origin is not None and not re.fullmatch(r"chrome-extension://[a-p]{32}", origin)):
             raise GatewayError(403, "forbidden_origin", "Browser extension Origin required")
         allowed = self.server.gateway.config.get("allowed_origins", [])
@@ -371,6 +551,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         try:
             self.guard()
+            if self.path not in ("/health", "/v1/models", "/v1/chat/completions"):
+                raise GatewayError(404, "not_found", "Unknown path")
             if not self.allowed_origin:
                 raise GatewayError(403, "forbidden_origin", "Origin required")
             if self.headers.get("Access-Control-Request-Method") not in ("GET", "POST"):
@@ -428,25 +610,74 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self.error(GatewayError(500, "internal_error", "Gateway internal error"))
 
+    def unsupported(self):
+        try:
+            self.guard()
+            raise GatewayError(405, "method_not_allowed", "Method not allowed")
+        except GatewayError as exc:
+            self.error(exc)
+
+    do_HEAD = do_PUT = do_PATCH = do_DELETE = do_TRACE = do_CONNECT = unsupported
+
 def make_server(port=18790, gateway=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server.gateway = gateway or Gateway()
     return server
 
+def make_remote_server(gateway, discover=tailscale_identity):
+    conf = gateway.config.get("remote", {})
+    if conf.get("enabled") is not True:
+        raise ValueError("Remote listener is disabled")
+    address, name = discover()
+    if not is_tailscale_ip(address):
+        raise ValueError("Remote listener requires a local Tailscale IPv4 address")
+    port = conf.get("port", 18791)
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValueError("Invalid remote port")
+    if not read_remote_token(gateway.home):
+        raise ValueError("Run pair before enabling the remote listener")
+    server = ThreadingHTTPServer((address, port), Handler)
+    server.daemon_threads = True
+    server.gateway, server.remote = gateway, True
+    server.allowed_hosts = {address + ":" + str(port)}
+    if name and re.fullmatch(r"[a-z0-9.-]+\.ts\.net", name):
+        server.allowed_hosts.add(name + ":" + str(port))
+    return server
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["serve"])
+    parser.add_argument("command", choices=["serve", "pair", "setup", "status"])
     parser.add_argument("--port", type=int)
+    parser.add_argument("--rotate", action="store_true")
     opts = parser.parse_args()
+    if opts.command != "serve":
+        if opts.command == "pair":
+            pair(rotate=opts.rotate)
+        elif opts.command == "setup":
+            setup()
+        else:
+            status()
+        return
     gateway = Gateway()
     server = make_server(opts.port if opts.port is not None else int(gateway.config["port"]), gateway)
+    remote = None
+    try:
+        if gateway.config.get("remote", {}).get("enabled"):
+            remote = make_remote_server(gateway)
+            threading.Thread(target=remote.serve_forever, daemon=True).start()
+    except (ValueError, OSError):
+        server.server_close()
+        raise SystemExit("Remote listener unavailable; no gateway listeners started") from None
     print("DualLens listening on 127.0.0.1:" + str(server.server_port), flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        if remote:
+            remote.shutdown()
+            remote.server_close()
         server.server_close()
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     profiles: [
       {
         id: 'gateway',
-        kind: 'gateway', // OpenAI-compatible local gateway, no key held by the extension
+        kind: 'gateway', // Optional pairing credential uses the local secrets slot, like API keys.
         name: '本机网关',
         baseUrl: 'http://127.0.0.1:18790/v1',
         model: 'ollama/qwen3:4b',
@@ -143,7 +143,7 @@ export function publicSettings(value) {
   if (!isPlainObject(value)) return value;
   const out = {};
   for (const [key, val] of Object.entries(value)) {
-    if (/^(secrets|apiKey|api_key|token|password|authorization|proxy_token|__proto__|constructor|prototype)$/i.test(key)) continue;
+    if (/^(secrets|apiKey|api_key|pairingToken|remote_token|token|password|authorization|proxy_token|__proto__|constructor|prototype)$/i.test(key)) continue;
     out[key] = publicSettings(val);
   }
   return out;

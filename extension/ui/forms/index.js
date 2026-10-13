@@ -4,13 +4,15 @@ import { exportConfig, importConfig } from '../../shared/configcrypto.js';
 import { createProviders, profileProblem } from '../../background/providers.js';
 import { buildMessages, parseSegments } from '../../shared/prompt.js';
 import { stripMarkup } from '../../shared/markup.js';
-import { validateSettings, importSettings, lines, terms } from '../validation.js';
+import { validateSettings, importSettings, lines, terms } from './validation.js';
 import { drawLayout } from './layout.js';
+import { parsePairing, gatewayProfile, gatewayChain, discoverGateway, compactConfig } from './gateway.js';
+import { drawQRCode } from './qrcode.js';
 
 // Shared by options and the platform's page panel. No browser globals or implicit storage.
 export async function mountSettingsForm(root, { store, platform }) {
   // Extension settings have their own origin and retain the ordinary password field.
-  const secretDialog = platform.kind !== 'extension' && typeof platform.promptSecret === 'function';
+  const secretDialog = platform.kind !== 'extension';
   const container = drawLayout(root, { secretDialog });
   const $ = id => container.querySelector('#' + id);
   $('save').disabled=true;
@@ -62,7 +64,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   async function showWizard() {
     const chain = providerChain(settings);
     const usable = await Promise.all(chain.map(async c => {
-      const apiKey = c.profile.kind === 'openai' ? await store.getSecret(c.profile.id) : '';
+      const apiKey = ['openai', 'gateway'].includes(c.profile.kind) ? await store.getSecret(c.profile.id) : '';
       return !profileProblem({ ...c.profile, model: c.model, apiKey }) && (!c.profile.requiresKey || !!apiKey);
     }));
     if (!destroyed) $('wizard').hidden = usable.some(Boolean);
@@ -79,7 +81,8 @@ export async function mountSettingsForm(root, { store, platform }) {
     fill('fallbackModels', (p.fallbackModels || []).join('\n'));
     if (!secretDialog) { fill('apiKey', ''); $('apiKey').disabled = true; }
     else { $('set-key').disabled = $('clear-key').disabled = true; $('key-status').textContent = '未设置'; }
-    $('key-row').hidden = p.kind !== 'openai'; $('baseUrl').disabled = p.kind === 'mock'; $('jsonMode').disabled = p.kind === 'mock';
+    $('key-row').hidden = p.kind === 'mock'; $('baseUrl').disabled = p.kind === 'mock'; $('jsonMode').disabled = p.kind === 'mock';
+    $('credential-label').textContent = p.kind === 'gateway' ? '配对令牌（可选；仅存本机）' : 'API key（仅存本机）';
     const preset = getPreset(p.preset);
     $('provider-description').textContent = preset?.description || '使用自己的模型服务；不会自动联网。';
     $('key-link').hidden = !preset?.keyUrl;
@@ -89,8 +92,8 @@ export async function mountSettingsForm(root, { store, platform }) {
     draftSecrets.set(p.id, secret);
     if (secretDialog) {
       $('key-status').textContent = secret ? '已设置' : '未设置';
-      $('set-key').disabled = $('clear-key').disabled = p.kind !== 'openai';
-    } else { fill('apiKey', secret); $('apiKey').disabled = p.kind !== 'openai'; }
+      $('set-key').disabled = $('clear-key').disabled = p.kind === 'mock';
+    } else { fill('apiKey', secret); $('apiKey').disabled = p.kind === 'mock'; }
     drawingProfile = false;
   }
   function captureProfile() {
@@ -98,7 +101,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     p.name = read('profileName').trim(); p.model = read('model').trim();
     for (const id of ['maxItems', 'maxChars', 'concurrency', 'timeoutMs']) p[id] = read(id);
     if (p.kind !== 'mock') { p.baseUrl = read('baseUrl').trim(); p.jsonMode = read('jsonMode'); }
-    if (p.kind === 'openai' && !secretDialog) draftSecrets.set(p.id, read('apiKey').trim());
+    if (p.kind !== 'mock' && !secretDialog) draftSecrets.set(p.id, read('apiKey').trim());
     p.fallbackModels = /^(claude|codex)\//.test(p.model) ? [] : lines(read('fallbackModels'));
   }
   function setSelectedChain() {
@@ -143,7 +146,12 @@ export async function mountSettingsForm(root, { store, platform }) {
   }
   async function save() {
     if (drawingProfile) throw new Error('正在读取本机密钥，请稍后保存');
-    const next = collect(); saving = true;
+    const next = collect();
+    for (const p of next.provider.profiles) if (p.kind === 'gateway' && modifiedSecrets.has(p.id)) {
+      const key = draftSecrets.get(p.id);
+      if (key && !/^[A-Za-z0-9_-]{43}$/.test(key)) throw new Error('配对令牌格式无效；请导入完整配对串');
+    }
+    saving = true;
     try {
       settings = await store.save(next);
       const registration=await platform.comics?.syncSites?.();
@@ -156,6 +164,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   }
   on('settings-form', 'input', event => {
     dirty = true;
+    if (event.target === $('backupText')) $('backup-qr').hidden = true;
     if (event.target === $('apiKey') && profileId) modifiedSecrets.add(profileId);
   });
   async function showLanguages() {
@@ -179,7 +188,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     action('set-key', async () => {
       const id = profileId;
       if (!id || drawingProfile) return;
-      const key = await platform.promptSecret('输入此服务的 API key（留空清除；取消保留原值）');
+      const key = await platform.promptSecret(profile()?.kind === 'gateway' ? '输入网关配对令牌（留空清除；取消保留原值）' : '输入此服务的 API key（留空清除；取消保留原值）');
       if (key === null || destroyed || profileId !== id) return;
       if (typeof key !== 'string' || /[^\x20-\x7e]/.test(key.trim())) throw new Error('API key 含有非法字符');
       draftSecrets.set(id, key.trim()); modifiedSecrets.add(id); dirty = true;
@@ -218,6 +227,38 @@ export async function mountSettingsForm(root, { store, platform }) {
     const p = profileFromPreset(preset, id); settings.provider.profiles.push(p); settings.provider.active = id; profileId = id; dirty = true;
     choices($('profile'), [{ id: '', name: '选择一个服务' }, ...settings.provider.profiles], id);
     await drawProfile(); setSelectedChain(); notice('填写 key，获取模型并测试；最后保存。');
+  });
+  function upsert(p) {
+    const index = settings.provider.profiles.findIndex(old => old.id === p.id);
+    if (index < 0) settings.provider.profiles.push(p); else settings.provider.profiles[index] = p;
+  }
+  async function selectGateway(id, chain) {
+    profileId = id; settings.provider.active = id; settings.provider.chain = chain; dirty = true;
+    choices($('profile'), [{ id: '', name: '选择一个服务' }, ...settings.provider.profiles], id);
+    fill('providerChain', JSON.stringify(chain, null, 2)); await drawProfile();
+  }
+  action('connect-gateway', async () => {
+    if (!platform.http) throw new Error('此平台未提供网关探测');
+    captureProfile();
+    const models = await discoverGateway(platform.http);
+    if (destroyed) return;
+    const p = gatewayProfile('gateway-local', '本机网关', 'http://127.0.0.1:18790/v1');
+    const chain = gatewayChain(models, p.id);
+    p.model = chain[0]?.model || ''; p.fallbackModels = chain.slice(1).map(c => c.model);
+    upsert(p); discovered.set(p.id, models); choices($('models'), models);
+    await selectGateway(p.id, chain);
+    notice(chain.length ? '已建立交大 → Hermes 免费模型 → Ollama 推荐链；点击保存。订阅模型仅手动选择。' : '网关可用，但没有推荐模型；请手动获取并选择模型后保存。');
+  });
+  action('import-pairing', async () => {
+    const text = secretDialog ? await platform.promptSecret('粘贴完整网关配对串（视同密钥；取消停止导入）') : read('pairingText');
+    if (!secretDialog) fill('pairingText', '');
+    if (text === null || destroyed) return;
+    const paired = parsePairing(text.trim()); captureProfile();
+    const profiles = [gatewayProfile('gateway-usb', '电脑网关（USB）', paired.usb)];
+    if (paired.tailscale) profiles.unshift(gatewayProfile('gateway-tailscale', '电脑网关（Tailscale）', paired.tailscale));
+    for (const p of profiles) { upsert(p); draftSecrets.set(p.id, paired.token); modifiedSecrets.add(p.id); }
+    await selectGateway(profiles[0].id, [{ profileId: profiles[0].id, model: profiles[0].model }]);
+    notice('已导入网关地址与令牌草稿；点击保存。没有 Tailscale 地址时只建立 USB 服务。');
   });
   action('load-models', async () => {
     captureProfile(); const p = profile(); notice('正在获取模型列表…');
@@ -258,11 +299,32 @@ export async function mountSettingsForm(root, { store, platform }) {
       const apiKey = await store.getSecret(p.id); if (apiKey) secrets[p.id] = { apiKey };
     }
     const text = await exportConfig(settings, { password, secrets });
+    $('backup-qr').hidden = true;
     fill('backupText', text);
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
     const a = root.ownerDocument.createElement('a'); a.href = url; a.download = password ? 'duallens-config.encrypted.txt' : 'duallens-config.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     if (!secretDialog) fill('backupPassword', ''); notice('已导出；明文配置不含 key，加密配置包含 key。');
+  });
+  action('export-phone', async () => {
+    const password = secretDialog ? await platform.promptSecret('设置手机配置导出口令（不能为空；取消停止）') : read('backupPassword');
+    if (password === null || destroyed) return;
+    if (!password) throw new Error('导出到手机必须设置加密口令');
+    await save(); const secrets = {};
+    for (const p of settings.provider.profiles) { const apiKey = await store.getSecret(p.id); if (apiKey) secrets[p.id] = { apiKey }; }
+    const text = await exportConfig(compactConfig(settings), { password, secrets });
+    if (destroyed) return;
+    fill('backupText', text); $('backup-qr').hidden = true;
+    if (!secretDialog) fill('backupPassword', '');
+    try { drawQRCode($('backup-qr'), text); $('backup-qr').hidden = false; notice('加密配置已生成；手机扫码或复制文本，然后从电脑导入。口令通过其他安全方式传递。'); }
+    catch (error) { notice(error.message); }
+  });
+  action('copy-backup', async () => {
+    const text = read('backupText'); if (!text) throw new Error('先生成配置文本');
+    const clipboard = root.ownerDocument.defaultView?.navigator?.clipboard;
+    if (!clipboard) { $('backupText').select(); notice('已选中配置文本，请用系统复制。'); return; }
+    try { await clipboard.writeText(text); notice('配置文本已复制'); }
+    catch { $('backupText').select(); notice('浏览器未允许复制；文本已选中，请用系统复制。'); }
   });
   async function importText(text) {
     const password = secretDialog ? (text.startsWith('duallens-config:v1:') ? await platform.promptSecret('输入配置导入口令（取消停止导入）') : '') : read('backupPassword');
@@ -273,10 +335,15 @@ export async function mountSettingsForm(root, { store, platform }) {
     try {
       settings = await store.save(next);
       for (const [id, secret] of Object.entries(parsed.secrets || {})) if (next.provider.profiles.some(p => p.id === id)) await store.setSecret(id, secret.apiKey);
-      draftSecrets.clear(); modifiedSecrets.clear(); dirty = false; if (!secretDialog) fill('backupPassword', ''); fill('backupText', ''); await draw(); notice('设置已导入');
+      draftSecrets.clear(); modifiedSecrets.clear(); dirty = false; if (!secretDialog) fill('backupPassword', ''); fill('backupText', ''); $('backup-qr').hidden = true; await draw(); notice('设置已导入');
     } finally { saving = false; }
   }
   action('import-button', () => importText(read('backupText')));
+  if (secretDialog) action('import-computer', () => {
+    const text = read('backupText').trim();
+    if (!text.startsWith('duallens-config:v1:')) throw new Error('请粘贴电脑生成的加密配置串');
+    return importText(text);
+  });
   action('import-file-button', async () => $('import-file').click());
   on('import-file', 'change', async () => {
     try {

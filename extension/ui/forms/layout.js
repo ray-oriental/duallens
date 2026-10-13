@@ -73,12 +73,16 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(p.grid, 'profile', '编辑 / 切换服务', 'select');
   field(p.grid, 'providerPreset', '新增服务预设', 'select', [{ id: '', name: '请选择（推荐 OpenRouter）' }, ...PROVIDER_PRESETS]);
   button(p.grid, 'add-profile', '添加所选服务');
+  button(p.grid, 'connect-gateway', '一键接入本机网关');
+  if (!secretDialog) field(p.grid, 'pairingText', '导入配对串（视同密钥，导入后立即清空）', 'password', [], { autocomplete: 'off' });
+  button(p.grid, 'import-pairing', '导入配对串');
+  p.grid.append(el('p', '手机可导入电脑终端 pair 生成的配对串；Tailscale 远程监听须在电脑显式启用，USB 需 adb reverse。', { class: 'hint wide' }));
   p.grid.append(el('p', '', { id: 'provider-description', class: 'hint wide' }), el('a', '服务商说明 / 获取 key', { id: 'key-link', class: 'wide', target: '_blank', rel: 'noopener noreferrer' }));
   field(p.grid, 'profileName', '服务名称');
   field(p.grid, 'baseUrl', '兼容 API 基础地址', 'url');
   if (secretDialog) {
     const row = el('div', '', { id: 'key-row', class: 'wide' });
-    row.append(el('p', 'API key（仅存本机）'), el('p', '未设置', { id: 'key-status', role: 'status' }));
+    row.append(el('p', 'API key / 网关配对令牌（仅存本机）', { id: 'credential-label' }), el('p', '未设置', { id: 'key-status', role: 'status' }));
     const controls = el('div', '', { class: 'actions' }); row.append(controls);
     button(controls, 'set-key', '设置 key'); button(controls, 'clear-key', '清除 key');
     row.append(el('p', '在浏览器原生对话框中输入；修改后点击保存。', { class: 'hint' }));
@@ -86,6 +90,8 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   } else {
     const key = field(p.grid, 'apiKey', 'API key（仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
     key.parentElement.id = 'key-row';
+    const title = el('span', 'API key（仅存本机）', { id: 'credential-label' });
+    key.parentElement.firstChild.replaceWith(title);
   }
   field(p.grid, 'model', '模型标识', 'text', [], { list: 'models', autocomplete: 'off' });
   p.grid.append(el('datalist', '', { id: 'models' }));
@@ -126,6 +132,9 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(backup.grid, 'backupText', '配置文本（加密文件可在设备之间搬运）', 'textarea');
   const ba = el('div', '', { class: 'actions' }); backup.box.append(ba);
   button(ba, 'export', '导出配置'); button(ba, 'import-button', '导入配置文本');
+  button(ba, 'export-phone', '导出到手机'); button(ba, 'copy-backup', '复制配置文本');
+  if (secretDialog) button(ba, 'import-computer', '从电脑导入');
+  backup.box.append(el('canvas', '', { id: 'backup-qr', hidden: '', 'aria-label': '加密配置二维码' }));
   const file = el('input', '', { id: 'import-file', type: 'file', accept: '.json,.txt,application/json,text/plain', hidden: '' }); ba.append(file);
   button(ba, 'import-file-button', '选择配置文件');
   backup.box.append(el('p', '加密备份含所填 key，请妥善保管。口令不会保存。明文导入保留本机 key。译文缓存不会导出。', { class: 'hint' }));
