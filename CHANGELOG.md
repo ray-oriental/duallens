@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-13
+
+- Generic multi-platform release: settings v2 with synced public settings and device-local secrets, provider presets (OpenRouter free-model discovery first), cross-profile fallback chain, encrypted config export/import.
+- Tampermonkey userscript build for Android Edge (and desktop), touch interactions (long-press, selection icon below range, draggable float ball).
+- Comic translation phase 1: on-device Tesseract OCR in an offscreen document, side-column bilingual reading-order list; only OCR text reaches the translation service.
+- Edge Add-ons package target, listing docs, privacy policy and real-UI store screenshots.
+
 - Replace userscript key/password fields and the Proxy adapter with native sandbox secret prompts, key-presence status and set/clear actions; preserve extension options behavior.
 - Validate userscript metadata/version, SHA-256 and rebuilt bytes, optional Edge store package contents, and release-directory asset consistency; remove stale versioned assets before publishing staged builds.
 
