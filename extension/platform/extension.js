@@ -3,6 +3,8 @@ import { chromeStorageArea } from '../shared/storage-areas.js';
 import { createSettingsStore } from '../shared/settings.js';
 import { createFetchHttp } from './http.js';
 import { ERR } from '../shared/protocol.js';
+import { observeTimedtext, fetchTimedtext } from '../content/subtitles/observe.js';
+import { originalTrackURL } from '../content/subtitles/track.js';
 
 export function createExtensionPlatform(api = globalThis.chrome) {
   const localArea = chromeStorageArea(api.storage.local, 'local', api.storage.onChanged);
@@ -14,6 +16,25 @@ export function createExtensionPlatform(api = globalThis.chrome) {
   };
   const platform = {
     kind: 'extension', coarse, syncArea, localArea,
+    subtitles: {
+      observe: observeTimedtext,
+      async fetchTrack(raw, { signal } = {}) {
+        const url = originalTrackURL(raw, location.href);
+        if (!url) throw new Error('字幕轨道地址无效');
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        if (new URL(url).origin === location.origin) return fetchTimedtext(url, { signal });
+        const id = 'subtitle-' + crypto.randomUUID();
+        const cancel = () => { void one({ type: 'subtitle-track-cancel', id }); };
+        signal?.addEventListener('abort', cancel, { once: true });
+        try {
+          const result = await one({ type: 'subtitle-track', id, url });
+          if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+          if (!result.ok) throw new Error('字幕轨道读取失败');
+          return result.data;
+        } finally { signal?.removeEventListener('abort', cancel); }
+      },
+    },
+    openTextTranslation: () => { void one({ type: 'open-sidepanel' }); },
     comics: {
       recognize: (req) => one({ ...req, type: 'comic-ocr' }),
       languages: (lang) => one(lang ? { type:'comic-languages-delete',lang } : { type:'comic-languages-list' }),

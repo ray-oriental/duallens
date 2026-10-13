@@ -13,6 +13,8 @@ import { InputBox } from './inputbox.js';
 import { HoverTranslate } from './hover.js';
 import { FloatBall } from './floatball.js';
 import { ComicTranslator } from './comics/controller.js';
+import { YouTubeSubtitles } from './subtitles/controller.js';
+import { subtitleOptions } from './subtitles/track.js';
 import { toast, clearToast } from './overlay.js';
 
 
@@ -27,6 +29,7 @@ class App {
     this.dormant = false;
     this.getSettings = () => this.settings;
     this.comics = new ComicTranslator({ platform, getSettings: this.getSettings });
+    this.subtitles = new YouTubeSubtitles({ platform, getSettings: this.getSettings });
 
     this.translator = new PageTranslator({
       platform,
@@ -72,6 +75,8 @@ class App {
     }[name] || name, () => this.#command(name));
     this.platform.registerCommand('translate-comics', '翻译此页漫画', () => this.#command('translate-comics'));
     this.platform.registerCommand('restore-comics', '恢复漫画原文', () => this.#command('restore-comics'));
+    this.platform.registerCommand('open-sidepanel', 'DualLens 文本翻译', () => this.platform.openTextTranslation());
+    this.platform.registerCommand('toggle-subtitles', '启用 / 恢复 YouTube 双语字幕', () => this.#command('toggle-subtitles'));
     if (!this.dormant) this.#wake(true);
   }
 
@@ -82,6 +87,7 @@ class App {
     this.input.enable();
     this.hover.enable();
     if (this.settings.floatBall.enabled) this.ball.enable();
+    if (subtitleOptions(this.settings).enabled) this.subtitles.enable();
     if (initial) this.#autoStart();
   }
 
@@ -90,6 +96,7 @@ class App {
     this.dormant = true;
     this.translator.stop();
     this.comics.restore();
+    this.subtitles.disable();
     this.selection.disable();
     this.input.disable();
     this.hover.disable();
@@ -135,6 +142,7 @@ class App {
       this.#wake(true);
       return;
     }
+    this.subtitles.update(prev, next);
     if (mode === 'always' && siteRuleFor(prev, HOST).mode !== 'always') this.translator.start();
     const t = this.translator;
     if (prev.displayMode !== next.displayMode) t.setDisplayMode(next.displayMode);
@@ -181,6 +189,7 @@ class App {
       ...this.translator.getState(),
       dormant: this.dormant,
       comics: this.comics.state(),
+      subtitles: this.subtitles.state(),
       ui: {
         selectionIcon: sel.selectionIcon,
         selectionCard: sel.selectionCard,
@@ -221,6 +230,16 @@ class App {
     if (this.dormant) return;
     const s = this.settings;
     switch (name) {
+      case 'toggle-subtitles':
+        this.store.save({ subtitles: { enabled: !subtitleOptions(s).enabled } });
+        break;
+      case 'restore-subtitles':
+        this.subtitles.disable();
+        this.store.save({ subtitles: { enabled: false } });
+        break;
+      case 'open-sidepanel':
+        this.platform.openTextTranslation();
+        break;
       case 'translate-comics':
         this.comics.start();
         break;
@@ -228,6 +247,11 @@ class App {
         this.comics.restore();
         break;
       case P.COMMANDS.TOGGLE_PAGE:
+        if (this.subtitles.enabled) {
+          this.subtitles.disable();
+          this.store.save({ subtitles: { enabled: false } });
+          if (!this.translator.isActive()) break;
+        }
         if (this.comics.panels.size && !this.translator.isActive()) { this.comics.restore(); break; }
         this.comics.restore();
         this.translator.toggle();

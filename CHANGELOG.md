@@ -2,9 +2,16 @@
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-13
+## [0.3.0] - 2026-10-13
 
-- Config center: one-click local gateway setup with a recommended chain, phone pairing over Tailscale or USB (opt-in, 256-bit token, Tailscale-only remote listener), encrypted export-to-phone with QR, and docs/SETUP-ALL-DEVICES.md.
+- Desktop PDF bilingual reading with local PDF.js rendering, selectable text, lazy nearby-paragraph translation, translation-only/restore, local-file selection and themes.
+- YouTube bilingual captions from existing subtitle tracks, seek-aware scheduling and exact native-caption restoration; subtitle preferences survive configuration transfer.
+- Desktop free-text side panel (Alt+S), with shared text/subtitle tabs in the userscript, explicit model selection, copy and system speech.
+- Fix popup width and narrow-window layout.
+- Keep QR generation in extension options through an optional platform capability; mobile encrypted export uses copyable text and stays below the unchanged 400 KB userscript startup budget.
+- Include subtitle documentation and v0.3 release notes in the public package allowlist.
+
+## [0.2.0] - 2026-10-13
 
 - Generic multi-platform release: settings v2 with synced public settings and device-local secrets, provider presets (OpenRouter free-model discovery first), cross-profile fallback chain, encrypted config export/import.
 - Tampermonkey userscript build for Android Edge (and desktop), touch interactions (long-press, selection icon below range, draggable float ball).

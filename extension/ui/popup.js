@@ -51,6 +51,14 @@ $('test').addEventListener('click',()=>busy($('test'),async()=>{
   if (!r.ok) throw new Error(errorText(r)); notice(`连接正常 · ${r.latencyMs} ms · ${r.sample||''}`);
 }));
 $('options').addEventListener('click',()=>chrome.runtime.openOptionsPage());
-try { settings=await loadSettings(); [tab]=await chrome.tabs.query({active:true,currentWindow:true}); if(tab?.url) { try { host=new URL(tab.url).hostname; } catch {} } draw(); await refresh(); }
+$('pdf-open').addEventListener('click',()=>busy($('pdf-open'),async()=>{
+  const r=await request('pdf-open',{tabId:tab.id}); if(!r.ok) throw new Error(errorText(r)); window.close();
+}));
+try {
+  settings=await loadSettings(); [tab]=await chrome.tabs.query({active:true,currentWindow:true});
+  if(tab?.url) { try { host=new URL(tab.url).hostname; } catch {} } draw(); await refresh();
+  const pdf=await request('pdf-status',{tabId:tab?.id});
+  $('pdf-open').hidden=!pdf.available; $('pdf-open').disabled=!pdf.available;
+}
 catch(e) { notice(e.message,true); }
 const poll=setInterval(refresh,700); window.addEventListener('pagehide',()=>clearInterval(poll),{once:true});

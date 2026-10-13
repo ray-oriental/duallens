@@ -13,6 +13,10 @@ import { createGMImageFetch, probeLocalOCR } from '../content/comics/capabilitie
 import { createUserscriptOCR } from '../content/comics/userscript-ocr.js';
 import { comicSiteMatches } from '../content/comics/sites.js';
 import { installCanvasHook } from '../content/comics/canvas-hook-runtime.js';
+import { installTimedtextObserver } from '../content/subtitles/observer-runtime.js';
+import { observeTimedtext, fetchTimedtext, fetchGMCrossHostTrack } from '../content/subtitles/observe.js';
+import { isYouTube, originalTrackURL } from '../content/subtitles/track.js';
+import { createUserscriptMediaPanel } from '../sidepanel/userscript-panel.js';
 
 // Capture the sandbox's native prompt before any awaits; never use host-page prompt.
 const sandboxPrompt = typeof prompt === 'function' ? prompt.bind(globalThis) : null;
@@ -24,6 +28,15 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
 
   const platform = {
     kind: 'userscript', coarse, syncArea, localArea,
+    subtitles: {
+      observe: observeTimedtext,
+      fetchTrack(raw, options) {
+        const url = originalTrackURL(raw, location.href);
+        if (!url) return Promise.reject(new Error('字幕轨道地址无效'));
+        return new URL(url).origin === location.origin ? fetchTimedtext(url, options) :
+          fetchGMCrossHostTrack(url, options, platform.http);
+      },
+    },
     comics: {
       async recognize(req) {
         try {
@@ -43,7 +56,14 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
     http: createGMHttp(gm.xmlhttpRequest),
     openSettings, valid: () => true,
     promptSecret(label) { return promptImpl ? promptImpl(String(label), '') : null; },
-    registerCommand(_id, label, handler) { gm.registerMenuCommand(label, handler); },
+    registerCommand(id, label, handler) {
+      gm.registerMenuCommand(label, handler);
+      if (id === 'open-sidepanel' && typeof document !== 'undefined') document.addEventListener('keydown', event => {
+        if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === 'KeyS') {
+          event.preventDefault(); handler();
+        }
+      });
+    },
     async detectLanguage(text) {
       for (const lang of ['ja', 'ko', 'zh-CN', 'ru', 'ar', 'th', 'en']) {
         if (looksLikeTarget(text, lang)) return { lang, reliable: true };
@@ -58,9 +78,26 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
     },
   };
   const store = platform.settingsStore = createSettingsStore({ syncArea, localArea });
+  let mediaPanel;
+  const openPanel = tab => {
+    mediaPanel ||= createUserscriptMediaPanel(platform);
+    return mediaPanel.open(tab);
+  };
+  platform.openSettings = () => { void openPanel('settings'); };
+  platform.openTextTranslation = () => { void openPanel('text'); };
   // The transitional userscript kept public v1 settings in another GM namespace.
   // Move them once without overwriting existing v2 settings or local secrets.
   platform.ready = (async () => {
+    if (typeof document !== 'undefined' && isYouTube(location.hostname)) {
+      const script = document.createElement('script');
+      try {
+        script.textContent = '(' + installTimedtextObserver.toString() + ')();';
+        (document.head || document.documentElement).append(script);
+      } catch {
+        // CSP / Trusted Types can reject MAIN installation. The passive resource
+        // observer remains usable; this must not prevent the whole app from booting.
+      } finally { script.remove(); }
+    }
     const current = await localArea.get(['settings.core', 'settings']);
     if (!current['settings.core'] && !current.settings) {
       const old = await gm.getValue('duallens:sync', {});

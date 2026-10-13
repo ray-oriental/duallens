@@ -31,7 +31,7 @@ popup 已提供“翻译此页漫画”。共享设置表单及用户脚本设�
 
 `userscript-sources.js` 以及扩展中内嵌 WASM 的 core JS 已删除。扩展只加载未修改的普通 `tesseract-core-simd-lstm.js` 加独立 `.wasm`；第一方 worker 的 locateFile 明确指向打包资产。用户脚本的 OCR 资源不进入发布 JS 或 ZIP。
 
-打包器强制用户脚本小于 400000 字节，目前约 316 KB。代码不要求某台电脑的本地服务。用户脚本仅在名单站点尝试安装第一方 canvas 钩子，其 document-idle 启动和 MAIN 注入可能受页面 CSP 限制；第一阶段识别仍以已显示 img 为主。Android 真机加载、内存及流畅度待用户/leader 验收。
+打包器强制用户脚本小于 400000 字节；集成版本的实际字节数以构建输出为准。代码不要求某台电脑的本地服务。用户脚本仅在名单站点尝试安装第一方 canvas 钩子，其 document-idle 启动和 MAIN 注入可能受页面 CSP 限制；第一阶段识别仍以已显示 img 为主。Android 真机加载、内存及流畅度待用户/leader 验收。
 
 ## 扩展接口（请 leader 纳入 PLATFORMS/SPEC）
 
