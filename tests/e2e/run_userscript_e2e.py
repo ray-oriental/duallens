@@ -48,11 +48,13 @@ STUB = r"""(() => {
   window.GM_registerMenuCommand = (label, fn) => commands.set(label,fn);
   window.GM_xmlhttpRequest = req => {
     // GM transport mock, never page fetch; exercise the real OpenAI adapter offline.
-    calls.push({url:req.url,method:req.method,anonymous:req.anonymous,hasAuth:!!req.headers.Authorization});
+    calls.push({url:req.url,method:req.method,anonymous:req.anonymous,hasAuth:!!req.headers.Authorization,authCorrect:req.headers.Authorization==='Bearer sk-test-not-real'});
     let stopped=false;
     const timer=setTimeout(() => {
       if(stopped)return;
-      if(req.method==='GET') req.onload({status:200,responseText:JSON.stringify({data:[{id:'mock'}]}),responseHeaders:''});
+      if(req.method==='GET') req.onload({status:200,responseText:JSON.stringify({data:req.url==='https://openrouter.ai/api/v1/models'
+        ? ['a','b','c'].map(id=>({id:id+'/mock:free',name:id+' free',context_length:32000,pricing:{prompt:'0',completion:'0'},supported_parameters:['response_format']}))
+        : [{id:'mock'}]}),responseHeaders:''});
       else {
         const payload=JSON.parse(req.data);
         const user=payload.messages.find(m=>m.role==='user').content;
@@ -69,7 +71,10 @@ STUB = r"""(() => {
     hasCommand:label=>commands.has(label),
     settings(patch) {
       const merge=(a,b)=>{const r=structuredClone(a||{});for(const[k,v]of Object.entries(b))r[k]=v&&typeof v==='object'&&!Array.isArray(v)?merge(r[k],v):v;return r;};
-      GM_setValue('duallens:sync',{settings:merge(data.get('duallens:sync')?.settings,patch)});
+      const old=data.get('duallens:local')||{};
+      const current={...old.settings,...old['settings.core'],glossary:old['settings.glossary'],...old['settings.sites']};
+      const next=merge(current,patch),{glossary,siteRules,autoTranslateLangs,...core}=next;
+      GM_setValue('duallens:local',{...old,'settings.core':core,'settings.glossary':glossary,'settings.sites':{siteRules,autoTranslateLangs}});
     },
     elements(selector) { return roots.filter(r=>r.host.isConnected).flatMap(r=>[...r.root.querySelectorAll(selector)]); },
     rect(selector) { const el=this.elements(selector).find(e=>getComputedStyle(e).display!=='none'); if(!el)return null;const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}; },
@@ -88,6 +93,7 @@ def rect(page, selector):
 
 
 def click_shadow(page, selector):
+    page.evaluate("s => __platformFixture.elements(s)[0]?.scrollIntoView({block:'center'})", selector)
     r = rect(page, selector)
     check(bool(r), 'missing UI control: ' + selector)
     page.mouse.click(r['x'] + r['width'] / 2, r['y'] + r['height'] / 2)
@@ -97,7 +103,8 @@ def fill_shadow(page, label, value):
     # No production test hooks: fixture captures closed roots before bundle execution.
     page.evaluate("""({label,value}) => {
       const wrap=__platformFixture.elements('label').find(el=>el.firstChild?.textContent===label);
-      const input=wrap.querySelector('input,select'); input.value=value; input.dispatchEvent(new Event('change',{bubbles:true}));
+      const input=wrap.querySelector('input,select'); input.value=value;
+      input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true}));
     }""", {'label': label, 'value': value})
 
 
@@ -142,7 +149,7 @@ def desktop_cases(page, base):
     page.wait_for_function("__platformFixture.elements('form').length===1")
     fill_shadow(page, '目标语言', 'ja')
     click_shadow(page, 'button[type=submit]')
-    page.wait_for_function("__platformFixture.data('duallens:sync').settings.targetLang==='ja'")
+    page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     check(all(page.evaluate("[...document.querySelectorAll('dl-ui')].map(e=>e.shadowRoot===null)")), 'overlay must stay closed')
     page.keyboard.press('Escape')
     page.wait_for_function("__platformFixture.elements('form').length===0")
@@ -159,27 +166,96 @@ def desktop_cases(page, base):
 def secret_transport_case(page, base):
     ready(page, base)
     page.evaluate("""() => {
-      __platformFixture.settings({provider:{active:'custom',profiles:[{id:'custom',kind:'openai',model:'mock',baseUrl:'https://mock.invalid/v1',concurrency:2,maxItems:12,maxChars:4000}]}});
+      __platformFixture.settings({provider:{active:'custom',profiles:[{id:'custom',name:'Mock endpoint',kind:'openai',model:'mock',baseUrl:'https://mock.invalid/v1',concurrency:2,maxItems:12,maxChars:4000,timeoutMs:5000,jsonMode:false,fallbackModels:[]}]}});
     }""")
     command(page, 'DualLens 设置')
-    page.wait_for_function("__platformFixture.elements('form').length===1")
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
     # beforeinput is prevented: the key never becomes the value of the connected DOM input.
     page.evaluate("""() => {
-      const el=__platformFixture.elements('input[type=password]')[0];
+      const el=__platformFixture.elements('#apiKey')[0];
       for(const data of 'sk-test-not-real')el.dispatchEvent(new InputEvent('beforeinput',{inputType:'insertText',data,cancelable:true,bubbles:true}));
     }""")
-    check(page.evaluate("__platformFixture.elements('input[type=password]')[0].value.includes('sk-test')") is False, 'key leaked into DOM value')
+    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value.includes('sk-test')") is False, 'key leaked into DOM value')
     click_shadow(page, 'button[type=submit]')
     page.wait_for_function("!!__platformFixture.data('duallens:local')?.secrets?.custom")
-    check(page.evaluate("JSON.stringify(__platformFixture.data('duallens:sync')).includes('sk-test')") is False, 'key leaked into public settings')
-    check(page.evaluate("__platformFixture.elements('input[type=password]')[0].value") == '', 'key editor did not clear')
-    click_shadow(page, 'form .actions button[type=button]')
-    page.wait_for_function("__platformFixture.elements('.status').some(e=>e.textContent.includes('连接成功'))")
+    check(page.evaluate("JSON.stringify(__platformFixture.data('duallens:local')['settings.core']).includes('sk-test')") is False, 'key leaked into public settings')
+    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '', 'key editor did not clear')
+    click_shadow(page, '#test')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
     page.keyboard.press('Escape'); command(page, '翻译 / 恢复当前页面'); wait_done(page)
     check(page.evaluate('__platformFixture.calls.every(c=>c.anonymous&&c.hasAuth)') is True, 'GM transport was not anonymous/authenticated')
     check(page.evaluate('localStorage.length') == 0, 'host localStorage was used')
     check(page.evaluate("document.body.outerHTML.includes('sk-test')") is False, 'key leaked into document')
     return 'GM HTTP exercised; secret remains in GM local area; no DOM/public-settings key'
+
+
+def assert_secret_private(page):
+    check(page.evaluate("localStorage.length") == 0, 'host localStorage was used')
+    check(page.evaluate("!document.documentElement.outerHTML.includes('sk-test-not-real')"), 'key leaked into page markup')
+    check(page.evaluate("__platformFixture.elements('input,textarea').every(e=>!e.value.includes('sk-test-not-real'))"), 'key leaked into closed-root field value')
+    check(page.evaluate("__platformFixture.elements('.dl-settings').every(e=>!e.outerHTML.includes('sk-test-not-real'))"), 'key leaked into panel markup')
+    check(page.evaluate("""() => {
+      const seen=new Set();
+      const clean=v=>{
+        if(typeof v==='string')return !v.includes('sk-test-not-real');
+        if(!v||typeof v!=='object'||seen.has(v))return true;
+        seen.add(v);
+        const p=Object.getPrototypeOf(v);
+        if(!Array.isArray(v)&&p!==Object.prototype&&p!==null)return true;
+        return Object.values(Object.getOwnPropertyDescriptors(v)).every(d=>!Object.hasOwn(d,'value')||clean(d.value));
+      };
+      return Object.values(Object.getOwnPropertyDescriptors(window)).every(d=>!Object.hasOwn(d,'value')||clean(d.value));
+    }"""), 'key leaked into window or a reachable plain object')
+    check(page.evaluate("!__platformFixture.calls.some(c=>JSON.stringify(c).includes('sk-test-not-real'))"), 'test transport recorded a key')
+
+
+def openrouter_profile_case(page, base):
+    ready(page, base)
+    command(page, 'DualLens 设置')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    page.evaluate("() => {const e=__platformFixture.elements('#providerPreset')[0];e.value='openrouter';e.dispatchEvent(new Event('change',{bubbles:true}));}")
+    click_shadow(page, '#add-profile')
+    page.wait_for_function("__platformFixture.elements('#profile')[0].value==='openrouter'&&!__platformFixture.elements('#apiKey')[0].disabled")
+    page.evaluate("__platformFixture.elements('#apiKey')[0].focus()")
+    page.keyboard.type('sk-test-not-real')
+    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '•' * len('sk-test-not-real'), 'secret editor must render bullets')
+    assert_secret_private(page)
+    click_shadow(page, '#load-models')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('获取到 3'))")
+    click_shadow(page, '#test')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
+    check(page.evaluate("!__platformFixture.data('duallens:local').secrets?.openrouter"), 'draft key saved before Save')
+    click_shadow(page, '#save')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('已保存'))")
+    saved = page.evaluate("__platformFixture.data('duallens:local')")
+    check(saved['secrets']['openrouter']['apiKey'] == 'sk-test-not-real', 'missing GM secret')
+    check(saved['settings.core']['provider']['active'] == 'openrouter', 'new preset not selected')
+    check(len(saved['settings.core']['provider']['chain']) == 3, 'free-model fallback chain missing')
+    for key in ['settings', 'settings.core', 'settings.glossary', 'settings.sites']:
+        check('sk-test-not-real' not in json.dumps(saved[key]), 'key in public GM setting: ' + key)
+    assert_secret_private(page)
+    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '', 'secret draft did not clear after Save')
+    page.keyboard.press('Escape')
+    command(page, 'DualLens 设置')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    check(page.evaluate("__platformFixture.elements('#apiKey')[0].value") == '', 'stored key backfilled into field')
+    click_shadow(page, '#test')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
+    assert_secret_private(page)
+    # Saving an unrelated field preserves the stored key; public export remains key-free.
+    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, '#save')
+    page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
+    check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'unedited key overwritten')
+    click_shadow(page, '#export')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('已导出'))")
+    assert_secret_private(page)
+    calls = page.evaluate('__platformFixture.calls')
+    check(all(c['anonymous'] for c in calls), 'GM requests sent page cookies')
+    check(all(not c['hasAuth'] for c in calls if c['method'] == 'GET'), 'public OpenRouter discovery sent key')
+    check(all(c['authCorrect'] for c in calls if c['method'] == 'POST'), 'saved/draft key not resolved by GM transport')
+    page.keyboard.press('Escape')
+    check(page.evaluate("__platformFixture.elements('.dl-settings').length") == 0, 'destroy left shared form attached')
+    return 'shared OpenRouter preset: draft/test/save/reopen/export, 3-model chain, key only in GM secrets, no DOM/window/localStorage key'
 
 
 def mobile_cases(page, base):
@@ -226,7 +302,7 @@ def mobile_cases(page, base):
     if page.viewport_size['width'] < 600:
         check(panel['x'] == 0 and panel['y'] == 0 and panel['width'] == page.viewport_size['width'], 'narrow settings not fullscreen')
     fill_shadow(page, '目标语言', 'ja'); click_shadow(page, 'button[type=submit]')
-    page.wait_for_function("__platformFixture.data('duallens:sync').settings.targetLang==='ja'")
+    page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     page.keyboard.press('Escape')
     # Long-page metrics include translation start and the full viewport-by-viewport scroll.
     ready(page, base, 'long.html')
@@ -262,6 +338,7 @@ def main():
     bundle = REPO / 'dist' / 'duallens.user.js'
     check(bundle.is_file(), 'build dist/duallens.user.js first')
     cases = [('desktop', 1280, 800, False, desktop_cases), ('secret_transport', 1280, 800, False, secret_transport_case),
+             ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
              ('mobile_375', 375, 812, True, mobile_cases), ('tablet_800', 800, 1280, True, mobile_cases)]
     if args.only: cases = [c for c in cases if any(o in c[0] for o in args.only)]
     if not cases: print('no matching cases'); return 2

@@ -1,6 +1,7 @@
 import { createGMStorageArea } from './storage.js';
 import { createGMHttp, asFetch } from './http.js';
-import { createPlatformSettingsStore } from './settings-store.js';
+import { performanceSettings } from './settings-store.js';
+import { createSettingsStore, publicSettings } from '../shared/settings.js';
 import { createStoredCache } from './cache.js';
 import { createProviders } from '../background/providers.js';
 import { createQueue } from '../background/queue.js';
@@ -10,8 +11,9 @@ import { toErrorInfo } from '../shared/errors.js';
 import { looksLikeTarget } from '../shared/lang.js';
 
 export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse = false } = {}) {
-  const syncArea = createGMStorageArea(gm, 'duallens:sync');
   const localArea = createGMStorageArea(gm, 'duallens:local');
+  // GM is private per-script storage, not browser sync. Both v2 areas share one record.
+  const syncArea = localArea;
   const platform = {
     kind: 'userscript', coarse, syncArea, localArea,
     http: createGMHttp(gm.xmlhttpRequest),
@@ -30,16 +32,33 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
       return () => style.remove();
     },
   };
-  const store = platform.settingsStore = createPlatformSettingsStore(platform);
+  const store = platform.settingsStore = createSettingsStore({ syncArea, localArea });
+  // The transitional userscript kept public v1 settings in another GM namespace.
+  // Move them once without overwriting existing v2 settings or local secrets.
+  platform.ready = (async () => {
+    const current = await localArea.get(['settings.core', 'settings']);
+    if (!current['settings.core'] && !current.settings) {
+      const old = await gm.getValue('duallens:sync', {});
+      if (old?.settings) {
+        const existing = (await localArea.get('secrets')).secrets || {};
+        for (const p of old.settings.provider?.profiles || []) {
+          if (p.apiKey && !Object.hasOwn(existing, p.id)) await store.setSecret(p.id, p.apiKey);
+        }
+        await store.save(publicSettings(old.settings));
+      }
+    }
+    await store.load();
+  })();
   const getSettings = async () => {
-    const s = await store.load();
-    for (const p of s.provider.profiles) p.apiKey = await store.getSecret(p.id);
-    return s;
+    await platform.ready;
+    return performanceSettings(await store.load(), coarse);
   };
-  const providers = createProviders({ fetchImpl: asFetch(platform.http) });
+  const getSecret = id => store.getSecret(id);
+  const providers = createProviders({ fetchImpl: asFetch(platform.http), getSecret });
   const cache = createStoredCache(localArea);
-  const translator = createTranslator({ provider: providers.chat, cache, queue: createQueue(), getSettings });
+  const translator = createTranslator({ provider: providers.chat, cache, queue: createQueue(), getSettings, getSecret });
   const handlers = createHandlers({ translator, cache, providers, getSettings });
+  platform.clearCache = () => cache.clear();
   let seq = 0;
   platform.translator = () => ({
     translateBatch(req, onPartial) {
@@ -53,7 +72,7 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
       return { cancel: () => ctrl.abort(), done };
     },
     translateText: (req) => handlers['translate-text'](req),
-    listModels: (profileId) => handlers['list-models']({ profileId }),
+    listModels: (profileId, options = {}) => handlers['list-models']({ ...options, profileId }),
     testProvider: (profileId) => handlers['provider-test']({ profileId }),
   });
   return platform;

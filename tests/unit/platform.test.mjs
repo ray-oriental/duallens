@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGMStorageArea, withLocalFallback } from '../../extension/platform/storage.js';
+import { createGMStorageArea } from '../../extension/platform/storage.js';
 import { createGMHttp, asFetch } from '../../extension/platform/http.js';
-import { createPlatformSettingsStore, performanceSettings } from '../../extension/platform/settings-store.js';
+import { performanceSettings, settingsEqual } from '../../extension/platform/settings-store.js';
 import { createStoredCache } from '../../extension/platform/cache.js';
 import { createUserscriptPlatform } from '../../extension/platform/userscript.js';
 import { DEFAULT_SETTINGS } from '../../extension/shared/settings.js';
 import { TranslateClient } from '../../extension/content/client.js';
 import { ExtensionTranslateClient } from '../../extension/platform/port-client.js';
 import { createExtensionPlatform } from '../../extension/platform/extension.js';
+import { memoryArea } from './storage-memory.mjs';
 
 function event() {
   const listeners = new Set();
@@ -51,34 +52,16 @@ test('GM changes from a second adapter reach the first adapter once', async () =
   assert.equal(count, 1);
 });
 
-test('sync quota fallback retains complete data separately from local secrets/settings', async () => {
-  const gm = fakeGM(); const local = createGMStorageArea(gm, 'local');
-  await local.set({ secrets: { p: { apiKey: 'sk-test-not-real' } }, settings: 'legacy' });
-  const sync = { get: async () => ({ glossary: ['old'] }), set: async () => { throw new Error('quota'); }, onChanged: () => () => {} };
-  const fallback = withLocalFallback(sync, local);
-  await fallback.set({ core: { lang: 'ja' } });
-  assert.deepEqual(await fallback.get(null), { glossary: ['old'], core: { lang: 'ja' } });
-  assert.equal((await local.get('settings')).settings, 'legacy');
-  assert.equal((await local.get('secrets')).secrets.p.apiKey, 'sk-test-not-real');
-  await fallback.remove('core'); assert.deepEqual(await fallback.get(null), { glossary: ['old'] });
-});
-
 test('user settings strip public keys and persist credentials only in localArea', async () => {
   const gm = fakeGM(), platform = createUserscriptPlatform(gm);
   const store = platform.settingsStore;
   await store.save({ provider: { active: 'custom', profiles: [{ id: 'custom', kind: 'openai', apiKey: 'sk-test-not-real' }] } });
-  assert.equal(JSON.stringify(gm.values.get('duallens:sync')).includes('sk-test-not-real'), false);
+  const data = gm.values.get('duallens:local');
+  for (const key of ['settings', 'settings.core', 'settings.glossary', 'settings.sites']) assert.equal(JSON.stringify(data[key]).includes('sk-test-not-real'), false);
+  assert.equal(platform.syncArea, platform.localArea);
+  assert.equal(store.syncStatus.synced, false);
   assert.equal((await store.load()).provider.profiles[0].apiKey, undefined);
   assert.equal(await store.getSecret('custom'), 'sk-test-not-real');
-});
-
-test('extension settings compatibility retains v1 secrets without giving them to content', async () => {
-  const gm = fakeGM(), area = createGMStorageArea(gm, 'local');
-  await area.set({ settings: { provider: { active: 'p', profiles: [{ id: 'p', apiKey: 'sk-test-not-real' }] } } });
-  const store = createPlatformSettingsStore({ syncArea: area, localArea: area, kind: 'extension' });
-  await store.save({ style: 'underline' });
-  assert.equal((await store.load()).provider.profiles[0].apiKey, undefined);
-  assert.equal(await store.getSecret('p'), 'sk-test-not-real');
 });
 
 test('concurrent secret writes for different profiles do not lose another profile', async () => {
@@ -94,6 +77,68 @@ test('mobile caps concurrency/batch size/margin without changing desktop default
   assert.ok(s.provider.profiles.every((p) => p.concurrency <= 2 && p.maxItems <= 12));
   assert.equal(performanceSettings(DEFAULT_SETTINGS, false), DEFAULT_SETTINGS);
   assert.equal(DEFAULT_SETTINGS.lazy.rootMarginPx, 600);
+});
+
+test('settings equality ignores object key order but preserves chain/glossary array order', () => {
+  assert.equal(settingsEqual({ profiles: [{ id: 'a', model: 'm' }] }, { profiles: [{ model: 'm', id: 'a' }] }), true);
+  assert.equal(settingsEqual([{ profileId: 'a' }, { profileId: 'b' }], [{ profileId: 'b' }, { profileId: 'a' }]), false);
+  assert.equal(settingsEqual({ style: 'plain' }, { style: 'muted' }), false);
+});
+
+test('userscript migrates the transitional GM namespace once and retains newer local secrets', async () => {
+  const gm = fakeGM();
+  gm.values.set('duallens:sync', { settings: { targetLang: 'ja', provider: { active: 'mock' } } });
+  gm.values.set('duallens:local', { secrets: { openai: { apiKey: 'sk-test-not-real' } } });
+  const platform = createUserscriptPlatform(gm);
+  await platform.ready;
+  assert.equal((await platform.settingsStore.load()).targetLang, 'ja');
+  assert.equal(await platform.settingsStore.getSecret('openai'), 'sk-test-not-real');
+  await platform.settingsStore.save({ targetLang: 'en' });
+  const second = createUserscriptPlatform(gm); await second.ready;
+  assert.equal((await second.settingsStore.load()).targetLang, 'en');
+  assert.equal(gm.values.get('duallens:local')['settings.core'].version, 2);
+});
+
+test('extension platform follows sync-only v2 updates and uses the shared whole-store local fallback', async () => {
+  const changed = event(), local = memoryArea(), sync = memoryArea();
+  const api = { storage: { local, sync, onChanged: changed }, runtime: {} };
+  const store = createExtensionPlatform(api).settingsStore;
+  await store.save({ targetLang: 'en' });
+  sync.data['settings.core'].targetLang = 'ja';
+  sync.data['settings.glossary'] = [{ src: 'kernel', dst: '内核' }];
+  let notifications = 0;
+  const off = store.onChange(() => notifications++);
+  changed.emit({ 'settings.core': {} }, 'sync');
+  assert.equal(notifications, 1);
+  assert.equal((await store.load()).targetLang, 'ja');
+  assert.equal((await store.load()).glossary[0].dst, '内核');
+  await store.save({ glossary: [{ src: 'x'.repeat(9000), dst: 'y' }], style: 'plain' });
+  assert.equal(store.syncStatus.synced, false);
+  assert.equal(store.syncStatus.reason, 'quota');
+  assert.equal((await store.load()).style, 'plain');
+  off(); changed.emit({ secrets: {} }, 'local'); assert.equal(notifications, 1);
+});
+
+test('userscript cross-profile fallback resolves each v2 secret without hydrating public profiles', async () => {
+  const gm = fakeGM(), calls = [];
+  gm.xmlhttpRequest = req => {
+    calls.push(req.url);
+    const primary = req.url.includes('primary.invalid');
+    assert.equal(req.headers.Authorization, primary ? 'Bearer sk-primary-not-real' : 'Bearer sk-backup-not-real');
+    queueMicrotask(() => req.onload(primary
+      ? { status: 429, responseHeaders: 'Retry-After: 60', responseText: '{}' }
+      : { status: 200, responseHeaders: '', responseText: JSON.stringify({ choices: [{ message: { content: '{"t":["【译】Hello"]}' } }] }) }));
+    return { abort() {} };
+  };
+  const platform = createUserscriptPlatform(gm); await platform.ready;
+  const profiles = ['primary', 'backup'].map(id => ({ id, kind: 'openai', requiresKey: true,
+    baseUrl: `https://${id}.invalid/v1`, model: 'same-model', concurrency: 1, maxItems: 12, maxChars: 4000 }));
+  await platform.settingsStore.save({ provider: { profiles, chain: profiles.map(p => ({ profileId: p.id, model: p.model })) } });
+  await platform.settingsStore.setSecret('primary', 'sk-primary-not-real');
+  await platform.settingsStore.setSecret('backup', 'sk-backup-not-real');
+  const result = await platform.translator().translateText({ text: 'Hello', to: 'zh-CN' });
+  assert.equal(result.ok, true); assert.equal(result.text, '【译】Hello'); assert.equal(calls.length, 2);
+  assert.equal(JSON.stringify((await platform.settingsStore.load()).provider).includes('sk-'), false);
 });
 
 test('GM HTTP adapter parses headers and omits webpage cookies', async () => {
@@ -138,7 +183,7 @@ test('userscript service translates batch/text with shared mock engine, supports
   cancel.cancel(); await cancel.done; assert.deepEqual(cancelled, []);
 });
 
-test('userscript provider uses only injected GM transport and locally hydrated credentials', async () => {
+test('userscript provider uses only injected GM transport and v2 secrets injected independently of public settings', async () => {
   const gm = fakeGM(); let calls = 0;
   gm.xmlhttpRequest = (req) => {
     calls++;

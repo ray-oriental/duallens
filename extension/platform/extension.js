@@ -1,12 +1,12 @@
 import { ExtensionTranslateClient } from './port-client.js';
-import { createChromeStorageArea, withLocalFallback } from './storage.js';
-import { createPlatformSettingsStore } from './settings-store.js';
+import { chromeStorageArea } from '../shared/storage-areas.js';
+import { createSettingsStore } from '../shared/settings.js';
 import { createFetchHttp } from './http.js';
 import { ERR } from '../shared/protocol.js';
 
 export function createExtensionPlatform(api = globalThis.chrome) {
-  const localArea = createChromeStorageArea(api.storage, 'local');
-  const syncArea = withLocalFallback(createChromeStorageArea(api.storage, 'sync'), localArea);
+  const localArea = chromeStorageArea(api.storage.local, 'local', api.storage.onChanged);
+  const syncArea = api.storage.sync && chromeStorageArea(api.storage.sync, 'sync', api.storage.onChanged);
   const coarse = globalThis.matchMedia?.('(pointer: coarse)').matches || false;
   const one = async (msg) => {
     try { return await api.runtime.sendMessage(msg) || { ok: false, error: { code: ERR.NETWORK, message: '后台没有响应' } }; }
@@ -29,7 +29,7 @@ export function createExtensionPlatform(api = globalThis.chrome) {
           return { done, cancel() { client.cancel(id); resolve(); } };
         },
         translateText: (req) => one({ ...req, type: 'translate-text' }),
-        listModels: (profileId) => one({ type: 'list-models', profileId }),
+        listModels: (profileId, options = {}) => one({ ...options, type: 'list-models', profileId }),
         testProvider: (profileId) => one({ type: 'provider-test', profileId }),
         dispose: () => client.dispose(),
       };
@@ -57,6 +57,6 @@ export function createExtensionPlatform(api = globalThis.chrome) {
     },
     valid: () => !!api.runtime?.id,
   };
-  platform.settingsStore = createPlatformSettingsStore(platform);
+  platform.settingsStore = createSettingsStore({ syncArea, localArea });
   return platform;
 }
