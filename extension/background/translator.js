@@ -7,7 +7,7 @@
 //   getSettings() -> Promise<settings>
 
 import { ERR, PRIORITY } from '../shared/protocol.js';
-import { activeProfile } from '../shared/settings.js';
+import { activeProfile, providerChain, getDefaultSettingsStore } from '../shared/settings.js';
 import { buildMessages, parseSegments, salvagePlain } from '../shared/prompt.js';
 import { makeBatches, splitLongText, joinTranslations } from '../shared/batch.js';
 import { escapeText, stripMarkup } from '../shared/markup.js';
@@ -25,13 +25,20 @@ function chunk(list, size) {
   return out;
 }
 
-export function createTranslator({ provider, cache, queue, getSettings, sha = sha256Hex, retryBatchMax = 8 }) {
+export function createTranslator({ provider, cache, queue, getSettings, getSecret = async id =>
+  globalThis.chrome?.storage?.local ? getDefaultSettingsStore().getSecret(id) : '', sha = sha256Hex, retryBatchMax = 8 }) {
   // req: { reqId, items: [{ id, text }], to, from, priority, context }
   // onPartial(results) gets [{ id, text } | { id, error: { code, message } }], each id at most once.
   // Resolves when everything has been reported; if `signal` aborts it resolves quietly and stops reporting.
   async function translate(req, { onPartial = () => {}, signal } = {}) {
     const settings = await getSettings();
-    const profile = activeProfile(settings);
+    const configured = providerChain(settings);
+    const usable = await Promise.all(configured.map(async c => {
+      const apiKey = c.profile.kind === 'openai' ? await getSecret(c.profile.id) || c.profile.apiKey || '' : '';
+      return !profileProblem({ ...c.profile, model: c.model, apiKey }) && (!c.profile.requiresKey || !!apiKey);
+    }));
+    const chain = configured.filter((c, i) => usable[i]);
+    const profile = chain[0]?.profile || activeProfile(settings);
     const items = (Array.isArray(req.items) ? req.items : []).filter((it) => it && it.id !== undefined);
     const to = req.to || settings.targetLang;
     const from = req.from || settings.sourceLang || 'auto';
@@ -52,7 +59,7 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
       }
     };
 
-    const problem = profileProblem(profile);
+    const problem = chain.length ? null : profileProblem(profile) || '没有可用的模型配置';
     if (problem) {
       emit(items.map((it) => ({ id: it.id, error: { code: ERR.CONFIG, message: problem } })));
       return;
@@ -78,14 +85,16 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
     const ttlDays = settings.cache && settings.cache.ttlDays != null ? settings.cache.ttlDays : DEFAULT_TTL_DAYS;
     const cacheOpts = { maxEntries: settings.cache && settings.cache.maxEntries, ttlMs: ttlDays > 0 ? ttlDays * DAY_MS : 0 };
     const keyers = new Map();
-    const keyerFor = (model) => {
-      if (!keyers.has(model)) keyers.set(model, makeKeyer({ profileId: profile.id, model, to, from, context:req.context||{}, preset, custom, glossary }, sha));
-      return keyers.get(model);
+    const keyerFor = (model, usedProfile = profile) => {
+      const id = JSON.stringify([usedProfile.id, model]);
+      if (!keyers.has(id)) keyers.set(id, makeKeyer({ profileId: usedProfile.id, model, to, from, context:req.context||{}, preset, custom, glossary }, sha));
+      return keyers.get(id);
     };
 
     if (cacheOn && pending.length) {
       try {
-        const keyOf = await keyerFor(queue.currentModel(profile));
+        const candidate = queue.currentCandidate(profile, chain);
+        const keyOf = await keyerFor(candidate.model, candidate.profile);
         const keys = await Promise.all(pending.map((g) => keyOf(g.text)));
         const hits = await cache.getMany(keys, { ttlMs: cacheOpts.ttlMs });
         const hitResults = [];
@@ -106,7 +115,7 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
     const units = [];
     let uid = 0;
     for (const g of pending) {
-      g.pieces = splitLongText(g.text, profile.maxChars);
+      g.pieces = splitLongText(g.text, Math.min(...chain.map(c => c.profile.maxChars || 4000)));
       g.out = new Array(g.pieces.length);
       g.left = g.pieces.length;
       g.pieces.forEach((text, idx) => units.push({ uid: ++uid, g, idx, text }));
@@ -132,18 +141,18 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
       }
     }
 
-    function completeUnit(u, text, model) {
+    function completeUnit(u, text, model, usedProfile = profile) {
       const g = u.g;
       if (g.state !== 'open') return;
       g.out[u.idx] = text;
-      g.models.push(model);
+      g.models.push({ model, profile: usedProfile });
       if (--g.left > 0) return;
       g.state = 'done';
       const full = g.pieces.length === 1 ? text : joinTranslations(g.out);
       emit(g.ids.map((id) => ({ id, text: full })));
-      if (cacheOn && g.models.every((m) => m === g.models[0])) {
+      if (cacheOn && g.models.every((m) => m.model === g.models[0].model && m.profile.id === g.models[0].profile.id)) {
         const m = g.models[0];
-        writes.push(keyerFor(m).then(async (keyOf) => ({ k: await keyOf(g.text), t: full })));
+        writes.push(keyerFor(m.model, m.profile).then(async (keyOf) => ({ k: await keyOf(g.text), t: full })));
       }
     }
 
@@ -161,11 +170,12 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
       try {
         out = await queue.enqueue({
           profile,
+          chain,
           priority,
           reqId,
           signal,
-          run: async ({ model, signal: s }) => {
-            const content=await provider({profile,model,messages,signal:s});
+          run: async ({ profile: selected, model, signal: s }) => {
+            const content=await provider({profile:selected,model,messages,signal:s});
             const parsed=parseSegments(content,idMap);
             if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
               for(const u of batch) {
@@ -174,7 +184,7 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
                 }
               }
             }
-            return {content,model};
+            return {content,model,profile:selected};
           },
         });
       } catch (e) {
@@ -183,7 +193,7 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
       }
       const byUid = new Map(batch.map((u) => [u.uid, u]));
       const { results, missing } = parseSegments(out.content, idMap);
-      for (const [id, text] of results) completeUnit(byUid.get(id), text, out.model);
+      for (const [id, text] of results) completeUnit(byUid.get(id), text, out.model, out.profile);
       if (!missing.length) return;
 
       const lost = missing.map((id) => byUid.get(id));
@@ -202,7 +212,7 @@ export function createTranslator({ provider, cache, queue, getSettings, sha = sh
 
     const batches = makeBatches(
       units.map((u) => ({ id: u.uid, text: u.text, unit: u })),
-      { maxItems: profile.maxItems, maxChars: profile.maxChars },
+      { maxItems: Math.min(...chain.map(c => c.profile.maxItems || 20)), maxChars: Math.min(...chain.map(c => c.profile.maxChars || 4000)) },
     );
     await Promise.all(
       batches.map(async (b) => {

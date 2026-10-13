@@ -1,0 +1,10 @@
+{
+  "data": [
+    { "id": "vendor-a/large:free", "name": "Fixture A Large", "pricing": { "prompt": "0", "completion": "0" }, "context_length": 64000, "supported_parameters": ["response_format", "temperature"] },
+    { "id": "vendor-a/small:free", "name": "Fixture A Small", "pricing": { "prompt": "0", "completion": "0" }, "context_length": 8000, "supported_parameters": ["response_format"] },
+    { "id": "vendor-b/huge:free", "name": "Fixture B Huge", "pricing": { "prompt": "0.0", "completion": "0" }, "context_length": 128000, "supported_parameters": ["temperature"] },
+    { "id": "vendor-c/medium:free", "pricing": { "prompt": "0", "completion": "0" }, "context_length": 32000, "supported_parameters": ["response_format"] },
+    { "id": "vendor-paid/model", "pricing": { "prompt": "0", "completion": "0.000002" }, "context_length": 256000 },
+    { "id": "vendor-unknown/model", "pricing": { "prompt": "0" } }
+  ]
+}

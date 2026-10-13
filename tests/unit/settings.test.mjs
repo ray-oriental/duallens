@@ -57,7 +57,7 @@ test('siteRuleFor: never beats always, custom rule is independent', () => {
 });
 
 test('activeProfile picks the active one and falls back to the first', () => {
-  assert.equal(activeProfile(DEFAULT_SETTINGS).id, 'openai');
+  assert.equal(activeProfile(DEFAULT_SETTINGS), undefined);
   const s = mergeSettings(DEFAULT_SETTINGS, { provider: { active: 'mock' } });
   assert.equal(activeProfile(s).id, 'mock');
   const gone = mergeSettings(DEFAULT_SETTINGS, { provider: { active: 'nope' } });
@@ -69,8 +69,8 @@ test('loadSettings / saveSettings round trip against a fake chrome.storage', asy
   globalThis.chrome = {
     storage: {
       local: {
-        async get(key) {
-          return key in store ? { [key]: store[key] } : {};
+        async get(keys) {
+          return Object.fromEntries((Array.isArray(keys) ? keys : [keys]).filter(k => k in store).map(k => [k, structuredClone(store[k])]));
         },
         async set(obj) {
           Object.assign(store, structuredClone(obj));
@@ -92,10 +92,12 @@ test('loadSettings / saveSettings round trip against a fake chrome.storage', asy
 });
 
 test('fresh installation requires a configured provider instead of borrowing local accounts', () => {
-  const profile = DEFAULT_SETTINGS.provider.profiles.find(p => p.id === DEFAULT_SETTINGS.provider.active);
+  assert.equal(DEFAULT_SETTINGS.provider.active, '');
+  assert.deepEqual(DEFAULT_SETTINGS.provider.chain, []);
+  const profile = DEFAULT_SETTINGS.provider.profiles.find(p => p.id === 'openai');
   assert.equal(profile.kind, 'openai');
   assert.equal(profile.baseUrl, '');
-  assert.equal(profile.apiKey, '');
+  assert.equal(profile.apiKey, undefined);
   const gateway = DEFAULT_SETTINGS.provider.profiles.find(p => p.id === 'gateway');
   assert.equal(gateway.model, 'ollama/qwen3:4b');
   assert.deepEqual(gateway.fallbackModels, []);

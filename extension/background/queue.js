@@ -1,52 +1,100 @@
-// Priority queue with per-model cooldown and immediate fallback.
-import {ERR} from '../shared/protocol.js';
-import {cancelledError,isCancelled} from '../shared/errors.js';
-export function createQueue(options={}){
- const cfg={baseBackoffMs:2000,maxBackoffMs:60000,cooldownMs:60000,maxAttempts:4,now:()=>Date.now(),...options};
- const states=new Map(),live=new Set();let seq=0;
- const chain=p=>[p.model,...(p.fallbackModels||[])].filter((m,i,a)=>typeof m==='string'&&m&&a.indexOf(m)===i);
- function state(p){let s=states.get(p.id);if(!s){s={profile:p,running:0,pending:[],cooldowns:new Map(),rates:new Map(),timer:null};states.set(p.id,s);}s.profile=p;return s;}
- function available(s){return chain(s.profile).find(m=>(s.cooldowns.get(m)||0)<=cfg.now());}
- function soonest(s){return Math.min(...chain(s.profile).map(m=>s.cooldowns.get(m)||0));}
- function currentModel(p){const s=state(p);return available(s)||chain(p).sort((a,b)=>(s.cooldowns.get(a)||0)-(s.cooldowns.get(b)||0))[0];}
- function settle(j,ok,value){if(j.settled)return;j.settled=true;live.delete(j);j.unlink?.();ok?j.resolve(value):j.reject(value);}
- function cancelJob(j){if(j.settled)return;j.cancelled=true;j.ctrl.abort();const s=j.state;s.pending=s.pending.filter(x=>x!==j);settle(j,false,cancelledError());pump(s);}
- function pump(s){
-  if(s.timer){clearTimeout(s.timer);s.timer=null;}
-  if(!s.pending.length)return;
-  if(!available(s)){s.timer=setTimeout(()=>pump(s),Math.max(1,soonest(s)-cfg.now()));return;}
-  const limit=Math.max(1,Math.floor(s.profile.concurrency)||1);
-  s.pending.sort((a,b)=>a.priority-b.priority||a.seq-b.seq);
-  while(s.running<limit&&s.pending.length&&available(s)){
-   const j=s.pending.shift();if(j.settled)continue;
-   const model=available(s);s.running++;j.attempts++;j.running=true;
-   Promise.resolve().then(()=>j.run({model,signal:j.ctrl.signal,attempt:j.attempts})).then(
-    value=>{s.rates.delete(model);settle(j,!j.cancelled,j.cancelled?cancelledError():value);},
-    error=>{
-     if(j.settled)return;
-     if(j.cancelled||isCancelled(error))return settle(j,false,cancelledError());
-     if(error?.code===ERR.CONFIG)return settle(j,false,error);
-     let wait=cfg.cooldownMs;
-     if(error?.code===ERR.RATE_LIMITED){
-      const streak=(s.rates.get(model)||0)+1;s.rates.set(model,streak);
-      wait=Number.isFinite(error.retryAfterMs)?Math.max(0,error.retryAfterMs):Math.min(cfg.maxBackoffMs,cfg.baseBackoffMs*2**(streak-1));
-     }
-     s.cooldowns.set(model,Math.max(s.cooldowns.get(model)||0,cfg.now()+wait));
-     if(j.attempts>=cfg.maxAttempts)settle(j,false,error);else s.pending.push(j);
-    }
-   ).finally(()=>{j.running=false;s.running--;pump(s);});
+// Global priority queue; concurrency is per profile, cooldown is per (profile, model).
+import { ERR } from '../shared/protocol.js';
+import { cancelledError, isCancelled } from '../shared/errors.js';
+
+export function createQueue(options = {}) {
+  const cfg = { baseBackoffMs: 2000, maxBackoffMs: 60000, cooldownMs: 60000,
+    maxAttempts: 4, now: () => Date.now(), ...options };
+  const states = new Map(), live = new Set();
+  let seq = 0, timer = null;
+  function state(profile) {
+    if (!states.has(profile.id)) states.set(profile.id, { profile, running: 0, cooldowns: new Map(), rates: new Map() });
+    const s = states.get(profile.id); s.profile = profile; return s;
   }
- }
- function enqueue({profile,priority=1,reqId=null,signal=null,run}){
-  return new Promise((resolve,reject)=>{
-   if(signal?.aborted)return reject(cancelledError());
-   const s=state(profile),j={seq:++seq,profile,priority,reqId,run,resolve,reject,state:s,attempts:0,ctrl:new AbortController(),settled:false,cancelled:false,running:false};
-   if(!chain(profile).length)return reject(new Error('No model configured'));
-   if(signal){const abort=()=>cancelJob(j);signal.addEventListener('abort',abort,{once:true});j.unlink=()=>signal.removeEventListener('abort',abort);}
-   live.add(j);s.pending.push(j);pump(s);
-  });
- }
- function cancel(reqId){for(const j of [...live])if(j.reqId===reqId)cancelJob(j);}
- function stats(){const out={};for(const[id,s]of states)out[id]={running:s.running,pending:s.pending.length,model:currentModel(s.profile),pausedForMs:available(s)?0:Math.max(0,soonest(s)-cfg.now())};return out;}
- return{enqueue,cancel,currentModel,stats};
+  function candidates(profile, chain) {
+    const list = chain?.length ? chain : [profile.model, ...(profile.fallbackModels || [])].map(model => ({ profile, model }));
+    const seen = new Set();
+    return list.filter(c => {
+      const key = JSON.stringify([c.profile?.id, c.model]);
+      if (!c.profile || !c.model || seen.has(key)) return false;
+      seen.add(key); state(c.profile); return true;
+    });
+  }
+  const ready = c => (state(c.profile).cooldowns.get(c.model) || 0) <= cfg.now();
+  const capacity = c => state(c.profile).running < Math.max(1, Math.floor(c.profile.concurrency) || 1);
+  function currentCandidate(profile, chain) {
+    const list = candidates(profile, chain);
+    return list.find(ready) || list.sort((a, b) =>
+      (state(a.profile).cooldowns.get(a.model) || 0) - (state(b.profile).cooldowns.get(b.model) || 0))[0];
+  }
+  const currentModel = profile => currentCandidate(profile)?.model;
+  function settle(job, ok, value) {
+    if (job.settled) return;
+    job.settled = true; live.delete(job); job.unlink?.();
+    if (ok) job.resolve(value); else job.reject(value);
+  }
+  function cancelJob(job) {
+    if (job.settled) return;
+    job.ctrl.abort(); settle(job, false, cancelledError()); pump();
+  }
+  function pump() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    const pending = [...live].filter(j => !j.running && !j.settled).sort((a, b) => a.priority - b.priority || a.seq - b.seq);
+    let earliest = Infinity;
+    for (const job of pending) {
+      const candidate = job.chain.find(ready);
+      if (!candidate) {
+        for (const c of job.chain) if (capacity(c)) earliest = Math.min(earliest, state(c.profile).cooldowns.get(c.model) || 0);
+        continue;
+      }
+      // A busy primary queues normally; only cooldown/failure makes a backup eligible.
+      if (!capacity(candidate)) continue;
+      const { profile, model } = candidate, s = state(profile);
+      job.running = true; job.attempts++; s.running++;
+      Promise.resolve().then(() => {
+        if (job.ctrl.signal.aborted) throw cancelledError();
+        return job.run({ profile, model, signal: job.ctrl.signal, attempt: job.attempts });
+      }).then(value => { s.rates.delete(model); settle(job, true, value); }, error => {
+        if (job.settled) return;
+        if (isCancelled(error)) return settle(job, false, cancelledError());
+        if (error?.code === ERR.CONFIG) return settle(job, false, error);
+        if (Number.isInteger(error?.status) && ![429, 502, 503].includes(error.status)) return settle(job, false, error);
+        let wait = cfg.cooldownMs;
+        if (error?.code === ERR.RATE_LIMITED) {
+          const streak = (s.rates.get(model) || 0) + 1; s.rates.set(model, streak);
+          wait = Number.isFinite(error.retryAfterMs) ? Math.max(0, error.retryAfterMs)
+            : Math.min(cfg.maxBackoffMs, cfg.baseBackoffMs * 2 ** (streak - 1));
+        }
+        s.cooldowns.set(model, Math.max(s.cooldowns.get(model) || 0, cfg.now() + wait));
+        if (job.attempts >= Math.max(cfg.maxAttempts, job.chain.length)) settle(job, false, error);
+      }).finally(() => { job.running = false; s.running--; pump(); });
+    }
+    if (Number.isFinite(earliest)) timer = setTimeout(pump, Math.max(1, earliest - cfg.now()));
+  }
+  function enqueue({ profile, chain, priority = 1, reqId = null, signal = null, run }) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) return reject(cancelledError());
+      const list = candidates(profile, chain);
+      if (!list.length) return reject(new Error('No model configured'));
+      const job = { seq: ++seq, chain: list, priority, reqId, run, resolve, reject,
+        attempts: 0, ctrl: new AbortController(), settled: false, running: false };
+      if (signal) {
+        const abort = () => cancelJob(job); signal.addEventListener('abort', abort, { once: true });
+        job.unlink = () => signal.removeEventListener('abort', abort);
+      }
+      live.add(job); pump();
+    });
+  }
+  function cancel(reqId) { for (const j of [...live]) if (j.reqId === reqId) cancelJob(j); }
+  function stats() {
+    const out = {};
+    for (const [id, s] of states) {
+      const cooling = [...s.cooldowns.values()].filter(t => t > cfg.now());
+      out[id] = { running: s.running, pending: [...live].filter(j => !j.running && j.chain.some(c => c.profile.id === id)).length,
+        model: currentModel(s.profile), pausedForMs: ready({ profile: s.profile, model: currentModel(s.profile) }) ? 0
+          : Math.max(0, Math.min(...cooling) - cfg.now()) };
+    }
+    return out;
+  }
+  return { enqueue, cancel, currentModel, currentCandidate, stats };
 }

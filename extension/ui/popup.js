@@ -4,10 +4,12 @@ import { $, options, notice, request, errorText, busy } from './common.js';
 let settings, tab, host='', state;
 function draw() {
   options($('target'),LANGS,settings.targetLang); options($('style'),STYLES,settings.style);
-  options($('profile'),settings.provider.profiles,settings.provider.active);
-  $('mode').value=settings.displayMode; $('model').value=activeProfile(settings).model;
+  options($('profile'),[{id:'',name:'先配置模型服务'},...settings.provider.profiles],settings.provider.active);
+  const profile=activeProfile(settings);
+  $('mode').value=settings.displayMode; $('model').value=profile?.model || '';
+  for(const id of ['model','load-models','test']) $(id).disabled=!profile;
   $('site').value=host ? siteRuleFor(settings,host).mode || '' : ''; $('site').disabled=!host;
-  $('subscription').hidden=!/^(claude|codex)\//.test(activeProfile(settings).model);
+  $('subscription').hidden=!/^(claude|codex)\//.test(profile?.model || '');
 }
 async function pageMessage(msg) { if (!tab?.id) throw new Error('没有可翻译的标签页'); return chrome.tabs.sendMessage(tab.id,msg); }
 async function refresh() {

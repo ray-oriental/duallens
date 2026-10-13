@@ -1,14 +1,7 @@
-import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, mergeSettings } from '../shared/settings.js';
+import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, mergeSettings, publicSettings, SETTINGS_VERSION } from '../shared/settings.js';
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
-const secretKey = /^(apiKey|api_key|token|password|authorization|proxy_token)$/i;
 export function safeExport(value) {
-  if (Array.isArray(value)) return value.map(safeExport);
-  if (value && typeof value === 'object') {
-    const out = {};
-    for (const [key, v] of Object.entries(value)) if (!badKeys.has(key) && !secretKey.test(key)) out[key] = safeExport(v);
-    return out;
-  }
-  return value;
+  return publicSettings(value);
 }
 function requireThat(ok, message) { if (!ok) throw new Error(message); }
 export function lines(text) { return String(text).split(/\r?\n/).map(x => x.trim()).filter(Boolean); }
@@ -42,7 +35,8 @@ export function validateSettings(s) {
     for (const k of ['include','exclude']) if (r[k] != null) requireThat(typeof r[k]==='string' || (Array.isArray(r[k]) && r[k].every(x=>typeof x==='string')), 'include/exclude 须是选择器字符串或字符串数组');
     if (r.style != null) requireThat(STYLES.some(x=>x.id===r.style), '自定义规则样式无效');
   }
-  requireThat(Array.isArray(s.provider.profiles) && s.provider.profiles.length>0 && s.provider.profiles.some(p=>p.id===s.provider.active), '活动接口无效');
+  requireThat(Array.isArray(s.provider.profiles) && s.provider.profiles.length>0 &&
+    (s.provider.active === '' || s.provider.profiles.some(p=>p.id===s.provider.active)), '活动接口无效');
   const seen = new Set();
   for (const p of s.provider.profiles) {
     requireThat(p && typeof p.id==='string' && !badKeys.has(p.id) && !seen.has(p.id) && ['gateway','openai','mock'].includes(p.kind), '接口标识重复或类型无效'); seen.add(p.id);
@@ -56,6 +50,12 @@ export function validateSettings(s) {
     requireThat(Array.isArray(p.fallbackModels) && p.fallbackModels.every(m=>typeof m==='string' && m.trim() && !/^(claude|codex)\//.test(m)), 'Claude/Codex订阅模型只能手动选择，不能作为自动备选');
     for (const [v, lo, hi, name] of [[p.maxItems,1,50,'批量段数'],[p.maxChars,100,12000,'批量字符'],[p.concurrency,1,6,'并发数'],[p.timeoutMs,1000,300000,'超时']]) requireThat(Number.isInteger(v) && v>=lo && v<=hi, `${name}设置无效`);
   }
+  requireThat(Array.isArray(s.provider.chain), '备选链须为数组');
+  for (const [i, c] of s.provider.chain.entries()) {
+    requireThat(c && seen.has(c.profileId) && typeof c.model === 'string' && c.model.trim(), '备选链的接口或模型无效');
+    requireThat(i === 0 || !/^(claude|codex)\//.test(c.model), 'Claude/Codex订阅模型只能手动选择，不能作为自动备选');
+  }
+  if (/^(claude|codex)\//.test(s.provider.chain[0]?.model || '')) requireThat(s.provider.chain.length === 1, '订阅模型只能手动选择，不能自动回退');
   return s;
 }
 function cleanLike(value, shape) {
@@ -70,12 +70,11 @@ function cleanLike(value, shape) {
 export function importSettings(data, current) {
   requireThat(data && typeof data==='object' && !Array.isArray(data), '设置文件须是JSON对象');
   const next=cleanLike(safeExport(data), DEFAULT_SETTINGS);
-  next.provider.profiles = current.provider.profiles.map((existing) => {
-    const imported = Array.isArray(data.provider?.profiles) ? data.provider.profiles.find(p=>p?.id===existing.id) : null;
-    const shape = DEFAULT_SETTINGS.provider.profiles.find(p=>p.id===existing.id) || existing;
-    const p = imported ? cleanLike(safeExport(imported), shape) : structuredClone(existing);
-    if (Object.hasOwn(existing,'apiKey')) p.apiKey=existing.apiKey;
-    return p;
+  const incoming = Array.isArray(data.provider?.profiles) ? data.provider.profiles : current.provider.profiles;
+  next.provider.profiles = incoming.map(imported => {
+    const shape = { ...DEFAULT_SETTINGS.provider.profiles[1], preset: '', requiresKey: false };
+    return cleanLike(safeExport(imported), shape);
   });
+  next.version = SETTINGS_VERSION;
   return validateSettings(mergeSettings(DEFAULT_SETTINGS,next));
 }
