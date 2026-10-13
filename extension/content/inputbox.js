@@ -2,10 +2,9 @@
 // content is replaced by the translation into settings.input.targetLang. A leading "/ja " style
 // prefix overrides the target language for that one translation.
 
-import { MSG_TRANSLATE_TEXT } from '../shared/protocol.js';
 import { LANGS } from '../shared/settings.js';
 import { createOverlay, toast } from './overlay.js';
-import { deepActiveElement, sendOneShot } from './util.js';
+import { deepActiveElement } from './util.js';
 
 const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel']);
 const PREFIX = /^\s*\/([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)[ \t ]+/;
@@ -117,12 +116,20 @@ function accessor(el, useSelection) {
 }
 
 export class InputBox {
-  constructor({ getSettings }) {
+  constructor({ getSettings, platform }) {
+    this.platform = platform;
     this.getSettings = getSettings;
     this.hits = [];
     this.busy = new WeakSet();
     this.on = false;
     this.chip = null;
+    this.lastEditable = null;
+    this.onFocus = (e) => {
+      const target = e.composedPath()[0];
+      const editable = editableOf(target);
+      if (editable) this.lastEditable = editable;
+      else if (!e.composedPath().some((n) => n.localName === 'dl-ui')) this.lastEditable = null;
+    };
     this.onKeyDown = (e) => this.#keydown(e);
   }
 
@@ -130,12 +137,15 @@ export class InputBox {
     if (this.on) return;
     this.on = true;
     document.addEventListener('keydown', this.onKeyDown, true);
+    document.addEventListener('focusin', this.onFocus, true);
   }
 
   disable() {
     if (!this.on) return;
     this.on = false;
     document.removeEventListener('keydown', this.onKeyDown, true);
+    document.removeEventListener('focusin', this.onFocus, true);
+    this.lastEditable = null;
     this.chip?.ui.detach();
     this.chip = null;
   }
@@ -169,8 +179,10 @@ export class InputBox {
   }
 
   // Command path (Alt+I): the focused field, honouring a selection inside it.
-  translateFocused() {
-    const el = editableOf(deepActiveElement());
+  translateFocused(allowRecent = false) {
+    // Touching a shadow menu may move focus away from the field. Only that explicit menu
+    // action may use the last editable; shortcuts retain their focused-field semantics.
+    const el = editableOf(deepActiveElement()) || (allowRecent && this.lastEditable?.isConnected ? editableOf(this.lastEditable) : null);
     if (!el) {
       toast('请先点进要翻译的输入框', 'error');
       return;
@@ -223,8 +235,7 @@ export class InputBox {
     const before = acc.current();
     this.busy.add(el);
     this.#showChip(el);
-    const res = await sendOneShot({
-      type: MSG_TRANSLATE_TEXT,
+    const res = await this.platform.translator().translateText({
       text,
       to: target,
       from: 'auto',

@@ -13,7 +13,13 @@ const HOLD_MS = 130;
 const REST_MS = 500;
 
 export class HoverTranslate {
-  constructor({ getSettings, controller }) {
+  constructor({ getSettings, controller, platform }) {
+    this.platform = platform;
+    this.touch = null;
+    this.touchTimer = 0;
+    this.onTouchDown = (e) => this.#touchDown(e);
+    this.onTouchMove = (e) => { if (this.touch && e.pointerId === this.touch.id && Math.hypot(e.clientX - this.touch.x, e.clientY - this.touch.y) > 10) this.#cancelTouch(); };
+    this.onTouchEnd = () => this.#cancelTouch();
     this.getSettings = getSettings;
     this.controller = controller;
     this.on = false;
@@ -37,6 +43,11 @@ export class HoverTranslate {
   enable() {
     if (this.on) return;
     this.on = true;
+    document.addEventListener('pointerdown', this.onTouchDown, { capture: true, passive: true });
+    document.addEventListener('pointermove', this.onTouchMove, { capture: true, passive: true });
+    document.addEventListener('pointerup', this.onTouchEnd, true);
+    document.addEventListener('pointercancel', this.onTouchEnd, true);
+    window.addEventListener('scroll', this.onTouchEnd, { capture: true, passive: true });
     document.addEventListener('mousemove', this.onMove, { capture: true, passive: true });
     document.addEventListener('keydown', this.onKeyDown, true);
     document.addEventListener('keyup', this.onKeyUp, true);
@@ -47,6 +58,12 @@ export class HoverTranslate {
   disable() {
     if (!this.on) return;
     this.on = false;
+    document.removeEventListener('pointerdown', this.onTouchDown, true);
+    document.removeEventListener('pointermove', this.onTouchMove, true);
+    document.removeEventListener('pointerup', this.onTouchEnd, true);
+    document.removeEventListener('pointercancel', this.onTouchEnd, true);
+    window.removeEventListener('scroll', this.onTouchEnd, true);
+    this.#cancelTouch();
     document.removeEventListener('mousemove', this.onMove, { capture: true });
     document.removeEventListener('keydown', this.onKeyDown, true);
     document.removeEventListener('keyup', this.onKeyUp, true);
@@ -54,6 +71,20 @@ export class HoverTranslate {
     window.removeEventListener('blur', this.onBlur);
     this.#disarm();
     clearTimeout(this.restTimer);
+  }
+
+  #cancelTouch() { clearTimeout(this.touchTimer); this.touch = null; }
+
+  #touchDown(e) {
+    this.#cancelTouch();
+    if (e.pointerType !== 'touch' || !e.isPrimary || !this.isActive()) return;
+    const target = e.composedPath()[0];
+    if (!target?.closest || target.closest('dl-ui,a,button,input,textarea,select,[contenteditable]') || editableOf(target)) return;
+    this.touch = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    this.touchTimer = setTimeout(() => {
+      if (this.touch && this.isActive() && target.isConnected) this.controller.hoverToggle(target, 'toggle');
+      this.touch = null;
+    }, REST_MS);
   }
 
   isActive() {
@@ -73,7 +104,7 @@ export class HoverTranslate {
   }
 
   #move(e) {
-    if (!this.getSettings().hover.enabled) return;
+    if (this.platform.coarse || !this.getSettings().hover.enabled) return;
     if (e.clientX === this.lastX && e.clientY === this.lastY) return; // layout-induced move events
     this.lastX = e.clientX;
     this.lastY = e.clientY;

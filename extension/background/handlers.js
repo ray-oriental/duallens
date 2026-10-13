@@ -14,6 +14,7 @@ import { buildMessages, parseSegments } from '../shared/prompt.js';
 import { stripMarkup } from '../shared/markup.js';
 import { DLError, toErrorInfo } from '../shared/errors.js';
 import { profileProblem } from './providers.js';
+import { profileFromPreset } from '../shared/presets.js';
 
 const MAX_TEXT_CHARS = 20000;
 
@@ -48,8 +49,8 @@ export function createHandlers({ translator, cache, providers, getSettings, open
     }),
 
     [MSG_LIST_MODELS]: wrap(async (msg) => {
-      const profile = await profileById(msg.profileId);
-      return { ok: true, models: await providers.listModels(profile) };
+      const profile = msg.presetId ? profileFromPreset(msg.presetId) : await profileById(msg.profileId);
+      return { ok: true, models: await providers.listModels(profile, { freeOnly: msg.freeOnly !== false }) };
     }),
 
     [MSG_PROVIDER_TEST]: wrap(async (msg) => {

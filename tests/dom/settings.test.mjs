@@ -8,10 +8,10 @@ test('export omits credentials recursively without changing local settings', () 
  const out=safeExport(s); assert.equal(out.provider.profiles[1].apiKey,undefined); assert.equal(out.nested.token,undefined);
  assert.equal(out.nested.name,'keep'); assert.equal(s.provider.profiles[1].apiKey,'local-only-example');
 });
-test('import preserves local API key, ignores imported credentials and unknown fields', () => {
+test('import ignores profile credentials and unknown fields; store retains separate local secrets', () => {
  const local=fresh(); local.provider.profiles[1].apiKey='local-only-example';
  const incoming=fresh(); incoming.targetLang='ja'; incoming.provider.profiles[1].apiKey='ignored-example'; incoming.unknown='omit';
- const out=importSettings(incoming,local); assert.equal(out.targetLang,'ja'); assert.equal(out.provider.profiles[1].apiKey,'local-only-example'); assert.equal(out.unknown,undefined);
+ const out=importSettings(incoming,local); assert.equal(out.targetLang,'ja'); assert.equal(out.provider.profiles[1].apiKey,undefined); assert.equal(out.unknown,undefined);
 });
 test('JSON prototype keys never survive settings import', () => {
  const incoming=JSON.parse('{"__proto__":{"polluted":true},"targetLang":"en"}');

@@ -4,10 +4,12 @@ import { $, options, notice, request, errorText, busy } from './common.js';
 let settings, tab, host='', state;
 function draw() {
   options($('target'),LANGS,settings.targetLang); options($('style'),STYLES,settings.style);
-  options($('profile'),settings.provider.profiles,settings.provider.active);
-  $('mode').value=settings.displayMode; $('model').value=activeProfile(settings).model;
+  options($('profile'),[{id:'',name:'先配置模型服务'},...settings.provider.profiles],settings.provider.active);
+  const profile=activeProfile(settings);
+  $('mode').value=settings.displayMode; $('model').value=profile?.model || '';
+  for(const id of ['model','load-models','test']) $(id).disabled=!profile;
   $('site').value=host ? siteRuleFor(settings,host).mode || '' : ''; $('site').disabled=!host;
-  $('subscription').hidden=!/^(claude|codex)\//.test(activeProfile(settings).model);
+  $('subscription').hidden=!/^(claude|codex)\//.test(profile?.model || '');
 }
 async function pageMessage(msg) { if (!tab?.id) throw new Error('没有可翻译的标签页'); return chrome.tabs.sendMessage(tab.id,msg); }
 async function refresh() {
@@ -15,7 +17,8 @@ async function refresh() {
     state=await pageMessage({type:P.MSG_GET_STATE});
     $('page-status').textContent=state.dormant ? '本站已设为从不翻译，可在下方修改。' : state.translated ? `已翻译 ${state.done ?? (state.units-state.pending-state.failed)} 段 · 待处理 ${state.pending} · 失败 ${state.failed}` : '已准备好，翻译靠近视口的段落。';
     $('toggle').textContent=state.translated ? '恢复原文' : '翻译当前页面'; $('toggle').disabled=state.dormant;
-  } catch { $('page-status').textContent='此页面不能运行扩展，或扩展刚更新；请打开普通网页并刷新。'; $('toggle').disabled=true; }
+    $('comics').disabled=state.dormant || !settings.comics.enabled;
+  } catch { $('page-status').textContent='此页面不能运行扩展，或扩展刚更新；请打开普通网页并刷新。'; $('toggle').disabled=true;$('comics').disabled=true; }
 }
 async function persist(patch) { settings=await saveSettings(patch); draw(); await refresh(); }
 function activeModel() { return activeProfile(settings); }
@@ -29,6 +32,7 @@ $('model').addEventListener('change',()=>busy($('model'),async()=>{
   await persist({provider:{profiles}});
 }));
 $('toggle').addEventListener('click',()=>busy($('toggle'),async()=>{ await pageMessage({type:P.MSG_COMMAND,name:P.COMMANDS.TOGGLE_PAGE}); await refresh(); }));
+$('comics').addEventListener('click',()=>busy($('comics'),async()=>{await pageMessage({type:P.MSG_COMMAND,name:'translate-comics'});await refresh();}));
 $('site').addEventListener('change',()=>busy($('site'),async()=>{
   const mode=$('site').value;
   const always=settings.siteRules.always.filter(x=>x!==host), never=settings.siteRules.never.filter(x=>x!==host);

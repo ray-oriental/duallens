@@ -679,6 +679,31 @@ def hover_shift(h: Session) -> None:
         h.page.keyboard.up("Shift")
 
 
+@case("v2_sync_hover", "v2 同步设置更新；对象键重排保留悬停译文，真实设置变化生效")
+def v2_sync_hover(h: Session) -> None:
+    hover_shift(h)
+    before = h.page.locator('#p-plain dl-t').inner_text()
+    h.sw_eval("""async () => {
+      const reorder = v => Array.isArray(v) ? v.map(reorder) : v && typeof v === 'object'
+        ? Object.fromEntries(Object.keys(v).reverse().map(k => [k,reorder(v[k])])) : v;
+      const got = await chrome.storage.sync.get('settings.core');
+      await chrome.storage.sync.set({'settings.core':reorder(got['settings.core'])});
+    }""")
+    h.page.wait_for_timeout(300)
+    check(h.page.locator('#p-plain dl-t').inner_text() == before, 'key reordering cleared the hover unit')
+    h.sw_eval("""async () => {
+      const got = await chrome.storage.sync.get('settings.core');
+      await chrome.storage.sync.set({'settings.core': {...got['settings.core'], style:'highlight', displayMode:'translation-only',hover:{enabled:false,modifier:'Shift'}}});
+    }""")
+    h.wait_js("() => document.querySelector('#p-plain.dl-only dl-t.dl-s-highlight')", 10, what='sync-only mode and style applied')
+    h.wait_state(lambda s: not s['ui']['hoverActive'], 5, 'sync-only hover disabled')
+    h.sw_eval("""async () => {
+      const got = await chrome.storage.sync.get('settings.core');
+      await chrome.storage.sync.set({'settings.core': {...got['settings.core'],targetLang:'ja'}});
+    }""")
+    h.wait_js("() => !document.querySelector('#p-plain dl-t')", 10, what='target change invalidated old hover translation')
+
+
 @case("structure_mixed_and_flex", "结构：混合内容的 run 单元 data-dl-* 挂在 dl-t 上而非父 li；flex 宿主内多一层 dl-w")
 def structure_mixed_and_flex(h: Session) -> None:
     h.open("article.html")

@@ -41,6 +41,26 @@ class ReleaseTests(unittest.TestCase):
         return path
     def build(self):
         return build_release(self.project, self.out)
+    def userscript_builder(self):
+        return self.write('scripts/build_userscript.mjs', """import fs from 'node:fs/promises';
+import path from 'node:path';
+const version=JSON.parse(await fs.readFile('extension/manifest.json','utf8')).version;
+const output=process.argv[2]==='--output'?process.argv[3]:'dist/duallens.user.js';
+await fs.mkdir(path.dirname(output),{recursive:true});
+await fs.writeFile(output,'// ==UserScript==\\n// @version '+version+'\\n// ==/UserScript==\\n// fixture userscript\\n');
+""")
+    def rehash(self):
+        sums = self.out / 'SHA256SUMS'
+        names = [line.split('  ', 1)[1] for line in sums.read_text().splitlines()]
+        sums.write_text(''.join(f'{hashlib.sha256((self.out/name).read_bytes()).hexdigest()}  {name}\n' for name in names), encoding='utf-8')
+    def replace_zip_member(self, name, member, content):
+        archive = self.out / name
+        with zipfile.ZipFile(archive) as z:
+            rows = [(entry, content if entry.filename == member else z.read(entry.filename)) for entry in z.infolist()]
+        with zipfile.ZipFile(archive, 'w') as z:
+            for entry, data in rows:
+                z.writestr(entry, data)
+        self.rehash()
     def test_two_archives_and_sha256_validate(self):
         paths = self.build(); self.assertEqual(len(paths),3)
         verify_release(self.project,self.out)
@@ -48,6 +68,91 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn('manifest.json',z.namelist()); self.assertNotIn('extension/manifest.json',z.namelist())
         with zipfile.ZipFile(self.out/'duallens-portable-v0.1.0.zip') as z:
             self.assertIn('extension/manifest.json',z.namelist()); self.assertIn('gateway/duallens_gateway.py',z.namelist()); self.assertIn('tests/unit/example.test.mjs',z.namelist())
+
+    def test_edge_store_target_removes_manifest_key_and_keeps_extension_members(self):
+        manifest = self.project / 'extension/manifest.json'
+        data = json.loads(manifest.read_text())
+        data['key'] = 'public-test-key'
+        manifest.write_text(json.dumps(data), encoding='utf-8')
+        paths = build_release(self.project, self.out, 'edge-store')
+        self.assertEqual([p.name for p in paths], ['duallens-extension-v0.1.0.zip', 'duallens-portable-v0.1.0.zip', 'duallens-edge-store-v0.1.0.zip', 'SHA256SUMS'])
+        verify_release(self.project, self.out)
+        with zipfile.ZipFile(self.out/'duallens-edge-store-v0.1.0.zip') as edge:
+            self.assertNotIn('key', json.loads(edge.read('manifest.json')))
+            self.assertEqual(set(edge.namelist()), {'LICENSE', 'manifest.json', 'background/main.js', 'content/loader.js', 'shared/defs.js', 'ui/popup.html', 'ui/popup.js', 'ui/ui.css', 'icons/1.png'})
+
+    def test_userscript_builder_is_optional_and_added_when_present(self):
+        self.userscript_builder()
+        paths = self.build()
+        self.assertIn(self.out/'duallens.user.js', paths)
+        self.assertIn('duallens.user.js', (self.out/'SHA256SUMS').read_text(encoding='utf-8'))
+        verify_release(self.project, self.out)
+        self.assertFalse((self.project / 'dist').exists(), 'builder wrote into source project instead of staging')
+
+    def test_userscript_hash_metadata_and_rebuild_are_all_checked(self):
+        self.userscript_builder()
+        for mode, error in [('hash', 'checksum mismatch'), ('version', 'metadata version'), ('header', 'metadata header'), ('duplicate', 'metadata version'), ('bytes', 'rebuilt source')]:
+            with self.subTest(mode=mode):
+                self.build()
+                user = self.out / 'duallens.user.js'
+                content = user.read_text()
+                if mode == 'version': content = content.replace('@version 0.1.0', '@version 9.9.9')
+                elif mode == 'header': content = content.replace('==UserScript==', 'invalid')
+                elif mode == 'duplicate': content = content.replace('// @version 0.1.0', '// @version 0.1.0\n// @version 0.1.0')
+                else: content += '// changed\n'
+                user.write_text(content, encoding='utf-8')
+                if mode != 'hash': self.rehash()
+                with self.assertRaisesRegex(CheckError, error): verify_release(self.project, self.out)
+
+    def test_missing_userscript_or_checksum_entry_is_rejected(self):
+        self.userscript_builder(); self.build()
+        (self.out / 'duallens.user.js').unlink()
+        with self.assertRaisesRegex(CheckError, 'missing release asset'): verify_release(self.project, self.out)
+        self.build()
+        sums = self.out / 'SHA256SUMS'
+        sums.write_text(''.join(line+'\n' for line in sums.read_text().splitlines() if not line.endswith('duallens.user.js')))
+        with self.assertRaisesRegex(CheckError, 'expected versioned assets'): verify_release(self.project, self.out)
+
+    def test_edge_store_key_members_and_source_bytes_are_checked(self):
+        self.userscript_builder()
+        name = 'duallens-edge-store-v0.1.0.zip'
+        for mode, error in [('key', 'manifest contains key'), ('manifest', 'manifest differs'), ('source', 'archive differs'), ('extra', 'unexpected or missing archive member')]:
+            with self.subTest(mode=mode):
+                build_release(self.project, self.out, 'edge-store')
+                if mode in {'key', 'manifest'}:
+                    with zipfile.ZipFile(self.out/name) as z: data = json.loads(z.read('manifest.json'))
+                    data['key' if mode == 'key' else 'name'] = 'public fixture'
+                    self.replace_zip_member(name, 'manifest.json', json.dumps(data).encode())
+                elif mode == 'source': self.replace_zip_member(name, 'shared/defs.js', b'// changed\n')
+                else:
+                    with zipfile.ZipFile(self.out/name, 'a') as z: z.writestr('extra.txt', 'fixture')
+                    self.rehash()
+                with self.assertRaisesRegex(CheckError, error): verify_release(self.project, self.out)
+
+    def test_old_versions_are_cleaned_and_current_store_is_rebuilt(self):
+        self.userscript_builder(); build_release(self.project, self.out, 'edge-store')
+        for kind in ['extension', 'portable', 'edge-store']:
+            (self.out / f'duallens-{kind}-v0.0.9.zip').write_text('stale')
+        unrelated = self.out / 'notes.txt'; unrelated.write_text('keep')
+        self.build(); verify_release(self.project, self.out)
+        self.assertTrue((self.out/'duallens-edge-store-v0.1.0.zip').exists())
+        self.assertFalse(any(self.out.glob('*v0.0.9.zip')))
+        self.assertEqual(unrelated.read_text(), 'keep')
+        manifest = self.project/'extension/manifest.json'
+        data = json.loads(manifest.read_text()); data['version'] = '0.2.0'; manifest.write_text(json.dumps(data))
+        self.build(); verify_release(self.project, self.out)
+        self.assertFalse(any(self.out.glob('*v0.1.0.zip')))
+
+    def test_stale_directory_asset_is_rejected_even_if_unlisted_in_checksums(self):
+        self.build(); (self.out/'duallens-extension-v0.0.9.zip').write_text('stale')
+        with self.assertRaisesRegex(CheckError, 'stale'): verify_release(self.project, self.out)
+
+    def test_failed_userscript_build_preserves_previous_release(self):
+        self.userscript_builder(); self.build()
+        before = {p.name:p.read_bytes() for p in self.out.iterdir()}
+        self.write('scripts/build_userscript.mjs', 'process.exit(1);')
+        with self.assertRaisesRegex(CheckError, 'rebuild failed'): self.build()
+        self.assertEqual(before, {p.name:p.read_bytes() for p in self.out.iterdir()})
     def test_repeated_build_is_byte_identical(self):
         first = {p.name:p.read_bytes() for p in self.build()}
         second = {p.name:p.read_bytes() for p in self.build()}

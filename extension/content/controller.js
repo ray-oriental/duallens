@@ -5,26 +5,29 @@ import { siteRuleFor } from '../shared/settings.js';
 import { PRIORITY, ERR } from '../shared/protocol.js';
 import { parseMarkup } from '../shared/markup.js';
 import { looksLikeTarget, normalizeLang, sameLanguage } from '../shared/lang.js';
-import { collectRuns, runsOf, blockContainerOf } from './walker.js';
+import { collectRuns, iterateRuns, runsOf, blockContainerOf } from './walker.js';
 import { serializeRun, isTranslatable, buildFragment, textFragment } from './serialize.js';
 import * as inj from './injector.js';
 import { TranslateClient } from './client.js';
+import { IdleSlices } from './idle.js';
 import { LazyObserver, MutationWatcher, RouteWatcher } from './observer.js';
-import { joinSelectors, debounce, detectLanguage } from './util.js';
+import { joinSelectors, debounce } from './util.js';
 
 const MAX_REQUEST_ITEMS = 50;
 const CHURN_LIMIT = 12; // re-translations of one host within a minute before we leave it alone
 
 export class PageTranslator {
   // getSettings(): current merged settings. onChange(): something user-visible changed.
-  constructor({ getSettings, onChange }) {
+  constructor({ getSettings, onChange, platform }) {
+    this.platform = platform;
+    this.slices = new IdleSlices();
     this.getSettings = getSettings;
     this.onChange = onChange || (() => {});
     this.units = new Map(); // id -> unit
     this.registry = new WeakMap(); // first node -> unit (dedupe across rescans)
     this.byHost = new Map(); // host -> Set<unit>
     this.churn = new WeakMap(); // host -> { n, t0 }
-    this.client = new TranslateClient();
+    this.client = new TranslateClient(platform);
     this.lazy = new LazyObserver((u, pr, top) => this.#enqueue(u, pr, top));
     this.watch = new MutationWatcher((batch) => this.#onMutations(batch));
     this.route = new RouteWatcher(() => this.#onRoute());
@@ -99,6 +102,7 @@ export class PageTranslator {
   // Restores the original page completely and stops watching.
   stop() {
     this.active = false;
+    this.slices.cancel();
     clearTimeout(this.flushTimer);
     this.flushTimer = 0;
     this.queue.length = 0;
@@ -182,13 +186,14 @@ export class PageTranslator {
   }
 
   #scanOne(root, shallow) {
-    const runs = collectRuns(root, {
-      minChars: this.s.minChars,
-      exclude: this.#exclude(),
-      known: this.#known,
-      shallow,
-    });
-    for (const run of runs) this.#addUnit(run);
+    const opts = { minChars: this.s.minChars, exclude: this.#exclude(), known: this.#known, shallow };
+    if (this.platform.coarse) {
+      this.slices.run(iterateRuns(root, opts), (run) => {
+        if (run && this.active && run.host.isConnected && !this.#known(run.host, run.first)) this.#addUnit(run);
+      });
+    } else {
+      for (const run of collectRuns(root, opts)) this.#addUnit(run);
+    }
   }
 
   #addUnit(run, { watch = true } = {}) {
@@ -262,6 +267,8 @@ export class PageTranslator {
     // read phase: no DOM writes until every unit has been measured
     const ready = [];
     for (const u of batch) {
+      if (this.platform.coarse) await this.slices.yield();
+      if (u.dead || this.units.get(u.id) !== u) continue;
       if (!inj.intact(u)) {
         this.#drop(u);
         continue;
@@ -305,12 +312,12 @@ export class PageTranslator {
   async #alreadyTarget(plain, s) {
     if (looksLikeTarget(plain, s.targetLang)) return true;
     if (plain.length < 24) return false;
-    const det = await detectLanguage(plain.slice(0, 400));
-    const top = det && det.isReliable && det.languages && det.languages[0];
+    const det = await this.platform.detectLanguage(plain.slice(0, 400));
+    const top = det && det.reliable && det.lang;
     if (!top) return false;
-    const pct = top.percentage ?? 100;
-    if (pct >= 70 && sameLanguage(normalizeLang(top.language), s.targetLang)) return true;
-    if (s.sourceLang && s.sourceLang !== 'auto' && pct >= 80 && !sameLanguage(normalizeLang(top.language), s.sourceLang)) {
+    const pct = det.percentage ?? 100;
+    if (pct >= 70 && sameLanguage(normalizeLang(top), s.targetLang)) return true;
+    if (s.sourceLang && s.sourceLang !== 'auto' && pct >= 80 && !sameLanguage(normalizeLang(top), s.sourceLang)) {
       return true;
     }
     return false;
@@ -338,16 +345,15 @@ export class PageTranslator {
   }
 
   #onResults(results) {
-    inj.write(() => {
-      for (const r of results) {
-        const u = this.units.get(r.id);
-        if (!u || u.dead || u.state !== 'pending') continue;
-        if (!inj.intact(u)) { this.#drop(u); continue; }
-        if (r.error) this.#fail(u, r.error);
-        else this.#apply(u, r.text);
-      }
+    const apply = (r) => inj.write(() => {
+      const u = this.units.get(r.id);
+      if (!u || u.dead || u.state !== 'pending') return;
+      if (!inj.intact(u)) { this.#drop(u); return; }
+      if (r.error) this.#fail(u, r.error);
+      else this.#apply(u, r.text);
     });
-    this.emit();
+    if (this.platform.coarse) this.slices.run(results[Symbol.iterator](), (r) => { apply(r); this.emit(); });
+    else { for (const r of results) apply(r); this.emit(); }
   }
 
   #fail(unit, error) {

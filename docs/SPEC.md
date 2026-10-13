@@ -1,7 +1,7 @@
 # DualLens 规格与接口契约
 
 公共接口契约。实现以本文件与设置模块为准；变更接口时同步更新规格。
-状态：v0.1 P0实现与验收（2026-10-13）。当前实现边界见ROADMAP.md。
+状态：v0.2 多平台接线（Unreleased，2026-10-13）；发布版本仍以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
 
 ## 0. 范围
 
@@ -16,13 +16,19 @@
 ## 1. 总体结构
 
 ```
-网页 ── content/loader.js（经典脚本，所有页面）
-          └─ import() → content/main.js（ES 模块）
+桌面网页 ── content/loader.js → platform/extension.js ─┐
+Android Edge + Tampermonkey                         │
+         └─ duallens.user.js → userscript/entry.js   │
+                    └─ platform/userscript.js ──────┤
+                                                   ▼
+                       content/main.js: start(platform)
                 walker / injector / observer / hover / selection / inputbox / floatball
-                    │  chrome.runtime 端口 "dl-translate"
-                    ▼
-        background/service-worker.js（ES 模块）
-          queue（优先级 + 并发）→ cache（IndexedDB）→ providers
+                    │ platform.translator() / settingsStore
+        ┌───────────┴─────────────────────────────────────────┐
+        │ extension: runtime 端口 → background/service-worker │
+        │ userscript: GM HTTP → 页面隔离环境内翻译服务         │
+        └───────────┬─────────────────────────────────────────┘
+          queue（优先级 + 并发）→ cache → providers
                     │
         ┌───────────┼──────────────┬─────────────┐
      gateway      openai          mock
@@ -36,9 +42,10 @@
    └─ hermes/* → 127.0.0.1:8645（Nous免费代理）
 ```
 
-扩展零构建：原生 ES 模块，没有 `node_modules`，也没有打包器。content script 不能直接作为模块加载，
+扩展零构建：原生 ES 模块，没有运行时依赖。content script 不能直接作为模块加载，
 所以由 `loader.js` 用 `import(chrome.runtime.getURL('content/main.js'))` 动态导入，被导入的文件列在
-`web_accessible_resources` 里。
+`web_accessible_resources` 里。`scripts/build_userscript.mjs` 仅为用户脚本将同一静态模块图与 CSS 打包成 IIFE；
+不改变可直接加载的 `extension/`。用户脚本的页内面板经 `mountForm` 复用 `mountSettingsForm`，关闭调用 `destroy()`。
 
 ## 2. 文件归属（并行开发时谁写哪里）
 
@@ -52,10 +59,33 @@
 
 需要改别人的文件时，联系文件维护者，不要自己改。契约文件改动需要接口维护者复审。
 
-## 3. 设置（`chrome.storage.local` 键 `settings`）
+## 3. 设置 v2 与 secrets（`extension/shared/settings.js`）
 
-字段与默认值以 `extension/shared/settings.js` 为准。读写只走 `loadSettings()` / `saveSettings(patch)`。
-内容脚本通过 `chrome.storage.onChanged` 感知变化，不缓存旧值。
+统一入口 `createSettingsStore({ syncArea, localArea })`，返回 `load()`、`save(patch)`、`getSecret(id)`、
+`setSecret(id, key)`、`onChange(cb)` 与 `syncStatus`。`loadSettings/saveSettings` 是默认扩展存储的薄包装。
+扩展的 popup、options、内容脚本、后台均用同一 v2 工厂与 `shared/storage-areas.js` 的 Chrome 适配。
+用户脚本的两个 area 指向同一个 GM 私有记录 `duallens:local`，不使用网页 localStorage / IndexedDB，也不声称跨设备自动同步。
+
+- 非机密配置拆为 `settings.core`（阅读、交互、provider、prompt、cache）、`settings.glossary`、
+  `settings.sites`（siteRules、autoTranslateLangs），扩展优先写 `chrome.storage.sync`。
+  单键超过 8 KB、总量超过 100 KB 或同步不可用时，整体回退本机区；设置页提示「此设备未同步」。
+- API key 只写本机区 `secrets: { [profileId]: { apiKey } }`。公共配置与兼容镜像 `settings` 均不含 key。
+  `settings.storage` 保存本机同步状态及兼容镜像摘要；`settings` 只用于旧调用兼容，不是内容脚本的数据源。
+- v1 迁移幂等：将 profiles 内的 apiKey 移到 secrets，保留较新的本机 key 与清除标记，将版本改为 2。
+  过渡用户脚本的 `duallens:sync.settings` 一次性迁入 v2，已有 v2 配置不会被旧记录覆盖。
+- `onChange` 是失效通知，不携带配置对象。内容脚本收到通知后重新 `load()`，忽略过期重载，
+  比较设置时忽略对象键顺序、保留数组顺序；无实际变化时保留悬停译文。
+- `provider.chain = [{ profileId, model }, …]` 表示跨 profile 备选链；其首项与兼容 active/model 对齐。
+  providers 与 translator 在请求时通过注入的 `getSecret` 读取密钥，不把 key 放进内容脚本配置。
+- 共享表单提供预设向导、免费模型发现、测试、站点规则、术语及加密备份。`platform.promptSecret(label)`
+  在用户脚本隔离沙箱中调用启动时捕获的原生 `prompt`，默认值永远为空，取消返回 null，不调用网页的 `window.prompt`。
+  用户脚本只显示 key 的已设置/未设置状态及设置、清除按钮，不渲染 key 或备份口令输入框；草稿留在闭包中，
+  点击保存才写入 GM secrets。扩展平台该方法返回 null，其独立 options 页面保留原有 password 表单。
+  明文导出递归去掉机密；带口令时使用 PBKDF2-SHA256（310,000 次）与 AES-GCM，
+  格式 `duallens-config:v1:<base64url(salt|iv|密文)>`。密钥与口令不进日志。
+
+字段与默认值仍以设置模块为准。触屏运行时将 rootMargin 限至 400px、每批至多 12 段、并发至多 2；
+不把性能限值回写用户配置。
 
 ## 4. 消息协议（`extension/shared/protocol.js`）
 
@@ -78,7 +108,7 @@
 | type | 请求 | 响应 |
 | --- | --- | --- |
 | `translate-text` | `{ text, to, from?, purpose: 'selection'|'input'|'hover' }` | `{ ok, text }` 或 `{ ok:false, error }` |
-| `list-models` | `{ profileId }` | `{ ok, models: [{ id, label }] }` |
+| `list-models` | `{ profileId? , presetId?, freeOnly? }`，presetId 优先，可在保存 profile 前发现模型 | `{ ok, models: [{ id, label, … }] }`；OpenRouter 默认仅返回免费模型 |
 | `provider-test` | `{ profileId }` | `{ ok, latencyMs, sample }` |
 | `cache-stats` / `cache-clear` | `{}` | `{ ok, entries }` |
 | `open-options` | `{}` | `{ ok }`；background 调 `chrome.runtime.openOptionsPage()`（内容脚本自己调不了） |
@@ -100,7 +130,7 @@
    code pre kbd samp var`、`[contenteditable]`、`[translate=no]`、`.notranslate`、`[aria-hidden=true]`、
    我们自己插入的元素、不可见元素；文本去空白后少于 `minChars` 或没有字母/汉字；纯数字、纯 URL、纯符号。
    站点规则的 `exclude` 选择器追加到这里，`include` 选择器限定根节点。
-3. **语言判定**：段落级用 `chrome.i18n.detectLanguage`（内容脚本可用），与目标语言同语种（`zh`、`zh-CN`、`zh-TW`
+3. **语言判定**：段落级用 `platform.detectLanguage`（扩展适配 chrome.i18n，用户脚本用 shared/lang 启发式），与目标语言同语种（`zh`、`zh-CN`、`zh-TW`
    按配置归一）且可信的段落跳过。中文目标额外用汉字占比做快速判断。
 4. **懒翻译**：`IntersectionObserver`，`rootMargin` 取设置里的像素值（默认 600px）。进入范围的单元按
    视口位置排优先级，攒 80ms 再发一批。
@@ -159,14 +189,15 @@
 
 ## 8. 队列、限流、缓存（background）
 
-- 队列按 `priority` 排序，每个 provider 配置自己的并发上限。冷却以**模型**为单位：429 按 `Retry-After`
-  冷却该模型（没有这个头就指数退避，从 2s 起，上限 60s），并把这一批**立刻**交给 `fallbackModels` 里下一个
+- 队列按 `priority` 排序，每个 provider 配置自己的并发上限。冷却以 **profile + 模型**为单位：429 按 `Retry-After`
+  冷却该 profile + 模型（没有这个头就指数退避，从 2s 起，上限 60s），并把这一批**立刻**交给 `provider.chain` 里下一个
   不在冷却中的模型，不原地等待；502/503/连接失败同样立刻换下一个，原模型冷却 60s。所有模型都在冷却时，
   批次排队等最早解冻的那个。
 - 取消：标签页关闭或换页时，content 发 `cancel`，未发出的批次直接丢弃。
 - 缓存：service worker 里的 IndexedDB，库 `duallens`、仓库 `tr`。键为
   `sha256(PROMPT_VERSION | profileId | model | from | to | preset/customHash | glossaryHash | titleHash | text)`，值为 `{ k, t, ts }`；
-  超过 `cache.maxEntries` 时按 `ts` 淘汰最旧的。命中缓存不计入并发。
+  超过 `cache.maxEntries` 时按 `ts` 淘汰最旧的。命中缓存不计入并发。用户脚本使用内存缓存与 GM localArea 持久化，
+  序列化数据上限 2 MB，按时间淘汰；不写网页存储。没有显式 v2 链的旧设置仍兼容同 profile 的 fallbackModels。
 
 ## 9. 本机网关（`gateway/`）
 
@@ -200,7 +231,8 @@
 | `claude/` | 子进程 `claude.exe -p --model <haiku\|sonnet> --tools "" --restricted --strict-mcp-config --no-session-persistence --disable-slash-commands --system-prompt-file <tmp> --output-format json` | exe 用 `%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe`，不走 `.cmd` 垫片；user 消息经 stdin；工作目录是空沙箱；环境去掉所有 `ANTHROPIC_*`、`CLAUDE_*`（否则会被 settings.json 里指向交大的地址带走，`--restricted` 也是为此）；`CREATE_NO_WINDOW`，超时 `taskkill /T /F`；从 `result` 取文本并去掉围栏。**每日上限按用户选择默认不限（0）**，超出回 429。并发 1 |
 | `codex/` | 子进程 `node <codex.js> exec -s read-only --skip-git-repo-check --ephemeral --ignore-user-config --json -o <tmp> -` | system 和 user 合并成一段经 stdin 传入，开头写明「不要使用任何工具或技能，只输出结果」；从 `-o` 文件取答案。每日上限按用户选择默认不限（0），并发 1 |
 
-全新扩展默认选择未配置的OpenAI兼容profile，必须由用户配置服务。gateway profile默认`ollama/qwen3:4b`，无自动fallback。
+全新安装没有选中的服务，设置页显示向导；用户配置后才能翻译。默认推荐 OpenRouter 免费模型，不自动联网。
+gateway profile默认`ollama/qwen3:4b`，无自动fallback，本机网关完全可选。
 `ollama/gpt-oss:20b`、`claude/*`、`codex/*` 只在用户手动选择时使用：订阅后端仅手动选择，且SJTU/Hermes/订阅默认disabled，需机器本地配置显式启用。
 
 ## 10. 测试与验收

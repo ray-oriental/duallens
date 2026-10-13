@@ -25,6 +25,8 @@ export const BASE_CSS = `
 *, *::before, *::after { box-sizing: border-box; }
 .dl-root {
   --fg: #1f2328; --fg2: #59636e; --bg: #ffffff; --bg2: #f6f8fa; --line: #d1d9e0;
+  --safe-top: env(safe-area-inset-top, 0px); --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px);
   --accent: #4263eb; --accent-fg: #ffffff; --danger: #cf222e; --shadow: 0 8px 24px rgba(31,35,40,.18);
   font: 13px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   color: var(--fg);
@@ -35,6 +37,7 @@ export const BASE_CSS = `
     --accent: #748ffc; --accent-fg: #101418; --danger: #ff7b72; --shadow: 0 8px 24px rgba(0,0,0,.5);
   }
 }
+@media (pointer: coarse) { button, select, input:not([type=checkbox]) { min-width: 44px; min-height: 44px; } }
 button { font: inherit; color: inherit; cursor: pointer; }
 `;
 
