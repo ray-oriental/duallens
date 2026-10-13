@@ -8,12 +8,26 @@ import { createTranslator } from '../background/translator.js';
 import { createHandlers } from '../background/handlers.js';
 import { toErrorInfo } from '../shared/errors.js';
 import { looksLikeTarget } from '../shared/lang.js';
+import { createGMImageFetch, probeLocalOCR } from '../content/comics/capabilities.js';
+import { createUserscriptOCR } from '../content/comics/userscript-ocr.js';
 
-export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse = false } = {}) {
+export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse = false, localOCR = null } = {}) {
   const syncArea = createGMStorageArea(gm, 'duallens:sync');
   const localArea = createGMStorageArea(gm, 'duallens:local');
+  const ocr = createUserscriptOCR({ storage: createGMStorageArea(gm, 'duallens:ocr'), xmlhttpRequest: gm.xmlhttpRequest });
   const platform = {
     kind: 'userscript', coarse, syncArea, localArea,
+    comics: {
+      async recognize(req) {
+        try {
+          const capability=await probeLocalOCR();
+          if (!capability.ok) return { ok:false,error:{ code:'ocr_unavailable',message:capability.reason } };
+          const blob=await createGMImageFetch(gm.xmlhttpRequest)(req.url);
+          return await (localOCR || ocr.recognize)(blob,{ lang:req.lang });
+        } catch(e) { return { ok:false,error:{ code:'image_unavailable',message:e.message } }; }
+      },
+      languages: (lang) => ocr.languages(lang),
+    },
     http: createGMHttp(gm.xmlhttpRequest),
     openSettings, valid: () => true,
     registerCommand(_id, label, handler) { gm.registerMenuCommand(label, handler); },

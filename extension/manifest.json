@@ -10,7 +10,8 @@
     "unlimitedStorage",
     "activeTab",
     "contextMenus",
-    "scripting"
+    "scripting",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -20,6 +21,13 @@
     "type": "module"
   },
   "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/comics/canvas-hook.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": false
+    },
     {
       "matches": [
         "http://*/*",
@@ -40,6 +48,7 @@
     {
       "resources": [
         "content/*.js",
+        "content/comics/*.js",
         "platform/*.js",
         "shared/*.js"
       ],
@@ -50,6 +59,7 @@
       ]
     }
   ],
+  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'" },
   "action": {
     "default_popup": "ui/popup.html",
     "default_title": "DualLens",

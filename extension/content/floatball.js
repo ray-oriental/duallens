@@ -355,6 +355,12 @@ export class FloatBall {
     input.type = 'button';
     input.addEventListener('pointerdown', (e) => e.preventDefault());
     input.addEventListener('click', () => { this.#closeMenu(); this.ctx.translateInput(); });
-    menu.append(input, opts);
+    const comics = node('button', 'row btn', '翻译此页漫画');
+    comics.type = 'button';
+    comics.addEventListener('click', () => { this.#closeMenu(); this.ctx.translateComics(); });
+    const restoreComics = node('button', 'row btn', '恢复漫画原文');
+    restoreComics.type = 'button';
+    restoreComics.addEventListener('click', () => { this.#closeMenu(); this.ctx.restoreComics(); });
+    menu.append(input, comics, restoreComics, opts);
   }
 }

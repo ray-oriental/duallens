@@ -22,6 +22,7 @@ import { createQueue } from './queue.js';
 import { createCache } from './cache.js';
 import { createTranslator } from './translator.js';
 import { createHandlers } from './handlers.js';
+import { createComicHandlers } from './comics.js';
 
 const queue = createQueue();
 const cache = createCache();
@@ -33,6 +34,7 @@ const handlers = createHandlers({
   getSettings: loadSettings,
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
+Object.assign(handlers, createComicHandlers(chrome));
 
 // A pending fetch alone does not stop Chrome from stopping an idle worker after ~30s; any
 // extension API call resets that timer, so poke one while work is in flight.
@@ -156,6 +158,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 });
 
 const MENU = {
+  COMICS: 'dl-translate-comics',
   TOGGLE: 'dl-toggle-page',
   SELECTION: 'dl-translate-selection',
   ALWAYS: 'dl-site-always',
@@ -167,6 +170,7 @@ function setupMenus() {
     void chrome.runtime.lastError;
     const add = (props) => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
     add({ id: MENU.TOGGLE, title: '翻译此页 / 恢复原文', contexts: ['page', 'link', 'image'] });
+    add({ id: MENU.COMICS, title: '翻译此页漫画', contexts: ['page', 'image'] });
     add({ id: MENU.SELECTION, title: '翻译选中文字', contexts: ['selection'] });
     add({ id: MENU.ALWAYS, title: '总是翻译此网站', contexts: ['page'] });
     add({ id: MENU.NEVER, title: '从不翻译此网站', contexts: ['page'] });
@@ -196,6 +200,9 @@ async function setSiteRule(host, mode) {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const tabId = tab && tab.id;
   switch (info.menuItemId) {
+    case MENU.COMICS:
+      await sendToTab(tabId, { type: MSG_COMMAND, name: 'translate-comics' });
+      break;
     case MENU.TOGGLE:
       await sendToTab(tabId, { type: MSG_COMMAND, name: COMMANDS.TOGGLE_PAGE });
       break;

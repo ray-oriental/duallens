@@ -14,6 +14,10 @@ export function createExtensionPlatform(api = globalThis.chrome) {
   };
   const platform = {
     kind: 'extension', coarse, syncArea, localArea,
+    comics: {
+      recognize: (req) => one({ ...req, type: 'comic-ocr' }),
+      languages: (lang) => one(lang ? { type:'comic-languages-delete',lang } : { type:'comic-languages-list' }),
+    },
     // HTTP is only available in the worker. Content uses translator() messaging.
     http(req) {
       if (typeof document !== 'undefined') return Promise.reject(new Error('HTTP requires the extension service worker'));
