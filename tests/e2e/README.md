@@ -19,6 +19,20 @@ On Linux, use your Python 3.12 virtual environment, install requirements-dev.txt
 
 ## Commands
 
+Run all three entry points from the repository root with the same Playwright Python/browser installation:
+
+```powershell
+$testPython = "$env:USERPROFILE\.venvs\duallens-e2e\Scripts\python.exe"
+# Optional: reuse an existing, matching Playwright 1.48 Chromium cache read-only.
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
+& $testPython -B -u tests/e2e/run_e2e.py --mock-only
+node scripts/build_userscript.mjs
+& $testPython -B -u tests/e2e/run_userscript_e2e.py
+& $testPython -B -u tests/dom/run_settings_browser.py
+```
+
+`PLAYWRIGHT_BROWSERS_PATH` points to the parent of `chromium-1140`, not to the executable or the numbered directory itself. Omit it when using the normal Playwright cache. None of these commands starts a model server or uses credentials. Building a release with `python -B scripts/build_release.py` also creates `dist/duallens.user.js`.
+
 ```sh
 python -B tests/e2e/run_e2e.py --list
 python -B tests/e2e/run_e2e.py --smoke
@@ -45,3 +59,22 @@ PASS/FAIL/SKIP/INFO are distinct. Only gateway_article can optionally SKIP; --mo
 Paragraph translation, link/code retention, exclusions and hidden/password elements, exact DOM restore, translation-only visibility, viewport lazy loading, dynamic append/SPA, style changes, input shortcut and editing race, selection and hover, mixed/flex structure, settings privacy/manual subscription selection, never/always wake/sleep, safe clones, original data attributes/classes and toast cleanup. Successes use structured results; only failures capture screenshots.
 
 The browser uses headless=False plus --headless=new to load extensions. Headless shell does not provide the same extension behavior.
+
+## Userscript runner
+
+`run_userscript_e2e.py` runs the unchanged generated userscript without an extension. A test-only GM transport/storage/menu stub and closed-shadow instrumentation exercise desktop translation, DOM-identical restore, translation-only, selection, shared settings and dynamic/SPA changes. Secret-transport and new OpenRouter-preset cases check bullet editing, no key backfill, local-only secrets, explicit mocked discovery/testing and no key in page storage/DOM/window properties.
+
+Touch cases run at 375×812 and 800×1280 with a coarse pointer. They verify a cancellable 500ms hold, selection controls below the selection, floating-ball drag, focused-input translation, full-screen narrow settings and full long-page scroll/translation metrics. Reported long-task measurements are synthetic measurements, not guarantees for every website/device. The runner never makes a real model call and exits 1 on failure, 2 on an empty filter.
+
+```sh
+node scripts/build_userscript.mjs
+python -B -u tests/e2e/run_userscript_e2e.py
+python -B -u tests/e2e/run_userscript_e2e.py --only openrouter_profile
+python -B -u tests/e2e/run_userscript_e2e.py --only mobile_375 --only tablet_800
+```
+
+Profiles are removed after the same bounded cleanup checks as the extension suite. Results and failure screenshots remain under `~/.cache/duallens-e2e/artifacts/userscript/`. GM instrumentation exists only in the runner, never in the release bundle. See [real-device acceptance](MOBILE_ACCEPTANCE.md) for Android Edge/Tampermonkey.
+
+## Settings browser runner
+
+`tests/dom/run_settings_browser.py` stages an isolated extension using the canonical session helper and runs five checks: no-network fresh wizard, mocked OpenRouter discovery/test/save, encrypted/public backup, popup switching, and an injected shared form with Chrome APIs forbidden. It uses a 375×812 viewport and writes light/dark screenshots to `~/.cache/duallens-e2e/providers-settings/`. Run it directly; it accepts no case filters. This is separate from both the full extension suite and the userscript suite.

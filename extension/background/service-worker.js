@@ -15,9 +15,9 @@ import {
   COMMANDS,
   PRIORITY,
 } from '../shared/protocol.js';
-import { loadSettings, saveSettings } from '../shared/settings.js';
+import { loadSettings, saveSettings, getDefaultSettingsStore } from '../shared/settings.js';
 import { toErrorInfo } from '../shared/errors.js';
-import { providers } from './providers.js';
+import { createProviders } from './providers.js';
 import { createQueue } from './queue.js';
 import { createCache } from './cache.js';
 import { createTranslator } from './translator.js';
@@ -25,7 +25,9 @@ import { createHandlers } from './handlers.js';
 
 const queue = createQueue();
 const cache = createCache();
-const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings });
+const getSecret = id => getDefaultSettingsStore().getSecret(id);
+const providers = createProviders({ getSecret });
+const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings, getSecret });
 const handlers = createHandlers({
   translator,
   cache,

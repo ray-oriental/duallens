@@ -6,6 +6,7 @@ import {
 } from '../shared/settings.js';
 import * as P from '../shared/protocol.js';
 import { normalizeLang } from '../shared/lang.js';
+import { performanceSettings, settingsEqual } from '../platform/settings-store.js';
 import { PageTranslator } from './controller.js';
 import { SelectionUI } from './selection.js';
 import { InputBox } from './inputbox.js';
@@ -53,7 +54,14 @@ class App {
   start() {
     this.dormant = siteRuleFor(this.settings, HOST).mode === 'never';
     this.removeMessage = this.platform.onMessage?.((msg, reply) => this.#onMessage(msg, reply));
-    this.removeSettings = this.store.onChange((next) => this.#applySettings(next));
+    let revision = 0;
+    this.removeSettings = this.store.onChange(() => {
+      // v2 onChange is an invalidation signal, not a settings snapshot. Ignore stale loads.
+      const token = ++revision;
+      this.store.load().then((next) => {
+        if (token === revision) this.#applySettings(performanceSettings(next, this.platform.coarse));
+      }).catch(() => {});
+    });
     for (const name of Object.values(P.COMMANDS)) this.platform.registerCommand(name, {
       'toggle-page': '翻译 / 恢复当前页面', 'toggle-translation-only': '切换双语 / 仅译文',
       'translate-input': '翻译当前输入框', 'toggle-hover': '开关悬停 / 长按翻译',
@@ -122,16 +130,16 @@ class App {
     if (mode === 'always' && siteRuleFor(prev, HOST).mode !== 'always') this.translator.start();
     const t = this.translator;
     if (prev.displayMode !== next.displayMode) t.setDisplayMode(next.displayMode);
-    const customChanged = JSON.stringify(prev.siteRules.custom) !== JSON.stringify(next.siteRules.custom);
+    const customChanged = !settingsEqual(prev.siteRules.custom, next.siteRules.custom);
     if (prev.style !== next.style || customChanged) t.setStyle(t.style);
     if (
       prev.targetLang !== next.targetLang ||
       prev.sourceLang !== next.sourceLang ||
       prev.minChars !== next.minChars ||
       customChanged ||
-      JSON.stringify(prev.provider) !== JSON.stringify(next.provider) ||
-      JSON.stringify(prev.prompt) !== JSON.stringify(next.prompt) ||
-      JSON.stringify(prev.glossary) !== JSON.stringify(next.glossary)
+      !settingsEqual(prev.provider, next.provider) ||
+      !settingsEqual(prev.prompt, next.prompt) ||
+      !settingsEqual(prev.glossary, next.glossary)
     ) {
       t.retranslate();
     }
@@ -228,7 +236,8 @@ export function start(platform) {
   if (ready) return ready;
   if (!platform.valid?.() && platform.valid) return Promise.resolve(null);
   ready = (async () => {
-    const app = new App(await platform.settingsStore.load(), platform);
+    await platform.ready;
+    const app = new App(performanceSettings(await platform.settingsStore.load(), platform.coarse), platform);
     app.start();
     return app;
   })().catch((error) => { ready = null; throw error; });

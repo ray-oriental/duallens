@@ -23,9 +23,10 @@ selection placement, input-menu action, settings and scrolling all 220 long-fixt
 of the observed interval outside long tasks. It cannot count every task below 50 ms or guarantee performance
 on arbitrary sites. Profiles and JSON evidence are under `~/.cache/duallens-e2e`, not in source.
 
-`run_platform_extension_e2e.py` runs the canonical extension suite with a **cache-only** manifest
-change adding `platform/*.js` to `web_accessible_resources`. It is a merge preview until leader updates
-the source manifest; it must not be described as a passing unmodified-source extension run.
+Use `run_e2e.py --mock-only` for source-extension acceptance. The source manifest already lists
+`platform/*.js`; the historical `run_platform_extension_e2e.py` staging preview is no longer needed.
+`run_settings_browser.py` separately validates the v2 wizard, backups and popup. The userscript suite
+also creates an OpenRouter preset with a fake key through the shared form and checks GM-only secrets.
 
 ## User-run Android Edge + Tampermonkey checklist
 
@@ -43,8 +44,9 @@ the source manifest; it must not be described as a passing unmodified-source ext
    focused field is translated. Password fields must remain untouched; editing during a request must cancel replacement.
 7. Open settings from the ball and Tampermonkey menu. On the phone it should fill the viewport;
    target/address/model/save/test controls must remain usable with the keyboard open. Close/reopen;
-   any previously saved key must never be displayed. Use paste or ordinary ASCII typing in the minimal key editor;
-   autofill/composition is deliberately discarded until the shared settings form replaces it.
+   any previously saved key must never be backfilled. Use paste or ordinary ASCII typing in the private
+   key editor attached to the shared form; autofill/composition is deliberately discarded. Confirm new input
+   shows only bullets, Save clears it, and a connection test after reopening still uses the saved key.
 8. Confirm changes survive reload and propagate to another tab. Visit a long public page and scroll
    from top to the actual bottom; confirm new content is translated without repeated insertion or visible stalls.
 9. Only after separately authorizing a real provider test, configure your own service and test it.
