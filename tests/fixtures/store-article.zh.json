@@ -1,0 +1,18 @@
+{
+  "Field Notes · Product & Culture": "现场笔记 · 产品与文化",
+  "Field Notes · Product &amp; Culture": "现场笔记 · 产品与文化",
+  "The Quiet Work of Better Interfaces": "更好界面的静默工作",
+  "A good interface does not ask for attention all the time. It makes the next useful action feel obvious, then gets out of the way.": "好的界面不会时时刻刻索取注意力。它让下一步有用的操作自然明了，然后安静地退到一旁。",
+  "By Mira Chen · October 13, 2026 · 7 min read": "作者：Mira Chen · 2026年10月13日 · 阅读需时7分钟",
+  "A small experiment: remove one control from a page and watch what readers choose without it.": "一个小实验：从页面上移除一个控件，看看读者在没有它时会做出什么选择。",
+  "The most valuable parts of a digital product are often the quietest ones: a sensible default, a readable paragraph, or a status message that arrives exactly when it is needed.": "数字产品中最有价值的部分往往最安静：一个合理的默认值、一段易读的文字，或一条在恰当时刻出现的状态消息。",
+  "These details are easy to miss because they rarely appear in a launch video. They live in the space between intention and action, where a person is deciding whether to continue, pause, or change direction.": "这些细节很容易被忽略，因为它们很少出现在发布视频里。它们存在于意图与行动之间的空隙中，那里的人正在决定是继续、暂停，还是改变方向。",
+  "Designing for the pause": "为停顿而设计",
+  "When a page gives people room to think, small moments of friction become easier to notice. A label can clarify a choice, a preview can prevent a mistake, and a translation can open a paragraph without hiding the words that came first.": "当页面给人留下思考的空间，细小的摩擦就更容易被察觉。标签可以说清一个选择，预览可以避免错误，而译文可以打开一段文字，同时不遮掩最初出现的词句。",
+  "The best tools preserve context while making the next step lighter.": "最好的工具会保留上下文，同时让下一步变得更轻松。",
+  "That principle matters especially when software crosses languages. Readers should be able to compare a sentence, keep its links and emphasis, and decide which version helps them move forward.": "当软件跨越语言边界时，这一原则尤其重要。读者应当能够比较句子、保留链接与强调格式，并决定哪个版本能帮助自己继续阅读。",
+  "Measure what remains": "衡量留下来的东西",
+  "Reliable interfaces leave the original structure intact. They make changes visible, reversible, and local to the task at hand. The result is not spectacle; it is confidence.": "可靠的界面会保留原始结构。它们让变化可见、可逆，并且只作用于眼前的任务。结果不是炫技，而是信心。",
+  "Before shipping a feature, we can ask a simple question: after the new layer appears, can the reader still tell what the page meant before it changed?": "在发布功能之前，我们可以问一个简单的问题：新的一层出现之后，读者还能看出页面变化前的含义吗？",
+  "That question is modest, but it scales from a personal reading habit to a public service. Clarity is a performance feature for human attention.": "这个问题看似朴素，却能从个人阅读习惯延伸到公共服务。清晰，是面向人类注意力的性能特性。"
+}
