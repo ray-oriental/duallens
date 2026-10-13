@@ -24,6 +24,9 @@ import { createTranslator } from './translator.js';
 import { createHandlers } from './handlers.js';
 import { createComicHandlers } from './comics.js';
 import { createCanvasRegistry } from './comic-sites.js';
+import { createPDFEntries } from './pdf.js';
+import { registerSidePanelCommand } from './media.js';
+import { createSubtitleHandlers } from './subtitles.js';
 
 const queue = createQueue();
 const cache = createCache();
@@ -38,8 +41,18 @@ const handlers = createHandlers({
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
 Object.assign(handlers, createComicHandlers(chrome));
+const pdfEntries = createPDFEntries(chrome);
+Object.assign(handlers, pdfEntries.handlers);
+Object.assign(handlers, createSubtitleHandlers());
 const canvasRegistry=createCanvasRegistry(chrome,loadSettings);
 handlers['comic-canvas-sites-sync']=()=>canvasRegistry.sync();
+handlers['open-sidepanel'] = async (_msg, sender) => {
+  try {
+    if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } };
+    await chrome.sidePanel.open({ tabId: sender.tab.id });
+    return { ok: true };
+  } catch { return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } }; }
+};
 getDefaultSettingsStore().onChange(()=>{void canvasRegistry.sync().catch(()=>{});});
 void canvasRegistry.sync().catch(()=>{});
 
@@ -159,12 +172,15 @@ async function activeTabId() {
 }
 
 const KNOWN_COMMANDS = new Set(Object.values(COMMANDS));
+registerSidePanelCommand(chrome);
 chrome.commands.onCommand.addListener(async (command, tab) => {
   if (!KNOWN_COMMANDS.has(command)) return;
   await sendToTab(tab && tab.id != null ? tab.id : await activeTabId(), { type: MSG_COMMAND, name: command });
 });
 
 const MENU = {
+  TEXT: 'dl-open-text',
+  SUBTITLES: 'dl-toggle-subtitles',
   COMICS: 'dl-translate-comics',
   TOGGLE: 'dl-toggle-page',
   SELECTION: 'dl-translate-selection',
@@ -177,6 +193,9 @@ function setupMenus() {
     void chrome.runtime.lastError;
     const add = (props) => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
     add({ id: MENU.TOGGLE, title: '翻译此页 / 恢复原文', contexts: ['page', 'link', 'image'] });
+    add(pdfEntries.menu);
+    add({ id: MENU.TEXT, title: 'DualLens 文本翻译', contexts: ['page', 'selection'] });
+    add({ id: MENU.SUBTITLES, title: '启用 / 恢复 YouTube 双语字幕', contexts: ['video', 'page'], documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*'] });
     add({ id: MENU.COMICS, title: '翻译此页漫画', contexts: ['page', 'image'] });
     add({ id: MENU.SELECTION, title: '翻译选中文字', contexts: ['selection'] });
     add({ id: MENU.ALWAYS, title: '总是翻译此网站', contexts: ['page'] });
@@ -207,6 +226,15 @@ async function setSiteRule(host, mode) {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const tabId = tab && tab.id;
   switch (info.menuItemId) {
+    case pdfEntries.menu.id:
+      await pdfEntries.openFromMenu(tab);
+      break;
+    case MENU.TEXT:
+      await chrome.sidePanel.open({ tabId }).catch(() => {});
+      break;
+    case MENU.SUBTITLES:
+      await sendToTab(tabId, { type: MSG_COMMAND, name: 'toggle-subtitles' });
+      break;
     case MENU.COMICS:
       await sendToTab(tabId, { type: MSG_COMMAND, name: 'translate-comics' });
       break;

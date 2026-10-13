@@ -12,6 +12,7 @@ PAIR = 'duallens-pair:v1:' + base64.urlsafe_b64encode(json.dumps({
     'urls': ['http://127.0.0.1:18790/v1', 'http://100.100.2.3:18791/v1'], 'token': TOKEN
 }).encode()).decode().rstrip('=')
 PASSWORD = 'offline test backup passphrase'
+SUBTITLES = {'enabled': True, 'mode': 'translation-only', 'fontSize': 32, 'position': 'top'}
 
 
 def extension_case(pw, run):
@@ -40,6 +41,9 @@ def extension_case(pw, run):
         h.ctx.route('http://100.100.2.3:18791/**', mocked)
         page.goto(f'chrome-extension://{h.ext_id}/ui/options.html')
         page.locator('#status').filter(has_text='修改后').wait_for()
+        page.evaluate("async subtitles => { const {saveSettings} = await import(chrome.runtime.getURL('shared/settings.js')); await saveSettings({subtitles}); }", SUBTITLES)
+        page.reload()
+        page.locator('#status').filter(has_text='修改后').wait_for()
         assert not calls
         page.click('#connect-gateway')
         page.locator('#status').filter(has_text='已建立').wait_for()
@@ -59,6 +63,7 @@ def extension_case(pw, run):
         assert state['local']['secrets']['gateway-usb']['apiKey'] == TOKEN
         assert TOKEN not in json.dumps(state['sync'])
         assert TOKEN not in json.dumps(state['local']['settings'])
+        assert state['sync']['settings.core']['subtitles'] == SUBTITLES
         page.click('#load-models')
         page.locator('#status').filter(has_text='获取到').wait_for()
         assert calls[-1] == ('http://100.100.2.3:18791/v1/models', 'Bearer ' + TOKEN)
@@ -81,6 +86,7 @@ def extension_case(pw, run):
         page.locator('#status').filter(has_text='设置已导入').wait_for()
         assert page.locator('#targetLang').input_value() == 'zh-CN'
         assert page.locator('#profile').input_value() == 'gateway-tailscale'
+        assert h.sw_eval("async () => (await chrome.storage.sync.get('settings.core'))['settings.core'].subtitles") == SUBTITLES
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         print('PASS extension_config_center: mock discovery chain, paired profiles, local-only Bearer, encrypted QR and import roundtrip', flush=True)
         return encrypted
@@ -129,11 +135,19 @@ def userscript_case(pw, base, encrypted):
         userscript.secret_prompt(page, '#import-computer', PASSWORD)
         page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('设置已导入'))")
         assert page.evaluate("__platformFixture.data('duallens:local').secrets['gateway-usb'].apiKey === 'A'.repeat(43)")
+        assert page.evaluate("__platformFixture.data('duallens:local')['settings.core'].subtitles") == SUBTITLES
         userscript.secret_prompt(page, '#export-phone', PASSWORD)
-        page.wait_for_function("__platformFixture.elements('#backup-qr').some(e=>!e.hidden)")
+        page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('加密配置已生成'))")
+        assert page.evaluate("__platformFixture.elements('#backup-qr').every(e=>e.hidden)")
+        exported = page.evaluate("__platformFixture.elements('#backupText')[0].value")
+        assert exported.startswith('duallens-config:v1:') and TOKEN not in exported
+        # The mobile build has no QR encoder, but the encrypted text must still round-trip.
+        userscript.secret_prompt(page, '#import-computer', PASSWORD)
+        page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('设置已导入'))")
+        assert page.evaluate("__platformFixture.data('duallens:local').secrets['gateway-usb'].apiKey === 'A'.repeat(43)")
         assert page.evaluate('window.__poisonCount') == 0
         assert page.evaluate('localStorage.length') == 0
-        print('PASS userscript_config_center: native secret pairing/cancel, anonymous GM Bearer, computer import and encrypted QR at 375px', flush=True)
+        print('PASS userscript_config_center: native secret pairing/cancel, anonymous GM Bearer, computer import and encrypted text round-trip without QR at 375px', flush=True)
     finally:
         if context:
             context.close()

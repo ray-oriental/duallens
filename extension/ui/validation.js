@@ -16,6 +16,9 @@ export function terms(text) {
 export function validateSettings(s) {
   requireThat(typeof s.comics?.enabled==='boolean' && ['jpn','jpn_vert','kor','eng'].includes(s.comics.language),'漫画开关或源语言无效');
   s.comics.canvasSites=comicSites(s.comics.canvasSites);
+  requireThat(typeof s.subtitles?.enabled === 'boolean' && ['bilingual', 'translation-only'].includes(s.subtitles.mode) &&
+    Number.isInteger(s.subtitles.fontSize) && s.subtitles.fontSize >= 16 && s.subtitles.fontSize <= 48 &&
+    ['top', 'bottom'].includes(s.subtitles.position), '字幕设置无效');
   const lang = code => LANGS.some(l => l.code === code);
   requireThat(lang(s.targetLang) && (s.sourceLang === 'auto' || lang(s.sourceLang)), '请选择有效的源语言和目标语言');
   requireThat(['bilingual','translation-only'].includes(s.displayMode), '显示模式无效');

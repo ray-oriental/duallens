@@ -7,7 +7,6 @@ import { stripMarkup } from '../../shared/markup.js';
 import { validateSettings, importSettings, lines, terms } from './validation.js';
 import { drawLayout } from './layout.js';
 import { parsePairing, gatewayProfile, gatewayChain, discoverGateway, compactConfig } from './gateway.js';
-import { drawQRCode } from './qrcode.js';
 
 // Shared by options and the platform's page panel. No browser globals or implicit storage.
 export async function mountSettingsForm(root, { store, platform }) {
@@ -316,7 +315,11 @@ export async function mountSettingsForm(root, { store, platform }) {
     if (destroyed) return;
     fill('backupText', text); $('backup-qr').hidden = true;
     if (!secretDialog) fill('backupPassword', '');
-    try { drawQRCode($('backup-qr'), text); $('backup-qr').hidden = false; notice('加密配置已生成；手机扫码或复制文本，然后从电脑导入。口令通过其他安全方式传递。'); }
+    if (typeof platform.renderQr !== 'function') {
+      notice('加密配置已生成；请复制文本并在另一设备导入。口令通过其他安全方式传递。');
+      return;
+    }
+    try { await platform.renderQr($('backup-qr'), text); if (destroyed) return; $('backup-qr').hidden = false; notice('加密配置已生成；手机扫码或复制文本，然后从电脑导入。口令通过其他安全方式传递。'); }
     catch (error) { notice(error.message); }
   });
   action('copy-backup', async () => {

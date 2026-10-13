@@ -36,6 +36,8 @@ export interface Platform {
   promptSecret(label: string): string | null; // userscript：隔离沙箱原生 prompt，默认空值；取消返回 null
                             // extension：返回 null；其独立 options 页面保留 password 输入框
   registerCommand(id, label, handler): void;  // userscript：GM_registerMenuCommand；extension：commands 已在 manifest
+  renderQr?(canvas: HTMLCanvasElement, text: string): void | Promise<void>;
+                            // 可选：仅扩展 options 提供本地二维码渲染；内容平台与 userscript 不加载编码器
 }
 
 export interface TranslatorService {
@@ -92,6 +94,10 @@ export interface TranslatorService {
   真机验收必须确认 Tampermonkey 启用了隔离世界；[官方 sandbox 文档](https://www.tampermonkey.net/documentation.php?q=sandbox)说明 DOM 模式在隔离上下文未启用时可能使用其他已启用上下文，不能将页面世界运行作为安全配置。
 - **加密导出/导入**（在两台电脑和手机之间搬配置）：PBKDF2-SHA256（≥ 310,000 次迭代）派生密钥，AES-GCM 加密，
   格式 `duallens-config:v1:<base64url(salt|iv|密文)>`。不填口令时导出的明文 JSON **不含**任何 key。
+- 共享表单通过可选 `platform.renderQr` 显示加密导出二维码；不静态导入二维码模块。缺少该能力时显示可复制的加密文本，导出/导入功能保持可用。
+  用户脚本启动产物必须小于 400000 字节，不包含二维码编码器、PDF.js / PDF 阅读页或扩展侧栏入口；共用的文本/字幕页签仍保留。
+- 非机密字幕偏好 `subtitles = { enabled:false, mode:'bilingual', fontSize:22, position:'bottom' }` 随公共设置同步与备份。
+  `mode` 为 `bilingual` / `translation-only`，字号为 16–48 的整数，位置为 `top` / `bottom`；旧备份缺少该字段时恢复默认值。
 
 ## 4. 移动端体验
 

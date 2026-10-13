@@ -72,6 +72,9 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
     assert.ok(Buffer.byteLength(content)<400000,'ordinary startup bundle exceeds 400 KB');
+    for (const module of ['ui/forms/qrcode.js', 'ui/forms/qrcodegen.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js']) {
+      assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
+    }
     assert.ok(content.includes('@grant        GM_getResourceText'));
     assert.equal((content.match(/^\/\/ @resource\s+/gm)||[]).length,2);
     assert.equal((content.match(/#sha256=[a-f0-9]{64}/g)||[]).length,2);

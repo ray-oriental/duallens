@@ -1,9 +1,11 @@
 import { getDefaultSettingsStore } from '../shared/settings.js';
 import { mountSettingsForm } from './forms/index.js';
 import { MSG_CACHE_CLEAR } from '../shared/protocol.js';
+import { drawQRCode } from './forms/qrcode.js';
 
 const platform = {
   kind: 'extension',
+  renderQr: drawQRCode,
   comics: {
     languages:lang=>chrome.runtime.sendMessage({type:lang?'comic-languages-delete':'comic-languages-list',lang}),
     syncSites:()=>chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'}),

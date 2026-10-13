@@ -75,6 +75,7 @@ test('gateway transport resolves paired credentials for models and chat, redacts
 
 test('mobile compact encrypted backup restores settings and fits a real QR with pairing profiles', async () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.subtitles = { enabled: true, mode: 'translation-only', fontSize: 32, position: 'top' };
   for (const [id, url] of [['usb', 'http://127.0.0.1:18790/v1'], ['tailscale', 'http://100.100.1.2:18791/v1']]) settings.provider.profiles.push(gatewayProfile(id, id, url));
   settings.provider.active = 'tailscale'; settings.provider.chain = [{ profileId: 'tailscale', model: 'ollama/qwen3:4b' }];
   const text = await exportConfig(compactConfig(settings), { password: 'test passphrase', secrets: { usb: { apiKey: TOKEN }, tailscale: { apiKey: TOKEN } } });
@@ -85,7 +86,19 @@ test('mobile compact encrypted backup restores settings and fits a real QR with 
   assert.equal(restored.provider.profiles.at(-1).kind, 'gateway');
   assert.equal(restored.provider.active, 'tailscale');
   assert.equal(restored.provider.profiles[0].timeoutMs, settings.provider.profiles[0].timeoutMs);
+  assert.deepEqual(restored.subtitles, settings.subtitles);
   assert.doesNotThrow(() => qrcodegen.QrCode.encodeText(text, qrcodegen.QrCode.Ecc.LOW));
   assert.doesNotThrow(() => validateSettings(restored));
   assert.throws(() => qrcodegen.QrCode.encodeText('a'.repeat(4000), qrcodegen.QrCode.Ecc.LOW));
+});
+
+test('subtitle preferences import with legacy defaults and reject malformed backup values', () => {
+  const legacy = structuredClone(DEFAULT_SETTINGS);
+  delete legacy.subtitles;
+  assert.deepEqual(importSettings(legacy, DEFAULT_SETTINGS).subtitles, DEFAULT_SETTINGS.subtitles);
+  for (const patch of [{ enabled: 'true' }, { mode: 'invalid' }, { fontSize: 15 }, { fontSize: 49 }, { fontSize: 22.5 }, { position: 'left' }]) {
+    const incoming = structuredClone(DEFAULT_SETTINGS);
+    Object.assign(incoming.subtitles, patch);
+    assert.throws(() => importSettings(incoming, DEFAULT_SETTINGS), /字幕设置无效/);
+  }
 });

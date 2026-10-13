@@ -1,15 +1,16 @@
 # DualLens 规格与接口契约
 
 公共接口契约。实现以本文件与设置模块为准；变更接口时同步更新规格。
-状态：v0.2 多平台接线（Unreleased，2026-10-13）；发布版本仍以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
+状态：v0.3 集成（2026-10-13）；发布版本以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
 
 ## 0. 范围
 
 | 阶段 | 功能 |
 | --- | --- |
 | **P0（本轮）** | 网页段落级双语对照；仅译文 / 恢复原文；视口懒翻译；动态内容（MutationObserver、SPA 路由）；译文样式；悬停翻译；划词翻译；输入框翻译；悬浮球；弹出页；设置页；站点规则（总是/从不/自定义选择器）；快捷键与右键菜单；翻译缓存；术语表；提示词预设与自定义；本机网关（交大 / Ollama / Claude CLI / Codex CLI / Hermes）；直连任意 OpenAI 兼容端点；测试用 mock 后端 |
-| P1 | YouTube 双语字幕；PDF 双语阅读（pdf.js）；侧边栏文本翻译；EPUB |
-| P2 | 图片/漫画 OCR 翻译；文档翻译；iframe 内翻译 |
+| P1 已实现 | YouTube 已有轨道双语字幕；桌面 PDF 文本层双语阅读（pdf.js）；桌面侧边栏 / 用户脚本页签文本翻译 |
+| P1 计划 | EPUB；Android Chrome 书签脚本 |
+| P2 | 已实现第一阶段本地漫画 OCR 旁列翻译；视觉模型、文档翻译、iframe 内翻译仍计划中 |
 
 不做：账号体系、付费墙、遥测、远程配置下发。
 
@@ -107,7 +108,7 @@ Android Edge + Tampermonkey                         │
 
 | type | 请求 | 响应 |
 | --- | --- | --- |
-| `translate-text` | `{ text, to, from?, purpose: 'selection'|'input'|'hover' }` | `{ ok, text }` 或 `{ ok:false, error }` |
+| `translate-text` | `{ text, to, from?, purpose: 'selection'|'input'|'hover'|'text', profileId?, model? }`；可选服务/模型只作用于本次请求，不改持久配置 | `{ ok, text }` 或 `{ ok:false, error }` |
 | `list-models` | `{ profileId? , presetId?, freeOnly? }`，presetId 优先，可在保存 profile 前发现模型 | `{ ok, models: [{ id, label, … }] }`；OpenRouter 默认仅返回免费模型 |
 | `provider-test` | `{ profileId }` | `{ ok, latencyMs, sample }` |
 | `cache-stats` / `cache-clear` | `{}` | `{ ok, entries }` |
@@ -120,6 +121,15 @@ Android Edge + Tampermonkey                         │
 | `command` | `{ name: 'toggle-page'|'toggle-translation-only'|'translate-input'|'toggle-hover' }`，来自快捷键、弹出页、右键菜单 |
 | `get-state` | 响应 `{ translated, mode, units, pending, failed, ui }`，弹出页与 E2E 用。`ui = { selectionIcon: bool, selectionCard: { visible, text } \| null, floatBall: bool, hoverActive: bool }`。shadow root 保持 closed，E2E 经此消息读界面状态，不在页面上暴露任何钩子 |
 | `translate-selection` | 右键菜单「翻译选中文字」，`{ text }` |
+
+### 4.4 v0.3 功能接入
+
+- PDF 的 `pdf-status` / `pdf-open` 使用实际标签页 URL，仅在显式入口探测；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
+- `open-sidepanel` / Alt+S 打开桌面文本侧栏；用户脚本用 `platform.openTextTranslation()` 打开原面板页签。
+- `platform.subtitles = { observe(callback), fetchTrack(url,{signal}) }` 注入受限 YouTube 取轨能力。`subtitle-track` / `subtitle-track-cancel` 只处理当前顶层 YouTube 视频的轨道；见 [SUBTITLES.md](SUBTITLES.md)。
+- 内容命令包含 `toggle-subtitles` / `restore-subtitles`、`translate-comics` / `restore-comics`；`get-state` 可包含字幕与漫画状态，不含签名轨道 URL 或机密。
+- `subtitles` 默认值与导入约束、可选 `platform.renderQr(canvas,text)` 见 [PLATFORMS.md](PLATFORMS.md)。二维码仅在扩展设置页生成，缺少能力时保留加密文本导出。
+- 可选 `platform.comics` 提供本地识别、语言包管理与站点注册；接口与限制见 [COMICS.md](COMICS.md)。
 
 ## 5. 内容脚本流水线
 

@@ -44,6 +44,7 @@ export function createHandlers({ translator, cache, providers, getSettings, open
         text,
         to: msg.to || settings.targetLang,
         from: msg.from || settings.sourceLang,
+        ...(msg.profileId !== undefined || msg.model !== undefined ? { profileId: msg.profileId, model: msg.model } : {}),
       });
       return { ok: true, text: out };
     }),

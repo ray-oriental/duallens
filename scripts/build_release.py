@@ -32,6 +32,8 @@ def build_release(project_root: Path, output_dir: Path | None = None, target: st
     if target not in {'all', 'edge-store'}:
         raise ValueError(f'unknown release target: {target}')
     project = project_root.absolute()
+    # Shared reviewed PUBLIC_DOCS allowlist in check_project.py includes PDF.md;
+    # use release_members for both packaging and validation to prevent drift.
     manifest, extension, portable = release_members(project)
     version = manifest['version']
     output = (output_dir or project / 'dist').absolute()

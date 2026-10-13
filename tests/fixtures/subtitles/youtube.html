@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline YouTube fixture</title>
+<style>body{margin:0;background:#171717;color:white;font-family:sans-serif}#movie_player{position:relative;width:100%;height:360px;background:#252525}video{width:100%;height:100%}.ytp-caption-window-container{position:absolute;bottom:20px;left:20px}button{min-height:44px}</style>
+</head><body>
+<div id="movie_player" class="html5-video-player"><video src="/fixture.wav" preload="auto"></video><div class="ytp-caption-window-container"><div class="caption-window">Native caption</div></div></div>
+<button id="cc">Enable captions</button><button id="full">Fullscreen player</button>
+<script>
+(() => {
+  const video=document.querySelector('video');
+  video.addEventListener('loadedmetadata',()=>{video.currentTime=17.3},{once:true});
+  window.fixtureSeek=value=>{video.currentTime=value;video.dispatchEvent(new Event('seeking'));video.dispatchEvent(new Event('timeupdate'));};
+  // Mobile metadata may give a www track: exercise that bounded cross-host path.
+  window.fixtureCaptions=()=>fetch('https://www.youtube.com/api/timedtext?v='+new URL(location.href).searchParams.get('v')+'&lang=en&tlang=zh-CN&fmt=srv3').then(r=>r.json());
+  document.querySelector('#cc').addEventListener('click',()=>{void fixtureCaptions()});
+  document.querySelector('#full').addEventListener('click',()=>{void document.querySelector('#movie_player').requestFullscreen()});
+  window.fixtureBefore=document.querySelector('#movie_player').outerHTML;
+})();
+</script></body></html>

@@ -31,7 +31,19 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
   // onPartial(results) gets [{ id, text } | { id, error: { code, message } }], each id at most once.
   // Resolves when everything has been reported; if `signal` aborts it resolves quietly and stops reporting.
   async function translate(req, { onPartial = () => {}, signal } = {}) {
-    const settings = await getSettings();
+    let settings = await getSettings();
+    if (req.profileId !== undefined || req.model !== undefined) {
+      const selected = settings.provider.profiles.find(p => p.id === req.profileId);
+      const model = req.model || selected?.model;
+      if (!selected || typeof model !== 'string' || !model.trim() || model.length > 256) {
+        throw new DLError(ERR.CONFIG, '服务或模型选择无效');
+      }
+      // Per-request choice, never overwrite the page's provider or persisted chain.
+      // providerChain retains the explicit-only subscription safeguards.
+      const rest = providerChain(settings).map(c => ({ profileId: c.profile.id, model: c.model }));
+      settings = { ...settings, provider: { ...settings.provider, active: selected.id,
+        chain: [{ profileId: selected.id, model }, ...rest] } };
+    }
     const configured = providerChain(settings);
     const usable = await Promise.all(configured.map(async c => {
       const apiKey = c.profile.kind === 'openai' ? await getSecret(c.profile.id) || c.profile.apiKey || '' : '';
@@ -234,10 +246,10 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
   }
 
   // Plain-text translation for selection / input box / hover. Returns the translated string.
-  async function translateText({ text, to, from }, { signal } = {}) {
+  async function translateText({ text, to, from, profileId, model }, { signal } = {}) {
     let result = null;
     await translate(
-      { reqId: null, to, from, priority: PRIORITY.VISIBLE, context: {}, items: [{ id: 't', text: escapeText(text) }] },
+      { reqId: null, to, from, profileId, model, priority: PRIORITY.VISIBLE, context: {}, items: [{ id: 't', text: escapeText(text) }] },
       { onPartial: (r) => (result = r[0]), signal },
     );
     if (signal && signal.aborted) throw cancelledError();
