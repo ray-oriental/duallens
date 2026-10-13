@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, mergeSettings, publicSettings, SETTINGS_VERSION } from '../shared/settings.js';
+import { comicSites } from '../content/comics/sites.js';
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
 export function safeExport(value) {
   return publicSettings(value);
@@ -13,6 +14,8 @@ export function terms(text) {
   });
 }
 export function validateSettings(s) {
+  requireThat(typeof s.comics?.enabled==='boolean' && ['jpn','jpn_vert','kor','eng'].includes(s.comics.language),'漫画开关或源语言无效');
+  s.comics.canvasSites=comicSites(s.comics.canvasSites);
   const lang = code => LANGS.some(l => l.code === code);
   requireThat(lang(s.targetLang) && (s.sourceLang === 'auto' || lang(s.sourceLang)), '请选择有效的源语言和目标语言');
   requireThat(['bilingual','translation-only'].includes(s.displayMode), '显示模式无效');

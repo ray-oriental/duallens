@@ -17,12 +17,12 @@ from urllib.parse import unquote, urlsplit
 import zipfile
 
 PROJECT = Path(__file__).resolve().parent.parent
-ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.woff2', '.ttf', '.ico', '.txt'}
+ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.woff2', '.ttf', '.ico', '.txt', '.wasm'}
 BLOCKED = {'.git', '.cache', '.duallens', 'private', 'runtime', 'reference', 'duallens-ref', 'node_modules', '__pycache__', 'venv', '.venv', 'credentials', 'secrets', 'backups'}
 GATEWAY_FILES = ('gateway/__init__.py', 'gateway/duallens_gateway.py', 'gateway/run_hermes_proxy.py', 'gateway/Install-Startup.ps1')
 PUBLIC_FILES = ('README.md', 'LICENSE', 'SECURITY.md', 'AGENTS.md', 'CONTRIBUTING.md', 'requirements-dev.txt', 'package.json', '.gitignore', '.gitattributes', 'CHANGELOG.md')
 # Add user documentation only through an explicit reviewed list; private research is never included.
-PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md')
+PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md', 'docs/COMICS.md', 'docs/PRIVACY.md', 'docs/store/permissions.md')
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
 VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store)-v\d+(?:\.\d+){0,3}\.zip')
@@ -100,7 +100,7 @@ def extension_assets(extension: Path) -> dict[str, Path]:
                 continue
             if path.is_dir():
                 visit(path)
-            elif path.suffix.casefold() in ASSET_SUFFIXES:
+            elif path.suffix.casefold() in ASSET_SUFFIXES or rel == 'vendor/tesseract/VENDOR.md':
                 assets[rel] = safe_file(extension, rel)
     require(extension.is_dir() and not is_link(extension), 'missing or linked extension directory')
     visit(extension)
@@ -193,7 +193,7 @@ def release_members(project: Path) -> tuple[dict, dict[str, Path], dict[str, Pat
     portable = {'extension/' + name: path for name, path in assets.items()}
     for name in PUBLIC_FILES + PUBLIC_DOCS + GATEWAY_FILES:
         portable[name] = safe_file(project, name)
-    for directory, suffixes in [('gateway', {'.py', '.ps1'}), ('scripts', {'.py'}), ('tests', {'.py', '.mjs', '.html', '.md'}), ('.github', {'.yml', '.yaml', '.md'})]:
+    for directory, suffixes in [('gateway', {'.py', '.ps1'}), ('scripts', {'.py'}), ('tests', {'.py', '.mjs', '.html', '.md', '.png'}), ('.github', {'.yml', '.yaml', '.md'})]:
         portable.update(public_source_files(project, directory, suffixes))
     # The portable bundle must retain all locally linked Markdown documentation from README.
     readme = portable['README.md'].read_text(encoding='utf-8-sig')

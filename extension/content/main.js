@@ -12,6 +12,7 @@ import { SelectionUI } from './selection.js';
 import { InputBox } from './inputbox.js';
 import { HoverTranslate } from './hover.js';
 import { FloatBall } from './floatball.js';
+import { ComicTranslator } from './comics/controller.js';
 import { toast, clearToast } from './overlay.js';
 
 
@@ -25,6 +26,7 @@ class App {
     this.settings = settings;
     this.dormant = false;
     this.getSettings = () => this.settings;
+    this.comics = new ComicTranslator({ platform, getSettings: this.getSettings });
 
     this.translator = new PageTranslator({
       platform,
@@ -44,6 +46,8 @@ class App {
         setSiteMode: (mode) => this.#setSiteMode(mode),
         saveSettings: (patch) => this.store.save(patch),
         translateInput: () => this.input.translateFocused(true),
+        translateComics: () => this.comics.start(),
+        restoreComics: () => this.comics.restore(),
         openOptions: () => platform.openSettings(),
       },
     });
@@ -66,6 +70,8 @@ class App {
       'toggle-page': '翻译 / 恢复当前页面', 'toggle-translation-only': '切换双语 / 仅译文',
       'translate-input': '翻译当前输入框', 'toggle-hover': '开关悬停 / 长按翻译',
     }[name] || name, () => this.#command(name));
+    this.platform.registerCommand('translate-comics', '翻译此页漫画', () => this.#command('translate-comics'));
+    this.platform.registerCommand('restore-comics', '恢复漫画原文', () => this.#command('restore-comics'));
     if (!this.dormant) this.#wake(true);
   }
 
@@ -83,6 +89,7 @@ class App {
   #sleep() {
     this.dormant = true;
     this.translator.stop();
+    this.comics.restore();
     this.selection.disable();
     this.input.disable();
     this.hover.disable();
@@ -116,6 +123,7 @@ class App {
   // ---- settings ----------------------------------------------------------------------------
 
   #applySettings(next) {
+    if(next.comics?.enabled===false) this.comics.restore();
     const prev = this.settings;
     this.settings = next;
     const mode = siteRuleFor(next, HOST).mode;
@@ -172,6 +180,7 @@ class App {
     return {
       ...this.translator.getState(),
       dormant: this.dormant,
+      comics: this.comics.state(),
       ui: {
         selectionIcon: sel.selectionIcon,
         selectionCard: sel.selectionCard,
@@ -212,7 +221,15 @@ class App {
     if (this.dormant) return;
     const s = this.settings;
     switch (name) {
+      case 'translate-comics':
+        this.comics.start();
+        break;
+      case 'restore-comics':
+        this.comics.restore();
+        break;
       case P.COMMANDS.TOGGLE_PAGE:
+        if (this.comics.panels.size && !this.translator.isActive()) { this.comics.restore(); break; }
+        this.comics.restore();
         this.translator.toggle();
         break;
       case P.COMMANDS.TOGGLE_TRANSLATION_ONLY:

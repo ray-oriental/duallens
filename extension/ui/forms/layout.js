@@ -103,6 +103,13 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(i.grid, 'inputLang', '输入框目标语言', 'select', LANGS);
   field(i.grid, 'inputTrigger', '输入触发', 'select', pairs([['triple-space', '三次空格或快捷键'], ['shortcut', '仅快捷键']]));
   field(i.grid, 'floatSide', '悬浮球侧边', 'select', pairs([['right', '右侧'], ['left', '左侧']]));
+  const comics = section('漫画');
+  field(comics.grid,'comicsEnabled','启用漫画本地 OCR','checkbox');
+  field(comics.grid,'comicsLanguage','漫画源语言','select',pairs([['jpn','日文横排'],['jpn_vert','日文竖排'],['kor','韩文'],['eng','英文']]));
+  field(comics.grid,'comicsSites','canvas 还原站点（域名或 *.example.com，每行一个）','textarea');
+  comics.box.append(el('p','仅名单站点安装 canvas 来源钩子；增删后刷新网页生效。原图本地识别，仅 OCR 文字发给模型。',{class:'hint'}));
+  comics.box.append(el('div','',{id:'comics-languages',role:'status'}));
+  button(comics.box,'comics-refresh','查看已下载语言包');
   const pr = section('提示词与术语');
   field(pr.grid, 'preset', '翻译风格', 'select', pairs([['general', '通用'], ['tech', '技术'], ['academic', '学术'], ['news', '新闻'], ['social', '口语'], ['custom', '自定义']]));
   field(pr.grid, 'customPrompt', '自定义风格要求', 'textarea'); field(pr.grid, 'glossary', '术语表（每行 原词 → 译词）', 'textarea');

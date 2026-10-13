@@ -4,6 +4,10 @@ import { MSG_CACHE_CLEAR } from '../shared/protocol.js';
 
 const platform = {
   kind: 'extension',
+  comics: {
+    languages:lang=>chrome.runtime.sendMessage({type:lang?'comic-languages-delete':'comic-languages-list',lang}),
+    syncSites:()=>chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'}),
+  },
   async http({ url, method, headers, body, signal }) {
     const res = await fetch(url, { method, headers, body, signal, credentials: 'omit', cache: 'no-store' });
     return { status: res.status, headers: res.headers, text: await res.text() };

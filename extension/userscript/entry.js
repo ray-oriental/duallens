@@ -10,6 +10,7 @@ if (window.top === window.self && /html/i.test(document.contentType || 'text/htm
       getValue: GM_getValue, setValue: GM_setValue, deleteValue: GM_deleteValue,
       addValueChangeListener: GM_addValueChangeListener,
       registerMenuCommand: GM_registerMenuCommand, xmlhttpRequest: GM_xmlhttpRequest,
+      getResourceText: typeof GM_getResourceText==='function' ? GM_getResourceText : null,
     };
     let panel;
     const platform = createUserscriptPlatform(gm, {

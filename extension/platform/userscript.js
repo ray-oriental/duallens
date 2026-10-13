@@ -9,17 +9,37 @@ import { createTranslator } from '../background/translator.js';
 import { createHandlers } from '../background/handlers.js';
 import { toErrorInfo } from '../shared/errors.js';
 import { looksLikeTarget } from '../shared/lang.js';
+import { createGMImageFetch, probeLocalOCR } from '../content/comics/capabilities.js';
+import { createUserscriptOCR } from '../content/comics/userscript-ocr.js';
+import { comicSiteMatches } from '../content/comics/sites.js';
+import { installCanvasHook } from '../content/comics/canvas-hook-runtime.js';
 
-// Capture the native binding from the userscript's DOM sandbox before any awaits.
-// Never resolve window.prompt/unsafeWindow.prompt from the host-page realm.
+// Capture the sandbox's native prompt before any awaits; never use host-page prompt.
 const sandboxPrompt = typeof prompt === 'function' ? prompt.bind(globalThis) : null;
 
-export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse = false, promptImpl = sandboxPrompt } = {}) {
+export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse = false, localOCR = null, promptImpl = sandboxPrompt } = {}) {
   const localArea = createGMStorageArea(gm, 'duallens:local');
-  // GM is private per-script storage, not browser sync. Both v2 areas share one record.
   const syncArea = localArea;
+  const ocr = createUserscriptOCR({ storage: createGMStorageArea(gm, 'duallens:ocr'), xmlhttpRequest: gm.xmlhttpRequest, getResourceText: gm.getResourceText });
+
   const platform = {
     kind: 'userscript', coarse, syncArea, localArea,
+    comics: {
+      async recognize(req) {
+        try {
+          const capability=await probeLocalOCR();
+          if (!capability.ok) return { ok:false,error:{ code:'ocr_unavailable',message:capability.reason } };
+          const blob=await createGMImageFetch(gm.xmlhttpRequest)(req.url);
+          return await (localOCR || ocr.recognize)(blob,{ lang:req.lang });
+        } catch(e) { return { ok:false,error:{ code:'image_unavailable',message:e.message } }; }
+      },
+      languages: (lang) => ocr.languages(lang),
+      async syncSites() {
+        const settings=await store.load();
+        // Changing opt-in takes effect on the next document; do not patch the current page here.
+        return {ok:true,sites:settings.comics.canvasSites};
+      },
+    },
     http: createGMHttp(gm.xmlhttpRequest),
     openSettings, valid: () => true,
     promptSecret(label) { return promptImpl ? promptImpl(String(label), '') : null; },
@@ -53,6 +73,11 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
       }
     }
     await store.load();
+    const settings=await store.load();
+    if(typeof document!=='undefined' && settings.comics.enabled && comicSiteMatches(location.hostname,settings.comics.canvasSites)) {
+      const script=document.createElement('script');script.textContent='('+installCanvasHook.toString()+')();';
+      (document.head || document.documentElement).append(script);script.remove();
+    }
   })();
   const getSettings = async () => {
     await platform.ready;

@@ -13,6 +13,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   const secretDialog = platform.kind !== 'extension' && typeof platform.promptSecret === 'function';
   const container = drawLayout(root, { secretDialog });
   const $ = id => container.querySelector('#' + id);
+  $('save').disabled=true;
   let settings, profileId = '', dirty = false, saving = false, destroyed = false, drawToken = 0, drawingProfile = false;
   const discovered = new Map();
   const draftSecrets = new Map();
@@ -33,6 +34,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     selectionEnabled: 'selection.enabled', showIcon: 'selection.showIcon', inputEnabled: 'input.enabled', inputLang: 'input.targetLang',
     inputTrigger: 'input.trigger', prefixOverride: 'input.prefixOverride', floatEnabled: 'floatBall.enabled', floatSide: 'floatBall.side',
     preset: 'prompt.preset', customPrompt: 'prompt.custom', cacheEnabled: 'cache.enabled', maxEntries: 'cache.maxEntries', ttlDays: 'cache.ttlDays',
+    comicsEnabled:'comics.enabled',comicsLanguage:'comics.language',
   };
   const notice = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('error', error); };
   const fill = (id, value) => { if ($(id).type === 'checkbox') $(id).checked = !!value; else $(id).value = value ?? ''; };
@@ -105,6 +107,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     fill('providerChain', JSON.stringify(chain, null, 2));
   }
   async function draw() {
+    fill('comicsSites',settings.comics.canvasSites.join('\n'));
     for (const id of simple) fill(id, settings[id]);
     for (const [id, path] of Object.entries(bind)) fill(id, path.split('.').reduce((v, k) => v[k], settings));
     fill('glossary', settings.glossary.map(t => `${t.src} → ${t.dst}`).join('\n'));
@@ -115,10 +118,12 @@ export async function mountSettingsForm(root, { store, platform }) {
     choices($('profile'), [{ id: '', name: '选择一个服务' }, ...settings.provider.profiles], profileId);
     fill('providerChain', JSON.stringify(settings.provider.chain, null, 2));
     await drawProfile(); showSync(); await showWizard();
+    if(platform.comics) await showLanguages();
   }
   function collect() {
     captureProfile();
     const next = structuredClone(settings);
+    next.comics.canvasSites=lines(read('comicsSites'));
     for (const id of simple) next[id] = read(id);
     for (const [id, path] of Object.entries(bind)) {
       const parts = path.split('.'); next[parts[0]][parts[1]] = read(id);
@@ -141,6 +146,8 @@ export async function mountSettingsForm(root, { store, platform }) {
     const next = collect(); saving = true;
     try {
       settings = await store.save(next);
+      const registration=await platform.comics?.syncSites?.();
+      if(registration && !registration.ok) throw new Error(registration.error?.message || '漫画站点钩子注册失败');
       for (const id of modifiedSecrets) await store.setSecret(id, draftSecrets.get(id));
       modifiedSecrets.clear();
       dirty = false; showSync(); await showWizard(); notice('设置已保存');
@@ -151,6 +158,23 @@ export async function mountSettingsForm(root, { store, platform }) {
     dirty = true;
     if (event.target === $('apiKey') && profileId) modifiedSecrets.add(profileId);
   });
+  async function showLanguages() {
+    const output=$('comics-languages');output.replaceChildren();
+    const result=await platform.comics?.languages();
+    if(!result?.ok) {output.textContent=result?.error?.message || '此平台不能查看语言包';return;}
+    if(!result.languages.length) output.textContent='尚未下载语言包';
+    for(const pack of result.languages) {
+      const row=root.ownerDocument.createElement('p');row.textContent=`${pack.lang} · ${(pack.bytes/1048576).toFixed(2)} MiB `;
+      const button=root.ownerDocument.createElement('button');button.type='button';button.textContent='删除';
+      button.addEventListener('click',async()=> {
+        button.disabled=true;
+        try {const deleted=await platform.comics.languages(pack.lang);if(!deleted.ok)throw new Error('语言包删除失败');row.remove();}
+        catch(error){notice(error.message,true);button.disabled=false;}
+      });
+      row.append(button);output.append(row);
+    }
+  }
+  action('comics-refresh',showLanguages);
   if (secretDialog) {
     action('set-key', async () => {
       const id = profileId;
@@ -266,7 +290,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     if (!platform.clearCache) throw new Error('此平台未提供清理缓存操作');
     await platform.clearCache(); $('cache-stats').textContent = '译文缓存已清空'; notice('译文缓存已清空');
   });
-  settings = await store.load(); await draw(); notice('修改后点击保存；获取模型与测试连接由你手动发起。');
+  settings = await store.load(); await draw(); notice('修改后点击保存；获取模型与测试连接由你手动发起。');$('save').disabled=false;
   const off = store.onChange?.(async () => {
     if (saving || destroyed) return;
     if (dirty) { showSync(); return; }
