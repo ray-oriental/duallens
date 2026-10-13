@@ -56,6 +56,21 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(headers["Access-Control-Allow-Origin"], origin)
         self.g.config["allowed_origins"] = ["chrome-extension://" + "b" * 32]
         self.assertEqual(self.call(headers={"Origin": origin})[0], 403)
+
+    def test_multiple_explicit_extension_origins_are_allowed(self):
+        dev = "chrome-extension://" + "a" * 32
+        store = "chrome-extension://" + "b" * 32
+        self.g.config["allowed_origins"] = [dev, store]
+        self.assertEqual(self.call(headers={"Origin": dev})[0], 200)
+        self.assertEqual(self.call(headers={"Origin": store})[0], 200)
+
+    def test_config_rejects_wildcard_or_web_origin(self):
+        from gateway.duallens_gateway import config_load
+        for value in [["*"], ["https://example.test"], ["chrome-extension://" + "a" * 31]]:
+            with tempfile.TemporaryDirectory() as tmp:
+                Path(tmp, "gateway.json").write_text(json.dumps({"allowed_origins": value}), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "allowed_origins"):
+                    config_load(Path(tmp))
     def test_preflight(self):
         self.assertEqual(self.call("OPTIONS", headers={"Origin": "chrome-extension://" + "a"*32,
             "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type"})[0], 204)

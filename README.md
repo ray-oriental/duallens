@@ -23,6 +23,12 @@
 
 ## 功能
 
+### Edge 商店与 Android 用户脚本
+
+审核通过后可用：从 Microsoft Edge Add-ons 安装商店版。审核通过前，请使用 Release 中的 `duallens-edge-store-v<version>.zip` 解压后加载，或使用开发者模式安装。
+
+Android Edge：打开“扩展”并安装 Tampermonkey，然后打开 Release 里的 `duallens.user.js` 链接，按 Tampermonkey 提示安装并在脚本设置中填写自己的模型服务。
+
 - 段落级双语对照、仅译文和恢复原文；保留链接、加粗和行内代码。
 - 视口懒翻译、动态内容、SPA 页面；翻译缓存、模型限流与备用模型冷却。
 - Shift + 悬停、划词翻译、输入框三连空格翻译、悬浮球。
@@ -47,7 +53,7 @@ python -B gateway/duallens_gateway.py serve --port 18790
 
 默认仅启用 Ollama，地址 `http://127.0.0.1:11434`，模型名单为 `qwen3:4b`、`gpt-oss:20b`；需要自行准备模型。设置中选择「本机网关」、base URL `http://127.0.0.1:18790/v1`、模型 `ollama/qwen3:4b`。也可按下方配置添加已有的其他 Ollama 模型。
 
-网关健康检查：`http://127.0.0.1:18790/health`。浏览器 Origin 默认仅允许上述固定 DualLens 身份，本机程序也可通过回环接口调用。
+网关健康检查：`http://127.0.0.1:18790/health`。浏览器 Origin 默认仅允许上述固定 DualLens 身份，本机程序也可通过回环接口调用。商店版要把商店分配的扩展 ID 加入 `~/.duallens/gateway.json` 的 `allowed_origins` 白名单；只接受用户显式填写的精确 `chrome-extension://<id>`，不接受通配或网页来源。
 
 ### 可选集成：SJTU、Hermes、Claude、Codex
 
