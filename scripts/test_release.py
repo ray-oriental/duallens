@@ -48,6 +48,24 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn('manifest.json',z.namelist()); self.assertNotIn('extension/manifest.json',z.namelist())
         with zipfile.ZipFile(self.out/'duallens-portable-v0.1.0.zip') as z:
             self.assertIn('extension/manifest.json',z.namelist()); self.assertIn('gateway/duallens_gateway.py',z.namelist()); self.assertIn('tests/unit/example.test.mjs',z.namelist())
+
+    def test_edge_store_target_removes_manifest_key_and_keeps_extension_members(self):
+        manifest = self.project / 'extension/manifest.json'
+        data = json.loads(manifest.read_text())
+        data['key'] = 'public-test-key'
+        manifest.write_text(json.dumps(data), encoding='utf-8')
+        paths = build_release(self.project, self.out, 'edge-store')
+        self.assertEqual([p.name for p in paths], ['duallens-edge-store-v0.1.0.zip', 'SHA256SUMS'])
+        with zipfile.ZipFile(self.out/'duallens-edge-store-v0.1.0.zip') as edge:
+            self.assertNotIn('key', json.loads(edge.read('manifest.json')))
+            self.assertEqual(set(edge.namelist()), {'LICENSE', 'manifest.json', 'background/main.js', 'content/loader.js', 'shared/defs.js', 'ui/popup.html', 'ui/popup.js', 'ui/ui.css', 'icons/1.png'})
+
+    def test_userscript_builder_is_optional_and_added_when_present(self):
+        builder = self.project / 'scripts/build_userscript.mjs'
+        builder.write_text("import { mkdir, writeFile } from 'node:fs/promises'; await mkdir('dist',{recursive:true}); await writeFile('dist/duallens.user.js','// fixture userscript');\n", encoding='utf-8')
+        paths = self.build()
+        self.assertIn(self.out/'duallens.user.js', paths)
+        self.assertIn('duallens.user.js', (self.out/'SHA256SUMS').read_text(encoding='utf-8'))
     def test_repeated_build_is_byte_identical(self):
         first = {p.name:p.read_bytes() for p in self.build()}
         second = {p.name:p.read_bytes() for p in self.build()}

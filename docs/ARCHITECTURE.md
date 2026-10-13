@@ -24,6 +24,6 @@ To enable a backend, set its enabled field to true in machine-local config and r
 
 ## Release identity and state
 
-The manifest contains a public key used only to make the unpacked extension ID stable. The gateway derives its default Origin allowlist from that public key. A complete source/runtime bundle includes extension/ alongside gateway/ so this identity can be read. No private signing key is distributed.
+The manifest contains a public key used only to make the unpacked extension ID stable. The gateway derives its default Origin allowlist from that public key. A complete source/runtime bundle includes extension/ alongside gateway/ so this identity can be read. For the store build, add the store-assigned extension ID to the explicit allowlist on each machine; only exact `chrome-extension://<id>` entries are accepted. No private signing key is distributed.
 
 Gateway usage, metadata and config live under ~/.duallens. Browser settings/cache live in the current browser profile. Development dependencies, test profiles and raw artifacts stay outside the source tree. GitHub contains reproducible source and tagged release assets, not machine state.

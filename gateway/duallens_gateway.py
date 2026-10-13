@@ -45,7 +45,11 @@ def config_load(home=HOME):
                 conf[key].update(value)
             else:
                 conf[key] = value
-    if not conf["allowed_origins"]:
+    origins = conf.get("allowed_origins")
+    if not isinstance(origins, list) or any(not isinstance(origin, str) or
+            not re.fullmatch(r"chrome-extension://[a-p]{32}", origin) for origin in origins):
+        raise ValueError("allowed_origins must contain exact chrome-extension://<id> origins")
+    if not origins:
         manifest_path = Path(__file__).resolve().parents[1] / "extension/manifest.json"
         try:
             key = json.loads(manifest_path.read_text(encoding="utf-8"))["key"]
