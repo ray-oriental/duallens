@@ -252,3 +252,7 @@ dl-t.dl-t.dl-solo::before,
 dl-t.dl-t.dl-solo::after {
   content: none;
 }
+
+@media (pointer: coarse) {
+  dl-r { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+}

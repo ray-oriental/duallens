@@ -5,8 +5,8 @@ import { lensIcon } from './visual.js';
 import { createOverlay } from './overlay.js';
 import { STYLES } from '../shared/settings.js';
 
-const POS_KEY = 'dl-ball-pos'; // { [host]: { side, topRatio } } in chrome.storage.local
-const SIZE = 40;
+const POS_KEY = 'dl-ball-pos'; // { [host]: { side, topRatio } } in platform.localArea
+const SIZE = 44;
 const GAP = 6;
 
 const CSS = `
@@ -36,11 +36,12 @@ const CSS = `
 .menu {
   position: fixed; display: none; min-width: 190px; padding: 6px; border-radius: 10px;
   background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); pointer-events: auto;
+  max-height: calc(100dvh - 16px); overflow: auto;
 }
 .menu.show { display: block; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px; border-radius: 6px; }
 .row:hover { background: var(--bg2); }
-.row.btn { cursor: pointer; }
+.row.btn { cursor: pointer; width: 100%; color: var(--fg); background: transparent; border: 0; text-align: left; }
 select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; max-width: 120px; }
 .sw { position: relative; width: 30px; height: 18px; flex: none; }
 .sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
@@ -49,6 +50,12 @@ select { font: inherit; color: var(--fg); background: var(--bg); border: 1px sol
 .sw input:checked + i { background: var(--accent); }
 .sw input:checked + i::after { transform: translateX(12px); }
 .sep { height: 1px; background: var(--line); margin: 4px 0; }
+@media (pointer: coarse) {
+  .more { width: 44px; height: 44px; font-size: 22px; }
+  .row, select { min-height: 44px; }
+  .sw { height: 44px; }
+  .sw i { top: 13px; bottom: 13px; }
+}
 `;
 
 function node(tag, cls, text) {
@@ -59,9 +66,10 @@ function node(tag, cls, text) {
 }
 
 // ctx: { toggle(), getState(), siteMode() -> 'always'|'never'|null, setSiteMode(mode|null),
-//        saveSettings(patch), openOptions() }
+//        saveSettings(patch), openOptions(), translateInput() }
 export class FloatBall {
-  constructor({ getSettings, ctx }) {
+  constructor({ getSettings, ctx, platform }) {
+    this.platform = platform;
     this.getSettings = getSettings;
     this.ctx = ctx;
     this.ui = null;
@@ -117,7 +125,7 @@ export class FloatBall {
     const def = this.getSettings().floatBall;
     this.pos = { side: def.side === 'left' ? 'left' : 'right', topRatio: def.topRatio };
     try {
-      const got = await chrome.storage.local.get(POS_KEY);
+      const got = await this.platform.localArea.get(POS_KEY);
       const mine = got[POS_KEY] && got[POS_KEY][location.hostname];
       if (mine) this.pos = { side: mine.side === 'left' ? 'left' : 'right', topRatio: Number(mine.topRatio) || 0.6 };
     } catch {
@@ -127,10 +135,10 @@ export class FloatBall {
 
   async #savePos() {
     try {
-      const got = await chrome.storage.local.get(POS_KEY);
+      const got = await this.platform.localArea.get(POS_KEY);
       const all = got[POS_KEY] || {};
       all[location.hostname] = this.pos;
-      await chrome.storage.local.set({ [POS_KEY]: all });
+      await this.platform.localArea.set({ [POS_KEY]: all });
     } catch {
       /* not worth surfacing */
     }
@@ -150,6 +158,8 @@ export class FloatBall {
     const more = node('button', 'more', '⋯');
     more.type = 'button';
     more.title = '更多';
+    more.setAttribute('aria-label', '更多');
+    more.addEventListener('pointerdown', (e) => e.preventDefault());
     const menu = node('div', 'menu');
     this.ui.el.append(ball, more, menu);
     Object.assign(this, { ball, more, menu });
@@ -164,7 +174,7 @@ export class FloatBall {
     const hold = (v) => {
       clearTimeout(this.hideMore);
       if (v) more.classList.add('show');
-      else this.hideMore = setTimeout(() => !this.menuOpen && more.classList.remove('show'), 500);
+      else if (!this.platform.coarse) this.hideMore = setTimeout(() => !this.menuOpen && more.classList.remove('show'), 500);
     };
     for (const e of [ball, more]) {
       e.addEventListener('pointerenter', () => hold(true));
@@ -172,17 +182,24 @@ export class FloatBall {
     }
   }
 
+  #safeInsets() {
+    const cs = getComputedStyle(this.ui.el);
+    return Object.fromEntries(['top', 'right', 'bottom', 'left'].map((side) => [side, parseFloat(cs.getPropertyValue('--safe-' + side)) || 0]));
+  }
+
   #layout() {
     if (!this.ball) return;
     const vw = innerWidth;
     const vh = innerHeight;
-    const y = Math.round(Math.max(GAP, Math.min(vh - SIZE - GAP, this.pos.topRatio * (vh - SIZE))));
-    const x = this.pos.side === 'left' ? GAP : vw - SIZE - GAP;
+    const safe = this.#safeInsets();
+    const y = Math.round(Math.max(GAP + safe.top, Math.min(vh - SIZE - GAP - safe.bottom, this.pos.topRatio * (vh - SIZE))));
+    const x = this.pos.side === 'left' ? GAP + safe.left : vw - SIZE - GAP - safe.right;
     this.ball.style.left = `${x}px`;
     this.ball.style.top = `${y}px`;
-    const moreX = this.pos.side === 'left' ? x + SIZE - 4 : x - 14;
+    const moreX = this.pos.side === 'left' ? x + SIZE + GAP : x - SIZE - GAP;
     this.more.style.left = `${moreX}px`;
-    this.more.style.top = `${y - 8}px`;
+    this.more.style.top = `${Math.max(GAP + safe.top, y - 8)}px`;
+    if (this.platform.coarse) this.more.classList.add('show');
     if (this.menuOpen) this.#placeMenu();
   }
 
@@ -211,9 +228,12 @@ export class FloatBall {
     const offX = startX - r.left;
     const offY = startY - r.top;
     let dragging = false;
+    if (!e.isPrimary) return;
     ball.setPointerCapture(e.pointerId);
+    const safe = this.#safeInsets();
 
     const move = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
       if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
       if (!dragging) {
         dragging = true;
@@ -221,11 +241,12 @@ export class FloatBall {
         this.#closeMenu();
         this.more.classList.remove('show');
       }
-      ball.style.left = `${Math.max(0, Math.min(innerWidth - SIZE, ev.clientX - offX))}px`;
-      ball.style.top = `${Math.max(0, Math.min(innerHeight - SIZE, ev.clientY - offY))}px`;
+      ball.style.left = `${Math.max(GAP + safe.left, Math.min(innerWidth - SIZE - GAP - safe.right, ev.clientX - offX))}px`;
+      ball.style.top = `${Math.max(GAP + safe.top, Math.min(innerHeight - SIZE - GAP - safe.bottom, ev.clientY - offY))}px`;
     };
     const up = (ev) => {
-      ball.releasePointerCapture(ev.pointerId);
+      if (ev.pointerId !== e.pointerId) return;
+      if (ball.hasPointerCapture(ev.pointerId)) ball.releasePointerCapture(ev.pointerId);
       ball.removeEventListener('pointermove', move);
       ball.removeEventListener('pointerup', up);
       ball.removeEventListener('pointercancel', up);
@@ -266,7 +287,7 @@ export class FloatBall {
     this.menuOpen = false;
     this.menu?.classList.remove('show');
     this.ball?.classList.remove('open');
-    this.more?.classList.remove('show');
+    if (!this.platform.coarse) this.more?.classList.remove('show');
   }
 
   #placeMenu() {
@@ -324,11 +345,16 @@ export class FloatBall {
     });
     menu.append(always, never, node('div', 'sep'));
 
-    const opts = node('div', 'row btn', '打开设置');
+    const opts = node('button', 'row btn', '打开设置');
+    opts.type = 'button';
     opts.addEventListener('click', () => {
       this.#closeMenu();
       this.ctx.openOptions();
     });
-    menu.append(opts);
+    const input = node('button', 'row btn', '翻译当前输入框');
+    input.type = 'button';
+    input.addEventListener('pointerdown', (e) => e.preventDefault());
+    input.addEventListener('click', () => { this.#closeMenu(); this.ctx.translateInput(); });
+    menu.append(input, opts);
   }
 }

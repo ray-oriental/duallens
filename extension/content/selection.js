@@ -3,8 +3,7 @@
 
 import { lensIcon } from './visual.js';
 import { createOverlay } from './overlay.js';
-import { MSG_TRANSLATE_TEXT } from '../shared/protocol.js';
-import { deepActiveElement, sendOneShot } from './util.js';
+import { deepActiveElement } from './util.js';
 
 const MAX_CHARS = 4000;
 
@@ -42,6 +41,7 @@ const CSS = `
 .dst.err { color: var(--danger); }
 .dots::after { content: ""; animation: dots 1.1s steps(4, end) infinite; }
 @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+@media (pointer: coarse) { .icon { width: 44px; height: 44px; } .tool, .retry { min-width: 44px; min-height: 44px; } .head { touch-action: none; } }
 @media (prefers-reduced-motion: reduce) { .dots::after { animation: none; content: "..."; } }
 .retry { margin-top: 8px; border: 1px solid var(--line); background: var(--bg2); border-radius: 6px; padding: 2px 10px; }
 `;
@@ -54,7 +54,8 @@ function el(tag, cls, text) {
 }
 
 export class SelectionUI {
-  constructor({ getSettings }) {
+  constructor({ getSettings, platform }) {
+    this.platform = platform;
     this.getSettings = getSettings;
     this.ui = null;
     this.pending = null; // { text, rect }
@@ -81,9 +82,12 @@ export class SelectionUI {
         this.closeCard();
       }
     };
+    this.selectionTimer = 0;
+    this.onTouchUp = (e) => { if (e.pointerType === 'touch') setTimeout(() => this.#check(), 0); };
     this.onSelChange = () => {
       const sel = getSelection();
       if (!sel || sel.isCollapsed) this.#hideIcon();
+      else if (this.platform.coarse) { clearTimeout(this.selectionTimer); this.selectionTimer = setTimeout(() => { if (this.on) this.#check(); }, 100); }
     };
     this.hideIcon = () => this.#hideIcon();
   }
@@ -91,6 +95,7 @@ export class SelectionUI {
   enable() {
     if (this.on) return;
     this.on = true;
+    document.addEventListener('pointerup', this.onTouchUp, true);
     document.addEventListener('mouseup', this.onMouseUp, true);
     document.addEventListener('keyup', this.onKeyUp, true);
     document.addEventListener('pointerdown', this.onDown, true);
@@ -103,6 +108,8 @@ export class SelectionUI {
   disable() {
     if (!this.on) return;
     this.on = false;
+    clearTimeout(this.selectionTimer);
+    document.removeEventListener('pointerup', this.onTouchUp, true);
     document.removeEventListener('mouseup', this.onMouseUp, true);
     document.removeEventListener('keyup', this.onKeyUp, true);
     document.removeEventListener('pointerdown', this.onDown, true);
@@ -139,6 +146,8 @@ export class SelectionUI {
     this.ui = createOverlay(CSS);
     const icon = el('button', 'icon');
     icon.type = 'button';
+    icon.setAttribute('aria-label', '翻译选中文字');
+    icon.addEventListener('pointerdown', (e) => e.preventDefault());
     icon.title = '翻译选中文字';
     icon.append(lensIcon(false));
     icon.addEventListener('mousedown', (e) => e.preventDefault()); // keep the selection alive
@@ -236,8 +245,9 @@ export class SelectionUI {
       this.#build();
       this.ui.attach();
       const icon = this.iconEl;
-      const x = Math.min(innerWidth - 36, Math.max(4, rect.right + 4));
-      const y = Math.min(innerHeight - 36, Math.max(4, rect.bottom + 6));
+      const size = this.platform.coarse ? 44 : 28;
+      const x = Math.min(innerWidth - size - 4, Math.max(4, this.platform.coarse ? rect.left : rect.right + 4));
+      const y = Math.min(innerHeight - size - 4, Math.max(4, rect.bottom + 6));
       icon.style.left = `${x}px`;
       icon.style.top = `${y}px`;
       icon.classList.add('show');
@@ -270,8 +280,7 @@ export class SelectionUI {
     this.#checkSpeech(settings.targetLang);
     const token = (this.token = (this.token || 0) + 1);
 
-    const res = await sendOneShot({
-      type: MSG_TRANSLATE_TEXT,
+    const res = await this.platform.translator().translateText({
       text: value,
       to: settings.targetLang,
       from: settings.sourceLang || 'auto',
