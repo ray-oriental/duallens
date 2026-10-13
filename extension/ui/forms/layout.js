@@ -30,7 +30,7 @@ export const FORM_CSS = `
 @media(max-width:599px) { .dl-settings { padding:8px; width:100%; } .dl-settings .grid { grid-template-columns:1fr; } .dl-settings section { padding:12px; } .dl-settings .savebar { padding:8px; } }
 `;
 
-export function drawLayout(root) {
+export function drawLayout(root, { secretDialog = false } = {}) {
   const doc = root.ownerDocument;
   const el = (tag, text, attrs = {}) => {
     const n = doc.createElement(tag); if (text) n.textContent = text;
@@ -76,8 +76,17 @@ export function drawLayout(root) {
   p.grid.append(el('p', '', { id: 'provider-description', class: 'hint wide' }), el('a', '服务商说明 / 获取 key', { id: 'key-link', class: 'wide', target: '_blank', rel: 'noopener noreferrer' }));
   field(p.grid, 'profileName', '服务名称');
   field(p.grid, 'baseUrl', '兼容 API 基础地址', 'url');
-  const key = field(p.grid, 'apiKey', 'API key（仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
-  key.parentElement.id = 'key-row';
+  if (secretDialog) {
+    const row = el('div', '', { id: 'key-row', class: 'wide' });
+    row.append(el('p', 'API key（仅存本机）'), el('p', '未设置', { id: 'key-status', role: 'status' }));
+    const controls = el('div', '', { class: 'actions' }); row.append(controls);
+    button(controls, 'set-key', '设置 key'); button(controls, 'clear-key', '清除 key');
+    row.append(el('p', '在浏览器原生对话框中输入；修改后点击保存。', { class: 'hint' }));
+    p.grid.append(row);
+  } else {
+    const key = field(p.grid, 'apiKey', 'API key（仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
+    key.parentElement.id = 'key-row';
+  }
   field(p.grid, 'model', '模型标识', 'text', [], { list: 'models', autocomplete: 'off' });
   p.grid.append(el('datalist', '', { id: 'models' }));
   const actions = el('div', '', { class: 'actions wide' }); p.grid.append(actions);
@@ -94,6 +103,13 @@ export function drawLayout(root) {
   field(i.grid, 'inputLang', '输入框目标语言', 'select', LANGS);
   field(i.grid, 'inputTrigger', '输入触发', 'select', pairs([['triple-space', '三次空格或快捷键'], ['shortcut', '仅快捷键']]));
   field(i.grid, 'floatSide', '悬浮球侧边', 'select', pairs([['right', '右侧'], ['left', '左侧']]));
+  const comics = section('漫画');
+  field(comics.grid,'comicsEnabled','启用漫画本地 OCR','checkbox');
+  field(comics.grid,'comicsLanguage','漫画源语言','select',pairs([['jpn','日文横排'],['jpn_vert','日文竖排'],['kor','韩文'],['eng','英文']]));
+  field(comics.grid,'comicsSites','canvas 还原站点（域名或 *.example.com，每行一个）','textarea');
+  comics.box.append(el('p','仅名单站点安装 canvas 来源钩子；增删后刷新网页生效。原图本地识别，仅 OCR 文字发给模型。',{class:'hint'}));
+  comics.box.append(el('div','',{id:'comics-languages',role:'status'}));
+  button(comics.box,'comics-refresh','查看已下载语言包');
   const pr = section('提示词与术语');
   field(pr.grid, 'preset', '翻译风格', 'select', pairs([['general', '通用'], ['tech', '技术'], ['academic', '学术'], ['news', '新闻'], ['social', '口语'], ['custom', '自定义']]));
   field(pr.grid, 'customPrompt', '自定义风格要求', 'textarea'); field(pr.grid, 'glossary', '术语表（每行 原词 → 译词）', 'textarea');
@@ -105,7 +121,8 @@ export function drawLayout(root) {
   field(backup.grid, 'cacheEnabled', '缓存译文', 'checkbox');
   field(backup.grid, 'maxEntries', '缓存条数上限', 'number'); field(backup.grid, 'ttlDays', '缓存有效天数', 'number');
   backup.box.append(el('p', '', { id: 'cache-stats' })); button(backup.box, 'cache-clear', '清空译文缓存');
-  field(backup.grid, 'backupPassword', '备份口令（留空则导出不含 key 的明文）', 'password', [], { autocomplete: 'new-password' });
+  if (secretDialog) backup.box.append(el('p', '导出或导入加密配置时，浏览器原生对话框会询问口令；导出口令留空则生成不含 key 的明文。', { class: 'hint' }));
+  else field(backup.grid, 'backupPassword', '备份口令（留空则导出不含 key 的明文）', 'password', [], { autocomplete: 'new-password' });
   field(backup.grid, 'backupText', '配置文本（加密文件可在设备之间搬运）', 'textarea');
   const ba = el('div', '', { class: 'actions' }); backup.box.append(ba);
   button(ba, 'export', '导出配置'); button(ba, 'import-button', '导入配置文本');

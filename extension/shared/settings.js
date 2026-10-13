@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   minChars: 2,
   inlineMaxChars: 24, // units shorter than this get the inline layout
   lazy: { rootMarginPx: 600, batchDelayMs: 80 },
-  comics: { language: 'jpn', visionEnabled: false },
+  comics: { enabled:true, language: 'jpn', canvasSites:['*.pixiv.net'], visionEnabled: false },
 
   provider: {
     active: '',

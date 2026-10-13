@@ -1,6 +1,6 @@
 const CSS = `:host{display:inline-block;vertical-align:top;width:300px;max-width:100%;position:relative;z-index:2147483600;margin:8px;line-height:1.5;color-scheme:light dark;font:14px system-ui;color:CanvasText}details{border:1px solid GrayText;border-radius:12px;padding:12px;background:Canvas}summary{cursor:pointer;min-height:44px;font-weight:600}button,select{min-height:44px;font:inherit;color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:6px;cursor:pointer}button{padding:6px 10px}li{margin:12px 0}ol{padding-left:26px}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}.muted{opacity:.75}.error{color:#c44}@media(max-width:600px){:host{display:block;width:calc(100% - 16px);margin:8px 0}}`;
 const node = (doc,tag,text) => { const el=doc.createElement(tag); if (text!=null) el.textContent=text; return el; };
-export function createPanel(candidate, { lang,onRun,onClose,onLanguages }) {
+export function createPanel(candidate, { lang,onRun,onClose,onLanguages,onEnableCanvas }) {
   const doc=candidate.element.ownerDocument;
   const host=node(doc,'dl-comic');
   const root=host.attachShadow({ mode:'closed' });
@@ -18,6 +18,15 @@ export function createPanel(candidate, { lang,onRun,onClose,onLanguages }) {
   const status=node(doc,'p','首次使用会下载并校验所选 fast 语言包。'); status.setAttribute('role','status');
   const list=node(doc,'ol'); const packList=node(doc,'div');
   details.append(summary,privacy,select,run,packs,close,status,list,packList);root.append(style,details);
+  if(onEnableCanvas) {
+    const enable=node(doc,'button','为本站启用 canvas 还原（刷新后生效）');enable.type='button';
+    enable.addEventListener('click',async()=> {
+      enable.disabled=true;
+      try { if(await onEnableCanvas()) {api.setStatus('已为本站启用；请刷新页面后重试');enable.remove();} else throw new Error('canvas 站点注册失败'); }
+      catch(e) {api.setStatus(e.message,true);enable.disabled=false;}
+    });
+    details.append(enable);
+  }
   candidate.element.after(host);
   let highlight;
   function clearHighlight() { highlight?.remove();highlight=null; }

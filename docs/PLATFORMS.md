@@ -33,6 +33,8 @@ export interface Platform {
   translator(): TranslatorService;  // extension：经端口连 service worker；userscript：在页面内直接实例化
   detectLanguage(text): Promise<{ lang, reliable } | null>;  // extension 用 chrome.i18n；其余回落到 shared/lang.js 启发式
   openSettings(): void;     // extension：打开 options 页；userscript：打开页内设置面板
+  promptSecret(label: string): string | null; // userscript：隔离沙箱原生 prompt，默认空值；取消返回 null
+                            // extension：返回 null；其独立 options 页面保留 password 输入框
   registerCommand(id, label, handler): void;  // userscript：GM_registerMenuCommand；extension：commands 已在 manifest
 }
 
@@ -85,6 +87,9 @@ export interface TranslatorService {
   所以默认链里放 2 到 3 个不同厂商的免费模型。
 - **首次使用向导**：设置页第一次打开、或当前链里没有一个可用 profile 时显示：选预设 → 填 key → 获取模型 → 测试连接 →
   保存。用户脚本的页内设置面板用同一组表单组件。
+- 用户脚本的 key 与备份口令只能通过 `platform.promptSecret` 输入。API key 区只显示「已设置 / 未设置」及设置、清除按钮，
+  不创建 key/password 输入框；原生对话框不得预填旧值，也不得调用网页的 `window.prompt`。页面的 composed 输入事件可穿过 closed shadow root，不能依赖圆点编辑器隔离密钥。
+  真机验收必须确认 Tampermonkey 启用了隔离世界；[官方 sandbox 文档](https://www.tampermonkey.net/documentation.php?q=sandbox)说明 DOM 模式在隔离上下文未启用时可能使用其他已启用上下文，不能将页面世界运行作为安全配置。
 - **加密导出/导入**（在两台电脑和手机之间搬配置）：PBKDF2-SHA256（≥ 310,000 次迭代）派生密钥，AES-GCM 加密，
   格式 `duallens-config:v1:<base64url(salt|iv|密文)>`。不填口令时导出的明文 JSON **不含**任何 key。
 

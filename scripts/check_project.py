@@ -12,18 +12,20 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from urllib.parse import unquote, urlsplit
 import zipfile
 
 PROJECT = Path(__file__).resolve().parent.parent
-ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.woff2', '.ttf', '.ico', '.txt'}
+ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.woff2', '.ttf', '.ico', '.txt', '.wasm'}
 BLOCKED = {'.git', '.cache', '.duallens', 'private', 'runtime', 'reference', 'duallens-ref', 'node_modules', '__pycache__', 'venv', '.venv', 'credentials', 'secrets', 'backups'}
 GATEWAY_FILES = ('gateway/__init__.py', 'gateway/duallens_gateway.py', 'gateway/run_hermes_proxy.py', 'gateway/Install-Startup.ps1')
 PUBLIC_FILES = ('README.md', 'LICENSE', 'SECURITY.md', 'AGENTS.md', 'CONTRIBUTING.md', 'requirements-dev.txt', 'package.json', '.gitignore', '.gitattributes', 'CHANGELOG.md')
 # Add user documentation only through an explicit reviewed list; private research is never included.
-PUBLIC_DOCS = ('docs/SPEC.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md')
+PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md', 'docs/COMICS.md', 'docs/PRIVACY.md', 'docs/store/permissions.md')
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
+VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store)-v\d+(?:\.\d+){0,3}\.zip')
 
 class CheckError(ValueError):
     pass
@@ -98,7 +100,7 @@ def extension_assets(extension: Path) -> dict[str, Path]:
                 continue
             if path.is_dir():
                 visit(path)
-            elif path.suffix.casefold() in ASSET_SUFFIXES:
+            elif path.suffix.casefold() in ASSET_SUFFIXES or rel == 'vendor/tesseract/VENDOR.md':
                 assets[rel] = safe_file(extension, rel)
     require(extension.is_dir() and not is_link(extension), 'missing or linked extension directory')
     visit(extension)
@@ -191,7 +193,7 @@ def release_members(project: Path) -> tuple[dict, dict[str, Path], dict[str, Pat
     portable = {'extension/' + name: path for name, path in assets.items()}
     for name in PUBLIC_FILES + PUBLIC_DOCS + GATEWAY_FILES:
         portable[name] = safe_file(project, name)
-    for directory, suffixes in [('gateway', {'.py', '.ps1'}), ('scripts', {'.py'}), ('tests', {'.py', '.mjs', '.html', '.md'}), ('.github', {'.yml', '.yaml', '.md'})]:
+    for directory, suffixes in [('gateway', {'.py', '.ps1'}), ('scripts', {'.py'}), ('tests', {'.py', '.mjs', '.html', '.md', '.png'}), ('.github', {'.yml', '.yaml', '.md'})]:
         portable.update(public_source_files(project, directory, suffixes))
     # The portable bundle must retain all locally linked Markdown documentation from README.
     readme = portable['README.md'].read_text(encoding='utf-8-sig')
@@ -205,16 +207,51 @@ def release_members(project: Path) -> tuple[dict, dict[str, Path], dict[str, Pat
     return m, extension, portable
 
 
+def rebuild_userscript(project: Path) -> bytes:
+    builder = safe_file(project, 'scripts/build_userscript.mjs')
+    with tempfile.TemporaryDirectory(prefix='duallens-verify-user-') as temporary:
+        output = Path(temporary) / 'duallens.user.js'
+        result = subprocess.run(['node', str(builder), '--output', str(output)], cwd=project,
+                                capture_output=True, check=False)
+        require(result.returncode == 0 and output.is_file(), 'userscript rebuild failed')
+        return output.read_bytes()
+
+def verify_userscript_version(content: bytes, version: str) -> None:
+    try:
+        text = content.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        raise CheckError('userscript is not UTF-8') from exc
+    header = re.match(r'\A// ==UserScript==\r?\n(.*?)^// ==/UserScript==\r?$', text, re.M | re.S)
+    require(header is not None, 'invalid userscript metadata header')
+    versions = re.findall(r'^//\s*@version\s+(\S+)\s*$', header.group(1), re.M)
+    require(versions == [version], 'userscript metadata version differs from manifest')
+
 def verify_release(project: Path, dist: Path) -> None:
     m, extension, portable = release_members(project)
     names = {f"duallens-extension-v{m['version']}.zip": extension, f"duallens-portable-v{m['version']}.zip": portable}
+    edge_name = f"duallens-edge-store-v{m['version']}.zip"
+    if (dist / edge_name).exists():
+        names[edge_name] = extension
+    user_name = 'duallens.user.js'
+    expected_assets = set(names)
+    if (project / 'scripts/build_userscript.mjs').is_file():
+        expected_assets.add(user_name)
+    actual_assets = {p.name for p in dist.iterdir() if VERSIONED_ASSET_RE.fullmatch(p.name) or p.name == user_name}
+    require(actual_assets == expected_assets, 'unexpected, stale or missing release asset')
     checksum_file = safe_file(dist, 'SHA256SUMS')
     checksums = {}
     for line in checksum_file.read_text(encoding='utf-8').splitlines():
         match = re.fullmatch(r'([0-9a-f]{64})  ([A-Za-z0-9._-]+)', line)
         require(match is not None, 'invalid SHA256SUMS line')
         digest, name = match.groups(); require(name not in checksums, 'duplicate checksum entry'); checksums[name] = digest
-    require(set(checksums) == set(names), 'SHA256SUMS does not match expected versioned assets')
+    require(set(checksums) == expected_assets, 'SHA256SUMS does not match expected versioned assets')
+    for name in expected_assets:
+        asset = safe_file(dist, name)
+        require(hashlib.sha256(asset.read_bytes()).hexdigest() == checksums[name], f'checksum mismatch: {name}')
+    if user_name in expected_assets:
+        content = safe_file(dist, user_name).read_bytes()
+        verify_userscript_version(content, m['version'])
+        require(content == rebuild_userscript(project), 'userscript differs from rebuilt source')
     for name, expected in names.items():
         archive = safe_file(dist, name)
         require(hashlib.sha256(archive.read_bytes()).hexdigest() == checksums[name], f'checksum mismatch: {name}')
@@ -225,7 +262,15 @@ def verify_release(project: Path, dist: Path) -> None:
             for entry in members:
                 require(not entry.is_dir() and not stat.S_ISLNK(entry.external_attr >> 16), f'linked or directory ZIP member: {entry.filename}')
                 require(entry.date_time == (1980, 1, 1, 0, 0, 0), f'non-deterministic ZIP timestamp: {entry.filename}')
-                require(z.read(entry.filename) == packaged_bytes(expected[entry.filename]), f'archive differs from source: {entry.filename}')
+                content = z.read(entry.filename)
+                if name == edge_name and entry.filename == 'manifest.json':
+                    store_manifest = json.loads(content)
+                    require('key' not in store_manifest, 'edge-store manifest contains key')
+                    public_manifest = dict(m); public_manifest.pop('key', None)
+                    require(store_manifest == public_manifest, 'edge-store manifest differs from source')
+                    require(content == json.dumps(public_manifest, ensure_ascii=False, separators=(',', ':')).encode('utf-8'), 'edge-store manifest is not deterministic')
+                else:
+                    require(content == packaged_bytes(expected[entry.filename]), f'archive differs from source: {entry.filename}')
     require('manifest.json' in extension and 'extension/manifest.json' in portable, 'package layout lost manifest')
 
 def main(argv=None) -> int:

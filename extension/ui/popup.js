@@ -17,7 +17,8 @@ async function refresh() {
     state=await pageMessage({type:P.MSG_GET_STATE});
     $('page-status').textContent=state.dormant ? '本站已设为从不翻译，可在下方修改。' : state.translated ? `已翻译 ${state.done ?? (state.units-state.pending-state.failed)} 段 · 待处理 ${state.pending} · 失败 ${state.failed}` : '已准备好，翻译靠近视口的段落。';
     $('toggle').textContent=state.translated ? '恢复原文' : '翻译当前页面'; $('toggle').disabled=state.dormant;
-  } catch { $('page-status').textContent='此页面不能运行扩展，或扩展刚更新；请打开普通网页并刷新。'; $('toggle').disabled=true; }
+    $('comics').disabled=state.dormant || !settings.comics.enabled;
+  } catch { $('page-status').textContent='此页面不能运行扩展，或扩展刚更新；请打开普通网页并刷新。'; $('toggle').disabled=true;$('comics').disabled=true; }
 }
 async function persist(patch) { settings=await saveSettings(patch); draw(); await refresh(); }
 function activeModel() { return activeProfile(settings); }
@@ -31,6 +32,7 @@ $('model').addEventListener('change',()=>busy($('model'),async()=>{
   await persist({provider:{profiles}});
 }));
 $('toggle').addEventListener('click',()=>busy($('toggle'),async()=>{ await pageMessage({type:P.MSG_COMMAND,name:P.COMMANDS.TOGGLE_PAGE}); await refresh(); }));
+$('comics').addEventListener('click',()=>busy($('comics'),async()=>{await pageMessage({type:P.MSG_COMMAND,name:'translate-comics'});await refresh();}));
 $('site').addEventListener('change',()=>busy($('site'),async()=>{
   const mode=$('site').value;
   const always=settings.siteRules.always.filter(x=>x!==host), never=settings.siteRules.never.filter(x=>x!==host);

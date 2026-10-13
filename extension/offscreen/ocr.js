@@ -68,7 +68,7 @@ async function recognize(msg) {
       } else ctx.drawImage(bitmaps[0],0,0);
       worker = await Tesseract.createWorker(lang,1, {
         workerPath: new URL(`./ocr-worker.js?job=${job}`,location.href).href,
-        corePath: new URL('../vendor/tesseract/tesseract-core-simd-lstm.wasm.js',location.href).href,
+        corePath: new URL('../vendor/tesseract/tesseract-core-simd-lstm.js',location.href).href,
         langPath: new URL('./languages',location.href).href,
         workerBlobURL: false, cacheMethod: 'none', gzip: false, logger() {}, errorHandler() {},
       });

@@ -1,6 +1,7 @@
 import { discoverImages } from './discovery.js';
 import { cleanRegions, readingOrder } from './order.js';
 import { createPanel } from './panel.js';
+import { comicSiteMatches } from './sites.js';
 export class ComicTranslator {
   constructor({ platform,getSettings,doc=globalThis.document }) {
     this.platform=platform;this.getSettings=getSettings;this.doc=doc;this.panels=new Map();this.requests=new Set();this.generation=0;
@@ -9,6 +10,7 @@ export class ComicTranslator {
     this.navigationURL=doc.location.href;
   }
   start() {
+    if(this.getSettings().comics?.enabled===false) return 0;
     if(this.navigationURL!==this.doc.location.href) this.restore();
     this.navigationURL=this.doc.location.href;
     const records=[];
@@ -37,6 +39,12 @@ export class ComicTranslator {
       const lang=this.getSettings().comics?.language || ({ ja:'jpn',ko:'kor',en:'eng' }[from]) || 'jpn';
       const entry={ candidate,panel:null,version:0 };
       entry.panel=createPanel(candidate,{ lang,onRun:()=>this.run(entry),onClose:()=>this.close(entry),
+        onEnableCanvas:this.doc.location.hostname && ['http:','https:'].includes(this.doc.location.protocol) && !comicSiteMatches(this.doc.location.hostname,this.getSettings().comics.canvasSites) ? async()=> {
+          const current=await this.platform.settingsStore.load();
+          await this.platform.settingsStore.save({comics:{canvasSites:[...current.comics.canvasSites,this.doc.location.hostname]}});
+          const result=await this.platform.comics?.syncSites?.();
+          return !result || result.ok;
+        } : null,
         onLanguages:(language)=>this.platform.comics?.languages(language) || Promise.resolve({ ok:false,error:{message:'此平台暂不支持语言包管理'} }) });
       this.panels.set(candidate.element,entry);
       // Explicit page command runs only the bounded visible set and one upcoming image.

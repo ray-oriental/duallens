@@ -1,4 +1,4 @@
-import { CORE_SOURCE,WORKER_SOURCE } from '../../vendor/tesseract/userscript-sources.js';
+import { createRuntimeLoader } from './runtime-resources.js';
 import { LANGUAGES } from './languages.js';
 import { verifyLanguage } from '../../offscreen/language-store.js';
 import { detectTextRegions } from '../../offscreen/detector.js';
@@ -13,7 +13,8 @@ function toBase64(data) {
   for(let i=0;i<bytes.length;i+=8192) raw+=String.fromCharCode(...bytes.subarray(i,i+8192));
   return btoa(raw);
 }
-export function createUserscriptOCR({ storage,xmlhttpRequest }) {
+export function createUserscriptOCR({ storage,xmlhttpRequest,getResourceText }) {
+  const runtime=createRuntimeLoader({storage,xmlhttpRequest,getResourceText});
   let work=Promise.resolve();
   const loading=new Map();
   async function language(lang) {
@@ -42,6 +43,7 @@ export function createUserscriptOCR({ storage,xmlhttpRequest }) {
     loading.set(lang,promise);return promise;
   }
   async function recognize(blob,{lang}) {
+    const [CORE_SOURCE,WORKER_SOURCE]=await runtime();
     const trained=await language(lang);const start=performance.now();
     const workerURL=URL.createObjectURL(new Blob([CORE_SOURCE,'\n',WORKER_SOURCE],{type:'text/javascript'}));
     let worker,bitmap,timer,sequence=0,cancelled=false;const pending=new Map();

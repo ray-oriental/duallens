@@ -71,6 +71,12 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
+    assert.ok(Buffer.byteLength(content)<400000,'ordinary startup bundle exceeds 400 KB');
+    assert.ok(content.includes('@grant        GM_getResourceText'));
+    assert.equal((content.match(/^\/\/ @resource\s+/gm)||[]).length,2);
+    assert.equal((content.match(/#sha256=[a-f0-9]{64}/g)||[]).length,2);
+    const vendor=path.resolve('extension/vendor/tesseract');
+    for(const file of ['worker.min.js','tesseract-core-simd-lstm.js']) assert.ok(!content.includes(await fs.readFile(path.join(vendor,file),'utf8')),'OCR source was inlined');
     for (const grant of ['GM_xmlhttpRequest', 'GM_getValue', 'GM_setValue', 'GM_deleteValue', 'GM_registerMenuCommand', 'GM_addValueChangeListener']) assert.ok(content.includes('@grant        ' + grant));
     assert.ok(content.includes('@version      ' + a.version)); assert.ok(content.includes('@noframes'));
     assert.throws(() => metadata('invalid'), /Invalid/);

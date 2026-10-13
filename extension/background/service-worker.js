@@ -15,18 +15,21 @@ import {
   COMMANDS,
   PRIORITY,
 } from '../shared/protocol.js';
-import { loadSettings, saveSettings } from '../shared/settings.js';
+import { loadSettings, saveSettings, getDefaultSettingsStore } from '../shared/settings.js';
 import { toErrorInfo } from '../shared/errors.js';
-import { providers } from './providers.js';
+import { createProviders } from './providers.js';
 import { createQueue } from './queue.js';
 import { createCache } from './cache.js';
 import { createTranslator } from './translator.js';
 import { createHandlers } from './handlers.js';
 import { createComicHandlers } from './comics.js';
+import { createCanvasRegistry } from './comic-sites.js';
 
 const queue = createQueue();
 const cache = createCache();
-const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings });
+const getSecret = id => getDefaultSettingsStore().getSecret(id);
+const providers = createProviders({ getSecret });
+const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings, getSecret });
 const handlers = createHandlers({
   translator,
   cache,
@@ -35,6 +38,10 @@ const handlers = createHandlers({
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
 Object.assign(handlers, createComicHandlers(chrome));
+const canvasRegistry=createCanvasRegistry(chrome,loadSettings);
+handlers['comic-canvas-sites-sync']=()=>canvasRegistry.sync();
+getDefaultSettingsStore().onChange(()=>{void canvasRegistry.sync().catch(()=>{});});
+void canvasRegistry.sync().catch(()=>{});
 
 // A pending fetch alone does not stop Chrome from stopping an idle worker after ~30s; any
 // extension API call resets that timer, so poke one while work is in flight.

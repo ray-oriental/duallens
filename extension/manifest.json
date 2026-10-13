@@ -22,13 +22,6 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content/comics/canvas-hook.js"],
-      "world": "MAIN",
-      "run_at": "document_start",
-      "all_frames": false
-    },
-    {
       "matches": [
         "http://*/*",
         "https://*/*",
@@ -59,7 +52,9 @@
       ]
     }
   ],
-  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'"
+  },
   "action": {
     "default_popup": "ui/popup.html",
     "default_title": "DualLens",

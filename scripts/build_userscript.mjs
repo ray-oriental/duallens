@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { OCR_RESOURCES } from '../extension/content/comics/runtime-resources.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(HERE, '..');
@@ -255,6 +256,8 @@ export function metadata(version) {
 // @grant        GM_deleteValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_addValueChangeListener
+// @grant        GM_getResourceText
+${OCR_RESOURCES.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).join('\n')}
 // @connect      *
 // @downloadURL  https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js
 // @updateURL    https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js
@@ -266,6 +269,7 @@ export async function buildUserscript({ project = PROJECT, output = path.join(pr
   const manifest = JSON.parse((await fs.readFile(path.join(project, 'extension', 'manifest.json'), 'utf8')).replace(/^\uFEFF/, ''));
   const bundle = await buildBundle(path.join(project, 'extension', 'userscript', 'entry.js'), { root: path.join(project, 'extension') });
   const content = metadata(manifest.version) + bundle;
+  if(Buffer.byteLength(content)>=400000) throw new Error('Userscript exceeds the 400 KB startup budget');
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, content, 'utf8');
   return { output, bytes: Buffer.byteLength(content), version: manifest.version };

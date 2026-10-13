@@ -6,7 +6,9 @@ import { probeLocalOCR,createGMImageFetch } from '../../extension/content/comics
 import { fetchImage,createComicHandlers } from '../../extension/background/comics.js';
 import { verifyLanguage } from '../../extension/offscreen/language-store.js';
 import { detectTextRegions } from '../../extension/offscreen/detector.js';
-import { CORE_SOURCE,WORKER_SOURCE } from '../../extension/vendor/tesseract/userscript-sources.js';
+import { OCR_RESOURCES,createRuntimeLoader,verifyRuntime } from '../../extension/content/comics/runtime-resources.js';
+import { comicSites,comicSiteMatches,canvasMatches } from '../../extension/content/comics/sites.js';
+import { createCanvasRegistry } from '../../extension/background/comic-sites.js';
 import { LANGUAGES } from '../../extension/content/comics/languages.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -79,12 +81,26 @@ test('connected ink baseline groups horizontal/vertical lettering and discards p
   assert.equal(detectTextRegions(vertical,{vertical:true}).length,1);
   assert.deepEqual(detectTextRegions(make()),[]);
 });
-test('userscript executable source strings are lossless upstream assets and fixed language catalog agrees',()=>{
-  for(const [source,file] of [[CORE_SOURCE,'tesseract-core-simd-lstm.wasm.js'],[WORKER_SOURCE,'worker.min.js']]) {
-    const actual=readFileSync(new URL('../../extension/vendor/tesseract/'+file,import.meta.url));
-    assert.equal(createHash('sha256').update(source).digest('hex'),createHash('sha256').update(actual).digest('hex'));
-  }
+test('lazy runtime resource descriptors pin upstream integrity and language catalog agrees',()=>{
+  assert.equal(OCR_RESOURCES.length,2);
+  for(const spec of OCR_RESOURCES){assert.match(spec.url,/@5\.1\.1\//);assert.match(spec.sha256,/^[a-f0-9]{64}$/);}
   assert.deepEqual(LANGUAGES,JSON.parse(readFileSync(new URL('../../extension/offscreen/languages.json',import.meta.url),'utf8')));
+});
+test('runtime resources are not accessed at startup and tampered resources fail verification',async()=>{
+  let calls=0;const loader=createRuntimeLoader({getResourceText:()=>{calls++;return 'bad';},storage:{get:async()=>({}),remove:async()=>{}},xmlhttpRequest:req=>req.onerror()});
+  assert.equal(calls,0);await assert.rejects(loader(),/下载失败/);assert.equal(calls,2);
+  await assert.rejects(verifyRuntime('bad',OCR_RESOURCES[0]),/校验/);
+});
+test('canvas whitelist has no broad matches and disabled comics removes registration',async()=>{
+  assert.deepEqual(comicSites(['*.Pixiv.net','*.pixiv.net']),['*.pixiv.net']);
+  assert.equal(comicSiteMatches('www.pixiv.net',['*.pixiv.net']),true);
+  assert.equal(comicSiteMatches('evilpixiv.net',['*.pixiv.net']),false);
+  for(const value of ['*','<all_urls>','https://pixiv.net/','pixiv.net:443','../x']) assert.throws(()=>comicSites([value]));
+  let settings={comics:{enabled:true,canvasSites:['*.pixiv.net']}},current,registered=0,removed=0;
+  const api={scripting:{getRegisteredContentScripts:async()=>current?[current]:[],registerContentScripts:async scripts=>{current=scripts[0];registered++;},updateContentScripts:async scripts=>{current=scripts[0];},unregisterContentScripts:async()=>{current=null;removed++;}}};
+  const registry=createCanvasRegistry(api,async()=>settings);
+  await registry.sync();await registry.sync();assert.equal(registered,1);assert.equal(current.world,'MAIN');assert.equal(current.runAt,'document_start');
+  assert.deepEqual(current.matches,canvasMatches(settings));settings={comics:{enabled:false,canvasSites:['*.pixiv.net']}};await registry.sync();assert.equal(removed,1);
 });
 test('comic transport gate bounds all-tab fetching/OCR concurrency to two and rejects subframes',async()=>{
   const originalFetch=globalThis.fetch;let active=0,peak=0;

@@ -1,5 +1,8 @@
 // MAIN world, original implementation. WeakMaps preserve the page's DOM and collect no pixels.
 (() => {
+  const key=Symbol.for("duallens.comic.canvas.hook");
+  if(window[key]) return;
+  window[key]=true;
   const images = new WeakMap();
   const canvases = new WeakMap();
   const source = (image) => images.get(image) || (image instanceof HTMLImageElement ? { url: image.currentSrc || image.src } : canvases.get(image));

@@ -8,11 +8,18 @@ from http.server import ThreadingHTTPServer
 from functools import partial
 import threading
 import sys
+import time
 import run_e2e as runner
 
 REQUESTS=[]
 class Handler(runner._QuietHandler):
     def do_GET(self):
+        if self.path.startswith('/comics-runtime/'):
+            name=self.path.rsplit('/',1)[1]
+            if name not in ['worker.min.js','tesseract-core-simd-lstm.wasm.js']:
+                self.send_response(404);self.end_headers();return
+            data=(Path(os.environ['USERPROFILE'])/'.cache/duallens-e2e/comics-runtime'/name).read_bytes()
+            self.send_response(200);self.send_header('Content-Type','application/javascript');self.end_headers();self.wfile.write(data);return
         if self.path=='/comics-bundle.js':
             data=(runner.REPO/'dist/duallens.user.js').read_bytes()
             self.send_response(200);self.send_header('Content-Type','application/javascript');self.end_headers();self.wfile.write(data);return
@@ -50,11 +57,18 @@ def fixtures():
     threading.Thread(target=server.serve_forever,daemon=True).start()
     return server,f'http://127.0.0.1:{server.server_port}'
 
+def settings_v2(h,patch):
+    page=h.ctx.new_page();page.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
+    page.locator('#save:enabled').wait_for()
+    try:
+        return page.evaluate("async patch => {const {saveSettings}=await import(chrome.runtime.getURL('shared/settings.js'));return saveSettings(patch)}",patch)
+    finally:page.close()
+
 def setup(h,lang):
     data=Path(os.environ['USERPROFILE'])/'.cache/duallens-e2e/comics-data'
     # Offline controlled data response; production still pins the upstream URL and checks its hash.
     h.ctx.route('https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/**',lambda route:route.fulfill(path=str(data/route.request.url.rsplit('/',1)[1]),content_type='application/octet-stream'))
-    h.settings({'comics':{'language':lang},'provider':{'active':'comic-test','chain':[], 'profiles':[{
+    settings_v2(h,{'comics':{'language':lang},'provider':{'active':'comic-test','chain':[], 'profiles':[{
       'id':'comic-test','kind':'openai','name':'Offline local text recorder','baseUrl':h.base+'/v1','model':'mock',
       'jsonMode':True,'maxItems':20,'maxChars':4000,'concurrency':2,'timeoutMs':10000,'fallbackModels':[]}]}})
 
@@ -73,7 +87,7 @@ def comics_ocr(h):
         h.command('translate-comics')
         state=h.wait_state(lambda s:len(s.get('comics',[]))==1 and (
           (len(s['comics'][0]['items'])>=2 and all(i['translation'].startswith('【译】') for i in s['comics'][0]['items'])) or
-          any(word in s['comics'][0]['status'] for word in ['失败','未就绪','无法','connection','没有找到']) or
+          any(word in s['comics'][0]['status'] for word in ['失败','未就绪','无法','超时','connection','没有找到']) or
           (bool(s['comics'][0]['items']) and all(i['translation'].startswith('【译】') for i in s['comics'][0]['items']))),90,'two real OCR translations')
         panel=state['comics'][0]
         runner.check(len(panel['items'])>=2,'OCR failed: '+panel['status'])
@@ -92,7 +106,9 @@ def comics_ocr(h):
     settings=h.ctx.new_page();settings.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
     packs=settings.evaluate("() => chrome.runtime.sendMessage({type:'comic-languages-list'})")
     runner.check(packs['ok'] and {p['lang'] for p in packs['languages']}=={'jpn_vert','kor','eng'},str(packs))
-    deleted=settings.evaluate("() => chrome.runtime.sendMessage({type:'comic-languages-delete',lang:'eng'})")
+    row=settings.locator('#comics-languages p').filter(has_text='eng')
+    row.locator('button').click();row.wait_for(state='hidden')
+    deleted=settings.evaluate("() => chrome.runtime.sendMessage({type:'comic-languages-list'})")
     runner.check(deleted['ok'] and 'eng' not in {p['lang'] for p in deleted['languages']},str(deleted))
     settings.close()
     setup(h,'eng');h.open('comics/index.html')
@@ -122,7 +138,7 @@ def comics_403(h):
     runner.check(len(REQUESTS)==requests_before,'403 still sent a translation request')
 
 @runner.case('comics_userscript','Bundled local userscript OCR through anonymous GM blob/arraybuffer mocks')
-def comics_userscript(h,blocked=False):
+def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
     h.open('comics/blocked.html' if blocked else 'comics/index.html')
     h.page.set_viewport_size({'width':375,'height':812})
     h.js("() => document.querySelectorAll('figure').forEach(f=>{if(f.firstElementChild.id!=='eng')f.style.display='none'})")
@@ -131,7 +147,14 @@ def comics_userscript(h,blocked=False):
       const settings={version:2,provider:{active:'mock',chain:[]},comics:{language:'eng'},floatBall:{enabled:false}};
       // The platform owner still has a v1 compatibility seam in this integration baseline.
       const values={'duallens:sync':{settings,'settings.core':settings}};
+      window.fixtureStorage=values;
       const commands={};window.fixtureCommands=commands;window.fixtureRoots=[];window.fixtureRequests=[];
+      window.fixtureResourceReads=[];
+      window.GM_getResourceText=name=>{
+        window.fixtureResourceReads.push(name);
+        const file=name==='duallensOcrCore'?'tesseract-core-simd-lstm.wasm.js':'worker.min.js';
+        return fetch('/comics-runtime/'+file).then(res=>res.text());
+      };
       const attach=Element.prototype.attachShadow;
       Element.prototype.attachShadow=function(...args){const root=attach.apply(this,args);if(this.localName==='dl-comic')window.fixtureRoots.push(root);return root;};
       window.GM_getValue=(key,def)=>Promise.resolve(values[key]??def);
@@ -139,15 +162,20 @@ def comics_userscript(h,blocked=False):
       window.GM_addValueChangeListener=()=>{};window.GM_registerMenuCommand=(label,handler)=>{commands[label]=handler;};
       window.GM_xmlhttpRequest=req=>{
         window.fixtureRequests.push({url:req.url,anonymous:req.anonymous,type:req.responseType});
-        const url=req.url.startsWith('https://raw.githubusercontent.com/')?'/comics-data/'+req.url.split('/').pop():req.url;
+        const url=req.url.startsWith('https://raw.githubusercontent.com/')?'/comics-data/'+req.url.split('/').pop():req.url.startsWith('https://cdn.jsdelivr.net/')?'/comics-runtime/'+req.url.split('/').pop():req.url;
         const ctrl=new AbortController();fetch(url,{signal:ctrl.signal,credentials:'omit'}).then(async res=>{
           const response=req.responseType==='arraybuffer'?await res.arrayBuffer():req.responseType==='blob'?await res.blob():await res.text();
           req.onload({status:res.status,response,responseText:typeof response==='string'?response:'',responseHeaders:'content-type: '+res.headers.get('content-type')});
         }).catch(()=>req.onerror());return {abort:()=>ctrl.abort()};
       };
     }""")
+    if allow_sites: h.js("() => {window.fixtureStorage['duallens:sync'].settings.comics.canvasSites=['127.0.0.1']}")
+    if fallback: h.js("() => {window.GM_getResourceText=()=>{throw Error('Resource API unavailable')}}")
     h.page.add_script_tag(url=h.base+'/comics-bundle.js')
     h.wait_js("() => !!window.fixtureCommands['翻译此页漫画']")
+    runner.check(h.js('() => window.fixtureResourceReads.length')==0,'ordinary page parsed/read OCR resources at startup')
+    native=h.js("() => CanvasRenderingContext2D.prototype.drawImage.toString().includes('[native code]')")
+    runner.check(native!=allow_sites,'userscript canvas hook did not follow opt-in whitelist')
     h.js("() => window.fixtureCommands['翻译此页漫画']()")
     if blocked:
         h.wait_js("() => window.fixtureRoots.length && /此页无法本地识别/.test(window.fixtureRoots[0].querySelector('[role=status]').textContent)",timeout=10)
@@ -177,9 +205,59 @@ def comics_userscript(h,blocked=False):
 def comics_userscript_csp(h):
     comics_userscript(h,blocked=True)
 
+@runner.case('comics_userscript_fallback','Unavailable resource API uses verified private GM runtime downloads')
+def comics_userscript_fallback(h):
+    comics_userscript(h,fallback=True)
+
+@runner.case('comics_userscript_sites','User script MAIN hook installs only on explicitly opted-in domains')
+def comics_userscript_sites(h):
+    comics_userscript(h,allow_sites=True)
+
+@runner.case('comics_sites','Dynamic MAIN registration defaults to pixiv, follows setting changes, never all sites')
+def comics_sites(h):
+    setup(h,'eng');h.open('comics/index.html')
+    runner.check(h.js("() => CanvasRenderingContext2D.prototype.drawImage.toString().includes('[native code]')"),'ordinary extension page has a canvas hook')
+    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")
+    runner.check(len(scripts)==1 and set(scripts[0]['matches'])=={'http://*.pixiv.net/*','https://*.pixiv.net/*'},str(scripts))
+    options=h.ctx.new_page();options.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
+    options.locator('#save:enabled').wait_for()
+    options.locator('#comicsSites').fill('127.0.0.1');options.locator('#save').click()
+    for _ in range(100):
+        if options.locator('#status').inner_text()=='设置已保存': break
+        time.sleep(.05)
+    runner.check(options.locator('#status').inner_text()=='设置已保存','comic settings save failed: '+options.locator('#status').inner_text())
+    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")
+    runner.check(set(scripts[0]['matches'])=={'http://127.0.0.1/*','https://127.0.0.1/*'},str(scripts))
+    options.locator('#comicsEnabled').uncheck();options.locator('#save').click()
+    for _ in range(100):
+        if options.locator('#status').inner_text()=='设置已保存': break
+        time.sleep(.05)
+    runner.check(options.locator('#status').inner_text()=='设置已保存','comic disable save failed: '+options.locator('#status').inner_text())
+    runner.check(h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")==[],'disabled comics kept registration')
+    options.close()
+
+@runner.case('comics_popup','Popup comic button sends the command and renders local bilingual results')
+def comics_popup(h):
+    setup(h,'eng');h.open('comics/index.html')
+    h.js("() => document.querySelectorAll('figure').forEach(f=>{if(f.firstElementChild.id!=='eng')f.style.display='none'})")
+    before=h.js('() => document.body.outerHTML')
+    popup=h.ctx.new_page()
+    popup.add_init_script('if(globalThis.chrome?.tabs) chrome.tabs.query=async()=>[{id:'+str(h.tab_id)+',url:'+json.dumps(h.page.url)+'}];')
+    popup.goto('chrome-extension://'+h.ext_id+'/ui/popup.html')
+    popup.locator('#comics').click()
+    h.wait_state(lambda s:bool(s.get('comics')) and len(s['comics'][0]['items'])==2 and all(i['translation'].startswith('【译】') for i in s['comics'][0]['items']),30,'popup comic translations')
+    popup.close();h.command('restore-comics')
+    runner.check(h.js('() => document.body.outerHTML')==before,'popup comic restoration failed')
+
 @runner.case('comics_canvas','MAIN canvas source/crop hooks, original pixels and exact DOM restoration')
 def comics_canvas(h):
-    setup(h,'eng');h.open('comics/index.html')
+    setup(h,'eng');settings_v2(h,{'comics':{'canvasSites':['127.0.0.1']}})
+    options=h.ctx.new_page();options.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
+    registration=options.evaluate("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+    runner.check(registration['ok'],'canvas registration failed');options.close()
+    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")
+    runner.check(len(scripts)==1 and 'http://127.0.0.1/*' in scripts[0]['matches'],'registered site mismatch: '+str(scripts))
+    h.open('comics/index.html')
     h.js("""async()=>{
       document.querySelectorAll('figure').forEach(f=>f.style.display='none');
       const image=document.querySelector('#eng');await image.decode();

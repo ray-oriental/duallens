@@ -23,4 +23,10 @@ self.fetch = async function(url, options) {
   if (u.origin !== self.location.origin) throw new Error('Remote OCR runtime disabled');
   return nativeFetch(url,options);
 };
+importScripts('../vendor/tesseract/tesseract-core-simd-lstm.js');
+const upstreamCore=self.TesseractCore;
+self.TesseractCore=options=>upstreamCore({...options,locateFile(name) {
+  if(name!=='tesseract-core-simd-lstm.wasm') throw new Error('Unexpected OCR runtime file');
+  return new URL('../vendor/tesseract/'+name,self.location.href).href;
+}});
 importScripts('../vendor/tesseract/worker.min.js');
