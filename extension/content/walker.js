@@ -82,17 +82,24 @@ export function blockContainerOf(node) {
 // opts: { minChars, exclude: selector|null, known(host, first) -> bool, shallow: bool }
 // -> [{ host, first, last, whole }]
 export function collectRuns(root, opts = {}) {
+  const out = [];
+  for (const run of iterateRuns(root, opts)) if (run) out.push(run);
+  return out;
+}
+
+// Null yields are cooperative checkpoints, including containers that contain no text.
+export function* iterateRuns(root, opts = {}) {
   const minChars = opts.minChars ?? 2;
   const exclude = opts.exclude || null;
   const known = opts.known || null;
   const shallow = !!opts.shallow;
-  const out = [];
 
-  if (root.nodeType !== 1) return out;
-  if (inExcludedContext(root, exclude)) return out;
-  if (classify(root, exclude) === 'hidden' || classify(root, exclude) === 'excluded-block') return out;
+  if (root.nodeType !== 1) return;
+  if (inExcludedContext(root, exclude)) return;
+  if (classify(root, exclude) === 'hidden' || classify(root, exclude) === 'excluded-block') return;
 
-  function scan(el) {
+  function* scan(el) {
+    yield null;
     if (el.hasAttribute('data-dl-id')) return; // already a whole unit; its children belong to it
     let first = null;
     let last = null;
@@ -102,7 +109,9 @@ export function collectRuns(root, opts = {}) {
 
     const flush = () => {
       if (first && letters && rough >= minChars && !(known && known(el, first))) {
-        out.push({ host: el, first, last, whole: false });
+        const run = { host: el, first, last, whole: false };
+        first = last = null; rough = 0; letters = false;
+        return run;
       }
       first = last = null;
       rough = 0;
@@ -110,6 +119,7 @@ export function collectRuns(root, opts = {}) {
     };
 
     for (let n = el.firstChild; n; n = n.nextSibling) {
+      yield null;
       if (n.nodeType === 3) {
         const d = n.data;
         if (!first) {
@@ -135,23 +145,24 @@ export function collectRuns(root, opts = {}) {
         }
         continue;
       }
-      flush();
+      const run = flush();
+      if (run) yield run;
       sawBlock = true;
-      if (kind === 'container' && !shallow) scan(n);
+      if (kind === 'container' && !shallow) yield* scan(n);
     }
 
     if (first && !sawBlock) {
       // The single run covers the whole container: claim the container itself.
       if (letters && rough >= minChars && !(known && known(el, el.firstChild))) {
-        out.push({ host: el, first: el.firstChild, last: el.lastChild, whole: true });
+        yield { host: el, first: el.firstChild, last: el.lastChild, whole: true };
       }
       first = last = null;
     }
-    flush();
+    const run = flush();
+    if (run) yield run;
   }
 
-  scan(root);
-  return out;
+  yield* scan(root);
 }
 
 // Runs belonging to one block container only (no recursion); used by hover on an unscanned page.

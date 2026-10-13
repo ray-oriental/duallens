@@ -1,0 +1,78 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import vm from 'node:vm';
+import { buildBundle, metadata, buildUserscript } from '../../scripts/build_userscript.mjs';
+
+async function fixture(files, fn) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'duallens-bundle-'));
+  try { for (const [name, code] of Object.entries(files)) await fs.writeFile(path.join(root, name), code); return await fn(root); }
+  finally { await fs.rm(root, { recursive: true, force: true }); }
+}
+
+test('bundler handles named, default, namespace, async and generator exports with isolated scope', async () => {
+  await fixture({
+    'dep.js': 'export const value = 3; export default function twice(x) { return x * 2; } export function* values() { yield value; } export async function answer() { return value; }',
+    'other.js': 'const value = 9; export {value as other};',
+    'entry.js': 'import {value as a, values} from "./dep.js"; import twice from "./dep.js"; import * as ns from "./other.js"; globalThis.result = [a,twice(a),ns.other,[...values()][0]];',
+  }, async (root) => {
+    const bundle = await buildBundle(path.join(root, 'entry.js'), { root });
+    new Function(bundle); const context = {}; vm.runInNewContext(bundle, context);
+    assert.deepEqual(Array.from(context.result), [3, 6, 9, 3]); assert.equal(context.__modules, undefined);
+  });
+});
+
+test('strings, comments, regex and template text containing module keywords remain intact', async () => {
+  await fixture({ 'entry.js': 'const text = "export import()"; const re = /import\\(\\)|export{}/; /* import("no") */ const t = `export ${"safe"}`; globalThis.result = [text,re.source,t];' }, async (root) => {
+    const c = {}; vm.runInNewContext(await buildBundle(path.join(root, 'entry.js'), { root }), c);
+    assert.equal(c.result[0], 'export import()'); assert.equal(c.result[2], 'export safe');
+  });
+});
+
+for (const [label, source] of Object.entries({
+  dynamic: 'import("./dep.js");', commented_dynamic: 'import /* gap */ ("./dep.js");',
+  template_dynamic: 'const x = `${import("./dep.js")}`;', meta: 'const x = import.meta.url;',
+  reexport: 'export { x } from "./dep.js";', export_star: 'export * from "./dep.js";',
+  mutable: 'export let x = 1;', attributes: 'import x from "./dep.js" with {type:"json"};',
+  external: 'import fs from "node:fs";', multi_const: 'export const x = 1, y = 2;',
+  reserved: 'const __require = () => {};',
+  await: 'await Promise.resolve();',
+})) test(`unsupported syntax fails: ${label}`, async () => {
+  await fixture({ 'entry.js': source, 'dep.js': 'export const x = 1; export default 1;' }, async (root) => {
+    await assert.rejects(buildBundle(path.join(root, 'entry.js'), { root }));
+  });
+});
+
+test('anonymous default function/class exports get a statement terminator', async () => {
+  await fixture({
+    'entry.js': 'import f from "./dep.js"; import C from "./class.js"; globalThis.result = f() + new C().n;',
+    'dep.js': 'export default function() { return 2; } export const after = 1;',
+    'class.js': 'export default class { n = 3; } export const after = 1;',
+  }, async (root) => {
+    const c = {}; vm.runInNewContext(await buildBundle(path.join(root, 'entry.js'), { root }), c); assert.equal(c.result, 5);
+  });
+});
+
+test('missing exports and module cycles fail rather than silently breaking at runtime', async () => {
+  await fixture({ 'entry.js': 'import {missing} from "./dep.js";', 'dep.js': 'export const x = 1;' }, async (root) => {
+    await assert.rejects(buildBundle(path.join(root, 'entry.js'), { root }), /missing export/);
+  });
+  await fixture({ 'entry.js': 'import "./dep.js";', 'dep.js': 'import "./entry.js";' }, async (root) => {
+    await assert.rejects(buildBundle(path.join(root, 'entry.js'), { root }), /cyclic/);
+  });
+});
+
+test('real bundle is deterministic, contains inline CSS/required grants and passes new Function', async () => {
+  await fixture({}, async (root) => {
+    const a = await buildUserscript({ output: path.join(root, 'a.js') });
+    const b = await buildUserscript({ output: path.join(root, 'b.js') });
+    const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
+    new Function(content); assert.ok(content.includes('dl-s-muted'));
+    assert.ok(content.includes('@sandbox      DOM'));
+    for (const grant of ['GM_xmlhttpRequest', 'GM_getValue', 'GM_setValue', 'GM_deleteValue', 'GM_registerMenuCommand', 'GM_addValueChangeListener']) assert.ok(content.includes('@grant        ' + grant));
+    assert.ok(content.includes('@version      ' + a.version)); assert.ok(content.includes('@noframes'));
+    assert.throws(() => metadata('invalid'), /Invalid/);
+  });
+});

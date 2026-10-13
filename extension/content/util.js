@@ -46,39 +46,8 @@ export function joinSelectors(v) {
   return parts.length ? parts.join(',') : null;
 }
 
-export function contextValid() {
-  try {
-    return !!(globalThis.chrome && chrome.runtime && chrome.runtime.id);
-  } catch {
-    return false;
-  }
-}
-
-// Promise wrapper that never rejects: resolves {ok:false,error} when the extension is gone.
-export async function sendOneShot(msg) {
-  if (!contextValid()) return { ok: false, error: { code: 'config_error', message: '扩展已更新，请刷新页面' } };
-  try {
-    const res = await chrome.runtime.sendMessage(msg);
-    return res || { ok: false, error: { code: 'network_error', message: '后台没有响应' } };
-  } catch (e) {
-    return { ok: false, error: { code: 'network_error', message: String(e && e.message ? e.message : e) } };
-  }
-}
-
 export function deepActiveElement() {
   let el = document.activeElement;
   while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
   return el;
-}
-
-// chrome.i18n.detectLanguage as a promise that always resolves (null when unavailable).
-export function detectLanguage(text) {
-  return new Promise((resolve) => {
-    try {
-      const p = chrome.i18n.detectLanguage(text, (r) => resolve(r || null));
-      if (p && typeof p.then === 'function') p.then((r) => resolve(r || null), () => resolve(null));
-    } catch {
-      resolve(null);
-    }
-  });
 }
