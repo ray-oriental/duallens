@@ -1,0 +1,52 @@
+import { loadSettings, saveSettings, LANGS, STYLES, siteRuleFor, activeProfile } from '../shared/settings.js';
+import * as P from '../shared/protocol.js';
+import { $, options, notice, request, errorText, busy } from './common.js';
+let settings, tab, host='', state;
+function draw() {
+  options($('target'),LANGS,settings.targetLang); options($('style'),STYLES,settings.style);
+  options($('profile'),settings.provider.profiles,settings.provider.active);
+  $('mode').value=settings.displayMode; $('model').value=activeProfile(settings).model;
+  $('site').value=host ? siteRuleFor(settings,host).mode || '' : ''; $('site').disabled=!host;
+  $('subscription').hidden=!/^(claude|codex)\//.test(activeProfile(settings).model);
+}
+async function pageMessage(msg) { if (!tab?.id) throw new Error('没有可翻译的标签页'); return chrome.tabs.sendMessage(tab.id,msg); }
+async function refresh() {
+  try {
+    state=await pageMessage({type:P.MSG_GET_STATE});
+    $('page-status').textContent=state.dormant ? '本站已设为从不翻译，可在下方修改。' : state.translated ? `已翻译 ${state.done ?? (state.units-state.pending-state.failed)} 段 · 待处理 ${state.pending} · 失败 ${state.failed}` : '已准备好，翻译靠近视口的段落。';
+    $('toggle').textContent=state.translated ? '恢复原文' : '翻译当前页面'; $('toggle').disabled=state.dormant;
+  } catch { $('page-status').textContent='此页面不能运行扩展，或扩展刚更新；请打开普通网页并刷新。'; $('toggle').disabled=true; }
+}
+async function persist(patch) { settings=await saveSettings(patch); draw(); await refresh(); }
+function activeModel() { return activeProfile(settings); }
+$('target').addEventListener('change',()=>busy($('target'),()=>persist({targetLang:$('target').value})));
+$('style').addEventListener('change',()=>busy($('style'),()=>persist({style:$('style').value})));
+$('mode').addEventListener('change',()=>busy($('mode'),()=>persist({displayMode:$('mode').value})));
+$('profile').addEventListener('change',()=>busy($('profile'),()=>persist({provider:{active:$('profile').value}})));
+$('model').addEventListener('change',()=>busy($('model'),async()=>{
+  const model=$('model').value.trim(); if (!model) throw new Error('请填写模型标识');
+  const profiles=settings.provider.profiles.map(p=>p.id===settings.provider.active ? {...p,model,fallbackModels:/^(claude|codex)\//.test(model)?[]:p.fallbackModels}:p);
+  await persist({provider:{profiles}});
+}));
+$('toggle').addEventListener('click',()=>busy($('toggle'),async()=>{ await pageMessage({type:P.MSG_COMMAND,name:P.COMMANDS.TOGGLE_PAGE}); await refresh(); }));
+$('site').addEventListener('change',()=>busy($('site'),async()=>{
+  const mode=$('site').value;
+  const always=settings.siteRules.always.filter(x=>x!==host), never=settings.siteRules.never.filter(x=>x!==host);
+  if (mode==='always') always.push(host); if (mode==='never') never.push(host);
+  await persist({siteRules:{always,never}});
+  const applied=siteRuleFor(settings,host).mode;
+  notice((applied||'')!==mode?'本站仍被通配规则命中，请到全部设置修改。':'站点规则已保存');
+}));
+$('load-models').addEventListener('click',()=>busy($('load-models'),async()=>{
+  const r=await request(P.MSG_LIST_MODELS,{profileId:settings.provider.active});
+  if (!r.ok) throw new Error(errorText(r));
+  options($('models'),r.models||[]); notice(`获取到 ${r.models?.length||0} 个模型，选择后生效`);
+}));
+$('test').addEventListener('click',()=>busy($('test'),async()=>{
+  notice('正在翻译测试文本…'); const r=await request(P.MSG_PROVIDER_TEST,{profileId:settings.provider.active});
+  if (!r.ok) throw new Error(errorText(r)); notice(`连接正常 · ${r.latencyMs} ms · ${r.sample||''}`);
+}));
+$('options').addEventListener('click',()=>chrome.runtime.openOptionsPage());
+try { settings=await loadSettings(); [tab]=await chrome.tabs.query({active:true,currentWindow:true}); if(tab?.url) { try { host=new URL(tab.url).hostname; } catch {} } draw(); await refresh(); }
+catch(e) { notice(e.message,true); }
+const poll=setInterval(refresh,700); window.addEventListener('pagehide',()=>clearInterval(poll),{once:true});

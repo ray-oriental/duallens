@@ -1,0 +1,41 @@
+{
+  "port": 18790,
+  "allowed_origins": [],
+  "ollama": {
+    "enabled": true,
+    "url": "http://127.0.0.1:11434",
+    "models": [
+      "qwen3:4b",
+      "gpt-oss:20b"
+    ]
+  },
+  "sjtu": {
+    "enabled": false,
+    "url": "http://127.0.0.1:18765",
+    "models": [
+      "deepseek-chat"
+    ]
+  },
+  "hermes": {
+    "enabled": false,
+    "url": "http://127.0.0.1:8645",
+    "models": [
+      "upstage/solar-mini4:free"
+    ]
+  },
+  "claude": {
+    "enabled": false,
+    "models": [
+      "haiku",
+      "sonnet"
+    ],
+    "daily_limit": 0
+  },
+  "codex": {
+    "enabled": false,
+    "models": [
+      "default"
+    ],
+    "daily_limit": 0
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "manifest_version": 3,
+  "name": "DualLens 双语对照翻译",
+  "short_name": "DualLens",
+  "version": "0.1.0",
+  "description": "段落级双语网页翻译。支持自选OpenAI兼容接口、本机Ollama网关及可选模型集成。",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "contextMenus",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*",
+        "file:///*"
+      ],
+      "js": [
+        "content/loader.js"
+      ],
+      "css": [
+        "styles/content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/*.js",
+        "shared/*.js"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*",
+        "file:///*"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "ui/popup.html",
+    "default_title": "DualLens",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "options_page": "ui/options.html",
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "commands": {
+    "toggle-page": {
+      "suggested_key": {
+        "default": "Alt+A"
+      },
+      "description": "翻译 / 恢复当前页面"
+    },
+    "toggle-translation-only": {
+      "suggested_key": {
+        "default": "Alt+W"
+      },
+      "description": "切换双语对照 / 仅显示译文"
+    },
+    "translate-input": {
+      "suggested_key": {
+        "default": "Alt+I"
+      },
+      "description": "翻译当前输入框的内容"
+    },
+    "toggle-hover": {
+      "description": "开关悬停翻译"
+    }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvqZ20TGawXFE5pQOogJC4jEpXfq0OGZC0d0z6ruwZS2ZDceVKQBEYZsmMxRUg+eThb9KOACpfisQSG4AJJnye9S1hYqQ2eAxX4MW4YujpPolsPmNbIbMWUx09vfboFlD90K5oRDIANXT7uNKvW7u3Olt1TIU0ki8OIwCh3+dgHcWIaJy8su2Dh1MfvU1qgZAneKmbEelBxydwOtajgrmWZBqen5Wf6X8yUNXAUjl0ry3BZo8VAkzuV4o/dvCxop5jMoAS/DWEYxpF5cWiZoGe5x3hez1J1Z3U4lvNPHGQp/m5huQCsLek+Sa42l29AZ2NCYGN8TwH4k2FVGLO0L1awIDAQAB"
+}

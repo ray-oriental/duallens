@@ -1,0 +1,22 @@
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.log
+dist/
+*.zip
+*.crx
+.env
+.env.*
+!.env.example
+
+# Machine state and private development evidence
+.duallens/
+.venv/
+venv/
+playwright-report/
+test-results/
+docs/private/
+docs/research/
+docs/HANDOFF-CODEX.md
+docs/acceptance.json

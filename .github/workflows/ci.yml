@@ -1,0 +1,75 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  checks:
+    name: Offline checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: JavaScript unit tests
+        run: npm test
+      - name: Gateway unit tests (mock transports only)
+        run: python -B -m unittest discover -s gateway/tests
+      - name: Release safety and reproducibility tests
+        run: python -B -m unittest discover -s scripts -p "test_*.py"
+      - name: Manifest, imports and syntax
+        run: python -B scripts/check_project.py
+      - name: Build release assets
+        run: python -B scripts/build_release.py
+      - name: Verify packaged completeness and checksums
+        run: python -B scripts/check_project.py --dist-dir dist
+      - name: Upload release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: duallens-${{ matrix.os }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+  browser:
+    name: Chromium E2E (ubuntu-24.04, mock only)
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install E2E dependencies outside checkout
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/duallens-e2e-venv"
+          "$RUNNER_TEMP/duallens-e2e-venv/bin/python" -m pip install -r requirements-dev.txt
+          "$RUNNER_TEMP/duallens-e2e-venv/bin/python" -m playwright install --with-deps chromium
+      - name: Run offline browser acceptance
+        shell: bash
+        run: '"$RUNNER_TEMP/duallens-e2e-venv/bin/python" -B -u tests/e2e/run_e2e.py --mock-only --artifacts-dir "$RUNNER_TEMP/duallens-e2e-artifacts"'
+      - name: Upload E2E results and failure screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: duallens-chromium-mock-results
+          path: ${{ runner.temp }}/duallens-e2e-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7

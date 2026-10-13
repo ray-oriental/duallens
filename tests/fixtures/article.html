@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DualLens fixture: article</title>
+<style>
+  body { font: 16px/1.6 Georgia, serif; max-width: 760px; margin: 24px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 20px; }
+  pre { background: #f4f4f4; padding: 8px; overflow: auto; }
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #bbb; padding: 4px 8px; }
+  blockquote { border-left: 3px solid #999; margin-left: 0; padding-left: 12px; color: #555; }
+</style>
+</head>
+<body>
+<h1 id="h-title">Notes on Reliable Local Tooling</h1>
+<p id="p-intro">This short article is a fixture for the DualLens end to end tests. It mixes paragraphs, links, lists, tables and code so that every rule in the content pipeline gets exercised.</p>
+<h2 id="h2-short">Quick start</h2>
+<p id="p-plain">Good translation tools keep the original structure of the page intact while adding a readable second line under each paragraph.</p>
+<p id="p-links">Read the <a id="lnk-docs" href="https://example.com/docs/getting-started?lang=en">getting started guide</a> first, then the <a id="lnk-anchor" href="article.html#section-two">section on caching</a> for the details.</p>
+<p id="p-bold">The <strong>most important rule</strong> is that the original text must never be deleted, even while a <em>translation</em> is still pending.</p>
+<p id="p-inline-code">Run <code id="code-inline">npm run build</code> in the project root before you open the page.</p>
+<div id="div-direct">A block container with direct text and no paragraph wrapper should also be translated.</div>
+<ul id="list-1">
+  <li id="li-1">Install the extension from the unpacked folder.</li>
+  <li id="li-2">Open any article and press the toggle shortcut.</li>
+  <li id="li-3">Use the popup to switch between bilingual and translation-only views.</li>
+</ul>
+<table id="tbl-1">
+  <caption>Feature matrix</caption>
+  <thead><tr><th>Feature</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td id="td-1">Paragraph translation</td><td>Ready</td></tr>
+    <tr><td>Hover translation</td><td>Ready</td></tr>
+  </tbody>
+</table>
+<blockquote id="quote-1">Quality comes from measuring the output, not from arguing about it.</blockquote>
+<ul id="list-mixed">
+  <li id="li-mixed">Parent text before the nested list<ul><li id="li-nested">Nested item text inside the list.</li></ul></li>
+</ul>
+<div id="flex-host" style="display:flex;gap:8px">Flex container text that is translated as one run.</div>
+<pre id="pre-code"><code>function add(a, b) {
+  return a + b;
+}</code></pre>
+<p id="p-zh">这一段已经是中文，不应该被再次翻译。</p>
+<div class="notranslate" id="notranslate-box"><p id="p-notranslate">This paragraph lives inside a notranslate container and must stay untouched.</p></div>
+<div translate="no" id="translate-no-box"><p id="p-translate-no">This paragraph is marked translate=no and must stay untouched.</p></div>
+<p id="p-numbers">12345 67890</p>
+<p id="p-url">https://example.com/a/b/c</p>
+<p id="p-symbols">--- ||| ---</p>
+<p id="p-aria-hidden" aria-hidden="true">This paragraph is hidden from assistive technology.</p>
+<p id="p-display-none" style="display:none">This paragraph is not rendered at all.</p>
+<form id="form-area" onsubmit="return false">
+  <input id="pw" type="password" aria-label="Password field" value="">
+  <textarea id="ta" aria-label="Notes field"></textarea>
+  <div id="ce" contenteditable="true"><p id="p-ce">This contenteditable paragraph is user-edited text and must not be translated by the page pass.</p></div>
+</form>
+</body>
+</html>

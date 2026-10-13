@@ -1,0 +1,24 @@
+name: Feature request / 功能建议
+description: 描述实际使用场景与期望的行为
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 现在遇到的问题
+      description: 哪个具体阅读或输入流程需要改善？
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: 期望行为与验收示例
+      description: 可用公开网页、模拟文本或本地夹具说明。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 替代方案与范围
+      description: 首版是P0网页翻译。PDF、字幕、EPUB、OCR是ROADMAP中的后续功能，请区分当前缺陷与新阶段建议。

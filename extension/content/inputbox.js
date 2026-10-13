@@ -1,0 +1,245 @@
+// Input-box translation: press space three times quickly (or Alt+I) in a text field and its
+// content is replaced by the translation into settings.input.targetLang. A leading "/ja " style
+// prefix overrides the target language for that one translation.
+
+import { MSG_TRANSLATE_TEXT } from '../shared/protocol.js';
+import { LANGS } from '../shared/settings.js';
+import { createOverlay, toast } from './overlay.js';
+import { deepActiveElement, sendOneShot } from './util.js';
+
+const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel']);
+const PREFIX = /^\s*\/([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)[ \t ]+/;
+const WINDOW_MS = 500;
+
+const CHIP_CSS = `
+.chip {
+  position: fixed; display: none; align-items: center; gap: 6px; padding: 3px 10px;
+  border-radius: 999px; background: var(--bg); color: var(--fg2); border: 1px solid var(--line);
+  box-shadow: var(--shadow); font-size: 12px; pointer-events: none;
+}
+.chip.show { display: inline-flex; }
+.spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: s .8s linear infinite; }
+@keyframes s { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+`;
+
+// The editable element a key event or focus belongs to, or null. Password fields never qualify.
+export function editableOf(node) {
+  if (!node || node.nodeType !== 1) return null;
+  const tag = node.tagName;
+  if (tag === 'TEXTAREA') return node.readOnly || node.disabled ? null : node;
+  if (tag === 'INPUT') {
+    const type = (node.getAttribute('type') || 'text').toLowerCase();
+    if (!TEXT_TYPES.has(type) || node.readOnly || node.disabled) return null;
+    return node;
+  }
+  if (node.isContentEditable) {
+    let host = node;
+    while (host.parentElement && host.parentElement.isContentEditable) host = host.parentElement;
+    return host;
+  }
+  return null;
+}
+
+function resolveLang(code) {
+  const c = code.toLowerCase();
+  const exact = LANGS.find((l) => l.code.toLowerCase() === c);
+  if (exact) return exact.code;
+  const base = c.split('-')[0];
+  const hit = LANGS.find((l) => l.code.toLowerCase() === base) || LANGS.find((l) => l.code.toLowerCase().startsWith(`${base}-`));
+  return hit ? hit.code : null;
+}
+
+// React tracks the value property itself; assigning through the prototype setter and then firing
+// "input" is what makes a controlled component notice the change.
+function setNativeValue(el, value) {
+  const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+  setter.call(el, value);
+  el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+}
+
+function accessor(el, useSelection) {
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+    const v = el.value;
+    let s = 0;
+    let e = v.length;
+    if (useSelection && el.selectionStart !== el.selectionEnd) {
+      s = el.selectionStart;
+      e = el.selectionEnd;
+    }
+    return {
+      text: v.slice(s, e),
+      current: () => el.value,
+      apply(out) {
+        setNativeValue(el, v.slice(0, s) + out + v.slice(e));
+        const pos = s + out.length;
+        try {
+          el.setSelectionRange(pos, pos);
+        } catch {
+          /* some input types have no selection API */
+        }
+      },
+    };
+  }
+  const sel = getSelection();
+  const partial =
+    useSelection && sel.rangeCount && !sel.isCollapsed && el.contains(sel.anchorNode) && el.contains(sel.focusNode);
+  const saved = partial ? sel.getRangeAt(0).cloneRange() : null;
+  return {
+    text: partial ? sel.toString() : el.innerText,
+    current: () => el.innerText,
+    apply(out) {
+      el.focus();
+      const s = getSelection();
+      s.removeAllRanges();
+      if (saved) s.addRange(saved);
+      else {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        s.addRange(r);
+      }
+      // execCommand keeps the editor's undo stack and fires the events rich editors listen to
+      const ok = document.execCommand('insertText', false, out);
+      if (!ok) {
+        if (saved) {
+          saved.deleteContents();
+          const node = document.createTextNode(out);
+          saved.insertNode(node);
+          saved.setStartAfter(node);
+          saved.collapse(true);
+          s.removeAllRanges(); s.addRange(saved);
+        } else el.textContent = out;
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: out }));
+      }
+    },
+  };
+}
+
+export class InputBox {
+  constructor({ getSettings }) {
+    this.getSettings = getSettings;
+    this.hits = [];
+    this.busy = new WeakSet();
+    this.on = false;
+    this.chip = null;
+    this.onKeyDown = (e) => this.#keydown(e);
+  }
+
+  enable() {
+    if (this.on) return;
+    this.on = true;
+    document.addEventListener('keydown', this.onKeyDown, true);
+  }
+
+  disable() {
+    if (!this.on) return;
+    this.on = false;
+    document.removeEventListener('keydown', this.onKeyDown, true);
+    this.chip?.ui.detach();
+    this.chip = null;
+  }
+
+  #keydown(e) {
+    const cfg = this.getSettings().input;
+    if (!cfg.enabled || cfg.trigger !== 'triple-space') return;
+    if (e.isComposing || e.keyCode === 229) {
+      this.hits.length = 0;
+      return;
+    }
+    if (e.key === ' ' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+      const el = editableOf(e.composedPath()[0]);
+      if (!el) {
+        this.hits.length = 0;
+        return;
+      }
+      if (this.hitElement !== el) { this.hits.length = 0; this.hitElement = el; }
+      const now = performance.now();
+      this.hits = this.hits.filter((t) => now - t <= WINDOW_MS);
+      this.hits.push(now);
+      if (this.hits.length >= 3) {
+        this.hits.length = 0;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.run(el, false);
+      }
+    } else if (e.key !== 'Shift' && e.key !== 'Control' && e.key !== 'Alt' && e.key !== 'Meta') {
+      this.hits.length = 0;
+    }
+  }
+
+  // Command path (Alt+I): the focused field, honouring a selection inside it.
+  translateFocused() {
+    const el = editableOf(deepActiveElement());
+    if (!el) {
+      toast('请先点进要翻译的输入框', 'error');
+      return;
+    }
+    this.run(el, true);
+  }
+
+  #showChip(el) {
+    if (!this.chip) {
+      const ui = createOverlay(CHIP_CSS);
+      const node = document.createElement('div');
+      node.className = 'chip';
+      const spin = document.createElement('i');
+      spin.className = 'spin';
+      node.append(spin, document.createTextNode('翻译中…'));
+      ui.el.appendChild(node);
+      this.chip = { ui, node };
+    }
+    const r = el.getBoundingClientRect();
+    this.chip.ui.attach();
+    this.chip.node.style.left = `${Math.max(4, Math.min(innerWidth - 100, r.right - 90))}px`;
+    this.chip.node.style.top = `${Math.max(4, Math.min(innerHeight - 30, r.bottom + 4))}px`;
+    this.chip.node.classList.add('show');
+  }
+
+  #hideChip() {
+    this.chip?.node.classList.remove('show');
+  }
+
+  async run(el, useSelection) {
+    if (this.busy.has(el)) return;
+    const settings = this.getSettings();
+    if (!settings.input.enabled) return;
+    const acc = accessor(el, useSelection);
+    // the first two spaces of a triple-space trigger are already in the field
+    let text = acc.text.replace(/[  ]+$/, '');
+    let target = settings.input.targetLang;
+    if (settings.input.prefixOverride) {
+      const m = PREFIX.exec(text);
+      const lang = m && resolveLang(m[1]);
+      if (lang) {
+        target = lang;
+        text = text.slice(m[0].length);
+      }
+    }
+    if (!text.trim()) {
+      toast('输入框是空的', 'error');
+      return;
+    }
+    const before = acc.current();
+    this.busy.add(el);
+    this.#showChip(el);
+    const res = await sendOneShot({
+      type: MSG_TRANSLATE_TEXT,
+      text,
+      to: target,
+      from: 'auto',
+      purpose: 'input',
+    });
+    this.busy.delete(el);
+    this.#hideChip();
+    if (!res.ok) {
+      toast(`输入框翻译失败：${(res.error && res.error.message) || '未知错误'}`, 'error', 4000);
+      return;
+    }
+    if (!this.on || !el.isConnected || !editableOf(el) || acc.current() !== before) {
+      toast('翻译期间输入框内容变了，已放弃替换', 'error', 3500);
+      return;
+    }
+    acc.apply(res.text);
+  }
+}

@@ -1,0 +1,2 @@
+# Browser tests only; gateway and packaging use the Python standard library.
+playwright==1.48.0

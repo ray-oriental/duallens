@@ -1,0 +1,56 @@
+name: Bug report / 问题反馈
+description: 可复现的扩展、网关或安装问题
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请用公开网页或本地测试页说明复现步骤。报告不包含 API key、cookie、token、私有原文或完整请求日志。
+        安全漏洞请先阅读 [SECURITY.md](../../SECURITY.md)。
+  - type: input
+    id: version
+    attributes:
+      label: DualLens 版本
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器版本与操作系统
+      placeholder: Chrome 130 / Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: 翻译接口
+      options:
+        - 演示 mock（不联网）
+        - 自定义 OpenAI 兼容接口
+        - 本机 Ollama
+        - SJTU
+        - Hermes 零价模型
+        - 手动选择的 Claude/Codex 订阅
+        - 与模型无关的安装/页面问题
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤与公开页面/本地夹具
+      placeholder: "1. 加载扩展\n2. 选择mock\n3. 打开...\n4. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期行为与实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 可选证据
+      description: 截图或错误代码；先去掉敏感文字、凭据与完整请求头。

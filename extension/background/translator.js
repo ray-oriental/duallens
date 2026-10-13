@@ -1,0 +1,240 @@
+// Orchestration: cache lookup -> batching -> queue -> <seg> parsing -> one retry for missing
+// segments -> cache write -> partial results. All collaborators are injected so unit tests need
+// neither chrome.* nor IndexedDB:
+//   provider({ profile, model, messages, signal }) -> Promise<string>
+//   cache     see background/cache.js
+//   queue     see background/queue.js
+//   getSettings() -> Promise<settings>
+
+import { ERR, PRIORITY } from '../shared/protocol.js';
+import { activeProfile } from '../shared/settings.js';
+import { buildMessages, parseSegments, salvagePlain } from '../shared/prompt.js';
+import { makeBatches, splitLongText, joinTranslations } from '../shared/batch.js';
+import { escapeText, stripMarkup } from '../shared/markup.js';
+import { sha256Hex } from '../shared/hash.js';
+import { DLError, cancelledError, isCancelled, toErrorInfo } from '../shared/errors.js';
+import { profileProblem } from './providers.js';
+import { makeKeyer } from './cache.js';
+
+const DAY_MS = 86400000;
+const DEFAULT_TTL_DAYS = 30;
+
+function chunk(list, size) {
+  const out = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+export function createTranslator({ provider, cache, queue, getSettings, sha = sha256Hex, retryBatchMax = 8 }) {
+  // req: { reqId, items: [{ id, text }], to, from, priority, context }
+  // onPartial(results) gets [{ id, text } | { id, error: { code, message } }], each id at most once.
+  // Resolves when everything has been reported; if `signal` aborts it resolves quietly and stops reporting.
+  async function translate(req, { onPartial = () => {}, signal } = {}) {
+    const settings = await getSettings();
+    const profile = activeProfile(settings);
+    const items = (Array.isArray(req.items) ? req.items : []).filter((it) => it && it.id !== undefined);
+    const to = req.to || settings.targetLang;
+    const from = req.from || settings.sourceLang || 'auto';
+    const priority = Number.isFinite(req.priority) ? req.priority : PRIORITY.NEAR;
+    const reqId = req.reqId ?? null;
+    const preset = settings.prompt.preset;
+    const custom = preset === 'custom' ? settings.prompt.custom : '';
+    const glossary = settings.glossary;
+
+    const emitted = new Set();
+    const emit = (results) => {
+      const fresh = results.filter((r) => !emitted.has(r.id) && emitted.add(r.id));
+      if (!fresh.length || (signal && signal.aborted)) return;
+      try {
+        onPartial(fresh);
+      } catch {
+        /* a failing consumer must not break translation */
+      }
+    };
+
+    const problem = profileProblem(profile);
+    if (problem) {
+      emit(items.map((it) => ({ id: it.id, error: { code: ERR.CONFIG, message: problem } })));
+      return;
+    }
+
+    // Blank text has nothing to translate; identical texts are translated once and fanned out.
+    const groups = new Map();
+    for (const it of items) {
+      if (typeof it.text !== 'string' || !it.text.trim()) {
+        emit([{ id: it.id, text: typeof it.text === 'string' ? it.text : '' }]);
+        continue;
+      }
+      let g = groups.get(it.text);
+      if (!g) {
+        g = { text: it.text, ids: [], state: 'open', pieces: [], out: [], left: 0, models: [], key: null };
+        groups.set(it.text, g);
+      }
+      g.ids.push(it.id);
+    }
+    let pending = [...groups.values()];
+
+    const cacheOn = !!cache && settings.cache && settings.cache.enabled !== false;
+    const ttlDays = settings.cache && settings.cache.ttlDays != null ? settings.cache.ttlDays : DEFAULT_TTL_DAYS;
+    const cacheOpts = { maxEntries: settings.cache && settings.cache.maxEntries, ttlMs: ttlDays > 0 ? ttlDays * DAY_MS : 0 };
+    const keyers = new Map();
+    const keyerFor = (model) => {
+      if (!keyers.has(model)) keyers.set(model, makeKeyer({ profileId: profile.id, model, to, from, context:req.context||{}, preset, custom, glossary }, sha));
+      return keyers.get(model);
+    };
+
+    if (cacheOn && pending.length) {
+      try {
+        const keyOf = await keyerFor(queue.currentModel(profile));
+        const keys = await Promise.all(pending.map((g) => keyOf(g.text)));
+        const hits = await cache.getMany(keys, { ttlMs: cacheOpts.ttlMs });
+        const hitResults = [];
+        pending.forEach((g, i) => {
+          const t = hits.get(keys[i]);
+          if (t === undefined) return;
+          g.state = 'done';
+          for (const id of g.ids) hitResults.push({ id, text: t });
+        });
+        emit(hitResults);
+      } catch {
+        /* cache trouble is treated as a miss */
+      }
+      pending = pending.filter((g) => g.state === 'open');
+    }
+    if (!pending.length) return;
+
+    const units = [];
+    let uid = 0;
+    for (const g of pending) {
+      g.pieces = splitLongText(g.text, profile.maxChars);
+      g.out = new Array(g.pieces.length);
+      g.left = g.pieces.length;
+      g.pieces.forEach((text, idx) => units.push({ uid: ++uid, g, idx, text }));
+    }
+
+    const writes = [];
+    async function flushWrites() {
+      if (!cacheOn || !writes.length) return;
+      const batch = writes.splice(0, writes.length);
+      try {
+        await cache.putMany(await Promise.all(batch), cacheOpts);
+      } catch {
+        /* a full or unavailable cache must not fail the translation */
+      }
+    }
+
+    function failUnits(list, error) {
+      for (const u of list) {
+        const g = u.g;
+        if (g.state !== 'open') continue;
+        g.state = 'error';
+        emit(g.ids.map((id) => ({ id, error })));
+      }
+    }
+
+    function completeUnit(u, text, model) {
+      const g = u.g;
+      if (g.state !== 'open') return;
+      g.out[u.idx] = text;
+      g.models.push(model);
+      if (--g.left > 0) return;
+      g.state = 'done';
+      const full = g.pieces.length === 1 ? text : joinTranslations(g.out);
+      emit(g.ids.map((id) => ({ id, text: full })));
+      if (cacheOn && g.models.every((m) => m === g.models[0])) {
+        const m = g.models[0];
+        writes.push(keyerFor(m).then(async (keyOf) => ({ k: await keyOf(g.text), t: full })));
+      }
+    }
+
+    async function runBatch(batch, isRetry) {
+      const { messages, idMap } = buildMessages({
+        items: batch.map((u) => ({ id: u.uid, text: u.text })),
+        to,
+        from,
+        context: req.context,
+        preset,
+        custom,
+        glossary,
+      });
+      let out;
+      try {
+        out = await queue.enqueue({
+          profile,
+          priority,
+          reqId,
+          signal,
+          run: async ({ model, signal: s }) => {
+            const content=await provider({profile,model,messages,signal:s});
+            const parsed=parseSegments(content,idMap);
+            if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
+              for(const u of batch) {
+                if(parsed.results.get(u.uid)===u.text && /[A-Za-z]/.test(stripMarkup(u.text))) {
+                  throw new DLError(ERR.PROVIDER,'模型漏翻，尝试备用模型',{status:502});
+                }
+              }
+            }
+            return {content,model};
+          },
+        });
+      } catch (e) {
+        if (!isCancelled(e)) failUnits(batch, toErrorInfo(e));
+        return;
+      }
+      const byUid = new Map(batch.map((u) => [u.uid, u]));
+      const { results, missing } = parseSegments(out.content, idMap);
+      for (const [id, text] of results) completeUnit(byUid.get(id), text, out.model);
+      if (!missing.length) return;
+
+      const lost = missing.map((id) => byUid.get(id));
+      if (!isRetry) {
+        await Promise.all(chunk(lost, Math.max(1, Math.ceil(lost.length / 2))).map((sub) => runBatch(sub, true)));
+        return;
+      }
+      const failed = [];
+      for (const u of lost) {
+        const plain = ''; // Non-JSON prose cannot be trusted as a translation.
+        if (plain) completeUnit(u, plain, out.model);
+        else failed.push(u);
+      }
+      failUnits(failed, { code: ERR.PARSE, message: '模型没有返回这一段的译文' });
+    }
+
+    const batches = makeBatches(
+      units.map((u) => ({ id: u.uid, text: u.text, unit: u })),
+      { maxItems: profile.maxItems, maxChars: profile.maxChars },
+    );
+    await Promise.all(
+      batches.map(async (b) => {
+        const list = b.map((x) => x.unit);
+        try {
+          await runBatch(list, false);
+        } catch (e) {
+          failUnits(list, toErrorInfo(e));
+        }
+        await flushWrites();
+      }),
+    );
+    if (!(signal && signal.aborted)) {
+      for (const g of pending) {
+        if (g.state === 'open') failUnits(units.filter((u) => u.g === g), { code: ERR.PARSE, message: '译文不完整' });
+      }
+    }
+    await flushWrites();
+  }
+
+  // Plain-text translation for selection / input box / hover. Returns the translated string.
+  async function translateText({ text, to, from }, { signal } = {}) {
+    let result = null;
+    await translate(
+      { reqId: null, to, from, priority: PRIORITY.VISIBLE, context: {}, items: [{ id: 't', text: escapeText(text) }] },
+      { onPartial: (r) => (result = r[0]), signal },
+    );
+    if (signal && signal.aborted) throw cancelledError();
+    if (!result) throw new DLError(ERR.PROVIDER, '没有得到译文');
+    if (result.error) throw new DLError(result.error.code, result.error.message);
+    return stripMarkup(result.text);
+  }
+
+  return { translate, translateText };
+}
