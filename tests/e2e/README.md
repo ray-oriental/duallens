@@ -75,6 +75,16 @@ python -B -u tests/e2e/run_userscript_e2e.py --only mobile_375 --only tablet_800
 
 Profiles are removed after the same bounded cleanup checks as the extension suite. Results and failure screenshots remain under `~/.cache/duallens-e2e/artifacts/userscript/`. GM instrumentation exists only in the runner, never in the release bundle. See [real-device acceptance](MOBILE_ACCEPTANCE.md) for Android Edge/Tampermonkey.
 
+## Authorized v0.3.1 real-page runner
+
+`run_v031_live.py --only novel` is separate from offline checks and requires explicit authorization for the existing local gateway and model calls. It uses a fresh profile, direct Chromium connections (`--no-proxy-server`), and bounded navigation/read retries. It never logs in. Reads may retry after document replacement; translation commands/clicks are never replayed blindly.
+
+The novel probe measures Chinese translation in the current viewport, requires first translation within 3 seconds and viewport fill within 30 seconds, and checks translation-only, scroll discovery, floating-ball restore and original reader DOM. An untranslated line cannot borrow a later line's translation. Screenshots, safe numeric transport metrics and results stay under `~/.cache/duallens-e2e/v031/`.
+
+The explicitly renewed streaming round uses `sjtu-budget-novel-stream.json`, distinct from the earlier round's ledger. Cumulative SJTU attempts are capped at 30; a run defaults to at most six (`--sjtu-limit` can lower or allocate the remaining authorized budget). The allowance is reserved before launch, so a crash cannot silently reset it. Do not delete/reset this ledger to obtain more calls. New rounds require new authorization. The old unsupported-stream local rejection exception applies only to that exact verified local error; normal failures/aborted requests count conservatively. `--max-items 1..20` changes only the temporary test profile and defaults to 20, matching the normal profile capacity; Japanese-to-Chinese first output starts with two items, with the remainder retaining profile capacity. Only the explicitly allowed SJTU, free Solar and local Qwen models may be used.
+
+`python -B -m unittest discover -s tests/e2e -p test_live_runner.py` in the Playwright venv runs the read retry boundary tests without a browser or model. `run_layout_e2e.py` additionally exercises actual document navigation and a tall shared novel host using controlled offline fixtures.
+
 ## Settings browser runner
 
 `tests/dom/run_settings_browser.py` stages an isolated extension using the canonical session helper and runs five checks: no-network fresh wizard, mocked OpenRouter discovery/test/save, encrypted/public backup, popup switching, and an injected shared form with Chrome APIs forbidden. It uses a 375×812 viewport and writes light/dark screenshots to `~/.cache/duallens-e2e/providers-settings/`. Run it directly; it accepts no case filters. This is separate from both the full extension suite and the userscript suite.

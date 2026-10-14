@@ -4,6 +4,10 @@
 
 ## [0.3.1] - 2026-10-14
 
+- Schedule novel paragraphs by their own source ranges rather than a shared tall host; preserve scroll discovery and avoid whole-story requests.
+- Reject approximate Japanese prose echoes before streamed display and recover unfinished omissions with the existing bounded batch-retry budget; prompt cache version 4.
+- Make real-page read probes resilient to document navigation and run Pixiv checks without a hard-coded HTTP proxy.
+
 - Stream OpenAI-compatible responses through extension fetch, userscript GM progress and optional gateway SSE; display completed items early and use smaller first-viewport batches.
 - Cool down and hide missing models after 404; discover Hermes models from the proxy catalog intersected with the configured free allowlist.
 - Split Pixiv novel paragraphs, place comic panels in document flow, and preserve PDF formula runs as placeholders.

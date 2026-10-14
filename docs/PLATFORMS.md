@@ -59,6 +59,8 @@ export interface TranslatorService {
 
 `http.onText(delta,status,headers)` 提供新增文本片段，最终仍返回完整 `text`。扩展用流式 fetch，用户脚本用 GM progress/readystatechange；无增量回调时在 onload 解析。provider `chat({profile,messages,signal,onDelta?})` 的 `onDelta(text)` 只提供脱敏内容，不显示推理字段。请求 `stream:true`，不支持时回退非流式；完整 JSON 验证后才写缓存，恢复/取消后不插入迟到片段。
 
+两种平台按每个正文单元的源节点 Range 判断可见性，避免小说共用高 `<p>` 时触发整篇请求；滚动、模式切换和译文布局变化仍发现该宿主内较远段落。日译中疑似回显在流式显示前检查；漏翻缩批与 JSON 错项恢复共用有限重试预算。SJTU 请求的空闲等待上限为 12 秒，输出进展会重置，其它端点保留用户配置。
+
 漫画名单 `comics.canvasSites` 兼容域名字符串与 `{host,imageHosts?,referer?}`；CDN 最多八个具体域名，Referer 限该站点 HTTP(S) 根地址。旧 Pixiv 字符串项使用 `i.pximg.net` / `https://www.pixiv.net/` 兼容元数据。扩展会话 DNR 规则必须含 `initiatorDomains:[chrome.runtime.id]` 与 `resourceTypes:['xmlhttprequest','other']`，关闭漫画或移出名单即删除，不新增 host 权限。用户脚本匿名 GM 取图按匹配站点设置 Referer，不支持请求头或本地 OCR 时保留原图并明确降级。
 
 ## 2. 打包

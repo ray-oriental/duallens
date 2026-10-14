@@ -159,6 +159,15 @@ test('first visible batch caps at six items and 2000 chars, subsequent batch use
   assert.ok(sizes[1].length > sizes[0].length);
 });
 
+test('Japanese-to-Chinese first visible batch starts two items while the remainder uses profile capacity',async()=>{
+  const sizes=[];
+  const rig=makeRig({profile:testProfile({maxItems:20,maxChars:4000}),provider:async({messages})=>{
+    const segs=readSegs(messages);sizes.push(segs.length);return JSON.stringify({t:segs.map(()=> '早上好。')});
+  }});
+  const result=await run(rig,{from:'ja',items:Array.from({length:14},(_,i)=>({id:i,text:'こんにちは。'+i}))});
+  assert.deepEqual(sizes,[2,12]);assert.equal(result.total,14);
+});
+
 test('visible work gates prefetch, synchronous callbacks and cancelAll do not leak or dispatch queued jobs', async () => {
   const started = [], callbacks = [];
   const client = new TranslateClient({ translator: () => ({ translateBatch(req, callback) {

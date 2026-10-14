@@ -151,6 +151,17 @@ test('timeout aborts the request and reports network_error', async () => {
   assert.equal(aborted, true);
 });
 
+test('SJTU idle waiting is capped at twelve seconds without shortening unrelated endpoint settings',async()=>{
+  const f=fakeFetch({body:JSON.stringify({choices:[{message:{content:'hello'}}]})});
+  const {chat}=createProviders({fetchImpl:f});
+  await chat({profile:gateway({timeoutMs:130000}),model:'sjtu/deepseek-chat',messages});
+  assert.equal(f.calls.at(-1).init.timeoutMs,12000);
+  await chat({profile:openai({baseUrl:'https://models.sjtu.edu.cn/v1',timeoutMs:130000}),model:'deepseek-chat',messages});
+  assert.equal(f.calls.at(-1).init.timeoutMs,12000);
+  await chat({profile:openai({timeoutMs:130000}),model:'gpt-x',messages});
+  assert.equal(f.calls.at(-1).init.timeoutMs,130000);
+});
+
 test('an external abort reports cancelled', async () => {
   const f = (url, init) =>
     new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));

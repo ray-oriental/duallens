@@ -132,5 +132,39 @@ def novel_pixiv_scope(h):
     return 'BR paragraphs, line groups, body scope, vertical/font inheritance, repeat/dynamic restore'
 
 
+@e.case('novel_range_lazy','Tall shared reader host releases only nearby ranges, scroll discovers later lines, exact restore')
+def novel_range_lazy(h):
+    html='<!doctype html><meta charset="utf-8"><style>p{font:20px/8 serif;max-width:700px}p:has(dl-o){line-height:2}</style><nav>このナビゲーションは本文ではない</nav><p>'+''.join('<span class="text-count">これは小説の本文です。雨の庭を眺めていました。'+str(i)+'</span><br>' for i in range(80))+'</p>'
+    h.ctx.route('https://www.pixiv.net/novel/show.php?*',lambda route:route.fulfill(body=html,content_type='text/html'))
+    h.settings({'lazy':{'rootMarginPx':50}})
+    h.page=h.ctx.new_page();h.page.goto('https://www.pixiv.net/novel/show.php?id=2#2')
+    h.tab_id=h.sw_eval(e.JS_FIND_TAB,h.page.url);h.wait_ready()
+    before=h.js('() => document.body.outerHTML')
+    h.command('toggle-page');h.wait_js("() => document.querySelectorAll('dl-t[data-dl-state=done]').length>0")
+    h.page.wait_for_timeout(500)
+    first=h.js("() => document.querySelectorAll('dl-t[data-dl-state=done]').length")
+    assert first<25,first
+    assert not h.js("() => document.querySelector('nav dl-t')")
+    h.command('toggle-translation-only')
+    h.wait_js("() => document.querySelectorAll('dl-t[data-dl-state=done]').length>"+str(first))
+    h.command('toggle-translation-only');h.wait_js("() => !document.querySelector('dl-o')")
+    nearby=h.js("() => document.querySelectorAll('dl-t[data-dl-state=done]').length")
+    h.page.locator('p > span.text-count').nth(60).scroll_into_view_if_needed()
+    h.wait_js("() => document.querySelectorAll('dl-t[data-dl-state=done]').length>"+str(nearby))
+    h.command('toggle-page');assert h.js('() => document.body.outerHTML')==before
+    return f'first viewport/nearby translated {first}/80; contraction rechecks without scroll; distant lines wait for scroll; exact restore'
+
+@e.case('live_navigation_reads','Real document replacement retries read, and missing line cannot borrow next line translation')
+def live_navigation_reads(h):
+    from run_v031_live import read,reader_snapshot
+    html='<p><span class="text-count">今日はいい天気です。</span><br><span class="text-count">明日も晴れるでしょう。</span><br><dl-t data-dl-state="done">明天也会晴。</dl-t></p>'
+    h.ctx.route(h.base+'/nav-start',lambda route:route.fulfill(body=html+"<script>setTimeout(()=>location.replace('/nav-stable'),150)</script>",content_type='text/html'))
+    h.ctx.route(h.base+'/nav-stable',lambda route:route.fulfill(body=html,content_type='text/html'))
+    h.page=h.ctx.new_page();h.page.goto(h.base+'/nav-start',wait_until='domcontentloaded')
+    count=read(h.page,lambda:h.page.locator('span.text-count').evaluate_all('async els=>{await new Promise(r=>setTimeout(r,300));return els.length}'))
+    assert h.page.url.endswith('/nav-stable') and count==2
+    assert [p['done'] for p in reader_snapshot(h.page)['pairs']]==[False,True]
+    return 'navigation-safe locator read; adjacent translated line cannot make missing line pass'
+
 if __name__=='__main__':
     raise SystemExit(e.main(['--mock-only','--artifacts-dir',str(e.E2E_ROOT/'layout'/'offline'),*sys.argv[1:]]))

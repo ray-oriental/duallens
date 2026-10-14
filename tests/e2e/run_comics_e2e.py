@@ -64,7 +64,9 @@ class Handler(runner._QuietHandler):
         request=json.loads(body)
         user=request['messages'][-1]['content']
         content=json.loads(user.split('<input>',1)[1].split('</input>',1)[0])
-        response=json.dumps({'choices':[{'message':{'content':json.dumps({'t':['【译】'+text for text in content['t']]},ensure_ascii=False)}}]},ensure_ascii=False).encode()
+        # This recorder is a text transport fixture, not a Japanese translation model.
+        translated=['【译】模拟中文' if any('\u3040'<=c<='\u309f' for c in text) else '【译】'+text for text in content['t']]
+        response=json.dumps({'choices':[{'message':{'content':json.dumps({'t':translated},ensure_ascii=False)}}]},ensure_ascii=False).encode()
         self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(response)));self.end_headers();self.wfile.write(response)
 
 def fixtures():

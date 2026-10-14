@@ -46,6 +46,41 @@ test('the page title and target language reach the prompt', async () => {
   assert.match(sys, /My Title/);
 });
 
+test('Japanese prose with small edits is rejected before streamed display and falls back without caching it',async()=>{
+  const bad='あかりは、町のカフェで会うつもりだったけどね。';
+  const provider=async({model,onDelta})=>{
+    const content=JSON.stringify({t:[model==='m1'?bad:'明莉本来打算在镇上的咖啡馆见面。']});
+    onDelta?.(content);return content;
+  };
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('アカリは、町のカフェで会うつもりだったけどね。'),from:'ja'});
+  assert.equal(textOf(result,'i1'),'明莉本来打算在镇上的咖啡馆见面。');
+  assert.ok(result.batches.flat().every(item=>item.text!==bad));
+  assert.equal(await rig.cache.count(),1);
+});
+
+test('omitted multi-item Japanese batches recover as smaller batches within the shared retry budget',async()=>{
+  const provider=fakeProvider(({segs})=>JSON.stringify({t:segs.map(s=>segs.length>1?s.text:'你好')}));
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('こんにちは','ありがとう'),from:'ja'});
+  assert.equal(result.total,2);assert.equal(provider.calls.length,4);
+  assert.ok([...result.results.values()].every(r=>r.text==='你好'));
+  assert.equal(await rig.cache.count(),2);
+});
+
+test('a short retained hiragana name inside Chinese is not treated as Japanese prose',async()=>{
+  const provider=fakeProvider(()=>JSON.stringify({t:['你好，さくら。']}));
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('さくら、こんにちは。'),from:'ja'});
+  assert.equal(textOf(result,'i1'),'你好，さくら。');assert.equal(provider.calls.length,1);
+});
+
+test('explicit offline mock profiles keep their intentional source echo for DOM fixtures',async()=>{
+  const rig=makeRig({profile:testProfile({kind:'mock'})});
+  const result=await run(rig,{items:items('こんにちは、いい天気ですね。'),from:'ja'});
+  assert.equal(textOf(result,'i1'),'【译】こんにちは、いい天気ですね。');
+});
+
 test('cache: a second identical request is answered without calling the model', async () => {
   const rig = makeRig();
   const first = await run(rig, { items: items('Hello', 'World') });

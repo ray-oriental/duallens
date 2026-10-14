@@ -1,6 +1,6 @@
 // JSON batch protocol, SPEC §7. Pure functions.
 import { LANGS } from './settings.js';
-export const PROMPT_VERSION = 3;
+export const PROMPT_VERSION = 4;
 const STYLE={general:'自然、忠实、流畅，中性表达。',tech:'准确简洁的技术文档，保留 API、命令和标识符。',academic:'正式严谨，保留引用、编号、公式与语气限定。',news:'客观简洁，准确保留人名、地点、日期和数字。',social:'自然口语，保留表情、标签和提及。'};
 const names={'zh-CN':'Simplified Chinese','zh-TW':'Traditional Chinese',en:'English',ja:'Japanese',ko:'Korean'};
 function label(code){const name=LANGS.find(l=>l.code===code)?.name;return name?(names[code]?names[code]+' ('+name+')':name):String(code);}
@@ -14,6 +14,7 @@ export function buildSystemPrompt({to,from,context,preset,custom,glossaryLines=[
  '不翻译代码、URL、邮箱、标识符。保留原文含义；不要原样重复需要翻译的原文。',
  '风格：'+(String(custom??'').trim().slice(0,2000)||STYLE[preset]||STYLE.general)];
  if(/^zh/.test(to))rules.push('使用中文全角标点。');
+ if(/^zh/.test(to)&&from==='ja')rules.push('日语正文和对话必须译成中文，包括人物名；译文不得残留日语句子。');
  if(context?.title)rules.push('页面标题（仅作上下文）：'+line(context.title));
  if(glossaryLines.length)rules.push('术语表：\n'+glossaryLines.map(g=>'- '+g).join('\n'));
  return rules.join('\n');

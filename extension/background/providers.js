@@ -298,8 +298,8 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       url: endpoint(profile, '/chat/completions'),
       method: 'POST',
       body: JSON.stringify(payload),
-      timeoutMs: /^(sjtu\/)/.test(payload.model) || /models\.sjtu\.edu\.cn/.test(profile.baseUrl)
-        ? Math.min(profile.timeoutMs || 45000, 45000) : profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
+        timeoutMs: /^(sjtu\/)/.test(payload.model) || /models\.sjtu\.edu\.cn/.test(profile.baseUrl)
+          ? Math.min(profile.timeoutMs || 12000, 12000) : profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
       signal, onDelta: onDelta || (() => {}),
     });
     let res=await send();

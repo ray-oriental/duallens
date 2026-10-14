@@ -3,17 +3,20 @@
 
 import { isOurs } from './util.js';
 
-// Which units are close enough to the viewport to translate. One IntersectionObserver target per
-// host element; every unit living in that host is released together.
+// Observe hosts, but schedule by each unit's range, including ranges inside a tall reader block.
 export class LazyObserver {
   constructor(onVisible) {
     this.onVisible = onVisible;
     this.margin = 600;
     this.targets = new Map(); // host -> Set<unit>
     this.io = null;
+    this.frame=0;
+    this.scroll=()=>{if(!this.frame)this.frame=requestAnimationFrame(()=>{this.frame=0;for(const host of this.targets.keys())this.#release(host);});};
   }
 
   #make() {
+    window.addEventListener('scroll',this.scroll,{passive:true,capture:true});
+    window.addEventListener('resize',this.scroll);
     this.io = new IntersectionObserver((entries) => this.#onEntries(entries), {
       rootMargin: `${this.margin}px 0px ${this.margin}px 0px`,
     });
@@ -29,7 +32,7 @@ export class LazyObserver {
   }
 
   watch(unit) {
-    const r = unit.host.getBoundingClientRect();
+    const r = this.#rect(unit);
     if (r.bottom > 0 && r.top < (window.innerHeight || 800)) {
       this.onVisible(unit, 0, r.top); return;
     }
@@ -54,21 +57,32 @@ export class LazyObserver {
   }
 
   #onEntries(entries) {
+    for(const e of entries)if(e.isIntersecting)this.#release(e.target);
+  }
+
+  #rect(unit) {
+    if(unit.first?.isConnected && unit.last?.isConnected) {
+      const range=document.createRange();range.setStartBefore(unit.first);range.setEndAfter(unit.last);
+      const rect=range.getBoundingClientRect();if(rect.height || rect.width)return rect;
+    }
+    return unit.host.getBoundingClientRect();
+  }
+
+  #release(host) {
+    const set=this.targets.get(host);if(!set)return;
     const vh = window.innerHeight || 800;
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      const set = this.targets.get(e.target);
-      this.targets.delete(e.target);
-      this.io.unobserve(e.target);
-      if (!set) continue;
-      const r = e.boundingClientRect;
+    const bounds=host.getBoundingClientRect();if(bounds.bottom<=-this.margin || bounds.top>=vh+this.margin)return;
+    for(const u of [...set]) {
+      const r=this.#rect(u);if(r.bottom<=-this.margin || r.top>=vh+this.margin)continue;
       // 0 = on screen, 1 = within a screen's distance, 2 = further prefetch
       const priority = r.bottom > 0 && r.top < vh ? 0 : r.bottom > -vh && r.top < 2 * vh ? 1 : 2;
-      for (const u of set) this.onVisible(u, priority, r.top);
+      this.unwatch(u);this.onVisible(u, priority, r.top);
     }
   }
 
   disconnect() {
+    window.removeEventListener('scroll',this.scroll,true);window.removeEventListener('resize',this.scroll);
+    cancelAnimationFrame(this.frame);this.frame=0;
     this.io?.disconnect();
     this.io = null;
     this.targets.clear();
@@ -156,9 +170,7 @@ export class MutationWatcher {
   }
 }
 
-// Same-document navigation. A content script lives in an isolated world, so wrapping
-// history.pushState only sees calls made from that world; the Navigation API and a slow poll
-// cover calls made by the page itself.
+// Isolated-world history hooks need the Navigation API and polling to cover page routes.
 export class RouteWatcher {
   constructor(onChange) {
     this.onChange = onChange;

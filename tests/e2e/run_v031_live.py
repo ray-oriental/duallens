@@ -1,6 +1,6 @@
 """Explicitly authorized real-page checks. No login, paid model or profile reuse.
 
-Uses the user's existing loopback gateway and proxy, caps cumulative SJTU
+Uses the user's existing loopback gateway and direct system connection, caps cumulative SJTU
 forwarded attempts at 30, and keeps screenshots outside git. Only a verified
 local streaming rejection is excluded from that conservative budget.
 The model catalog is not itself evidence that a model works.
@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 import run_e2e as e
+from playwright.sync_api import Error as BrowserError
 
 URLS={
     'novel':'https://www.pixiv.net/novel/show.php?id=29352462#2',
@@ -19,6 +20,16 @@ URLS={
     'pdf':'https://math.berkeley.edu/~andrewshi/teaching/math1560j-fa26/lecture-notes/lecture-notes.pdf',
 }
 OUT=e.E2E_ROOT/'v031'
+
+def read(page,operation,seconds=15):
+    """Retry only reads across a document replacement; never replay commands/clicks."""
+    end=time.monotonic()+seconds
+    while True:
+        try:return operation()
+        except BrowserError as error:
+            if page.is_closed() or time.monotonic()>=end or not any(word in str(error).lower() for word in
+              ('execution context was destroyed','cannot find context','navigation','not attached')):raise
+            page.wait_for_timeout(100)
 e.JS_SEND="""async ({tabId,msg}) => Promise.race([
  chrome.tabs.sendMessage(tabId,msg).then(response=>({ok:true,response}),e=>({ok:false,error:String(e)})),
  new Promise(resolve=>setTimeout(()=>resolve({ok:false,error:'tab response timeout'}),10000))])"""
@@ -26,7 +37,7 @@ e.JS_SEND="""async ({tabId,msg}) => Promise.race([
 def wait(page,predicate,seconds=120):
     end=time.monotonic()+seconds
     while time.monotonic()<end:
-        result=page.evaluate(f'() => Boolean(({predicate})())')
+        result=read(page,lambda:page.evaluate(f'() => Boolean(({predicate})())'),min(15,max(.1,end-time.monotonic())))
         if result:return result
         page.wait_for_timeout(100)
     raise AssertionError('Real-page condition timed out')
@@ -41,62 +52,120 @@ def comic_done(item):
     return bool(text) and not text.startswith(('翻译中','文字翻译失败'))
 
 def navigate(page,url):
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             res=page.goto(url,wait_until='domcontentloaded',timeout=60000)
             if res and res.status>=500:raise AssertionError('Page HTTP '+str(res.status))
             return res.status if res else None
         except Exception:
-            if attempt==2:raise
-            page.wait_for_timeout(1500)
+            if attempt==4:raise
+            page.wait_for_timeout(min(6000,1500*(attempt+1)))
 
-def restore_ball(h,pdf=False):
+def click_ball(h,pdf=False):
     size=h.page.viewport_size
     y=.6*size['height']+22 if pdf else round(.6*(size['height']-44))+22
     h.page.mouse.click(size['width']-28,y)
+
+def restore_ball(h,pdf=False):
+    click_ball(h,pdf)
     wait(h.page,'() => document.querySelectorAll("dl-t,dl-o,dl-w,dl-r,dl-comic").length===0',10)
     h.page.wait_for_timeout(1000)
-    return h.page.locator('dl-t,dl-o,dl-w,dl-r,dl-comic').count()==0
+    return read(h.page,lambda:h.page.locator('dl-t,dl-o,dl-w,dl-r,dl-comic').count())==0
+
+def reader_snapshot(page):
+    return read(page,lambda:page.evaluate('''()=>{
+      const visible=r=>r.width>0 && r.height>0 && r.top<innerHeight && r.bottom>0;
+      const spans=[...document.querySelectorAll('p > span.text-count')];
+      const pairs=spans.filter(el=>el.textContent.trim().length>3 && visible(el.getBoundingClientRect())).map(el=>{
+        let translation=null;
+        for(let n=el.nextSibling;n;n=n.nextSibling){
+          if(n.nodeType!==1)continue;
+          if(n.matches('dl-t')){translation=n;break;}
+          if(n.matches('span.text-count') && n.textContent.trim())break;
+        }
+        return {done:translation?.matches('[data-dl-state=done]')||false,text:translation?.textContent||''};
+      });
+      return {url:location.href,pairs,total:document.querySelectorAll('p:has(span.text-count) dl-t[data-dl-state=done]').length,
+        aligned:[...document.querySelectorAll('p:has(span.text-count) dl-t')].every(t=>{
+          const p=t.parentElement.getBoundingClientRect(),r=t.getBoundingClientRect();return r.left>=p.left-2 && r.right<=p.right+2;
+        })};
+    }'''))
+
+def reader_original(page):
+    return read(page,lambda:page.locator('p:has(span.text-count)').evaluate_all('els=>els.map(el=>el.outerHTML)'))
 
 def novel(h,result):
     wait(h.page,'() => document.querySelectorAll("p > span.text-count").length>0',40)
-    h.page.locator('p:has(>span.text-count)').first.evaluate("el=>el.scrollIntoView({block:'start'})")
-    h.page.wait_for_timeout(500)
-    before=h.page.locator('p:has(>span.text-count)').evaluate_all('els=>els.map(el=>el.outerHTML)')
-    visible=h.page.locator('p > span.text-count').evaluate_all('''els=>els.map((el,index)=>({index,r:el.getBoundingClientRect(),text:el.textContent.trim()}))
-      .filter(x=>x.text.length>3 && x.r.top<innerHeight && x.r.bottom>0 && x.r.width>0).map(x=>x.index)''')
-    assert visible,'No visible novel reader paragraphs'
-    result['visibleParagraphs']=len(visible)
-    h.page.screenshot(path=str(OUT/'novel-original.png'))
-    start=time.monotonic();h.command('toggle-page')
-    try:
-        wait(h.page,'''() => [...document.querySelectorAll('p:has(>span.text-count) dl-t[data-dl-state=done]')]
-          .some(el=>{const r=el.getBoundingClientRect();return r.top<innerHeight && r.bottom>0 && r.width>0;})''',140)
-        result['firstViewportParagraphMs']=round((time.monotonic()-start)*1000)
-    except AssertionError:
-        result['firstViewportParagraphMs']=None
-        result['firstViewportTimedOut']=True
-    h.page.screenshot(path=str(OUT/'novel-first.png'))
-    filled=False;end=start+180
+    # Idempotent positioning is separate from translation commands. A navigation before
+    # this baseline is harmless; one during translation must remain an explicit failure.
+    read(h.page,lambda:h.page.locator('p:has(>span.text-count)').first.evaluate("el=>el.scrollIntoView({block:'start'})"))
+    stable=None;end=time.monotonic()+15
     while time.monotonic()<end:
-        filled=h.page.evaluate('''()=>{const els=[...document.querySelectorAll('p > span.text-count')].filter(el=>{
-          const r=el.getBoundingClientRect();return el.textContent.trim().length>3 && r.top<innerHeight && r.bottom>0 && r.width>0;});
-          return els.length>0 && els.every(el=>{for(let n=el.nextSibling;n;n=n.nextSibling)
-            if(n.nodeType===1 && n.matches('dl-t'))return n.matches('[data-dl-state=done]');
-            return !!el.querySelector('dl-t[data-dl-state=done]');});}''')
+        baseline=reader_original(h.page)
+        if baseline and baseline==stable:break
+        stable=baseline;h.page.wait_for_timeout(800)
+    else:raise AssertionError('Novel reader did not settle after navigation')
+    before=baseline;initial=reader_snapshot(h.page)
+    assert initial['pairs'],'No visible novel reader paragraphs'
+    result['visibleParagraphs']=len(initial['pairs'])
+    h.page.screenshot(path=str(OUT/'novel-original.png'))
+    start=time.monotonic();click_ball(h)
+    result['ballStarted']=True
+    result['firstViewportParagraphMs']=None;filled=False;end=start+35
+    while time.monotonic()<end:
+        snapshot=reader_snapshot(h.page);pairs=snapshot['pairs']
+        done=[p for p in pairs if p['done'] and chinese(p['text'])]
+        if done and result['firstViewportParagraphMs'] is None:
+            result['firstViewportParagraphMs']=round((time.monotonic()-start)*1000)
+            h.page.screenshot(path=str(OUT/'novel-first.png'))
+        filled=bool(pairs) and len(done)==len(pairs)
         if filled:break
-        h.page.wait_for_timeout(100)
+        h.page.wait_for_timeout(50)
     result['viewportFilled']=filled
     if filled:result['viewportFilledMs']=round((time.monotonic()-start)*1000)
-    texts=h.page.locator('p:has(>span.text-count) dl-t[data-dl-state=done]').all_text_contents()
-    result['translationCount']=len(texts);result['chineseTranslations']=sum(map(chinese,texts))
-    result['aligned']=h.page.evaluate('''()=>[...document.querySelectorAll('p:has(>span.text-count) dl-t[data-dl-state=done]')].every(t=>{
-      const p=t.parentElement.getBoundingClientRect(),r=t.getBoundingClientRect();
-      return r.left>=p.left-2 && r.right<=p.right+2 && r.bottom<=p.bottom+2;})''')
+    result['translationCount']=snapshot['total'];result['visibleChineseTranslations']=len(done)
+    result['visibleMissingTranslations']=len(pairs)-len(done);result['aligned']=snapshot['aligned']
     h.page.screenshot(path=str(OUT/'novel-bilingual.png'))
+    if filled:
+        h.command('toggle-translation-only')
+        wait(h.page,"() => !!document.querySelector('p:has(span.text-count) dl-o.dl-hide')",10)
+        result['translationOnly']=read(h.page,lambda:h.page.evaluate("() => [...document.querySelectorAll('p:has(span.text-count) dl-o.dl-hide')].every(el=>el.getClientRects().length===0)"))
+        only_start=time.monotonic()
+        wait(h.page,"""() => ![...document.querySelectorAll('p span.text-count')].some(el=>{
+          const r=el.getBoundingClientRect();return !el.closest('dl-t') && el.textContent.trim().length>3 && r.width>0 && r.height>0 && r.top<innerHeight && r.bottom>0;
+        })""",30)
+        result['onlyViewportFilledMs']=round((time.monotonic()-only_start)*1000)
+        h.page.screenshot(path=str(OUT/'novel-only.png'))
+        h.command('toggle-translation-only')
+        wait(h.page,"() => !document.querySelector('p:has(span.text-count) dl-o')",10)
+        untouched=read(h.page,lambda:h.page.evaluate('''()=>{
+          const spans=[...document.querySelectorAll('p > span.text-count')];
+          return spans.findIndex(el=>{
+            if(el.textContent.trim().length<6 || !/[ぁ-ヿ]/.test(el.textContent))return false;
+            for(let n=el.nextSibling;n;n=n.nextSibling){
+              if(n.nodeType!==1)continue;
+              if(n.matches('dl-t'))return false;
+              if(n.matches('span.text-count') && n.textContent.trim())break;
+            }
+            return true;
+          });
+        }'''))
+        assert untouched>=0,'No untouched Japanese paragraph for lazy acceptance'
+        result['lazyUntouchedIndex']=untouched
+        read(h.page,lambda:h.page.locator('p > span.text-count').nth(untouched).evaluate("el=>el.scrollIntoView({block:'start'})"))
+        h.page.wait_for_timeout(300)
+        lazy_start=time.monotonic()
+        while time.monotonic()-lazy_start<30:
+            lazy=reader_snapshot(h.page)
+            if lazy['pairs'] and all(p['done'] and chinese(p['text']) for p in lazy['pairs']):break
+            h.page.wait_for_timeout(100)
+        result['lazyScroll']=bool(lazy['pairs']) and all(p['done'] and chinese(p['text']) for p in lazy['pairs'])
+        result['lazyScrollMs']=round((time.monotonic()-lazy_start)*1000)
+        h.page.screenshot(path=str(OUT/'novel-scrolled.png'))
     result['ballRestored']=restore_ball(h)
-    result['readerDOMRestored']=before==h.page.locator('p:has(>span.text-count)').evaluate_all('els=>els.map(el=>el.outerHTML)')
-    assert filled and result['firstViewportParagraphMs'] is not None and texts and all(map(chinese,texts)) and result['aligned'] and result['readerDOMRestored'], 'Viewport translation incomplete'
+    result['readerDOMRestored']=before==reader_original(h.page)
+    h.page.screenshot(path=str(OUT/'novel-restored.png'))
+    assert filled and result['firstViewportParagraphMs']<=3000 and result['viewportFilledMs']<=30000 and result['aligned'] and result['readerDOMRestored'] and result.get('translationOnly') and result.get('lazyScroll'), 'Novel timing/language/interaction acceptance failed'
 
 def artwork(h,result):
     wait(h.page,'() => [...document.images].some(i=>i.naturalWidth>280 && i.getBoundingClientRect().width>280)',40)
@@ -167,15 +236,18 @@ def pdf(h,result,numbers=(1,2,3)):
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--only',choices=list(URLS),action='append')
     parser.add_argument('--pdf-page',type=int,action='append',help='Explicit additional PDF page probe instead of pages 1-3')
-    parser.add_argument('--max-items',type=int,choices=range(1,7),default=6,help='Temporary profile batch size; does not alter device configuration')
+    parser.add_argument('--max-items',type=int,choices=range(1,21),default=20,help='Temporary profile batch size; does not alter device configuration')
+    parser.add_argument('--sjtu-limit',type=int,choices=range(0,31),default=6,help='Per-run cap within the new cumulative 30-call streaming round')
     args=parser.parse_args()
     OUT.mkdir(parents=True,exist_ok=True);run=e.E2E_ROOT/('run-v031-live-'+uuid.uuid4().hex[:8]);run.mkdir()
-    ledger=OUT/'sjtu-budget.json'
+    ledger=OUT/'sjtu-budget-novel-stream.json'
     previous_budget=json.loads(ledger.read_text(encoding='utf-8')) if ledger.exists() else {}
     raw_used=previous_budget.get('gatewayRequests',0)
     local_rejections=previous_budget.get('verifiedLocalRejections',0)
     used=raw_used-local_rejections
-    remaining=max(0,min(24,30-used))
+    remaining=max(0,min(args.sjtu_limit,30-used))
+    # Reserve before launching; a crashed runner cannot silently reset its allowance.
+    ledger.write_text(json.dumps({'gatewayRequests':raw_used+remaining,'verifiedLocalRejections':local_rejections,'upstreamUpperBound':used+remaining,'reserved':True}),encoding='utf-8')
     ext,missing=e.stage_extension(run);assert not missing,missing
     results=[]
     try:
@@ -183,9 +255,8 @@ def main():
             h=e.Session(pw,ext,'','v031-live');h.profile.mkdir()
             try:
                 h.ctx=pw.chromium.launch_persistent_context(str(h.profile),headless=False,
-                    args=['--headless=new',f'--disable-extensions-except={ext}',f'--load-extension={ext}','--no-first-run'],
-                    ignore_default_args=['--disable-extensions'],viewport=e.VIEWPORT,
-                    proxy={'server':'http://127.0.0.1:7897','bypass':'127.0.0.1,localhost'})
+                    args=['--headless=new',f'--disable-extensions-except={ext}',f'--load-extension={ext}','--no-first-run','--no-proxy-server'],
+                    ignore_default_args=['--disable-extensions'],viewport=e.VIEWPORT)
                 h.ext_id=e.get_sw(h.ctx).url.split('/')[2]
                 h.sw_eval('''limit=>{const original=globalThis.fetch;globalThis.liveCalls=[];globalThis.liveSJTU=0;
                   globalThis.liveForwarded=0;globalThis.liveLocalRejected=0;
@@ -194,7 +265,7 @@ def main():
                     const payload=JSON.parse(init.body);model=payload.model;streaming=payload.stream===true;
                     if(!['sjtu/deepseek-chat','hermes/upstage/solar-mini4:free','ollama/qwen3:4b'].includes(model))throw Error('Forbidden model');
                     if(model.startsWith('sjtu/')) {if(globalThis.liveForwarded>=limit)throw Error('SJTU test budget exhausted');globalThis.liveSJTU++;globalThis.liveForwarded++;}}
-                    const res=await original(url,init);if(model){const metric={model,status:res.status};
+                    const started=performance.now();const res=await original(url,init);if(model){const body=JSON.parse(init.body);const metric={model,status:res.status,headersMs:Math.round(performance.now()-started),stream:/text\\/event-stream/.test(res.headers.get('content-type')||''),japaneseHint:body.messages[0].content.includes('Japanese'),items:JSON.parse(body.messages.find(m=>m.role==='user').content.split('<input>')[1].split('</input>')[0]).t.length};
                       if(model.startsWith('sjtu/') && streaming && res.status===400) try {
                         const e=(await res.clone().json()).error;
                         if(e.code==='unsupported' && e.message==='Streaming is not supported') {
@@ -230,8 +301,10 @@ def main():
                         result['outcome']='PASS'
                     except Exception as error:
                         result['outcome']='FAIL';result['error']=str(error)[:600]
-                        result['visibleErrors']=h.page.locator('dl-r').evaluate_all('els=>els.map(el=>el.title || el.getAttribute("aria-label"))')
-                        h.page.screenshot(path=str(OUT/f'{name}-failure.png'))
+                        try:result['visibleErrors']=read(h.page,lambda:h.page.locator('dl-r').evaluate_all('els=>els.map(el=>el.title || el.getAttribute("aria-label"))'))
+                        except BrowserError:result['diagnosticUnavailable']=True
+                        try:h.page.screenshot(path=str(OUT/f'{name}-failure.png'))
+                        except BrowserError:pass
                     finally:h.page.close()
                     results.append(result);print(json.dumps(result,ensure_ascii=False),flush=True)
                 budget=h.sw_eval('() => ({sjtuGatewayRequests:globalThis.liveSJTU,forwardedUpperBound:globalThis.liveForwarded,localRejections:globalThis.liveLocalRejected,calls:globalThis.liveCalls})')

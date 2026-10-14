@@ -1,14 +1,10 @@
 // Batched translation with bounded JSON retries and validated cache.
-// Dependencies are injected; tests need neither Chrome nor IndexedDB:
-//   provider({ profile, model, messages, signal }) -> Promise<string>
-//   cache     see background/cache.js
-//   queue     see background/queue.js
-//   getSettings() -> Promise<settings>
+// Injected dependencies keep tests offline.
 
 import { createTranslationStream } from '../shared/stream.js';
 import { ERR, PRIORITY } from '../shared/protocol.js';
 import { activeProfile, providerChain, getDefaultSettingsStore } from '../shared/settings.js';
-import { buildMessages, parseSegments, salvagePlain } from '../shared/prompt.js';
+import { buildMessages, parseSegments } from '../shared/prompt.js';
 import { makeBatches, splitLongText, joinTranslations } from '../shared/batch.js';
 import { escapeText, stripMarkup } from '../shared/markup.js';
 import { sha256Hex } from '../shared/hash.js';
@@ -54,7 +50,13 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     const items = (Array.isArray(req.items) ? req.items : []).filter((it) => it && it.id !== undefined);
     const to = req.to || settings.targetLang;
     const from = req.from || settings.sourceLang || 'auto';
-    const omitted=(value,source)=>value===source && (/[A-Za-z]/.test(stripMarkup(source)) || to!=='ja' && (/[ぁ-ゟ]/.test(stripMarkup(source)) || from==='ja' && /[ァ-ヿ]/.test(stripMarkup(source))));
+    const omitted=(value,source,kind)=>{
+      if(kind==='mock')return false;
+      const original=stripMarkup(source),plain=stripMarkup(value);
+      const hira=(plain.match(/[ぁ-ゟ]/g)||[]).length;
+      return plain===original && (/[A-Za-z]/.test(original) || to!=='ja' && (/[ぁ-ゟ]/.test(original) || from==='ja' && /[ァ-ヿ]/.test(original))) ||
+        /^zh/.test(to) && /[ぁ-ゟ]/.test(original) && hira>=4 && hira/((plain.match(/\p{L}/gu)||[]).length||1)>.2;
+    };
     const priority = Number.isFinite(req.priority) ? req.priority : PRIORITY.NEAR;
     const reqId = req.reqId ?? null;
     const preset = settings.prompt.preset;
@@ -178,6 +180,16 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     }
 
     async function runBatch(batch, isRetry, budget={left:retryBatchMax}) {
+      async function retryLost(lost) {
+        if(batch.length>1 && budget.left>0) {
+          const retries=[];
+          for(const sub of chunk(lost,isRetry?1:Math.max(1,Math.ceil(lost.length/2)))) {
+            if(budget.left-- >0) retries.push(runBatch(sub,true,budget));
+            else failUnits(sub,{code:ERR.PARSE,message:'模型没有返回这一段的译文'});
+          }
+          await Promise.all(retries);
+        } else failUnits(lost,{code:ERR.PROVIDER,message:'模型未返回可靠译文'});
+      }
       const { messages, idMap } = buildMessages({
         items: batch.map((u) => ({ id: u.uid, text: u.text })),
         to,
@@ -199,13 +211,13 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
             const stream = createTranslationStream(batch.length, (index, text) => {
               const u = batch[index];
               if (req.streamItems === false) return;
-              if (s.aborted || /^(zh|ja|ko|ar|ru|th)/.test(to) && omitted(text,u.text)) return;
+              if (s.aborted || /^(zh|ja|ko|ar|ru|th)/.test(to) && omitted(text,u.text,selected.kind)) return;
               completeUnit(u, text, model, selected);
             });
             const content=await provider({profile:selected,model,messages,signal:s,onDelta: delta => stream.push(delta)});
             const parsed=parseSegments(content,idMap);
             if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
-              const unchanged=batch.filter(u=>omitted(parsed.results.get(u.uid),u.text));
+              const unchanged=batch.filter(u=>omitted(parsed.results.get(u.uid),u.text,selected.kind));
               if(unchanged.length) {
                 // Preserve neighbors only after whole-batch JSON validation.
                 if(!parsed.missing.length) for(const u of batch) {
@@ -221,6 +233,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
           },
         });
       } catch (e) {
+        if(e?.serverCode==='untranslated_items' && batch.length>1)return retryLost(batch.filter(u=>!u.completed));
         if (!isCancelled(e)) failUnits(batch, toErrorInfo(e));
         return;
       }
@@ -237,21 +250,10 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
 
       const lost = missing.map((id) => byUid.get(id));
       if (batch.length>1 && budget.left>0) {
-        const retries=[];
-        for(const sub of chunk(lost,isRetry?1:Math.max(1,Math.ceil(lost.length/2)))) {
-          if(budget.left-- >0) retries.push(runBatch(sub,true,budget));
-          else failUnits(sub,{code:ERR.PARSE,message:'模型没有返回这一段的译文'});
-        }
-        await Promise.all(retries);
+        await retryLost(lost);
         return;
       }
-      const failed = [];
-      for (const u of lost) {
-        const plain = ''; // Non-JSON prose cannot be trusted as a translation.
-        if (plain) completeUnit(u, plain, out.model);
-        else failed.push(u);
-      }
-      failUnits(failed, { code: ERR.PARSE, message: '模型没有返回这一段的译文' });
+      failUnits(lost, { code: ERR.PARSE, message: '模型没有返回这一段的译文' });
     }
 
     const batches = makeBatches(
@@ -260,7 +262,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     );
     if (priority === PRIORITY.VISIBLE && batches.length) {
       const first = batches.shift();
-      const small = makeBatches(first, { maxItems: 6, maxChars: 2000 });
+      const small = makeBatches(first, { maxItems: from==='ja' && /^zh/.test(to)?2:6, maxChars: 2000 });
       const head = small[0];
       batches.unshift(head, ...makeBatches(first.slice(head.length), { maxItems: Math.min(...chain.map(c => c.profile.maxItems || 20)), maxChars: Math.min(...chain.map(c => c.profile.maxChars || 4000)) }));
     }
