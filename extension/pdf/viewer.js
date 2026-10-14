@@ -3,6 +3,8 @@ import { createExtensionPlatform } from '../platform/extension.js';
 import { PageTranslator } from '../content/controller.js';
 import { segmentTextItems } from './segments.js';
 import { checkPDFBytes, readPDFURL, MAX_PDF_BYTES } from './source.js';
+import { createOverlay } from '../content/overlay.js';
+import { lensIcon } from '../content/visual.js';
 
 GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.js', import.meta.url).href;
 const platform = createExtensionPlatform();
@@ -12,16 +14,73 @@ let mode = settings.displayMode;
 let pdf, task, pages = [], observer, translator;
 let epoch = 0, serial = Promise.resolve();
 let zoomRevision = 0;
+let alignmentFrame = 0;
 const resident = new Map();
+const floating = createOverlay(`.pdf-ball{position:fixed;right:max(6px,env(safe-area-inset-right));top:60vh;width:44px;height:44px;border:0;border-radius:50%;background:linear-gradient(135deg,#4263eb,#20c997);box-shadow:0 2px 10px #0004;cursor:pointer;pointer-events:auto;touch-action:none}.pdf-ball svg{width:22px;height:22px}.pdf-ball:disabled{opacity:.4}.pdf-ball[aria-pressed=true]{outline:2px solid #20c997;outline-offset:3px}`);
+const ball = document.createElement('button');ball.className='pdf-ball';ball.type='button';
+ball.setAttribute('aria-label','翻译或恢复当前 PDF');ball.title='翻译 / 恢复 PDF（拖动可移动，右键返回工具栏）';
+ball.append(lensIcon(true));floating.el.append(ball);
+if(settings.floatBall.enabled) floating.attach();
+ball.disabled=true;
+ball.addEventListener('click',()=> { if(!translator) return;translator.toggle();stateChanged(); });
+ball.addEventListener('contextmenu',event=> {event.preventDefault();document.querySelector('header').scrollIntoView({block:'start'});$('translate').focus();});
+ball.addEventListener('pointerdown',event=> {
+  if(event.button!==0 || !event.isPrimary) return;
+  const origin=ball.getBoundingClientRect();let moved=false;
+  ball.setPointerCapture(event.pointerId);
+  const move=e=> {
+    if(e.pointerId!==event.pointerId) return;
+    if(!moved && Math.hypot(e.clientX-event.clientX,e.clientY-event.clientY)<5) return;
+    moved=true;
+    ball.style.left=Math.max(6,Math.min(innerWidth-50,origin.left+e.clientX-event.clientX))+'px';
+    ball.style.top=Math.max(6,Math.min(innerHeight-50,origin.top+e.clientY-event.clientY))+'px';ball.style.right='auto';
+  };
+  const end=e=> {
+    if(e.pointerId!==event.pointerId) return;
+    ball.removeEventListener('pointermove',move);ball.removeEventListener('pointerup',end);ball.removeEventListener('pointercancel',end);
+    if(ball.hasPointerCapture(event.pointerId)) ball.releasePointerCapture(event.pointerId);
+    if(moved) ball.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();},{once:true,capture:true});
+  };
+  ball.addEventListener('pointermove',move);ball.addEventListener('pointerup',end);ball.addEventListener('pointercancel',end);
+});
+function alignParagraphs() {
+  alignmentFrame = 0;
+  // Flow layout gives long translations room; source coordinates add spacing, never absolute overlap.
+  for (const page of pages) {
+    if (!page.rendered) continue;
+    const scale = Number($('zoom').value);
+    let bottom = 0;
+    for (const paragraph of page.paragraphs.querySelectorAll(':scope > p')) {
+      const target = Number(paragraph.dataset.offset) * scale;
+      const gap = document.body.classList.contains('only') ? 0 : Math.max(0, target - bottom);
+      paragraph.style.marginBlockStart = `${gap}px`;
+      bottom += gap + paragraph.getBoundingClientRect().height + 12;
+    }
+  }
+}
+function scheduleAlignment() {
+  if (!alignmentFrame) alignmentFrame = requestAnimationFrame(alignParagraphs);
+}
+function appendMathContent(element,part) {
+  if(!part.runs) {element.textContent=part.text;return;}
+  for(const run of part.runs) {
+    if(!run.script) element.append(document.createTextNode(run.text));
+    else {const script=document.createElement(run.script);script.textContent=run.text;element.append(script);}
+  }
+}
+const paragraphResize = new ResizeObserver(scheduleAlignment);
+window.addEventListener('resize', scheduleAlignment);
 const effectiveSettings = () => ({ ...settings, displayMode: mode, inlineMaxChars: 0,
   siteRules: { always: [], never: [], custom: [{ match: '*', include: ['.paragraphs'], exclude: [] }] } });
 function message(text, error = false) { $('status').textContent = text; $('status').classList.toggle('error', error); }
 function stateChanged() {
   if (!translator) return;
   const state = translator.getState();
+  ball.disabled=false;ball.setAttribute('aria-pressed',String(state.translated));
   $('translate').textContent = state.translated ? '继续翻译附近段落' : '翻译附近段落';
   $('restore').disabled = !state.translated;
   document.body.classList.toggle('only', state.translated && mode === 'translation-only');
+  scheduleAlignment();
   if (state.translated) message(`已翻译 ${state.done} 段 · 待处理 ${state.pending} · 失败 ${state.failed}（点击段落 ↻ 重试）`);
 }
 function buildTranslator() {
@@ -94,10 +153,23 @@ async function render(page, generation, revision) {
   await textLayer.render();
   if (generation !== epoch || revision !== zoomRevision) { textLayer.cancel(); canvas.width = canvas.height = 0; return; }
   if (!page.rendered) {
-    const paragraphs = segmentTextItems(text.items);
+    const paragraphs = segmentTextItems(text.items,{pageHeight:proxy.view[3]-proxy.view[1],pageNumber:page.number});
     for (const paragraph of paragraphs) {
-      const p = document.createElement('p'); p.textContent = paragraph.text;
+      const p = document.createElement('p');
+      p.dataset.offset = Math.max(0,proxy.view[3]-paragraph.y-paragraph.lines[0].height);
+      if (paragraph.kind !== 'prose') {
+        p.className = paragraph.kind === 'margin' ? 'pdf-margin' : 'pdf-formula';
+        p.setAttribute('translate','no');
+        appendMathContent(p,paragraph.parts[0]);
+      } else for (const part of paragraph.parts) {
+        if (part.type === 'text') p.append(document.createTextNode(part.text));
+        else {
+          const math = document.createElement('span');math.className='pdf-math';
+          math.setAttribute('translate','no');appendMathContent(math,part);p.append(math);
+        }
+      }
       page.paragraphs.append(p);
+      paragraphResize.observe(p);
     }
     page.note.textContent = paragraphs.length ? '' : '此页没有可读取的文本层（可能为扫描件），本轮不提供 PDF OCR。';
     page.shell.style.setProperty('--page-height', Math.max(viewport.height + 24, 180) + 'px');
@@ -106,6 +178,7 @@ async function render(page, generation, revision) {
   page.shell.dataset.rendered = 'true';
   resident.delete(page.number);
   resident.set(page.number, { canvas, textLayer, proxy });
+  scheduleAlignment();
   // Keep at most four rendered surfaces. Paragraph DOM remains for restore/cache.
 }
 function evict(page) {
@@ -121,9 +194,11 @@ function evict(page) {
 async function open(data) {
   const generation = ++epoch;
   observer?.disconnect(); translator?.destroy(); translator = null;
+  paragraphResize.disconnect();
   for (const page of pages) { page.renderTask?.cancel(); evict(page); }
   await task?.destroy();
   $('translate').disabled = true; $('restore').disabled = true;
+  ball.disabled=true;
   document.body.classList.remove('only');
   pages = []; $('pdf-pages').replaceChildren();
   task = getDocument({ data: checkPDFBytes(data), isEvalSupported: false,
@@ -154,7 +229,7 @@ async function guarded(fn) { try { await fn(); } catch { message('无法打开 P
 $('translate').addEventListener('click', () => { translator?.start(); stateChanged(); });
 $('restore').addEventListener('click', () => { translator?.stop(); stateChanged(); message('已恢复原文，停止待处理翻译。'); });
 $('mode').value = mode;
-$('mode').addEventListener('change', () => { mode = $('mode').value; translator?.setDisplayMode(mode); stateChanged(); });
+$('mode').addEventListener('change', () => { mode = $('mode').value; translator?.setDisplayMode(mode); stateChanged();void platform.settingsStore.save({displayMode:mode}); });
 $('theme').addEventListener('change', () => {
   if ($('theme').value === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = $('theme').value;
@@ -181,10 +256,25 @@ $('local-file').addEventListener('change', () => {
   $('local-file').value = '';
 });
 const unsubscribe = platform.settingsStore.onChange(() => { void guarded(async () => {
-  settings = await platform.settingsStore.load(); translator?.retranslate();
+  const previous=settings;settings = await platform.settingsStore.load();
+  mode=settings.displayMode;$('mode').value=mode;
+  if(JSON.stringify({...previous,displayMode:null,style:null,floatBall:null}) === JSON.stringify({...settings,displayMode:null,style:null,floatBall:null})) {
+    translator?.setDisplayMode(mode);translator?.setStyle(settings.style);
+  } else translator?.retranslate();
+  if(settings.floatBall.enabled) floating.attach();else floating.detach();
+  stateChanged();
 }); });
+const removeMessages=platform.onMessage((msg,reply)=> {
+  if(msg?.type==='get-state') {reply({...translator?.getState(),dormant:false,ui:{floatBall:ball.isConnected},comics:[]});return false;}
+  if(msg?.type!=='command' || !translator) return false;
+  if(msg.name==='toggle-page') translator.toggle();
+  else if(msg.name==='toggle-translation-only') { $('mode').value=mode==='bilingual'?'translation-only':'bilingual';$('mode').dispatchEvent(new Event('change')); }
+  stateChanged();reply({ok:true});return false;
+});
 window.addEventListener('pagehide', () => {
   epoch++; unsubscribe(); observer?.disconnect(); translator?.destroy();
+  removeMessages();floating.detach();
+  paragraphResize.disconnect();cancelAnimationFrame(alignmentFrame);
   for (const page of pages) { page.renderTask?.cancel(); evict(page); }
   void task?.destroy();
 }, { once: true });

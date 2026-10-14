@@ -1,4 +1,4 @@
-const CSS = `:host{display:inline-block;vertical-align:top;width:300px;max-width:100%;position:relative;z-index:2147483600;margin:8px;line-height:1.5;color-scheme:light dark;font:14px system-ui;color:CanvasText}details{border:1px solid GrayText;border-radius:12px;padding:12px;background:Canvas}summary{cursor:pointer;min-height:44px;font-weight:600}button,select{min-height:44px;font:inherit;color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:6px;cursor:pointer}button{padding:6px 10px}li{margin:12px 0}ol{padding-left:26px}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}.muted{opacity:.75}.error{color:#c44}@media(max-width:600px){:host{display:block;width:calc(100% - 16px);margin:8px 0}}`;
+const CSS = `:host{display:block;box-sizing:border-box;width:100%;max-width:720px;position:relative;isolation:isolate;margin:12px auto;line-height:1.5;color-scheme:light dark;font:14px system-ui;color:CanvasText;white-space:normal;text-align:start;writing-mode:horizontal-tb}*{box-sizing:border-box}details{border:1px solid GrayText;border-radius:12px;padding:12px;background:Canvas}summary{cursor:pointer;min-height:44px;font-weight:600}button,select{max-width:100%;min-height:44px;font:inherit;color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:6px;cursor:pointer}button{padding:6px 10px}li{margin:12px 0}ol{padding-left:26px}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}.muted{opacity:.75}.error{color:#c44}@media(max-width:600px){:host{margin:8px 0}details{padding:10px}}`;
 const node = (doc,tag,text) => { const el=doc.createElement(tag); if (text!=null) el.textContent=text; return el; };
 export function createPanel(candidate, { lang,onRun,onClose,onLanguages,onEnableCanvas }) {
   const doc=candidate.element.ownerDocument;
@@ -27,7 +27,13 @@ export function createPanel(candidate, { lang,onRun,onClose,onLanguages,onEnable
     });
     details.append(enable);
   }
-  candidate.element.after(host);
+  // Do not put interactive controls inside the artwork's full-size image link.
+  // Normal document flow reserves space and cannot cover site actions/comments.
+  let anchor=candidate.element;
+  while(anchor.parentElement?.matches('a,picture')) anchor=anchor.parentElement;
+  const figure=anchor.closest('figure');
+  if(figure && figure.querySelectorAll('img,canvas').length===1) anchor=figure;
+  anchor.after(host);
   let highlight;
   function clearHighlight() { highlight?.remove();highlight=null; }
   const stopHighlight=() => clearHighlight();
@@ -41,6 +47,7 @@ export function createPanel(candidate, { lang,onRun,onClose,onLanguages,onEnable
   }
   const api={
     host,lang:()=>select.value,
+    setMode(mode) { for(const li of list.children) li.firstElementChild.hidden=mode==='translation-only'; },
     setStatus(text,error=false) { status.textContent=text;status.className=error?'error':''; },
     busy(value) { run.disabled=value; select.disabled=value; },
     render(regions,uncertain) {

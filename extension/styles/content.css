@@ -33,7 +33,8 @@ dl-w {
 
 dl-t.dl-block {
   display: block;
-  margin-top: 0.3em;
+  margin-block-start: 0.3em;
+  overflow-wrap: anywhere;
 }
 
 dl-t.dl-inline {
@@ -247,6 +248,10 @@ dl-t.dl-t.dl-solo {
   all: unset;
   display: inline;
 }
+
+/* A virtual paragraph takes its own line/vertical column in translation-only readers. */
+dl-t.dl-block.dl-solo { display: block; }
+dl-t.dl-block[data-dl-state="done"] + br { display: none; }
 
 dl-t.dl-t.dl-solo::before,
 dl-t.dl-t.dl-solo::after {
