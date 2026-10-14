@@ -1,4 +1,4 @@
-# 多平台与通用配置契约（v0.2）
+# 多平台与通用配置契约（v0.3.1）
 
 状态：2026-10-13 起草，主控维护。本文件与 [SPEC.md](SPEC.md) 同级，接口变更先改这里。
 
@@ -28,7 +28,7 @@ export interface Platform {
   kind: 'extension' | 'userscript' | 'bookmarklet';
   syncArea: StorageArea;    // 非机密设置；extension 用 chrome.storage.sync，满额或不可用时退回 local
   localArea: StorageArea;   // 机密与本机状态；extension 用 chrome.storage.local，userscript 用 GM_getValue/GM_setValue
-  http(req: { url, method, headers, body, timeoutMs, signal }): Promise<{ status, headers: { get(name) }, text }>;
+  http(req: { url, method, headers, body, timeoutMs, signal, onText? }): Promise<{ status, headers: { get(name) }, text }>;
                             // extension 用 fetch（在 service worker 里，无 CORS 限制）；userscript 用 GM_xmlhttpRequest
   translator(): TranslatorService;  // extension：经端口连 service worker；userscript：在页面内直接实例化
   detectLanguage(text): Promise<{ lang, reliable } | null>;  // extension 用 chrome.i18n；其余回落到 shared/lang.js 启发式
@@ -56,6 +56,12 @@ export interface TranslatorService {
 - 用户脚本元数据：`@match *://*/*`、`@run-at document-idle`、`@noframes`、`@grant GM_xmlhttpRequest GM_getValue
   GM_setValue GM_deleteValue GM_registerMenuCommand GM_addValueChangeListener`、`@connect *`、`@downloadURL`/`@updateURL`
   指向 GitHub Release 的最新版地址。
+
+`http.onText(delta,status,headers)` 提供新增文本片段，最终仍返回完整 `text`。扩展用流式 fetch，用户脚本用 GM progress/readystatechange；无增量回调时在 onload 解析。provider `chat({profile,messages,signal,onDelta?})` 的 `onDelta(text)` 只提供脱敏内容，不显示推理字段。请求 `stream:true`，不支持时回退非流式；完整 JSON 验证后才写缓存，恢复/取消后不插入迟到片段。
+
+两种平台按每个正文单元的源节点 Range 判断可见性，避免小说共用高 `<p>` 时触发整篇请求；滚动、模式切换和译文布局变化仍发现该宿主内较远段落。日译中疑似回显在流式显示前检查；漏翻缩批与 JSON 错项恢复共用有限重试预算。SJTU 请求的空闲等待上限为 12 秒，输出进展会重置，其它端点保留用户配置。
+
+漫画名单 `comics.canvasSites` 兼容域名字符串与 `{host,imageHosts?,referer?}`；CDN 最多八个具体域名，Referer 限该站点 HTTP(S) 根地址。旧 Pixiv 字符串项使用 `i.pximg.net` / `https://www.pixiv.net/` 兼容元数据。扩展会话 DNR 规则必须含 `initiatorDomains:[chrome.runtime.id]` 与 `resourceTypes:['xmlhttprequest','other']`，关闭漫画或移出名单即删除，不新增 host 权限。用户脚本匿名 GM 取图按匹配站点设置 Referer，不支持请求头或本地 OCR 时保留原图并明确降级。
 
 ## 2. 打包
 
@@ -132,3 +138,5 @@ export interface TranslatorService {
 | 移动端模拟（Chromium 设备模拟，375×812 与 800×1280，`pointer: coarse`） | 长按翻译、划词图标位置、悬浮球拖动、设置面板可用、长页面滚动无卡顿（主线程长任务 < 50ms 的占比） |
 | 真机 Android Edge + Tampermonkey | 用户手动验收（我们提供逐步清单） |
 | 真实服务 | OpenRouter 免费模型一条链路（key 由用户放进环境变量 `DUALLENS_OPENROUTER_KEY`，测试从环境变量读取，不落盘） |
+
+2026-10-14 授权探测中，Hermes ling-3.1-flash 与 longcat-2.0:free 返回 404，solar-mini4:free 返回中文成功。因此默认 allowlist 与一键接入仅自动选入 Solar，仍须出现在实时目录中；其它模型可由用户显式配置并手选，不更改现有设备配置。

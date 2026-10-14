@@ -8,6 +8,7 @@
 import { ERR } from '../shared/protocol.js';
 import { DLError, cancelledError } from '../shared/errors.js';
 import { getDefaultSettingsStore } from '../shared/settings.js';
+import { createSSEParser } from '../shared/stream.js';
 import { profileFromPreset } from '../shared/presets.js';
 
 const TEMPERATURE = 0.2;
@@ -153,19 +154,52 @@ export function createProviders({ fetchImpl, getSecret = async id => {
   const doFetch = (...args) => (fetchImpl || globalThis.fetch)(...args);
 
   const noJson = new Set();
+  const noStream = new Set();
   async function withSecret(profile) {
     // apiKey is accepted only as a transient legacy adapter input, never stored here.
     if (!['openai', 'gateway'].includes(profile?.kind)) return profile;
     return { ...profile, apiKey: await getSecret(profile.id) || (profile.kind === 'openai' ? profile.apiKey : '') || '' };
   }
 
-  async function request(profile, { url, method, body, timeoutMs, signal }) {
+  async function request(profile, { url, method, body, timeoutMs, signal, onDelta }) {
     const ctrl = new AbortController();
     let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      ctrl.abort();
-    }, timeoutMs);
+    let timer;
+    const reset = () => { clearTimeout(timer); timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs); };
+    reset();
+    let content = '', streamed = false, done = false, carry = '';
+    const key = String(profile.apiKey || '').trim();
+    const emitDelta = delta => {
+      const text = scrub(carry + delta, profile);
+      let hold = 0;
+      // Retain only a possible key prefix, so redaction also works when the
+      // upstream splits a credential across SSE events.
+      for (let n = Math.min(key.length - 1, text.length); n > 0; n--) {
+        if (key.startsWith(text.slice(-n))) { hold = n; break; }
+      }
+      carry = hold ? text.slice(-hold) : '';
+      const ready = hold ? text.slice(0, -hold) : text;
+      if (ready) onDelta?.(ready);
+    };
+    const parser = createSSEParser(data => {
+      if (data === '[DONE]') { done = true; if (carry) onDelta?.(carry); carry = ''; return; }
+      if (done) return;
+      let event;
+      try { event = JSON.parse(data); } catch { throw new DLError(ERR.PARSE, '无效的流式响应'); }
+      if (event.error) throw new DLError(ERR.PROVIDER, '流式接口返回错误', { status: 502 });
+      const delta = event.choices?.[0]?.delta;
+      if (delta?.content || delta?.reasoning_content) reset();
+      if (typeof delta?.content === 'string') {
+        content += delta.content;
+        if (content.length > 4 * 1024 * 1024) throw new DLError(ERR.PARSE, '流式响应过大');
+        emitDelta(delta.content);
+      }
+    });
+    const progress = (text, status, headers) => {
+      if (status >= 200 && status < 300 && /text\/event-stream/i.test(headers?.get('content-type') || '')) {
+        streamed = true; parser.push(text);
+      }
+    };
     const onAbort = () => ctrl.abort();
     if (signal) {
       if (signal.aborted) ctrl.abort();
@@ -174,17 +208,38 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     try {
       const res = await doFetch(url, {
         method,
-        headers: headersFor(profile),
+        headers: { ...headersFor(profile), ...(onDelta ? { Accept: 'text/event-stream, application/json' } : {}) },
         body,
         signal: ctrl.signal,
         credentials: 'omit',
         cache: 'no-store',
-        timeoutMs,
+        timeoutMs, onText: progress,
       });
-      const text = await res.text();
+      let text;
+      if (onDelta && res.body?.getReader && /text\/event-stream/i.test(res.headers?.get('content-type') || '')) {
+        streamed = true;
+        const reader = res.body.getReader(), decoder = new TextDecoder();
+        try {
+          while (true) {
+            const part = await reader.read();
+            if (part.done) break;
+            parser.push(decoder.decode(part.value, { stream: true }));
+            if (done) { await reader.cancel(); break; }
+          }
+          parser.push(decoder.decode());
+        } catch (error) { await reader.cancel().catch(() => {}); throw error; }
+        finally { reader.releaseLock(); }
+        text = '';
+      } else text = await res.text();
+      if (streamed) {
+        parser.end();
+        if (!done) throw new DLError(ERR.PROVIDER, '流式响应中断', { status: 502 });
+        text = JSON.stringify({ choices: [{ message: { content } }] });
+      }
       return { status: res.status, retryAfter: res.headers && res.headers.get ? res.headers.get('retry-after') : null, text };
     } catch (e) {
       if (signal && signal.aborted) throw cancelledError();
+      if (e instanceof DLError) throw e;
       if (timedOut) throw new DLError(ERR.NETWORK, `请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
       const hint = profile.kind === 'gateway' ? '，请确认本机网关已启动' : '';
       throw new DLError(ERR.NETWORK, `无法连接 ${hostOf(profile)}${hint}`);
@@ -197,7 +252,9 @@ export function createProviders({ fetchImpl, getSecret = async id => {
   function httpError(profile, res) {
     const detail = serverMessage(res.text, profile);
     const suffix = detail ? `：${detail}` : '';
-    const extra = { status: res.status };
+    let serverCode;
+    try { serverCode = JSON.parse(res.text)?.error?.code; } catch {}
+    const extra = { status: res.status, serverCode };
     if (res.status === 429) {
       return new DLError(ERR.RATE_LIMITED, `被限流（429）${suffix}`, {
         ...extra,
@@ -224,7 +281,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     return text.replace(/<seg id="(\d+)">([\s\S]*?)<\/seg>/g, '<seg id="$1">【译】$2</seg>');
   }
 
-  async function chat({ profile, model, messages, signal }) {
+  async function chat({ profile, model, messages, signal, onDelta }) {
     if (signal && signal.aborted) throw cancelledError();
     if (profile && profile.kind === 'mock') return mockChat({ model: model || profile.model, messages, signal });
     profile = await withSecret(profile);
@@ -232,20 +289,30 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     const problem = profileProblem(profile);
     if (problem) throw new DLError(ERR.CONFIG, problem);
     if (profile.requiresKey && !profile.apiKey) throw new DLError(ERR.CONFIG, '此设备尚未填写 API key，请打开设置');
-    const payload={ model: model || profile.model, messages, temperature:TEMPERATURE, stream:false,
+    const payload={ model: model || profile.model, messages, temperature:TEMPERATURE, stream:true,
       max_tokens:Math.min(4096, Math.max(256, messages.filter(m=>m.role==='user').reduce((n,m)=>n+String(m.content).length,0)*2+256)) };
     const jsonKey=profile.id+'|'+profile.baseUrl+'|'+(model||profile.model);
+    if (noStream.has(jsonKey)) payload.stream = false;
     if(profile.jsonMode!==false&&!noJson.has(jsonKey)) payload.response_format={type:'json_object'};
     const send=()=>request(profile, {
       url: endpoint(profile, '/chat/completions'),
       method: 'POST',
       body: JSON.stringify(payload),
-      timeoutMs: profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
-      signal,
+        timeoutMs: /^(sjtu\/)/.test(payload.model) || /models\.sjtu\.edu\.cn/.test(profile.baseUrl)
+          ? Math.min(profile.timeoutMs || 12000, 12000) : profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
+      signal, onDelta: onDelta || (() => {}),
     });
     let res=await send();
-    if(res.status===400&&payload.response_format) {
+    if(res.status===400&&payload.response_format&&!/stream/i.test(serverMessage(res.text, profile))) {
       delete payload.response_format; noJson.add(jsonKey); res=await send();
+    }
+    if (payload.stream && [400, 422, 501].includes(res.status)) {
+      payload.stream = false;
+      res = await send();
+      if (res.status === 400 && payload.response_format) {
+        delete payload.response_format; noJson.add(jsonKey); res = await send();
+      }
+      if (res.status >= 200 && res.status < 300) noStream.add(jsonKey);
     }
     if (res.status < 200 || res.status >= 300) throw httpError(profile, res);
     let json;

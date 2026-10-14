@@ -23,7 +23,7 @@ import { createCache } from './cache.js';
 import { createTranslator } from './translator.js';
 import { createHandlers } from './handlers.js';
 import { createComicHandlers } from './comics.js';
-import { createCanvasRegistry } from './comic-sites.js';
+import { createCanvasRegistry, createImageRegistry } from './comic-sites.js';
 import { createPDFEntries } from './pdf.js';
 import { registerSidePanelCommand } from './media.js';
 import { createSubtitleHandlers } from './subtitles.js';
@@ -40,12 +40,18 @@ const handlers = createHandlers({
   getSettings: loadSettings,
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
-Object.assign(handlers, createComicHandlers(chrome));
+const imageRegistry=createImageRegistry(chrome,loadSettings);
+const comicHandlers=createComicHandlers(chrome);
+Object.assign(handlers,comicHandlers);
+handlers['comic-ocr']=async(msg,sender)=> {
+  await imageRegistry.sync();
+  return comicHandlers['comic-ocr'](msg,sender);
+};
 const pdfEntries = createPDFEntries(chrome);
 Object.assign(handlers, pdfEntries.handlers);
 Object.assign(handlers, createSubtitleHandlers());
 const canvasRegistry=createCanvasRegistry(chrome,loadSettings);
-handlers['comic-canvas-sites-sync']=()=>canvasRegistry.sync();
+handlers['comic-canvas-sites-sync']=async()=> {await imageRegistry.sync();return canvasRegistry.sync();};
 handlers['open-sidepanel'] = async (_msg, sender) => {
   try {
     if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } };
@@ -53,8 +59,9 @@ handlers['open-sidepanel'] = async (_msg, sender) => {
     return { ok: true };
   } catch { return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } }; }
 };
-getDefaultSettingsStore().onChange(()=>{void canvasRegistry.sync().catch(()=>{});});
+getDefaultSettingsStore().onChange(()=>{void canvasRegistry.sync().catch(()=>{});void imageRegistry.sync().catch(()=>{});});
 void canvasRegistry.sync().catch(()=>{});
+void imageRegistry.sync().catch(()=>{});
 
 // A pending fetch alone does not stop Chrome from stopping an idle worker after ~30s; any
 // extension API call resets that timer, so poke one while work is in flight.

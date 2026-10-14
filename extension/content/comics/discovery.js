@@ -1,3 +1,5 @@
+import { artworkImages } from '../../shared/site-adapters.js';
+
 export function imageURL(value, base) {
   try {
     const u = new URL(value, base);
@@ -15,16 +17,23 @@ export function sourceFor(img, base) {
 export function discoverImages(doc, { onlyImg = false, canvasRecords = [], max = 8 } = {}) {
   const win = doc.defaultView;
   const visible = [], next = [];
+  const seenURLs = new Set();
   const records = new Map(canvasRecords.map((r) => [r.element, r]));
-  const nodes = onlyImg ? doc.querySelectorAll('img') : doc.querySelectorAll('img,canvas,body *');
+  const nodes = artworkImages(doc) ?? (onlyImg ? doc.querySelectorAll('img') : doc.querySelectorAll('img,canvas,body *'));
   let scanned = 0;
   for (const element of nodes) {
     if (++scanned > 6000) break;
     if (element.closest('dl-ui,dl-comic,[translate="no"],.notranslate,[aria-hidden="true"]')) continue;
     const r = element.getBoundingClientRect();
-    if (r.width < 280 || r.height < 280 || r.bottom < 0 || r.right < 0 || r.left > win.innerWidth || r.top > win.innerHeight * 2) continue;
+    const minWidth = Math.min(280, win.innerWidth * .65);
+    if (r.width < minWidth || r.height < 280 || r.bottom < 0 || r.right < 0 || r.left > win.innerWidth || r.top > win.innerHeight * 2) continue;
     const style = win.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
+    if (doc.elementFromPoint && r.top < win.innerHeight) {
+      const hit=doc.elementFromPoint(Math.max(0,Math.min(win.innerWidth-1,r.left+r.width/2)),
+        Math.max(0,Math.min(win.innerHeight-1,(Math.max(0,r.top)+Math.min(win.innerHeight,r.bottom))/2)));
+      if(hit && hit!==element && !element.contains(hit) && !hit.contains(element)) continue;
+    }
     let url = '', slices;
     if (element.tagName === 'IMG') url = sourceFor(element, doc.baseURI);
     else if (element.tagName === 'CANVAS') {
@@ -35,6 +44,8 @@ export function discoverImages(doc, { onlyImg = false, canvasRecords = [], max =
       if (match) url = imageURL(match[1], doc.baseURI);
     }
     if (!url) continue;
+    if (element.tagName === 'IMG' && seenURLs.has(url)) continue;
+    if (element.tagName === 'IMG') seenURLs.add(url);
     const candidate = { element, url, slices, width: element.naturalWidth || element.width || r.width,
       height: element.naturalHeight || element.height || r.height, top: r.top };
     (r.top < win.innerHeight ? visible : next).push(candidate);

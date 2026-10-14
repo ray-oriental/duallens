@@ -1,5 +1,4 @@
-// Page translation controller: owns the unit table and ties walker, serializer, injector, client
-// and watchers together. One instance per page.
+// One translation controller per page.
 
 import { siteRuleFor } from '../shared/settings.js';
 import { PRIORITY, ERR } from '../shared/protocol.js';
@@ -17,7 +16,6 @@ const MAX_REQUEST_ITEMS = 50;
 const CHURN_LIMIT = 12; // re-translations of one host within a minute before we leave it alone
 
 export class PageTranslator {
-  // getSettings(): current merged settings. onChange(): something user-visible changed.
   constructor({ getSettings, onChange, platform }) {
     this.platform = platform;
     this.slices = new IdleSlices();
@@ -52,7 +50,6 @@ export class PageTranslator {
     document.addEventListener('keydown', this.retryHandler, true);
   }
 
-  // ---- settings-derived values -------------------------------------------------------------
 
   get s() {
     return this.getSettings();
@@ -83,7 +80,6 @@ export class PageTranslator {
     return { title: document.title, host: location.hostname, url: location.href };
   }
 
-  // ---- lifecycle ---------------------------------------------------------------------------
 
   isActive() {
     return this.active;
@@ -99,7 +95,6 @@ export class PageTranslator {
     this.emit();
   }
 
-  // Restores the original page completely and stops watching.
   stop() {
     this.active = false;
     this.slices.cancel();
@@ -142,12 +137,12 @@ export class PageTranslator {
     document.removeEventListener('keydown', this.retryHandler, true);
   }
 
-  // ---- display settings --------------------------------------------------------------------
 
   setDisplayMode(mode) {
     inj.write(() => {
       for (const u of this.units.values()) inj.setMode(u, mode);
     });
+    this.lazy.scroll();
   }
 
   setStyle(style) {
@@ -171,7 +166,6 @@ export class PageTranslator {
     return { translated: this.active, mode: this.s.displayMode, units: total, pending, failed, done };
   }
 
-  // ---- units -------------------------------------------------------------------------------
 
   #known = (host, first) => this.registry.has(first);
 
@@ -239,7 +233,6 @@ export class PageTranslator {
     inj.restore(unit);
   }
 
-  // ---- translation pipeline ----------------------------------------------------------------
 
   #enqueue(unit, priority, top, immediate = false) {
     if (unit.state !== 'idle' || unit.dead) return;
@@ -285,7 +278,7 @@ export class PageTranslator {
       ready.push(u);
     }
 
-    const skipFlags = await Promise.all(ready.map((u) => this.#alreadyTarget(u.plain, s)));
+    const skipFlags = await Promise.all(ready.map((u) => this.#alreadyTarget(u.plain, s, u)));
     const send = [];
     ready.forEach((u, i) => {
       if (u.dead || this.units.get(u.id) !== u || u.state !== 'queued') return;
@@ -309,13 +302,15 @@ export class PageTranslator {
     this.lazy.unwatch(unit);
   }
 
-  async #alreadyTarget(plain, s) {
+  async #alreadyTarget(plain, s, unit) {
+    if(s.sourceLang==='auto') unit.from=looksLikeTarget(plain,'ja')?'ja':'auto';
     if (looksLikeTarget(plain, s.targetLang)) return true;
     if (plain.length < 24) return false;
     const det = await this.platform.detectLanguage(plain.slice(0, 400));
     const top = det && det.reliable && det.lang;
     if (!top) return false;
     const pct = det.percentage ?? 100;
+    if(s.sourceLang==='auto' && pct>=80) unit.from=normalizeLang(top);
     if (pct >= 70 && sameLanguage(normalizeLang(top), s.targetLang)) return true;
     if (s.sourceLang && s.sourceLang !== 'auto' && pct >= 80 && !sameLanguage(normalizeLang(top), s.sourceLang)) {
       return true;
@@ -327,16 +322,18 @@ export class PageTranslator {
     const s = this.s;
     const byPriority = new Map();
     for (const u of units) {
-      if (!byPriority.has(u.priority)) byPriority.set(u.priority, []);
-      byPriority.get(u.priority).push(u);
+      const key=JSON.stringify([u.priority,u.from||'auto']);
+      if (!byPriority.has(key)) byPriority.set(key, []);
+      byPriority.get(key).push(u);
     }
-    for (const [priority, list] of byPriority) {
+    for (const [key, list] of byPriority) {
+      const [priority,from]=JSON.parse(key);
       list.sort((a, b) => a.top - b.top);
       for (let i = 0; i < list.length; i += MAX_REQUEST_ITEMS) {
         const chunk = list.slice(i, i + MAX_REQUEST_ITEMS);
         const items = chunk.map((u) => ({ id: u.id, text: u.src }));
         const reqId = this.client.request(
-          { items, priority, to: s.targetLang, from: s.sourceLang || 'auto', context: this.#context() },
+          { items, priority, to: s.targetLang, from: s.sourceLang==='auto'?from:s.sourceLang||'auto', context: this.#context() },
           { onResults: (results) => this.#onResults(results), onDone: () => this.emit() },
         );
         for (const u of chunk) u.reqId = reqId;
@@ -381,6 +378,7 @@ export class PageTranslator {
       style: this.style,
       inlineMaxChars: this.s.inlineMaxChars,
     });
+    this.lazy.scroll();
   }
 
   retry(id) {
@@ -393,7 +391,6 @@ export class PageTranslator {
     this.emit();
   }
 
-  // ---- dynamic content ---------------------------------------------------------------------
 
   #allowChurn(host) {
     const now = Date.now();
@@ -462,9 +459,7 @@ export class PageTranslator {
     this.emit();
   }
 
-  // ---- hover -------------------------------------------------------------------------------
 
-  // Finds the unit under an element, building one on demand when the page is not translated.
   #locate(el) {
     let child = null;
     for (let a = el; a && a !== document.documentElement; child = a, a = a.parentElement) {
@@ -510,9 +505,6 @@ export class PageTranslator {
     return this.#addUnit(pick, { watch: false });
   }
 
-  // Pointer + hover key. mode 'toggle': translate the unit under the pointer, or collapse / peek an
-  // already translated one. 'translate': only ever translate. 'collapse': only undo a hover
-  // translation. Returns a short action name (or null when there was nothing to do).
   hoverToggle(el, mode = 'toggle') {
     if (!el || !el.closest || el.closest('dl-ui')) return null;
     const t = el.closest('dl-t');

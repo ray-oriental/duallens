@@ -4,13 +4,19 @@
 
 A classic extension loader constructs `platform/extension.js` and calls `content/main.js: start(platform)`. The userscript entry constructs `platform/userscript.js` and calls the same entry point. Content modules depend on the supplied platform for storage, translation, language detection, commands and settings; they do not read Chrome or GM globals.
 
-The walker finds visible paragraph units and serializes inline formatting as bounded placeholders. IntersectionObserver schedules nearby units; idle slices spread scanning/insertion across frames. MutationObserver and navigation events handle updates. The injector restores only validated original formatting and safely inserts text; model output never reaches executable markup.
+The walker finds visible paragraph units and serializes inline formatting as bounded placeholders. IntersectionObserver schedules nearby units; idle slices spread scanning/insertion across frames. MutationObserver and navigation events handle updates. The injector restores only validated original formatting and safely inserts text; model output never reaches executable markup. PDF coordinate segmentation keeps numbered table-of-contents leader rows separate, preserving row alignment and batch cardinality while math remains opaque.
 
 On the extension, translation uses runtime ports and the background service worker, with fetch and IndexedDB caching. On the userscript, the same providers, queue, translator and handlers run in the userscript sandbox, with injected anonymous `GM_xmlhttpRequest` transport and a timestamp-evicted memory/GM cache capped at 2 MB. Neither translations nor keys enter the site's localStorage or IndexedDB. Both providers and translator resolve keys through injected `getSecret(id)` at request time; public settings are not hydrated with keys.
 
 The extension remains zero-build. `scripts/build_userscript.mjs` uses only Node standard-library modules to bundle the static module graph and CSS into a scoped IIFE. Unsupported module syntax fails the build. The generated `duallens.user.js` is a release asset covered by SHA256SUMS; bookmarklet delivery remains planned.
 
 The interface contracts are [SPEC.md](SPEC.md) and [PLATFORMS.md](PLATFORMS.md). [ROADMAP.md](ROADMAP.md) separates implemented features from planned work.
+
+Malformed JSON cardinality and exhausted content-omission fallbacks retry unfinished half batches, then individual items, sharing at most eight additional requests per original batch. Incorrect array positions are never guessed; single-item failure or budget exhaustion remains an explicit error. A range-aware lazy observer schedules individual source spans inside tall reader hosts and rechecks pending ranges on scrolling. Japanese prose echoes are checked before streamed display; this heuristic is not a translation-quality guarantee.
+
+The transport accepts optional `http.onText(delta,status,headers)`, using fetch streams or GM progress and returning the complete response text. Providers accept `onDelta(text)` and decode only redacted SSE content, with an idle timeout reset by content/reasoning progress. Complete translation items render early; only validated final batches enter the cache. A retained proper name in a complete JSON batch does not discard neighboring validated translations. Content omissions skip a model only for that job; they do not globally cool a working provider. Cancellation removes pending and late results. The optional gateway forwards OpenAI SSE, preserves errors before headers, and wraps a final JSON reply when upstream streaming is unsupported. A post-header failure has an error event without `[DONE]`.
+
+Comic site entries accept optional `imageHosts` and same-site root `referer` metadata. Session DNR rules modify only extension-initiated XHR/other requests to those CDN domains; website image requests do not match. Registry updates serialize, preserve unrelated rule IDs, and remove owned rules when comics are disabled or the site is removed. GM image downloads use the same policy with an explicit Referer header and retain the existing failure/capability degradation.
 
 ## Settings and shared UI
 
@@ -30,11 +36,13 @@ On coarse-pointer devices hover becomes a cancellable 500 ms paragraph hold. Run
 
 ## Providers
 
-1. **Direct OpenAI-compatible profile**: configured by the user, supports non-streaming plain-text chat completions. Presets include OpenRouter, DeepSeek, SiliconFlow, Zhipu, Moonshot, OpenAI, Gemini, Groq, SJTU and Ollama/custom endpoints. OpenRouter is the recommended first example: explicit model discovery filters zero input/output pricing and proposes a diverse free-model chain. An unconfigured profile cannot translate.
+1. **Direct OpenAI-compatible profile**: configured by the user, supports SSE chat completions with non-streaming fallback. Presets include OpenRouter, DeepSeek, SiliconFlow, Zhipu, Moonshot, OpenAI, Gemini, Groq, SJTU and Ollama/custom endpoints. OpenRouter is the recommended first example: explicit model discovery filters zero input/output pricing and proposes a diverse free-model chain. An unconfigured profile cannot translate.
 2. **Mock**: offline deterministic prefix, used for tests and interaction demos.
 3. **Optional local gateway**: Python standard library, http://127.0.0.1:18790/v1. Default enabled backend is Ollama; other integrations require explicit config. Direct remote services work on every supported device without this service.
 
-`provider.chain = [{ profileId, model }, …]` can span profiles and endpoints. Cooldown is scoped to profile plus model. 429/502/503/network failures immediately try the next non-cooling candidate; a busy provider merely queues work. Actual fallback identity participates in cache keys. Subscription CLI models remain explicit-only. Free-model fallback cannot bypass an account's daily/minute quotas or guarantee availability.
+`provider.chain = [{ profileId, model }, …]` can span profiles and endpoints. Cooldown is scoped to profile plus model. 404/429/502/503/network failures immediately try the next non-cooling candidate; a busy provider merely queues work. Actual fallback identity participates in cache keys. Subscription CLI models remain explicit-only. Free-model fallback cannot bypass an account's daily/minute quotas or guarantee availability.
+
+Hermes discovery intersects the proxy catalog and configured free-model allowlist. An actual 404 hides the model for 30 minutes; catalog discovery itself makes no completion calls and cannot prove provider availability. One-click gateway setup uses only that discovered catalog, while a fresh gateway profile still defaults to Ollama without automatic fallback.
 
 Optional config is ~/.duallens/gateway.json, merged over defaults. The [example](../gateway/gateway.example.json) contains no credentials. Backend model lists are explicit allowlists. For custom Ollama models, change ollama.models and choose the corresponding ollama/<model> identifier in extension settings.
 

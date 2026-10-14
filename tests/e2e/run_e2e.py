@@ -760,7 +760,8 @@ def paragraph_edit(h: Session) -> None:
 def never_wake(h: Session) -> None:
     h.settings({'siteRules': {'never': ['127.0.0.1']}})
     h.open('article.html')
-    check(h.state()['dormant'], 'never site not dormant')
+    # Settings load asynchronously after start(); poll instead of sampling the first answer.
+    h.wait_state(lambda st: st and st.get('dormant'), 10, 'never site dormant')
     check(h.js("() => document.querySelectorAll('dl-ui').length") == 0, 'dormant site contains extension UI')
     h.settings({'siteRules': {'never': [], 'always': ['127.0.0.1']}})
     h.wait_units(['#p-plain'])

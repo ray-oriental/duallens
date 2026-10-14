@@ -15,16 +15,23 @@ export function asFetch(http) {
   return async (url, options = {}) => {
     const res = await http({ url, method: options.method || 'GET', headers: options.headers,
       // Provider owns its timeout via AbortSignal (including longer gateway profiles).
-      body: options.body, signal: options.signal, timeoutMs: 0 });
+      body: options.body, signal: options.signal, timeoutMs: 0, onText: options.onText });
     return { status: res.status, headers: res.headers, text: async () => res.text };
   };
 }
 
 export function createGMHttp(xmlhttpRequest) {
-  return ({ url, method = 'GET', headers = {}, body, timeoutMs = 60000, signal }) => new Promise((resolve, reject) => {
+  return ({ url, method = 'GET', headers = {}, body, timeoutMs = 60000, signal, onText }) => new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
     let handle;
-    let settled = false;
+    let settled = false, offset = 0;
+    const progress = r => {
+      if (settled || !onText || !r.status || !r.responseHeaders || typeof r.responseText !== 'string') return;
+      const delta = r.responseText.slice(offset); offset = r.responseText.length;
+      if (!delta) return;
+      try { onText(delta, r.status, responseHeaders(r.responseHeaders)); }
+      catch (error) { finish(reject, error); handle?.abort(); }
+    };
     const finish = (fn, value) => {
       if (settled) return;
       settled = true;
@@ -41,7 +48,8 @@ export function createGMHttp(xmlhttpRequest) {
       if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error('Invalid URL');
       handle = xmlhttpRequest({ url: target.href, method, headers, data: body, timeout: timeoutMs,
         anonymous: true, responseType: 'text',
-        onload: (r) => finish(resolve, { status: r.status, headers: responseHeaders(r.responseHeaders), text: r.responseText || '' }),
+        onprogress: progress, onreadystatechange: progress,
+        onload: (r) => { progress(r); finish(resolve, { status: r.status, headers: responseHeaders(r.responseHeaders), text: r.responseText || '' }); },
         onerror: () => finish(reject, new Error('Network request failed')),
         ontimeout: () => finish(reject, new Error('Network request timed out')),
         onabort: () => finish(reject, new DOMException('Aborted', 'AbortError')),
@@ -53,14 +61,31 @@ export function createGMHttp(xmlhttpRequest) {
 
 // This adapter is for a service-worker caller, never for userscript requests.
 export function createFetchHttp(fetchImpl) {
-  return async ({ url, method = 'GET', headers, body, timeoutMs = 60000, signal }) => {
+  return async ({ url, method = 'GET', headers, body, timeoutMs = 60000, signal, onText }) => {
     const ctrl = new AbortController();
     const abort = () => ctrl.abort();
     if (signal?.aborted) abort();
     signal?.addEventListener('abort', abort, { once: true });
-    const timer = setTimeout(abort, timeoutMs);
+    const timer = timeoutMs > 0 ? setTimeout(abort, timeoutMs) : null;
     try {
       const res = await fetchImpl(url, { method, headers, body, signal: ctrl.signal, credentials: 'omit', cache: 'no-store' });
+      if (onText && res.body?.getReader && /text\/event-stream/i.test(res.headers.get('content-type') || '')) {
+        const reader = res.body.getReader(), decoder = new TextDecoder();
+        let text = '';
+        try {
+          while (true) {
+            const part = await reader.read();
+            if (part.done) break;
+            const delta = decoder.decode(part.value, { stream: true }); text += delta;
+            if (text.length > 4 * 1024 * 1024) throw new Error('Response too large');
+            onText(delta, res.status, res.headers);
+          }
+          const tail = decoder.decode(); text += tail;
+          if (tail) onText(tail, res.status, res.headers);
+          return { status: res.status, headers: res.headers, text };
+        } catch (error) { await reader.cancel().catch(() => {}); throw error; }
+        finally { reader.releaseLock(); }
+      }
       return { status: res.status, headers: res.headers, text: await res.text() };
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   };

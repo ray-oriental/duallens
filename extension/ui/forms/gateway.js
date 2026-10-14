@@ -3,7 +3,9 @@ import { DEFAULT_SETTINGS } from '../../shared/settings.js';
 import { isPairingHost } from '../../background/providers.js';
 
 export const PAIR_PREFIX = 'duallens-pair:v1:';
-export const FREE_HERMES = new Set(['hermes/inclusionai/ling-3.1-flash', 'hermes/meituan/longcat-2.0:free', 'hermes/upstage/solar-mini4:free']);
+// Conservative automatic choice: the proxy can list models that actually return 404.
+// Other configured Hermes models remain available for explicit manual selection.
+export const FREE_HERMES = new Set(['hermes/upstage/solar-mini4:free']);
 export function pairingUrl(value) {
   if (typeof value !== 'string') throw new Error('配对地址无效');
   const u = new URL(value);

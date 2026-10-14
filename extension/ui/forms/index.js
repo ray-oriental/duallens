@@ -109,7 +109,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     fill('providerChain', JSON.stringify(chain, null, 2));
   }
   async function draw() {
-    fill('comicsSites',settings.comics.canvasSites.join('\n'));
+    fill('comicsSites',settings.comics.canvasSites.map(site=>typeof site==='string'?site:JSON.stringify(site)).join('\n'));
     for (const id of simple) fill(id, settings[id]);
     for (const [id, path] of Object.entries(bind)) fill(id, path.split('.').reduce((v, k) => v[k], settings));
     fill('glossary', settings.glossary.map(t => `${t.src} → ${t.dst}`).join('\n'));
@@ -125,7 +125,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   function collect() {
     captureProfile();
     const next = structuredClone(settings);
-    next.comics.canvasSites=lines(read('comicsSites'));
+    next.comics.canvasSites=lines(read('comicsSites')).map(site=>site.startsWith('{')?JSON.parse(site):site);
     for (const id of simple) next[id] = read(id);
     for (const [id, path] of Object.entries(bind)) {
       const parts = path.split('.'); next[parts[0]][parts[1]] = read(id);

@@ -85,8 +85,8 @@ class GatewayTests(unittest.TestCase):
         for invalid in [True, 0, "300", 99999]:
             p = self.payload();p["max_tokens"] = invalid
             self.assertEqual(self.call("POST", "/v1/chat/completions", p)[0], 400)
-    def test_stream_and_multimodal_denied(self):
-        p = self.payload();p["stream"] = True
+    def test_invalid_stream_and_multimodal_denied(self):
+        p = self.payload();p["stream"] = "yes"
         self.assertEqual(self.call("POST", "/v1/chat/completions", p)[0], 400)
         p = self.payload();p["messages"][0]["content"] = [{"type": "image"}]
         self.assertEqual(self.call("POST", "/v1/chat/completions", p)[0], 400)
@@ -120,7 +120,7 @@ class GatewayTests(unittest.TestCase):
         self.g.request = fail
         for _ in range(2):
             with self.assertRaises(GatewayError):
-                self.g.chat(self.payload("hermes/inclusionai/ling-3.1-flash"))
+                self.g.chat(self.payload("hermes/upstage/solar-mini4:free"))
         self.assertEqual(len(calls), 1)
     def test_subscription_manual_without_daily_cap(self):
         self.assertEqual(self.g.config["claude"]["daily_limit"], 0)

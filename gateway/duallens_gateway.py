@@ -29,7 +29,7 @@ DEFAULTS = {
     "remote": {"enabled": False, "port": 18791},
     "sjtu": {"enabled": False, "url": "http://127.0.0.1:18765", "models": ["deepseek-chat"]},
     "hermes": {"enabled": False, "url": "http://127.0.0.1:8645", "models": [
-        "inclusionai/ling-3.1-flash", "meituan/longcat-2.0:free", "upstage/solar-mini4:free"]},
+        "upstage/solar-mini4:free"]},
     "ollama": {"enabled": True, "url": "http://127.0.0.1:11434", "models": ["qwen3:4b", "gpt-oss:20b"]},
     "claude": {"enabled": False, "models": ["haiku", "sonnet"], "daily_limit": 0},
     "codex": {"enabled": False, "models": ["default"], "daily_limit": 0},
@@ -169,6 +169,11 @@ def setup(home=HOME, ask=input, output=print, probe=backend_status):
         output(name + (": available (login not checked)" if available else ": unavailable"))
         answer = ask("Enable " + name + "? [y/N] ").strip().lower()
         conf[name]["enabled"] = answer in ("y", "yes")
+    if conf["hermes"]["enabled"]:
+        # Retain only the explicit free-model allowlist intersection, never add
+        # arbitrary models advertised by the proxy.
+        discovery = Gateway(home, config=conf)
+        conf["hermes"]["models"] = discovery.hermes_models()
     # Setup never enables remote access; explicit local config is required.
     home.mkdir(parents=True, exist_ok=True)
     (home / "gateway.json").write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
@@ -225,12 +230,75 @@ def loopback_request(url, body=None, headers=None, timeout=120):
         retry = retry_seconds(exc.headers.get("Retry-After"))
         # Never reflect raw upstream messages: these may include credentials or source text.
         raise GatewayError(exc.code, "upstream_auth_failed" if exc.code in (401, 403) else
-                           "rate_limited" if exc.code == 429 else "upstream_error",
+                           "rate_limited" if exc.code == 429 else "model_not_found" if exc.code == 404 else "upstream_error",
                            "Upstream returned HTTP " + str(exc.code), retry) from None
     except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError, OSError):
         raise GatewayError(503, "backend_unavailable", "Local backend unavailable", 60) from None
     except (ValueError, TypeError):
         raise GatewayError(502, "upstream_error", "Invalid upstream JSON") from None
+
+def manifest_version():
+    try:
+        return json.loads((Path(__file__).resolve().parents[1] / "extension/manifest.json").read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError):
+        return "unknown"
+
+
+def stream_event(model, text, finish=None):
+    return {"object": "chat.completion.chunk", "model": model,
+            "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": finish}]}
+
+
+def loopback_stream(url, body, headers=None, timeout=45):
+    """Read bounded SSE events; socket timeout is an inactivity timeout, not total duration."""
+    local_url(url)
+    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "text/event-stream", **(headers or {})})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            if "text/event-stream" not in resp.headers.get("Content-Type", ""):
+                raw = resp.read(MAX_BODY * 4 + 1)
+                if len(raw) > MAX_BODY * 4:
+                    raise GatewayError(502, "upstream_error", "Upstream response too large")
+                result = json.loads(raw)
+                yield stream_event(body["model"], result["choices"][0]["message"]["content"], "stop")
+                return
+            data, size, last_progress = [], 0, time.monotonic()
+            while True:
+                line = resp.readline(MAX_BODY + 1)
+                if time.monotonic() - last_progress > timeout:
+                    raise GatewayError(504, "backend_timeout", "Upstream stream made no progress", 60)
+                if not line:
+                    raise GatewayError(502, "upstream_error", "Upstream stream interrupted")
+                size += len(line)
+                if len(line) > MAX_BODY or size > MAX_BODY * 4:
+                    raise GatewayError(502, "upstream_error", "Upstream response too large")
+                line = line.decode("utf-8").rstrip("\r\n")
+                if not line:
+                    if not data:
+                        continue
+                    value = "\n".join(data); data = []
+                    if value == "[DONE]":
+                        return
+                    event = json.loads(value)
+                    if not isinstance(event, dict) or "error" in event:
+                        raise GatewayError(502, "upstream_error", "Upstream stream failed")
+                    delta = (event.get("choices") or [{}])[0].get("delta", {})
+                    if delta.get("content") or delta.get("reasoning_content"):
+                        last_progress = time.monotonic()
+                    yield event
+                elif line.startswith("data:"):
+                    data.append(line[5:].lstrip(" "))
+    except urllib.error.HTTPError as exc:
+        raise GatewayError(exc.code, "model_not_found" if exc.code == 404 else
+            "upstream_auth_failed" if exc.code in (401, 403) else "upstream_error",
+            "Upstream returned HTTP " + str(exc.code), retry_seconds(exc.headers.get("Retry-After"))) from None
+    except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError, OSError):
+        raise GatewayError(503, "backend_unavailable", "Local backend stream unavailable", 60) from None
+    except (ValueError, TypeError, KeyError, IndexError):
+        raise GatewayError(502, "upstream_error", "Invalid upstream stream") from None
+
 
 def proxy_environment():
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("ANTHROPIC_", "CLAUDE_")) and k.upper() not in ("OPENAI_API_KEY", "OPENAI_BASE_URL")}
@@ -271,12 +339,16 @@ def completion(model, text):
                          "message": {"role": "assistant", "content": text}}]}
 
 class Gateway:
-    def __init__(self, home=HOME, config=None, request=loopback_request):
+    def __init__(self, home=HOME, config=None, request=loopback_request, stream_request=loopback_stream):
         self.home, self.config, self.request = home, config or config_load(home), request
         self.lock = threading.Lock()
         self.cooldown, self.usage = {}, {}
+        self.not_found = {}
         self.auth_failures = {}
-        self.limits = {name: threading.BoundedSemaphore(1 if name in ("claude", "codex") else 2)
+        self.stream_request = stream_request
+        self.hermes_catalog = (0, [])
+        self.catalog_lock = threading.Lock()
+        self.limits = {name: threading.BoundedSemaphore(1 if name in ("claude", "codex") else 4 if name == "ollama" else 2)
                        for name in ("sjtu", "hermes", "ollama", "claude", "codex")}
         self.large_model_lock = threading.BoundedSemaphore(1)
         self.home.mkdir(parents=True, exist_ok=True)
@@ -321,16 +393,32 @@ class Gateway:
             with self.metadata_path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record) + "\n")
 
+    def hermes_models(self):
+        with self.catalog_lock:
+            until, ids = self.hermes_catalog
+            if until > time.monotonic():
+                return ids
+            try:
+                result = self.request(local_url(self.config["hermes"]["url"]) + "/v1/models", timeout=5)
+                available = {m["id"] for m in result.get("data", []) if isinstance(m, dict) and isinstance(m.get("id"), str)}
+                ids = [m for m in self.config["hermes"].get("models", []) if m in available]
+                self.hermes_catalog = (time.monotonic() + 600, ids)
+            except GatewayError:
+                # Do not advertise a stale or unreachable model. Short negative cache.
+                ids = []; self.hermes_catalog = (time.monotonic() + 15, ids)
+            return ids
+
     def models(self):
         return {"object": "list", "data": [{"id": name + "/" + model, "object": "model",
                     "owned_by": name} for name in self.limits if self.config.get(name, {}).get("enabled")
-                    for model in self.config[name].get("models", [])]}
+                    for model in (self.hermes_models() if name == "hermes" else self.config[name].get("models", []))
+                    if self.not_found.get(name + "/" + model, 0) <= time.monotonic()]}
 
     def validate(self, payload):
         if not isinstance(payload, dict):
             raise GatewayError(400, "invalid_request", "JSON object required")
         model = payload.get("model", "")
-        if not isinstance(model, str) or model not in {m["id"] for m in self.models()["data"]}:
+        if not isinstance(model, str) or model not in {name + "/" + m for name in self.limits if self.config[name].get("enabled") for m in self.config[name].get("models", [])}:
             raise GatewayError(400, "unknown_model", "Choose a model from /v1/models")
         messages = payload.get("messages")
         if not isinstance(messages, list) or not messages or len(messages) > 100:
@@ -338,8 +426,8 @@ class Gateway:
         for msg in messages:
             if not isinstance(msg, dict) or msg.get("role") not in ("system", "user", "assistant") or not isinstance(msg.get("content"), str):
                 raise GatewayError(400, "invalid_request", "Only text messages are supported")
-        if payload.get("stream"):
-            raise GatewayError(400, "unsupported", "Streaming is not supported")
+        if not isinstance(payload.get("stream", False), bool):
+            raise GatewayError(400, "invalid_request", "stream must be a boolean")
         budget = payload.get("max_tokens", 2048)
         if isinstance(budget, bool) or not isinstance(budget, int) or not 1 <= budget <= 8192:
             raise GatewayError(400, "invalid_request", "max_tokens must be an integer from 1 to 8192")
@@ -417,7 +505,7 @@ class Gateway:
             except (ValueError, OSError, KeyError):
                 raise GatewayError(502, "upstream_error", "Invalid subscription CLI output") from None
 
-    def chat(self, payload):
+    def chat(self, payload, on_chunk=None):
         model, messages = self.validate(payload)
         backend, suffix = model.split("/", 1)
         started = time.monotonic()
@@ -447,7 +535,8 @@ class Gateway:
                 return completion(model, self.cli(backend, suffix, messages))
             base = local_url(self.config[backend]["url"])
             forwarded = {k: payload[k] for k in ("messages", "temperature", "max_tokens", "response_format") if k in payload}
-            forwarded.update(model=suffix, stream=False)
+            streaming = payload.get("stream", False) and on_chunk is not None
+            forwarded.update(model=suffix, stream=streaming)
             forwarded.setdefault("max_tokens", 2048)
             headers = {}
             if backend == "sjtu":
@@ -471,23 +560,45 @@ class Gateway:
                 forwarded.update(reasoning_effort="none" if "qwen3" in suffix else "low", keep_alive="10m", temperature=0)
             if backend == "hermes":
                 forwarded["reasoning_effort"] = "none"
+            timeout = 45 if backend == "sjtu" else 120
+            if streaming:
+                sent = False
+                for attempt in range(3):
+                    try:
+                        for event in self.stream_request(base + "/v1/chat/completions", forwarded, headers, timeout=timeout):
+                            event["model"] = model
+                            on_chunk(event); sent = True
+                        return None
+                    except GatewayError as exc:
+                        if not sent and exc.status == 400 and backend == "hermes" and "response_format" in forwarded:
+                            forwarded.pop("response_format"); continue
+                        if not sent and exc.status in (400, 422, 501):
+                            forwarded["stream"] = False
+                            result = self.request(base + "/v1/chat/completions", forwarded, headers, timeout=timeout)
+                            return result
+                        raise
             try:
-                result = self.request(base + "/v1/chat/completions", forwarded, headers, timeout=120)
+                result = self.request(base + "/v1/chat/completions", forwarded, headers, timeout=timeout)
             except GatewayError as exc:
                 if backend != "hermes" or exc.status != 400 or "response_format" not in forwarded:
                     raise
                 forwarded.pop("response_format")
-                result = self.request(base + "/v1/chat/completions", forwarded, headers, timeout=120)
+                result = self.request(base + "/v1/chat/completions", forwarded, headers, timeout=timeout)
             if not isinstance(result, dict) or not isinstance(result.get("choices"), list) or not result["choices"]:
                 raise GatewayError(502, "upstream_error", "Missing upstream choices")
             result["model"] = model
             return result
+        except ConnectionError:
+            status = 499
+            raise
         except GatewayError as exc:
             status = exc.status
-            if exc.status in (401, 403, 429, 502, 503, 504):
-                duration = 600 if backend == "hermes" and exc.status in (401, 403) else exc.retry_after or 60
+            if exc.status in (401, 403, 404, 429, 502, 503, 504):
+                duration = 1800 if exc.status == 404 else 600 if backend == "hermes" and exc.status in (401, 403) else exc.retry_after or 60
                 with self.lock:
                     self.cooldown[model] = time.monotonic() + duration
+                    if exc.status == 404:
+                        self.not_found[model] = self.cooldown[model]
             raise
         finally:
             if acquired:
@@ -546,6 +657,10 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def error(self, exc):
+        if getattr(self, "stream_started", False):
+            self.stream_send({"error": {"message": "Gateway stream failed", "code": exc.code, "type": "gateway_error"}})
+            self.close_connection = True
+            return
         self.respond(exc.status, {"error": {"message": str(exc), "code": exc.code, "type": "gateway_error"}}, exc.retry_after)
 
     def do_OPTIONS(self):
@@ -575,7 +690,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.guard()
             if self.path == "/health":
-                body = {"ok": True, "name": "DualLens", "version": "0.1.0"}
+                body = {"ok": True, "name": "DualLens", "version": manifest_version()}
             elif self.path == "/v1/models":
                 body = self.server.gateway.models()
             else:
@@ -583,6 +698,22 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(200, body)
         except GatewayError as exc:
             self.error(exc)
+
+    def stream_send(self, event):
+        if not getattr(self, "stream_started", False):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            if getattr(self, "allowed_origin", None):
+                self.send_header("Access-Control-Allow-Origin", self.allowed_origin)
+                self.send_header("Vary", "Origin")
+            self.end_headers()
+            self.stream_started = True
+            self.close_connection = True
+        data = event if isinstance(event, str) else json.dumps(event, ensure_ascii=False)
+        self.wfile.write(("data: " + data + "\n\n").encode("utf-8"))
+        self.wfile.flush()
 
     def do_POST(self):
         try:
@@ -602,7 +733,15 @@ class Handler(BaseHTTPRequestHandler):
             if len(raw) != length:
                 raise GatewayError(400, "invalid_request", "Incomplete request body")
             payload = json.loads(raw)
-            self.respond(200, self.server.gateway.chat(payload))
+            if isinstance(payload, dict) and payload.get("stream") is True:
+                result = self.server.gateway.chat(payload, on_chunk=self.stream_send)
+                if result is not None:
+                    self.stream_send(stream_event(payload["model"], result["choices"][0]["message"]["content"], "stop"))
+                self.stream_send("[DONE]")
+            else:
+                self.respond(200, self.server.gateway.chat(payload))
+        except ConnectionError:
+            self.close_connection = True
         except GatewayError as exc:
             self.error(exc)
         except (ValueError, TypeError, socket.timeout):

@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-14
+
+- Schedule novel paragraphs by their own source ranges rather than a shared tall host; preserve scroll discovery and avoid whole-story requests.
+- Reject approximate Japanese prose echoes before streamed display and recover unfinished omissions with the existing bounded batch-retry budget; prompt cache version 4.
+- Make real-page read probes resilient to document navigation and run Pixiv checks without a hard-coded HTTP proxy.
+
+- Stream OpenAI-compatible responses through extension fetch, userscript GM progress and optional gateway SSE; display completed items early and use smaller first-viewport batches.
+- Cool down and hide missing models after 404; discover Hermes models from the proxy catalog intersected with the configured free allowlist.
+- Split Pixiv novel paragraphs, place comic panels in document flow, and preserve PDF formula runs as placeholders.
+- Fix Pixiv image downloads with extension-scoped session Referer rules and anonymous GM headers; disabling comics/removing sites deletes rules.
+- Route floating-ball restore through common page/comic/subtitle commands; keep optional CDN metadata across settings edits.
+- Preserve validated neighboring translations when an unchanged proper name triggers model fallback in a JSON batch.
+- Keep numbered PDF table-of-contents leader rows separate; scope content-omission fallback to the current job instead of cooling a working model globally.
+- Bound malformed-cardinality recovery to eight additional half-batch/single-item requests per original batch without guessing item correspondence.
+- Forward detected source-language hints, reject unchanged Japanese prose, and clarify that JSON/formatting placeholders contain text to translate; increment the prompt cache version.
+
 ## [0.3.0] - 2026-10-13
 
 - Desktop PDF bilingual reading with local PDF.js rendering, selectable text, lazy nearby-paragraph translation, translation-only/restore, local-file selection and themes.

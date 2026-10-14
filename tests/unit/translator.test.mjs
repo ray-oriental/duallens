@@ -17,12 +17,68 @@ test('translates a request and reports each id exactly once', async () => {
   assert.equal(rig.provider.calls[0].model, 'm1');
 });
 
+test('a retained proper name does not discard validated neighboring JSON translations or their cache', async () => {
+  const provider=fakeProvider(async({segs})=>JSON.stringify({t:segs.map(s=>s.text==='Andrew Shi'?s.text:'讲义')}));
+  const rig=makeRig({provider,profile:testProfile({fallbackModels:['m2']})});
+  const result=await run(rig,{items:items('Lecture Notes','Andrew Shi'),streamItems:false});
+  assert.equal(textOf(result,'i1'),'讲义');
+  assert.equal(result.results.get('i2').error.code,ERR.PROVIDER);
+  assert.equal(result.total,2,'each item is reported exactly once');
+  assert.equal(await rig.cache.count(),1,'only the validated changed item enters cache');
+  assert.equal(rig.queue.stats().t.pausedForMs,0,'a content omission does not cool the entire model');
+});
+
+test('Japanese kana copied verbatim is an omission, never a successful Chinese translation or cache hit', async () => {
+  for(const from of ['ja','auto']) {
+  const provider=fakeProvider(async({segs,model})=>JSON.stringify({t:segs.map(s=>model==='m1'?s.text:'你好')}));
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('こんにちは'),from});
+  assert.equal(textOf(result,'i1'),'你好');assert.equal(provider.calls.length,2);
+  assert.equal(provider.calls[1].model,'m2');assert.equal(await rig.cache.count(),1);
+  }
+});
+
 test('the page title and target language reach the prompt', async () => {
   const rig = makeRig();
   await run(rig, { items: items('Hello'), to: 'ja', context: { title: 'My Title' } });
   const sys = rig.provider.calls[0].messages[0].content;
   assert.match(sys, /Japanese/);
   assert.match(sys, /My Title/);
+});
+
+test('Japanese prose with small edits is rejected before streamed display and falls back without caching it',async()=>{
+  const bad='あかりは、町のカフェで会うつもりだったけどね。';
+  const provider=async({model,onDelta})=>{
+    const content=JSON.stringify({t:[model==='m1'?bad:'明莉本来打算在镇上的咖啡馆见面。']});
+    onDelta?.(content);return content;
+  };
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('アカリは、町のカフェで会うつもりだったけどね。'),from:'ja'});
+  assert.equal(textOf(result,'i1'),'明莉本来打算在镇上的咖啡馆见面。');
+  assert.ok(result.batches.flat().every(item=>item.text!==bad));
+  assert.equal(await rig.cache.count(),1);
+});
+
+test('omitted multi-item Japanese batches recover as smaller batches within the shared retry budget',async()=>{
+  const provider=fakeProvider(({segs})=>JSON.stringify({t:segs.map(s=>segs.length>1?s.text:'你好')}));
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('こんにちは','ありがとう'),from:'ja'});
+  assert.equal(result.total,2);assert.equal(provider.calls.length,4);
+  assert.ok([...result.results.values()].every(r=>r.text==='你好'));
+  assert.equal(await rig.cache.count(),2);
+});
+
+test('a short retained hiragana name inside Chinese is not treated as Japanese prose',async()=>{
+  const provider=fakeProvider(()=>JSON.stringify({t:['你好，さくら。']}));
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('さくら、こんにちは。'),from:'ja'});
+  assert.equal(textOf(result,'i1'),'你好，さくら。');assert.equal(provider.calls.length,1);
+});
+
+test('explicit offline mock profiles keep their intentional source echo for DOM fixtures',async()=>{
+  const rig=makeRig({profile:testProfile({kind:'mock'})});
+  const result=await run(rig,{items:items('こんにちは、いい天気ですね。'),from:'ja'});
+  assert.equal(textOf(result,'i1'),'【译】こんにちは、いい天気ですね。');
 });
 
 test('cache: a second identical request is answered without calling the model', async () => {

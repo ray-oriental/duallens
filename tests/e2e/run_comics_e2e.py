@@ -12,8 +12,23 @@ import time
 import run_e2e as runner
 
 REQUESTS=[]
+
+def wait_csp_safe(h, expression, timeout=15):
+    # Playwright 1.48's wait_for_function polls through eval on CSP-restricted pages.
+    # Evaluate the predicate directly; keep the tested page's CSP unchanged.
+    deadline=time.monotonic()+timeout
+    while time.monotonic()<deadline:
+        if h.js(expression): return
+        h.page.wait_for_timeout(50)
+    raise AssertionError('CSP-safe condition timed out: '+expression)
+
 class Handler(runner._QuietHandler):
     def do_GET(self):
+        if self.path=='/comics/referer.png':
+            if self.headers.get('Referer')!=f'http://{self.headers["Host"]}/':
+                self.send_response(403);self.end_headers();return
+            data=(runner.FIXTURES/'comics/eng.png').read_bytes()
+            self.send_response(200);self.send_header('Content-Type','image/png');self.end_headers();self.wfile.write(data);return
         if self.path.startswith('/comics-runtime/'):
             name=self.path.rsplit('/',1)[1]
             if name not in ['worker.min.js','tesseract-core-simd-lstm.wasm.js']:
@@ -49,7 +64,9 @@ class Handler(runner._QuietHandler):
         request=json.loads(body)
         user=request['messages'][-1]['content']
         content=json.loads(user.split('<input>',1)[1].split('</input>',1)[0])
-        response=json.dumps({'choices':[{'message':{'content':json.dumps({'t':['【译】'+text for text in content['t']]},ensure_ascii=False)}}]},ensure_ascii=False).encode()
+        # This recorder is a text transport fixture, not a Japanese translation model.
+        translated=['【译】模拟中文' if any('\u3040'<=c<='\u309f' for c in text) else '【译】'+text for text in content['t']]
+        response=json.dumps({'choices':[{'message':{'content':json.dumps({'t':translated},ensure_ascii=False)}}]},ensure_ascii=False).encode()
         self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(response)));self.end_headers();self.wfile.write(response)
 
 def fixtures():
@@ -127,6 +144,21 @@ def comics_ocr(h):
         runner.check(not any(s in raw for s in ['data:image','base64','image_url','127.0.0.1','jpn.png','kor.png','eng.png']),'image or page URL escaped to translation service')
     return 'real OCR p50_ms='+str(round(statistics.median(m['ocrMs'] for m in metrics),2))+' metrics='+json.dumps(metrics)+' recognition='+json.dumps(quality,ensure_ascii=False)
 
+@runner.case('page_source_language','Detected Japanese reaches prompt; edited short text does not keep a stale hint')
+def page_source_language(h):
+    setup(h,'eng');h.open('comics/index.html');REQUESTS.clear()
+    h.js("() => {const p=document.createElement('p');p.id='ja-hint';p.textContent='今日はいい天気ですね。';document.body.prepend(p)}")
+    settings_v2(h,{'sourceLang':'auto','siteRules':{'custom':[{'match':'127.0.0.1','include':['#ja-hint'],'exclude':[]}]}})
+    h.page.wait_for_timeout(400);h.command('toggle-page')
+    h.wait_js("() => !!document.querySelector('#ja-hint dl-t[data-dl-state=done]')")
+    runner.check(any('源语言：Japanese' in json.loads(body)['messages'][0]['content'] for body in REQUESTS),'Japanese hint missing')
+    h.command('toggle-page');REQUESTS.clear()
+    h.js("() => document.querySelector('#ja-hint').textContent='One short phrase'")
+    h.command('toggle-page');h.wait_js("() => !!document.querySelector('#ja-hint dl-t[data-dl-state=done]')")
+    runner.check(any('源语言：自动识别' in json.loads(body)['messages'][0]['content'] for body in REQUESTS),'stale Japanese hint')
+    h.command('toggle-page')
+    return 'language hint forwarded and reset after edit; mock-only'
+
 @runner.case('comics_403','Referer rejection preserves image and displays HTTP 403')
 def comics_403(h):
     setup(h,'eng');h.open('comics/403.html');before=h.js('() => document.body.outerHTML')
@@ -136,6 +168,46 @@ def comics_403(h):
     h.wait_state(lambda s: bool(s.get('comics')) and '403' in s['comics'][0]['status'],30,'403 comic failure')
     h.command('restore-comics');runner.check(h.js('() => document.body.outerHTML')==before,'403 restore changed DOM')
     runner.check(len(REQUESTS)==requests_before,'403 still sent a translation request')
+
+@runner.case('comics_referer_rules','Real DNR sets Referer only for extension initiator, follows remove/disable, floatball restores comics')
+def comics_referer_rules(h):
+    setup(h,'eng');h.open('comics/index.html')
+    entry={'host':'127.0.0.1','imageHosts':['127.0.0.1'],'referer':h.base+'/'}
+    settings_v2(h,{'comics':{'enabled':True,'canvasSites':[entry]}})
+    options=h.ctx.new_page()
+    try:
+        options.goto(f'chrome-extension://{h.ext_id}/ui/options.html')
+        options.locator('#save:enabled').wait_for()
+        runner.check(json.loads(options.locator('#comicsSites').input_value())==entry,'settings form dropped CDN metadata')
+        options.click('#save')
+        options.locator('#save:enabled').wait_for()
+        saved=options.evaluate("async()=>{const {loadSettings}=await import('../shared/settings.js');return (await loadSettings()).comics.canvasSites}")
+        runner.check(saved==[entry],'saving settings lost CDN metadata')
+    finally:options.close()
+    h.sw_eval("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+    rules=h.sw_eval('() => chrome.declarativeNetRequest.getSessionRules()')
+    runner.check(len(rules)==1 and rules[0]['condition']['initiatorDomains']==[h.ext_id],str(rules))
+    runner.check(rules[0]['condition']['resourceTypes']==['xmlhttprequest','other'],str(rules))
+    url=h.base+'/comics/referer.png'
+    probe="async url=>{const r=await fetch(url,{credentials:'omit',cache:'no-store'});await r.arrayBuffer();return r.status}"
+    runner.check(h.sw_eval(probe,url)==200,'extension Referer was not set')
+    runner.check(h.js(probe,url)==403,'website XHR was modified by extension rule')
+    settings_v2(h,{'comics':{'canvasSites':[]}})
+    h.sw_eval("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+    runner.check(h.sw_eval(probe,url)==403,'removed site left a rule active')
+    settings_v2(h,{'comics':{'canvasSites':[entry],'enabled':False}})
+    h.sw_eval("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+    runner.check(h.sw_eval('() => chrome.declarativeNetRequest.getSessionRules()')==[],'disabled comics left session rules')
+    settings_v2(h,{'comics':{'enabled':True,'canvasSites':['*.pixiv.net']}})
+    h.js("() => document.querySelectorAll('figure').forEach(f=>{if(f.firstElementChild.id!=='eng')f.style.display='none'})")
+    before=h.js('() => document.body.outerHTML')
+    h.command('translate-comics')
+    h.wait_state(lambda s: bool(s.get('comics')) and len(s['comics'][0]['items'])==2,30,'local OCR before floatball restore')
+    width,height=h.page.viewport_size.values()
+    h.page.mouse.click(width-28,round(.6*(height-44))+22)
+    h.wait_state(lambda s: not s.get('comics') and not s.get('translated'),10,'floatball comic restore')
+    runner.check(h.js('() => document.body.outerHTML')==before,'floatball restore changed original DOM')
+    return 'scoped header set, website XHR untouched, rule removal/disable and floatball exact restore'
 
 @runner.case('comics_userscript','Bundled local userscript OCR through anonymous GM blob/arraybuffer mocks')
 def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
@@ -172,13 +244,13 @@ def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
     if allow_sites: h.js("() => {window.fixtureStorage['duallens:sync'].settings.comics.canvasSites=['127.0.0.1']}")
     if fallback: h.js("() => {window.GM_getResourceText=()=>{throw Error('Resource API unavailable')}}")
     h.page.add_script_tag(url=h.base+'/comics-bundle.js')
-    h.wait_js("() => !!window.fixtureCommands['翻译此页漫画']")
+    wait_csp_safe(h,"() => !!window.fixtureCommands['翻译此页漫画']")
     runner.check(h.js('() => window.fixtureResourceReads.length')==0,'ordinary page parsed/read OCR resources at startup')
     native=h.js("() => CanvasRenderingContext2D.prototype.drawImage.toString().includes('[native code]')")
     runner.check(native!=allow_sites,'userscript canvas hook did not follow opt-in whitelist')
     h.js("() => window.fixtureCommands['翻译此页漫画']()")
     if blocked:
-        h.wait_js("() => window.fixtureRoots.length && /此页无法本地识别/.test(window.fixtureRoots[0].querySelector('[role=status]').textContent)",timeout=10)
+        wait_csp_safe(h,"() => window.fixtureRoots.length && /此页无法本地识别/.test(window.fixtureRoots[0].querySelector('[role=status]').textContent)",timeout=10)
         runner.check(h.js('() => window.fixtureRequests.length')==0,'CSP failure still downloaded or uploaded data')
         h.js("() => window.fixtureCommands['恢复漫画原文']()")
         runner.check(h.js('() => document.body.outerHTML')==before,'CSP failure restore changed DOM')

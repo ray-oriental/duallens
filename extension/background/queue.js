@@ -8,7 +8,7 @@ export function createQueue(options = {}) {
   const states = new Map(), live = new Set();
   let seq = 0, timer = null;
   function state(profile) {
-    if (!states.has(profile.id)) states.set(profile.id, { profile, running: 0, cooldowns: new Map(), rates: new Map() });
+    if (!states.has(profile.id)) states.set(profile.id, { profile, running: 0, cooldowns: new Map(), rates: new Map(), missing: new Map() });
     const s = states.get(profile.id); s.profile = profile; return s;
   }
   function candidates(profile, chain) {
@@ -42,9 +42,15 @@ export function createQueue(options = {}) {
     const pending = [...live].filter(j => !j.running && !j.settled).sort((a, b) => a.priority - b.priority || a.seq - b.seq);
     let earliest = Infinity;
     for (const job of pending) {
-      const candidate = job.chain.find(ready);
+      const eligible=job.chain.filter(c=>!job.skipped.has(JSON.stringify([c.profile.id,c.model])));
+      if(!eligible.length) {settle(job,false,job.contentError);continue;}
+      const missing = eligible.map(c => state(c.profile).missing.get(c.model));
+      if (missing.every(m => m && m.until > cfg.now())) {
+        settle(job, false, missing[0].error); continue;
+      }
+      const candidate = eligible.find(ready);
       if (!candidate) {
-        for (const c of job.chain) if (capacity(c)) earliest = Math.min(earliest, state(c.profile).cooldowns.get(c.model) || 0);
+        for (const c of eligible) if (capacity(c)) earliest = Math.min(earliest, state(c.profile).cooldowns.get(c.model) || 0);
         continue;
       }
       // A busy primary queues normally; only cooldown/failure makes a backup eligible.
@@ -58,14 +64,20 @@ export function createQueue(options = {}) {
         if (job.settled) return;
         if (isCancelled(error)) return settle(job, false, cancelledError());
         if (error?.code === ERR.CONFIG) return settle(job, false, error);
-        if (Number.isInteger(error?.status) && ![429, 502, 503].includes(error.status)) return settle(job, false, error);
-        let wait = cfg.cooldownMs;
+        // Content omissions affect this job, not availability of the whole model.
+        if(error?.serverCode==='untranslated_items') {
+          job.skipped.add(JSON.stringify([profile.id,model]));job.contentError=error;return;
+        }
+        const missingModel = error?.status === 404 && ['model_not_found', 'unknown_model'].includes(error.serverCode);
+        if (Number.isInteger(error?.status) && ![429, 502, 503, 504].includes(error.status) && !missingModel) return settle(job, false, error);
+        let wait = missingModel ? 30 * 60 * 1000 : cfg.cooldownMs;
         if (error?.code === ERR.RATE_LIMITED) {
           const streak = (s.rates.get(model) || 0) + 1; s.rates.set(model, streak);
           wait = Number.isFinite(error.retryAfterMs) ? Math.max(0, error.retryAfterMs)
             : Math.min(cfg.maxBackoffMs, cfg.baseBackoffMs * 2 ** (streak - 1));
         }
         s.cooldowns.set(model, Math.max(s.cooldowns.get(model) || 0, cfg.now() + wait));
+        if (missingModel) s.missing.set(model, { until: cfg.now() + wait, error });
         if (job.attempts >= Math.max(cfg.maxAttempts, job.chain.length)) settle(job, false, error);
       }).finally(() => { job.running = false; s.running--; pump(); });
     }
@@ -77,7 +89,7 @@ export function createQueue(options = {}) {
       const list = candidates(profile, chain);
       if (!list.length) return reject(new Error('No model configured'));
       const job = { seq: ++seq, chain: list, priority, reqId, run, resolve, reject,
-        attempts: 0, ctrl: new AbortController(), settled: false, running: false };
+        attempts: 0, skipped:new Set(), ctrl: new AbortController(), settled: false, running: false };
       if (signal) {
         const abort = () => cancelJob(job); signal.addEventListener('abort', abort, { once: true });
         job.unlink = () => signal.removeEventListener('abort', abort);

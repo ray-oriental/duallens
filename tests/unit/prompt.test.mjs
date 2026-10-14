@@ -18,6 +18,11 @@ test('XML and quote injection remains source data',()=>{
  assert.equal(JSON.parse(messages[1].content.slice(messages[1].content.indexOf('{'),messages[1].content.lastIndexOf('}')+1)).t[0],source);
 });
 const ids=new Map([[1,'a'],[2,'b']]);
+test('Japanese-to-Chinese requests retain source hints and explicit prose translation guidance',()=>{
+ const{messages}=buildMessages({items,to:'zh-CN',from:'ja'});
+ assert.match(messages[0].content,/源语言：Japanese/);
+ assert.match(messages[0].content,/日语正文和对话必须译成中文/);assert.equal(PROMPT_VERSION,4);
+});
 test('JSON object, array, fences and surrounding prose',()=>{
  for(const text of['{"t":["甲","乙"]}','["甲","乙"]','\x60\x60\x60json\n{"t":["甲","乙"]}\n\x60\x60\x60','text {"t":["甲","乙"]} text'])assert.deepEqual([...parseSegments(text,ids).results],[['a','甲'],['b','乙']]);
 });

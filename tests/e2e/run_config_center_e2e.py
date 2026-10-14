@@ -7,7 +7,7 @@ import run_e2e as e2e
 import run_userscript_e2e as userscript
 
 TOKEN = 'A' * 43
-MODELS = ['sjtu/deepseek-chat', 'hermes/upstage/solar-mini4:free', 'ollama/qwen3:4b', 'claude/haiku', 'codex/default']
+MODELS = ['sjtu/deepseek-chat', 'hermes/inclusionai/ling-3.1-flash', 'hermes/meituan/longcat-2.0:free', 'hermes/upstage/solar-mini4:free', 'ollama/qwen3:4b', 'claude/haiku', 'codex/default']
 PAIR = 'duallens-pair:v1:' + base64.urlsafe_b64encode(json.dumps({
     'urls': ['http://127.0.0.1:18790/v1', 'http://100.100.2.3:18791/v1'], 'token': TOKEN
 }).encode()).decode().rstrip('=')
@@ -48,7 +48,7 @@ def extension_case(pw, run):
         page.click('#connect-gateway')
         page.locator('#status').filter(has_text='已建立').wait_for()
         chain = json.loads(page.locator('#providerChain').input_value())
-        assert [c['model'] for c in chain] == MODELS[:3]
+        assert [c['model'] for c in chain] == ['sjtu/deepseek-chat','hermes/upstage/solar-mini4:free','ollama/qwen3:4b']
         page.click('#save')
         page.locator('#status').filter(has_text='已保存').wait_for()
         page.locator('#pairingText').fill(PAIR)
@@ -99,7 +99,7 @@ GM_MOCK = r"""(() => {
   window.GM_xmlhttpRequest = req => {
     __configCalls.push({url:req.url,paired:req.headers.Authorization==='Bearer '+ 'A'.repeat(43),anonymous:req.anonymous});
     const timer=setTimeout(()=>req.onload({status:200,responseHeaders:'',responseText:JSON.stringify(req.url.endsWith('/health')
-      ? {ok:true,name:'DualLens'} : {data:['sjtu/deepseek-chat','hermes/upstage/solar-mini4:free','ollama/qwen3:4b','claude/haiku','codex/default'].map(id=>({id}))})}),10);
+      ? {ok:true,name:'DualLens'} : {data:['sjtu/deepseek-chat','hermes/inclusionai/ling-3.1-flash','hermes/meituan/longcat-2.0:free','hermes/upstage/solar-mini4:free','ollama/qwen3:4b','claude/haiku','codex/default'].map(id=>({id}))})}),10);
     return {abort(){clearTimeout(timer);req.onabort?.();}};
   };
 })();"""
