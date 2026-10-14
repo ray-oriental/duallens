@@ -285,7 +285,7 @@ export class PageTranslator {
       ready.push(u);
     }
 
-    const skipFlags = await Promise.all(ready.map((u) => this.#alreadyTarget(u.plain, s)));
+    const skipFlags = await Promise.all(ready.map((u) => this.#alreadyTarget(u.plain, s, u)));
     const send = [];
     ready.forEach((u, i) => {
       if (u.dead || this.units.get(u.id) !== u || u.state !== 'queued') return;
@@ -309,13 +309,15 @@ export class PageTranslator {
     this.lazy.unwatch(unit);
   }
 
-  async #alreadyTarget(plain, s) {
+  async #alreadyTarget(plain, s, unit) {
+    if(s.sourceLang==='auto') unit.from=looksLikeTarget(plain,'ja')?'ja':'auto';
     if (looksLikeTarget(plain, s.targetLang)) return true;
     if (plain.length < 24) return false;
     const det = await this.platform.detectLanguage(plain.slice(0, 400));
     const top = det && det.reliable && det.lang;
     if (!top) return false;
     const pct = det.percentage ?? 100;
+    if(s.sourceLang==='auto' && pct>=80) unit.from=normalizeLang(top);
     if (pct >= 70 && sameLanguage(normalizeLang(top), s.targetLang)) return true;
     if (s.sourceLang && s.sourceLang !== 'auto' && pct >= 80 && !sameLanguage(normalizeLang(top), s.sourceLang)) {
       return true;
@@ -327,16 +329,18 @@ export class PageTranslator {
     const s = this.s;
     const byPriority = new Map();
     for (const u of units) {
-      if (!byPriority.has(u.priority)) byPriority.set(u.priority, []);
-      byPriority.get(u.priority).push(u);
+      const key=JSON.stringify([u.priority,u.from||'auto']);
+      if (!byPriority.has(key)) byPriority.set(key, []);
+      byPriority.get(key).push(u);
     }
-    for (const [priority, list] of byPriority) {
+    for (const [key, list] of byPriority) {
+      const [priority,from]=JSON.parse(key);
       list.sort((a, b) => a.top - b.top);
       for (let i = 0; i < list.length; i += MAX_REQUEST_ITEMS) {
         const chunk = list.slice(i, i + MAX_REQUEST_ITEMS);
         const items = chunk.map((u) => ({ id: u.id, text: u.src }));
         const reqId = this.client.request(
-          { items, priority, to: s.targetLang, from: s.sourceLang || 'auto', context: this.#context() },
+          { items, priority, to: s.targetLang, from: s.sourceLang==='auto'?from:s.sourceLang||'auto', context: this.#context() },
           { onResults: (results) => this.#onResults(results), onDone: () => this.emit() },
         );
         for (const u of chunk) u.reqId = reqId;

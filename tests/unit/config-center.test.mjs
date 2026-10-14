@@ -24,8 +24,16 @@ test('pairing imports only strict loopback and Tailscale IPv4 endpoints', () => 
 });
 
 test('recommended gateway chain uses discovered SJTU then approved free Hermes then qwen3:4b; subscriptions manual only', () => {
-  const models = ['codex/default', 'claude/haiku', 'ollama/gpt-oss:20b', 'hermes/paid', 'ollama/qwen3:4b', 'hermes/upstage/solar-mini4:free', 'sjtu/deepseek-chat'];
+  const models = ['codex/default', 'claude/haiku', 'ollama/gpt-oss:20b', 'hermes/paid', 'hermes/inclusionai/ling-3.1-flash', 'hermes/meituan/longcat-2.0:free', 'ollama/qwen3:4b', 'hermes/upstage/solar-mini4:free', 'sjtu/deepseek-chat'];
   assert.deepEqual(gatewayChain(models.map(id => ({ id })), 'gateway'), ['sjtu/deepseek-chat', 'hermes/upstage/solar-mini4:free', 'ollama/qwen3:4b'].map(model => ({ profileId: 'gateway', model })));
+});
+
+test('comic CDN metadata survives settings validation and configuration backup import', () => {
+  const settings=structuredClone(DEFAULT_SETTINGS);
+  const entry={host:'*.comic.test',imageHosts:['cdn.comic.test'],referer:'https://www.comic.test/'};
+  settings.comics.canvasSites=['*.pixiv.net',entry];
+  assert.deepEqual(validateSettings(settings).comics.canvasSites,['*.pixiv.net',entry]);
+  assert.deepEqual(importSettings(publicSettings(settings),DEFAULT_SETTINGS).comics.canvasSites,['*.pixiv.net',entry]);
 });
 
 test('one-click discovery calls only health and model catalog, never completions', async () => {

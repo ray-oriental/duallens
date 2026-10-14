@@ -29,7 +29,7 @@ DEFAULTS = {
     "remote": {"enabled": False, "port": 18791},
     "sjtu": {"enabled": False, "url": "http://127.0.0.1:18765", "models": ["deepseek-chat"]},
     "hermes": {"enabled": False, "url": "http://127.0.0.1:8645", "models": [
-        "inclusionai/ling-3.1-flash", "meituan/longcat-2.0:free", "upstage/solar-mini4:free"]},
+        "upstage/solar-mini4:free"]},
     "ollama": {"enabled": True, "url": "http://127.0.0.1:11434", "models": ["qwen3:4b", "gpt-oss:20b"]},
     "claude": {"enabled": False, "models": ["haiku", "sonnet"], "daily_limit": 0},
     "codex": {"enabled": False, "models": ["default"], "daily_limit": 0},

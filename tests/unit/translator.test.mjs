@@ -17,6 +17,27 @@ test('translates a request and reports each id exactly once', async () => {
   assert.equal(rig.provider.calls[0].model, 'm1');
 });
 
+test('a retained proper name does not discard validated neighboring JSON translations or their cache', async () => {
+  const provider=fakeProvider(async({segs})=>JSON.stringify({t:segs.map(s=>s.text==='Andrew Shi'?s.text:'讲义')}));
+  const rig=makeRig({provider,profile:testProfile({fallbackModels:['m2']})});
+  const result=await run(rig,{items:items('Lecture Notes','Andrew Shi'),streamItems:false});
+  assert.equal(textOf(result,'i1'),'讲义');
+  assert.equal(result.results.get('i2').error.code,ERR.PROVIDER);
+  assert.equal(result.total,2,'each item is reported exactly once');
+  assert.equal(await rig.cache.count(),1,'only the validated changed item enters cache');
+  assert.equal(rig.queue.stats().t.pausedForMs,0,'a content omission does not cool the entire model');
+});
+
+test('Japanese kana copied verbatim is an omission, never a successful Chinese translation or cache hit', async () => {
+  for(const from of ['ja','auto']) {
+  const provider=fakeProvider(async({segs,model})=>JSON.stringify({t:segs.map(s=>model==='m1'?s.text:'你好')}));
+  const rig=makeRig({provider});
+  const result=await run(rig,{items:items('こんにちは'),from});
+  assert.equal(textOf(result,'i1'),'你好');assert.equal(provider.calls.length,2);
+  assert.equal(provider.calls[1].model,'m2');assert.equal(await rig.cache.count(),1);
+  }
+});
+
 test('the page title and target language reach the prompt', async () => {
   const rig = makeRig();
   await run(rig, { items: items('Hello'), to: 'ja', context: { title: 'My Title' } });

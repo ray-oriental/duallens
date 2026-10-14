@@ -7,12 +7,13 @@ export async function probeLocalOCR(env = globalThis) {
 }
 
 export function createGMImageFetch(xmlhttpRequest) {
-  return (url) => new Promise((resolve,reject) => {
+  return (url, referer = '') => new Promise((resolve,reject) => {
     let u;
     try { u = new URL(url); } catch { reject(new Error('图片地址无效')); return; }
     if (!['http:','https:'].includes(u.protocol) || u.username || u.password) { reject(new Error('图片地址无效')); return; }
     let handle;
     handle=xmlhttpRequest({ url: u.href, method: 'GET', anonymous: true, responseType: 'blob', timeout: 20000,
+      ...(referer ? {headers:{Referer:referer}} : {}),
       onprogress(r) { if(r.loaded>16*1024*1024) {handle?.abort();reject(new Error('图片超过 16 MB'));} },
       onload(r) {
         if (r.status !== 200) reject(new Error(`图片下载失败（HTTP ${r.status}）`));

@@ -43,14 +43,14 @@ class App {
       platform,
       getSettings: this.getSettings,
       ctx: {
-        toggle: () => this.translator.toggle(),
-        getState: () => this.translator.getState(),
+        toggle: () => this.#command(P.COMMANDS.TOGGLE_PAGE),
+        getState: () => ({...this.translator.getState(),translated:this.translator.isActive() || this.comics.panels.size>0 || this.subtitles.enabled}),
         siteMode: () => siteRuleFor(this.settings, HOST).mode,
         setSiteMode: (mode) => this.#setSiteMode(mode),
         saveSettings: (patch) => this.store.save(patch),
         translateInput: () => this.input.translateFocused(true),
-        translateComics: () => this.comics.start(),
-        restoreComics: () => this.comics.restore(),
+        translateComics: () => this.#command('translate-comics'),
+        restoreComics: () => this.#command('restore-comics'),
         openOptions: () => platform.openSettings(),
       },
     });

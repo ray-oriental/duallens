@@ -7,8 +7,8 @@ import { fetchImage,createComicHandlers } from '../../extension/background/comic
 import { verifyLanguage } from '../../extension/offscreen/language-store.js';
 import { detectTextRegions } from '../../extension/offscreen/detector.js';
 import { OCR_RESOURCES,createRuntimeLoader,verifyRuntime } from '../../extension/content/comics/runtime-resources.js';
-import { comicSites,comicSiteMatches,canvasMatches } from '../../extension/content/comics/sites.js';
-import { createCanvasRegistry } from '../../extension/background/comic-sites.js';
+import { comicSites,comicSiteMatches,canvasMatches,imageReferer } from '../../extension/content/comics/sites.js';
+import { createCanvasRegistry,createImageRegistry,imageRefererRules,IMAGE_RULE_BASE } from '../../extension/background/comic-sites.js';
 import { LANGUAGES } from '../../extension/content/comics/languages.js';
 import { ComicTranslator } from '../../extension/content/comics/controller.js';
 import { readFileSync } from 'node:fs';
@@ -60,6 +60,38 @@ test('GM image request is anonymous blob-only and reports 403 without a retry',a
   let calls=0;
   const request=createGMImageFetch(req=>{calls++;assert.equal(req.responseType,'blob');assert.equal(req.anonymous,true);assert.equal(req.headers,undefined);req.onload({status:403});});
   await assert.rejects(request('https://test/img'),/403/);assert.equal(calls,1);
+});
+test('image rules restrict initiator and resource type, anchor CDN hosts and stop when disabled or removed',()=>{
+  const id='a'.repeat(32), settings={comics:{enabled:true,canvasSites:['*.pixiv.net']}};
+  const [rule]=imageRefererRules(settings,id);
+  assert.deepEqual(rule.condition,{urlFilter:'||i.pximg.net^',requestDomains:['i.pximg.net'],initiatorDomains:[id],resourceTypes:['xmlhttprequest','other']});
+  assert.deepEqual(rule.action,{type:'modifyHeaders',requestHeaders:[{header:'Referer',operation:'set',value:'https://www.pixiv.net/'}]});
+  assert.deepEqual(imageRefererRules({comics:{enabled:false,canvasSites:['*.pixiv.net']}},id),[]);
+  assert.deepEqual(imageRefererRules({comics:{canvasSites:[]}},id),[]);
+  assert.throws(()=>imageRefererRules(settings,''));
+  assert.equal(imageReferer(settings,'https://www.pixiv.net/artworks/1','https://i.pximg.net/a.jpg'),'https://www.pixiv.net/');
+  for(const [page,image] of [['https://evilpixiv.net/','https://i.pximg.net/a'],['https://www.pixiv.net/','https://i.pximg.net.evil.test/a'],['https://www.pixiv.net/','https://elsewhere.test/a']]) assert.equal(imageReferer(settings,page,image),'');
+});
+test('comic metadata validates CDN and same-site root Referer, and survives settings form serialization',()=>{
+  const entry={host:'*.comic.test',imageHosts:['cdn.comic.test'],referer:'https://www.comic.test/'};
+  assert.deepEqual(comicSites([entry]),[entry]);
+  assert.equal(comicSiteMatches('www.comic.test',[entry]),true);
+  assert.deepEqual(canvasMatches({comics:{canvasSites:[entry]}}),['https://*.comic.test/*','http://*.comic.test/*']);
+  for(const change of [{referer:'https://elsewhere.test/'},{referer:'https://www.comic.test/private'},{referer:'https://u:p@www.comic.test/'},{referer:'https://www.comic.test/?key=x'},{imageHosts:['*']},{imageHosts:['*.comic.test']},{imageHosts:['cdn.comic.test:443']},{imageHosts:[]}]) assert.throws(()=>comicSites([{...entry,...change}]));
+});
+test('image registry serializes updates and deletes only its owned session rules',async()=>{
+  let settings={comics:{canvasSites:['*.pixiv.net']}},rules=[{id:1}],updates=0;
+  const api={runtime:{id:'a'.repeat(32)},declarativeNetRequest:{getSessionRules:async()=>rules,
+    updateSessionRules:async({removeRuleIds,addRules})=>{updates++;rules=rules.filter(r=>!removeRuleIds.includes(r.id)).concat(addRules);}}};
+  const registry=createImageRegistry(api,async()=>settings);
+  await Promise.all([registry.sync(),registry.sync()]);assert.equal(updates,1);assert.equal(rules[1].id,IMAGE_RULE_BASE);
+  settings.comics.canvasSites=[];await registry.sync();assert.deepEqual(rules,[{id:1}]);
+  settings.comics.canvasSites=['*.pixiv.net'];await registry.sync();settings.comics.enabled=false;await registry.sync();assert.deepEqual(rules,[{id:1}]);
+});
+test('GM image fetch sends configured static Referer anonymously and degrades on unsupported policy',async()=>{
+  const request=createGMImageFetch(req=>{assert.deepEqual(req.headers,{Referer:'https://www.pixiv.net/'});assert.equal(req.anonymous,true);req.onload({status:200,response:new Blob(['image'],{type:'image/png'})});});
+  assert.equal((await request('https://i.pximg.net/a.jpg','https://www.pixiv.net/')).type,'image/png');
+  await assert.rejects(createGMImageFetch(req=>req.onerror())('https://i.pximg.net/a.jpg','https://www.pixiv.net/'),/无法取图/);
 });
 test('background image fetch uses sender referrer, no cookies, no redirects, validates format and 403',async()=>{
   let request;

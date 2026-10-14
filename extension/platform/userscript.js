@@ -11,7 +11,7 @@ import { toErrorInfo } from '../shared/errors.js';
 import { looksLikeTarget } from '../shared/lang.js';
 import { createGMImageFetch, probeLocalOCR } from '../content/comics/capabilities.js';
 import { createUserscriptOCR } from '../content/comics/userscript-ocr.js';
-import { comicSiteMatches } from '../content/comics/sites.js';
+import { comicSiteMatches, imageReferer } from '../content/comics/sites.js';
 import { installCanvasHook } from '../content/comics/canvas-hook-runtime.js';
 import { installTimedtextObserver } from '../content/subtitles/observer-runtime.js';
 import { observeTimedtext, fetchTimedtext, fetchGMCrossHostTrack } from '../content/subtitles/observe.js';
@@ -42,7 +42,8 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
         try {
           const capability=await probeLocalOCR();
           if (!capability.ok) return { ok:false,error:{ code:'ocr_unavailable',message:capability.reason } };
-          const blob=await createGMImageFetch(gm.xmlhttpRequest)(req.url);
+          const settings=await store.load();
+          const blob=await createGMImageFetch(gm.xmlhttpRequest)(req.url,imageReferer(settings,location.href,req.url));
           return await (localOCR || ocr.recognize)(blob,{ lang:req.lang });
         } catch(e) { return { ok:false,error:{ code:'image_unavailable',message:e.message } }; }
       },

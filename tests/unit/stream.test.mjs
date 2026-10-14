@@ -129,6 +129,18 @@ test('length mismatch uses whole-batch validation and half-size retry, with no d
   assert.equal(calls, 3); assert.equal(r.total, 2); assert.equal(r.results.get('b').text, '译two');
 });
 
+test('a provider that only honors singleton JSON falls back from half batches to bounded item retries', async () => {
+  let calls=0;
+  const rig=makeRig({profile:testProfile({maxItems:6,maxChars:2000}),provider:async({messages})=>{
+    calls++;const segs=readSegs(messages);
+    return JSON.stringify({t:segs.length===1?['译'+segs[0].text]:['bad cardinality']});
+  }});
+  const result=await run(rig,{items:Array.from({length:6},(_,i)=>({id:i,text:'paragraph'+i}))});
+  assert.equal(calls,9,'one request, two halves and six singletons');
+  assert.equal(result.total,6);assert.ok([...result.results.values()].every(r=>r.text.startsWith('译')));
+  assert.equal(await rig.cache.count(),6,'malformed intermediate replies do not enter cache');
+});
+
 test('one-shot text requires final validation even when a malformed stream has already emitted a string', async () => {
   const rig = makeRig({ provider: async ({ onDelta }) => {
     const content = '{"t":["invalid prefix","extra"]}'; onDelta(content); return content;

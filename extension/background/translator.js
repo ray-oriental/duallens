@@ -1,6 +1,5 @@
-// Orchestration: cache lookup -> batching -> queue -> <seg> parsing -> one retry for missing
-// segments -> cache write -> partial results. All collaborators are injected so unit tests need
-// neither chrome.* nor IndexedDB:
+// Batched translation with bounded JSON retries and validated cache.
+// Dependencies are injected; tests need neither Chrome nor IndexedDB:
 //   provider({ profile, model, messages, signal }) -> Promise<string>
 //   cache     see background/cache.js
 //   queue     see background/queue.js
@@ -55,6 +54,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     const items = (Array.isArray(req.items) ? req.items : []).filter((it) => it && it.id !== undefined);
     const to = req.to || settings.targetLang;
     const from = req.from || settings.sourceLang || 'auto';
+    const omitted=(value,source)=>value===source && (/[A-Za-z]/.test(stripMarkup(source)) || to!=='ja' && (/[ぁ-ゟ]/.test(stripMarkup(source)) || from==='ja' && /[ァ-ヿ]/.test(stripMarkup(source))));
     const priority = Number.isFinite(req.priority) ? req.priority : PRIORITY.NEAR;
     const reqId = req.reqId ?? null;
     const preset = settings.prompt.preset;
@@ -177,7 +177,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       }
     }
 
-    async function runBatch(batch, isRetry) {
+    async function runBatch(batch, isRetry, budget={left:retryBatchMax}) {
       const { messages, idMap } = buildMessages({
         items: batch.map((u) => ({ id: u.uid, text: u.text })),
         to,
@@ -199,16 +199,22 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
             const stream = createTranslationStream(batch.length, (index, text) => {
               const u = batch[index];
               if (req.streamItems === false) return;
-              if (s.aborted || /^(zh|ja|ko|ar|ru|th)/.test(to) && text === u.text && /[A-Za-z]/.test(stripMarkup(u.text))) return;
+              if (s.aborted || /^(zh|ja|ko|ar|ru|th)/.test(to) && omitted(text,u.text)) return;
               completeUnit(u, text, model, selected);
             });
             const content=await provider({profile:selected,model,messages,signal:s,onDelta: delta => stream.push(delta)});
             const parsed=parseSegments(content,idMap);
             if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
-              for(const u of batch) {
-                if(parsed.results.get(u.uid)===u.text && /[A-Za-z]/.test(stripMarkup(u.text))) {
-                  throw new DLError(ERR.PROVIDER,'模型漏翻，尝试备用模型',{status:502});
+              const unchanged=batch.filter(u=>omitted(parsed.results.get(u.uid),u.text));
+              if(unchanged.length) {
+                // Preserve neighbors only after whole-batch JSON validation.
+                if(!parsed.missing.length) for(const u of batch) {
+                  if(unchanged.includes(u)) continue;
+                  const text=parsed.results.get(u.uid);
+                  completeUnit(u,text,model,selected);
+                  if(u.rendered===text) {(u.g.validated ||= new Set()).add(u.idx);cacheCompleted(u.g);}
                 }
+                throw new DLError(ERR.PROVIDER,'模型漏翻，尝试备用模型',{status:502,serverCode:'untranslated_items'});
               }
             }
             return {content,model,profile:selected};
@@ -230,8 +236,13 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       if (!missing.length) return;
 
       const lost = missing.map((id) => byUid.get(id));
-      if (!isRetry) {
-        await Promise.all(chunk(lost, Math.max(1, Math.ceil(lost.length / 2))).map((sub) => runBatch(sub, true)));
+      if (batch.length>1 && budget.left>0) {
+        const retries=[];
+        for(const sub of chunk(lost,isRetry?1:Math.max(1,Math.ceil(lost.length/2)))) {
+          if(budget.left-- >0) retries.push(runBatch(sub,true,budget));
+          else failUnits(sub,{code:ERR.PARSE,message:'模型没有返回这一段的译文'});
+        }
+        await Promise.all(retries);
         return;
       }
       const failed = [];

@@ -14,7 +14,7 @@ popup 已提供“翻译此页漫画”。共享设置表单及用户脚本设�
 
 1. `content/comics/discovery.js` 发现当前选择的 `img.currentSrc`、懒加载 URL、srcset 后备、单层 CSS 背景及 canvas 来源。一次显式触发最多八张视口图片和下一张，不枚举网站 API，不自动抓后续页。默认图片最小显示尺寸为 280×280；只接受 HTTP(S)，不接受含用户名/密码的 URL、SVG、blob/data URL。
 2. `content/comics/canvas-hook.js` 仅在用户设置的漫画名单（默认 `*.pixiv.net`）由后台动态注册，在 MAIN world 用 WeakMap 记录 `drawImage`、`createImageBitmap` 裁剪和 OffscreenCanvas bitmap 的来源。元数据通过有界 DOM 事件查询传回，不写页面 data 属性。普通裁剪/缩放和仿射变换可重建；嵌套 canvas 合成、透明混合、超过 64 片或超过四个来源会明确拒绝，避免给出错误重建。
-3. `background/comics.js` 验证顶层扩展发送者，从 sender 取页面 referrer，使用 `fetch(url, {referrer: pageUrl, credentials:'omit', redirect:'error'})` 代取图。全标签页下载/OCR 并发最多二，等待队列最多十六。403 显示站点拒绝；不重试，不改 Referer，不读取 cookies。每个来源上限 16 MiB，OCR 原始解码像素上限 2400 万。
+3. `background/comics.js` 验证顶层扩展发送者，从 sender 取页面 referrer，使用 `fetch(url, {referrer: pageUrl, credentials:'omit', redirect:'error'})` 代取图。全标签页下载/OCR 并发最多二，等待队列最多十六。名单支持 `{host,imageHosts?,referer?}`；Pixiv 字符串项兼容 `i.pximg.net` / `https://www.pixiv.net/`。会话 DNR `modifyHeaders` 规则带 `initiatorDomains:[chrome.runtime.id]` 和 `resourceTypes:['xmlhttprequest','other']`，只为扩展发起的匹配 CDN 请求设置 Referer，网页请求不受影响。关闭漫画或移出名单删除规则，仍被拒绝则显示 403、保留原图；不读取 cookies。每个来源上限 16 MiB，OCR 原始解码像素上限 2400 万。
 4. offscreen 按需创建，以 ready 握手消除初始化竞态。`language-store.js` 下载固定 commit 的 tessdata_fast，按精确大小和 SHA-256 校验后存到扩展自己的 `duallens-ocr-languages` IndexedDB；缓存读取也校验，错误缓存删除。语言数据不打包。
 5. `offscreen/detector.js` 是原创、高对比文字的连通墨迹启发式：剔除大连通边框/画面，按字形尺寸合并横排或竖排列。它不是气泡、panel 或 SFX 模型。最多四十个候选区域；无法找到区域时回退 Tesseract 稀疏/竖排分段。扩展 OCR 图缩放到最多 600 万像素、长边 3200px，用户脚本最多 300 万像素、长边 2400px。
 6. 未修改的 Tesseract.js/core 5.1.1 在本地 Worker 中运行 LSTM-only；每项解码/初始化/识别有 20s 总限时，语言数据下载另有 60s 限时。完成或超时均终止 Worker。只把 confidence≥30 的可信、归一化框与清洗文本返回内容模块。
@@ -23,7 +23,7 @@ popup 已提供“翻译此页漫画”。共享设置表单及用户脚本设�
 
 ## 用户脚本
 
-`platform/userscript.js` 通过匿名 `GM_xmlhttpRequest(responseType:'blob')` 获取已显示图片；固定语言数据使用 `arraybuffer`、大小/SHA-256 校验，持久化到单独的 `duallens:ocr` GM 命名空间。网页的 IndexedDB/localStorage 不存图、OCR 文本、译文或语言数据。
+`platform/userscript.js` 通过匿名 `GM_xmlhttpRequest(responseType:'blob')` 获取已显示图片，匹配站点与 CDN 时带 `headers:{Referer}`；管理器不支持请求头或取图失败时保留原图并明确失败，既有本地 OCR 能力探测降级不变；固定语言数据使用 `arraybuffer`、大小/SHA-256 校验，持久化到单独的 `duallens:ocr` GM 命名空间。网页的 IndexedDB/localStorage 不存图、OCR 文本、译文或语言数据。
 
 `runtime-resources.js` 只有两个固定 Tesseract 5.1.1 资源的 URL、大小和 SHA-256，没有源码。Tampermonkey 元数据声明 `@resource`、完整 `#sha256=` 与 `GM_getResourceText`。用户触发 OCR 后才读取、独立校验资源并创建 Blob Worker；普通页面启动不读取或解析 Tesseract。Tampermonkey 可能在安装/更新时预取资源。
 
@@ -58,7 +58,9 @@ platform.comics = {
 - manifest 不再静态注入 MAIN 脚本。既有 `scripting` 权限通过 registerContentScripts 注册 `world:'MAIN'`、`document_start`、仅名单顶层 HTTP(S) 的原创钩子；默认只有 `*.pixiv.net`。设置修改会更新/撤销注册，下次刷新生效。面板提供“为本站启用 canvas 还原（刷新后生效）”按钮；不扩大 host 权限。
 - WAR 增加 `content/comics/*.js`，供隔离内容脚本的模块导入；未暴露 OCR worker、offscreen 或语言缓存。
 - 扩展页 CSP 增加 `'wasm-unsafe-eval'`；`script-src/worker-src` 仍限定 `'self'`。
-- 没有添加 DNR、cookies、webRequest 或任何远程代码权限。
+- 新增 `declarativeNetRequestWithHostAccess`，仅用于上述扩展专属漫画 CDN Referer 会话规则，不新增 host 权限，没有 cookies、webRequest 或远程代码权限。依据 [Chrome 官方 API 文档](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest)。
+
+对象名单项的 `imageHosts` 最多八个具体域名，`referer` 限该站点 HTTP(S) 根地址。共享设置一行一个域名或 JSON 对象，保存保留元数据；移除项同时撤销其规则。
 
 来源/版本/许可证/每文件 SHA-256 和同名参考文件的纯哈希比对见 [VENDOR.md](../extension/vendor/tesseract/VENDOR.md)。npm worker、普通 core JS 与独立 WASM 同参考文件哈希一致；tesseract.min.js 不一致。仅保留上游原件，未用参考内容替换。API 依据 [上游 v5.1.1 文档](https://github.com/naptha/tesseract.js/blob/v5.1.1/docs/api.md)，资源 API 见 [Tampermonkey 文档](https://www.tampermonkey.net/documentation.php#api:GM_getResourceText)。
 
@@ -80,7 +82,7 @@ $env:PLAYWRIGHT_BROWSERS_PATH="$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
 
 已观察到清晰日文夹具把「こんにちは」识别为「こんにちちは」，其余五条韩/英/日文夹具文字正确。专项以文字相似度≥0.8 检查区域对应/顺序，同时保留完整实际识别结果，不把它记成 OCR 逐字完美。最近测量单图 OCR p50 约 2.19s；首次离线语言包加载+校验+持久化约 1.51–2.60s（不是网络下载 benchmark）。采样的 offscreen JS 堆约 32.3 MiB；这不包含 Worker WASM、图片原生解码或浏览器进程 RSS，不能视作总峰值内存。
 
-未验证真实 Pixiv、用户的两台 Windows Chrome/Edge、Android Edge/Tampermonkey 真机或 Android Chrome。没有气泡/面板模型、可靠 SFX 分类、复杂混合方向自动识别、云视觉或真实服务测试。背景图的复杂 background-size/object-fit/页面 CSS 变换可能使高亮边框不精确；嵌套 bitmap/canvas 合成会明确拒绝。动态阅读器应在新图片显示后再次显式触发，不后台连续抓取。
+2026-10-14 临时 Chromium profile 的指定 Pixiv 作品页验收通过：11 个日文 OCR 区域、11 条最终中文译文，恢复保留原图 DOM。小说页免费模型单段批次的视口内首段为 3.688 秒，对齐/恢复正确，但 180 秒内视口未填满，整体验收仍未通过。完全一致的日文正文回显按漏翻处理；近似回显仍可能未被识别，不能保证模型翻译质量。OCR 仍会误识别，阅读顺序提示不确定。未验证用户两台 Windows Chrome/Edge、Android Edge/Tampermonkey 真机或 Android Chrome。没有气泡/面板模型、可靠 SFX 分类、复杂混合方向自动识别或云视觉；不保证其他真实站点兼容性。复杂背景样式和页面变换可能使高亮不精确，嵌套 bitmap/canvas 合成明确拒绝。动态阅读器在新图片显示后再次显式触发，不后台连续抓取。
 
 集成分支的 v2 平台接线和原生 promptSecret 已保留，popup/共享设置表单已接入。发布前由 leader 完成最终安全及真机验收。
 

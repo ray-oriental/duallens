@@ -14,6 +14,15 @@ test('PDF line gap over 2.4 heights splits, boundary stays together', () => {
   assert.equal(segmentTextItems([item('One'),item('Two',40,670)]).length,2);
   assert.equal(segmentTextItems([item('One'),item('Two',40,671.2)]).length,1);
 });
+test('PDF numbered table-of-contents leader rows stay separate rather than becoming one model item', () => {
+  const texts=['2.1 The Tangent Problem . . . . . . 9','2.2 The Limit of a Function . . . . . . 12','2.3 Calculating Limits . . . . . . 21'];
+  const input=texts.map((text,i)=>item(text,40,700-i*18));
+  const before=structuredClone(input);
+  const paragraphs=segmentTextItems(input);
+  assert.deepEqual(paragraphs.map(p=>p.text),texts);
+  assert.ok(paragraphs.every(p=>p.kind==='prose' && p.lines.length===1));
+  assert.deepEqual(input,before);
+});
 test('PDF left indentation over 1.2 heights starts a new paragraph', () => {
   assert.equal(segmentTextItems([item('First line'),item('Indented line',55,682)]).length,2);
 });

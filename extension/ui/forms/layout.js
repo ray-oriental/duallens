@@ -112,7 +112,7 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   const comics = section('漫画');
   field(comics.grid,'comicsEnabled','启用漫画本地 OCR','checkbox');
   field(comics.grid,'comicsLanguage','漫画源语言','select',pairs([['jpn','日文横排'],['jpn_vert','日文竖排'],['kor','韩文'],['eng','英文']]));
-  field(comics.grid,'comicsSites','canvas 还原站点（域名或 *.example.com，每行一个）','textarea');
+    field(comics.grid,'comicsSites','漫画站点（域名、*.example.com 或 JSON 对象，每行一个）','textarea');
   comics.box.append(el('p','仅名单站点安装 canvas 来源钩子；增删后刷新网页生效。原图本地识别，仅 OCR 文字发给模型。',{class:'hint'}));
   comics.box.append(el('div','',{id:'comics-languages',role:'status'}));
   button(comics.box,'comics-refresh','查看已下载语言包');

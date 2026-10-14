@@ -120,7 +120,7 @@ class GatewayTests(unittest.TestCase):
         self.g.request = fail
         for _ in range(2):
             with self.assertRaises(GatewayError):
-                self.g.chat(self.payload("hermes/inclusionai/ling-3.1-flash"))
+                self.g.chat(self.payload("hermes/upstage/solar-mini4:free"))
         self.assertEqual(len(calls), 1)
     def test_subscription_manual_without_daily_cap(self):
         self.assertEqual(self.g.config["claude"]["daily_limit"], 0)

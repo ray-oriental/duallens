@@ -14,6 +14,8 @@ PDF 类型只在用户打开 popup 或点击 PDF 右键菜单时按需判断。`
 
 日/韩/英 fast 语言包来自 tesseract-ocr/tessdata_fast 固定 commit `87416418657359cb625c412a48b6e1d6d41c29bd`，下载并校验 SHA-256 后存于扩展 IndexedDB 或用户脚本私有 GM 存储，可在漫画设置中查看大小及删除。扩展 OCR 代码和 WASM 随包发布；用户脚本使用固定版本 Tesseract 5.1.1 的 jsDelivr `@resource`，仅触发 OCR 后读取、校验并运行。资源 API 不支持时，匿名下载同一固定 URL 并校验、缓存于 GM 私有存储。Tampermonkey 可在安装/更新时预取资源，但普通网页启动不解析 OCR 代码；不使用网页的存储保存这些数据。
 
+漫画 CDN 防盗链兼容只设置公开站点根地址 Referer。扩展会话规则限定本扩展 ID 与 XHR/other，网页请求不受影响，关闭漫画或移出名单即撤销。用户脚本匿名 GM 请求只在站点与 CDN 匹配时带同一 Referer，不带 cookie、凭据或私密页面路径。
+
 ## English
 
 DualLens does not collect, sell, or upload telemetry and does not require an account. Webpage text is sent only to the model service explicitly selected by the user; that provider's handling is governed by the user's agreement with the provider. API keys remain in this browser's local storage and are not placed in sync settings, release packages, logs, or our servers. Translation cache and preferences remain on the user's device.
@@ -27,3 +29,5 @@ PDF type detection runs only when the user opens the popup or clicks the PDF con
 User-triggered comic translation downloads images anonymously and performs decoding/OCR locally. Only recognized text is sent to the configured translator; images, image/page URLs and cookies are not uploaded, and originals are not persisted. Canvas source hooks run only on opted-in domains (default `*.pixiv.net`); changes take effect after refresh.
 
 Fast Japanese/Korean/English language data is pinned to tessdata_fast commit `87416418657359cb625c412a48b6e1d6d41c29bd`, checked with SHA-256, and stored in extension IndexedDB or private GM storage with size/delete controls. Extensions package their OCR code/WASM. Userscripts read integrity-pinned jsDelivr Tesseract 5.1.1 resources only after OCR is requested; unsupported resource APIs fall back to anonymous, hash-verified downloads and private GM caching. Tampermonkey may prefetch resources at install/update time. Ordinary page startup does not parse OCR code, and webpage storage is not used.
+
+Comic CDN compatibility sets only a public site-root Referer. Extension session rules match this extension ID and XHR/other requests only, leave website requests untouched, and are removed on disabling comics or deleting the site. Anonymous userscript GM requests use the same header only for matching comic sites and CDNs, without cookies, credentials or private page paths.

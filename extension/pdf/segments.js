@@ -130,6 +130,7 @@ export function segmentTextItems(items = [], { pageHeight = 0 } = {}) {
     for (const line of col.lines) {
       line.text = line.text.trim();
       line.kind = formulaLine(line.text) ? 'formula' : 'prose';
+      const toc=/^\d+(?:\.\d+)*\s+\p{L}/u.test(line.text) && /(?:\.\s*){4,}/.test(line.text);
       // PDF page margins are in unscaled points. Restrict suppression to marginal text/page labels.
       const pageLabel=/^\s*(?:page\s+)?\d+\s*$/i.test(line.text);
       if (pageHeight && (line.y > pageHeight - 70 || line.y < 36 ||
@@ -137,7 +138,7 @@ export function segmentTextItems(items = [], { pageHeight = 0 } = {}) {
       const h = Math.max(line.height, previous?.height || 0);
       const newParagraph = !previous || previous.y - line.y > h * 2.4 || previous.y <= line.y ||
         Math.abs(line.x - previous.x) > h * 1.2 || col.right - (previous.x + previous.width) > 130 ||
-        Math.abs(line.height - previous.height) > h * .3 || line.kind !== previous.kind || line.kind !== 'prose';
+        Math.abs(line.height - previous.height) > h * .3 || line.kind !== previous.kind || line.kind !== 'prose' || toc || previous.toc;
       if (newParagraph) {
         paragraph = { ...line, lines: [line],scriptRanges:[...line.scriptRanges] };
         paragraphs.push(paragraph);
@@ -151,7 +152,7 @@ export function segmentTextItems(items = [], { pageHeight = 0 } = {}) {
         paragraph.height = paragraph.y - line.y + line.height;
         paragraph.lines.push(line);
       }
-      previous = line;
+      line.toc=toc;previous = line;
     }
   }
   for (const paragraph of paragraphs) paragraph.parts = paragraph.kind === 'prose' ? mathParts(paragraph.text,paragraph.scriptRanges) : [mathPart(paragraph.text,0,paragraph.text.length,paragraph.scriptRanges)];

@@ -22,7 +22,7 @@ class StreamingTests(unittest.TestCase):
         def request(url, body=None, headers=None, timeout=120):
             self.calls.append((url, body, timeout))
             if url.endswith('/models'):
-                return {'data': [{'id': 'meituan/longcat-2.0:free'}, {'id': 'paid-model'}]}
+                return {'data': [{'id': 'upstage/solar-mini4:free'}, {'id': 'paid-model'}]}
             return completion('upstream', 'fallback')
         self.g = Gateway(Path(self.temp.name), config, request=request,
             stream_request=lambda *a, **kw: iter([stream_event('upstream', '{"t":["你好"]}', 'stop')]))
@@ -77,7 +77,7 @@ class StreamingTests(unittest.TestCase):
     def test_hermes_catalog_is_allowlist_intersection_cached_ten_minutes(self):
         for _ in range(2):
             ids = [m['id'] for m in self.g.models()['data'] if m['owned_by'] == 'hermes']
-            self.assertEqual(ids, ['hermes/meituan/longcat-2.0:free'])
+            self.assertEqual(ids, ['hermes/upstage/solar-mini4:free'])
         self.assertEqual(len(self.calls), 1)
         self.assertGreater(self.g.hermes_catalog[0] - time.monotonic(), 590)
 
@@ -87,7 +87,7 @@ class StreamingTests(unittest.TestCase):
         self.assertEqual(json.loads(response.read())['version'], manifest_version()); conn.close()
 
     def test_model_advertised_by_stale_proxy_catalog_is_hidden_after_a_real_404(self):
-        model = 'hermes/meituan/longcat-2.0:free'
+        model = 'hermes/upstage/solar-mini4:free'
         self.assertIn(model, [m['id'] for m in self.g.models()['data']])
         def missing(*args, **kw):
             raise GatewayError(404, 'model_not_found', 'missing')
