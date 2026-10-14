@@ -6,6 +6,8 @@
 // content. Block-ness comes from computed style, so flex/grid items count as blocks.
 
 import { isOurs, LETTER_RE } from './util.js';
+import { novelRoots, novelBody, pixivNovelDocument } from '../shared/site-adapters.js';
+import { splitParagraphText } from './injector.js';
 
 const SILENT_TAGS = new Set(['script', 'style', 'noscript', 'template', 'head', 'title', 'meta', 'link', 'base']);
 
@@ -101,11 +103,20 @@ export function* iterateRuns(root, opts = {}) {
   function* scan(el) {
     yield null;
     if (el.hasAttribute('data-dl-id')) return; // already a whole unit; its children belong to it
+    const textParagraphs=splitParagraphText(el,minChars);
+    if(textParagraphs) {for(const run of textParagraphs) yield run;return;}
     let first = null;
     let last = null;
     let rough = 0;
     let letters = false;
     let sawBlock = false;
+    let breakNode = null;
+    let beforeBreak = null;
+    // Pixiv text-count spans are author-entered lines, not CSS-wrapped visual rows. When there
+    // are no explicit blank lines, each is already a paragraph (often one line of dialogue).
+    const paragraphLines = pixivNovelDocument(el.ownerDocument) && el.matches('p:has(> span.text-count)') &&
+      ![...el.querySelectorAll(':scope > span.text-count')].some(line=>!line.textContent.trim()) &&
+      !el.querySelector(':scope > br + br');
 
     const flush = () => {
       if (first && letters && rough >= minChars && !(known && known(el, first))) {
@@ -118,10 +129,27 @@ export function* iterateRuns(root, opts = {}) {
       letters = false;
     };
 
+    // Some novel readers use one block per visual line, with an empty block between paragraphs.
+    // Keep the original siblings intact and claim a range per natural paragraph.
+    if (novelBody(el) && el.children.length && [...el.children].every(n =>
+      ['div', 'p', 'span'].includes(n.localName) && classify(n, exclude) === 'container' && !n.querySelector(BLOCK_SEL))) {
+      for (const n of el.childNodes) {
+        yield null;
+        if (n.nodeType !== 1) continue;
+        const text = n.textContent.trim();
+        if (!text) { const run = flush(); if (run) yield run; continue; }
+        if (!first) first = n;
+        last = n; rough += text.length; letters ||= LETTER_RE.test(text);
+      }
+      const run = flush(); if (run) yield run;
+      return;
+    }
+
     for (let n = el.firstChild; n; n = n.nextSibling) {
       yield null;
       if (n.nodeType === 3) {
         const d = n.data;
+        if (/\S/.test(d)) breakNode = null;
         if (!first) {
           if (!/\S/.test(d)) continue;
           first = n;
@@ -136,6 +164,25 @@ export function* iterateRuns(root, opts = {}) {
       const kind = classify(n, exclude);
       if (kind === 'hidden') continue;
       if (kind === 'inline' || kind === 'atom') {
+        if (n.localName === 'br') {
+          if (paragraphLines) {
+            const run=flush();if(run) yield run;
+            sawBlock=true;breakNode=null;continue;
+          }
+          if (breakNode) {
+            last = beforeBreak;
+            const run = flush();
+            if (run) yield run;
+            // Consecutive breaks (and empty inline line wrappers) are separators, not source text.
+            sawBlock = true;
+            beforeBreak = null;
+            continue;
+          }
+          beforeBreak = last;
+          breakNode = n;
+        } else if (kind === 'inline' && /\S/.test(n.textContent)) {
+          breakNode = null;
+        }
         if (!first) first = n;
         last = n;
         if (kind === 'inline') {
@@ -148,6 +195,7 @@ export function* iterateRuns(root, opts = {}) {
       const run = flush();
       if (run) yield run;
       sawBlock = true;
+      breakNode = null;
       if (kind === 'container' && !shallow) yield* scan(n);
     }
 
@@ -162,6 +210,13 @@ export function* iterateRuns(root, opts = {}) {
     if (run) yield run;
   }
 
+  const doc = root.ownerDocument;
+  if (pixivNovelDocument(doc)) {
+    const bodies = novelRoots(doc);
+    if (bodies.some(body => body === root || body.contains(root))) yield* scan(root);
+    else for (const body of bodies) if (root.contains(body)) yield* scan(body);
+    return;
+  }
   yield* scan(root);
 }
 

@@ -18,6 +18,43 @@ export function write(fn) {
 
 const HEAVY_SEL = 'iframe,video,audio,input,textarea,select,canvas,object,embed';
 const INLINE_HOST_SEL = 'button,summary,label,[role="button"],[role="tab"],[role="menuitem"],[role="option"]';
+const textSplits = new WeakMap();
+
+// A pre-wrap reader can put several paragraphs in a single Text node. Retain that exact node
+// and its original data; every emitted range releases its claim during restore/drop.
+export function splitParagraphText(host, minChars) {
+  const original=host.firstChild;
+  if(original?.nodeType!==3 || original!==host.lastChild || !/\n[ \t\r]*\n/.test(original.data) ||
+    !['pre-wrap','pre-line','break-spaces'].includes(getComputedStyle(host).whiteSpace)) return null;
+  const data=original.data;
+  const parts=data.split(/(\n[ \t\r]*\n(?:[ \t\r]*\n)*)/);
+  if(parts.filter((part,i)=>i%2===0 && part.trim().length>=minChars && /\p{L}/u.test(part)).length<2) return null;
+  const record={original,data,nodes:[],active:new Set(),host};
+  const runs=[];
+  write(()=> {
+    parts.forEach((part,i)=> {
+      const node=i===0?original:document.createTextNode(part);
+      if(i===0) node.data=part;else host.append(node);
+      record.nodes.push({node,data:part});
+      if(i%2===0 && part.trim().length>=minChars && /\p{L}/u.test(part)) {
+        record.active.add(node);textSplits.set(node,record);
+        runs.push({host,first:node,last:node,whole:false});
+      }
+    });
+  });
+  return runs;
+}
+
+function releaseTextSplit(unit) {
+  const record=textSplits.get(unit.first);
+  if(!record) return;
+  textSplits.delete(unit.first);record.active.delete(unit.first);
+  if(record.active.size) return;
+  // A webpage edit wins over restoration of our own temporary split.
+  if(record.nodes.some(({node,data})=>node.parentNode!==record.host || node.data!==data)) return;
+  record.original.data=record.data;
+  for(const {node} of record.nodes) if(node!==record.original) node.remove();
+}
 
 export function nodesOf(unit) {
   const out = [];
@@ -137,6 +174,9 @@ export function markPending(unit) {
 }
 
 export function decideInline(unit, inlineMaxChars) {
+  // Virtual paragraphs in a line-break reader must remain separate even for short dialogue.
+  if (!unit.whole && (unit.host.querySelector(':scope > br') || unit.host.matches('[data-novel-content]'))) return false;
+  if(textSplits.has(unit.first)) return false;
   if (unit.plain.length < inlineMaxChars) return true;
   return unit.host.matches(INLINE_HOST_SEL);
 }
@@ -245,5 +285,6 @@ export function restore(unit) {
     unit.tEl = null;
     unit.wChecked = false;
     unit.adopted = false;
+    releaseTextSplit(unit);
   });
 }

@@ -12,6 +12,16 @@ import time
 import run_e2e as runner
 
 REQUESTS=[]
+
+def wait_csp_safe(h, expression, timeout=15):
+    # Playwright 1.48's wait_for_function polls through eval on CSP-restricted pages.
+    # Evaluate the predicate directly; keep the tested page's CSP unchanged.
+    deadline=time.monotonic()+timeout
+    while time.monotonic()<deadline:
+        if h.js(expression): return
+        h.page.wait_for_timeout(50)
+    raise AssertionError('CSP-safe condition timed out: '+expression)
+
 class Handler(runner._QuietHandler):
     def do_GET(self):
         if self.path.startswith('/comics-runtime/'):
@@ -172,13 +182,13 @@ def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
     if allow_sites: h.js("() => {window.fixtureStorage['duallens:sync'].settings.comics.canvasSites=['127.0.0.1']}")
     if fallback: h.js("() => {window.GM_getResourceText=()=>{throw Error('Resource API unavailable')}}")
     h.page.add_script_tag(url=h.base+'/comics-bundle.js')
-    h.wait_js("() => !!window.fixtureCommands['翻译此页漫画']")
+    wait_csp_safe(h,"() => !!window.fixtureCommands['翻译此页漫画']")
     runner.check(h.js('() => window.fixtureResourceReads.length')==0,'ordinary page parsed/read OCR resources at startup')
     native=h.js("() => CanvasRenderingContext2D.prototype.drawImage.toString().includes('[native code]')")
     runner.check(native!=allow_sites,'userscript canvas hook did not follow opt-in whitelist')
     h.js("() => window.fixtureCommands['翻译此页漫画']()")
     if blocked:
-        h.wait_js("() => window.fixtureRoots.length && /此页无法本地识别/.test(window.fixtureRoots[0].querySelector('[role=status]').textContent)",timeout=10)
+        wait_csp_safe(h,"() => window.fixtureRoots.length && /此页无法本地识别/.test(window.fixtureRoots[0].querySelector('[role=status]').textContent)",timeout=10)
         runner.check(h.js('() => window.fixtureRequests.length')==0,'CSP failure still downloaded or uploaded data')
         h.js("() => window.fixtureCommands['恢复漫画原文']()")
         runner.check(h.js('() => document.body.outerHTML')==before,'CSP failure restore changed DOM')

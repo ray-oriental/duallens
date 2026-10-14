@@ -10,9 +10,16 @@ import { OCR_RESOURCES,createRuntimeLoader,verifyRuntime } from '../../extension
 import { comicSites,comicSiteMatches,canvasMatches } from '../../extension/content/comics/sites.js';
 import { createCanvasRegistry } from '../../extension/background/comic-sites.js';
 import { LANGUAGES } from '../../extension/content/comics/languages.js';
+import { ComicTranslator } from '../../extension/content/comics/controller.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const region=(text,x,y,panel)=>({text,confidence:90,bbox:{x0:x,y0:y,x1:x+.15,y1:y+.08},panel});
+test('pixiv artwork page hashes preserve one comic session, work/query changes and other routes do not',()=>{
+  const key=url=>ComicTranslator.prototype.locationKey.call({doc:{location:new URL(url)}});
+  assert.equal(key('https://www.pixiv.net/artworks/123#1'),key('https://www.pixiv.net/artworks/123#2'));
+  assert.notEqual(key('https://www.pixiv.net/artworks/123#1'),key('https://www.pixiv.net/artworks/456#1'));
+  assert.notEqual(key('https://example.com/reader#1'),key('https://example.com/reader#2'));
+});
 test('comic text cleanup removes control noise and joins vertical Japanese without removing markup text',()=>{
   assert.equal(cleanText(' あ\nい\u200b ','jpn_vert'),'あい');
   assert.equal(cleanText('Hello\n world'),'Hello world');assert.equal(cleanText(' !!! '),'');
