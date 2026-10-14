@@ -29,6 +29,10 @@ export class LazyObserver {
   }
 
   watch(unit) {
+    const r = unit.host.getBoundingClientRect();
+    if (r.bottom > 0 && r.top < (window.innerHeight || 800)) {
+      this.onVisible(unit, 0, r.top); return;
+    }
     if (!this.io) this.#make();
     let set = this.targets.get(unit.host);
     if (!set) {

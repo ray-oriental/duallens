@@ -16,6 +16,22 @@ test('one 429 skips primary immediately and preserves model cooldown',async()=>{
 test('single 502 or network error switches models immediately',async()=>{
  for(const code of[ERR.PROVIDER,ERR.NETWORK]){const q=make(),seen=[];await q.enqueue({profile:testProfile(),run:async({model})=>{seen.push(model);if(model==='m1')throw err(code);return model;}});assert.deepEqual(seen,['m1','m2']);}
 });
+
+test('404 model_not_found immediately falls back and cools only that model for thirty minutes',async()=>{
+ let clock=1000; const q=make({now:()=>clock}), profile=testProfile(), seen=[];
+ const run=async({model})=>{seen.push(model);if(model==='m1')throw err(ERR.PROVIDER,'missing',{status:404,serverCode:'model_not_found'});return model;};
+ assert.equal(await q.enqueue({profile,run}),'m2');
+ clock+=29*60*1000; assert.equal(q.currentModel(profile),'m2');
+ clock+=60*1000; assert.equal(q.currentModel(profile),'m1');
+ assert.deepEqual(seen,['m1','m2']);
+});
+
+test('a chain consisting only of missing models fails promptly rather than waiting thirty minutes',async()=>{
+ const q=make(),profile=testProfile({fallbackModels:[]});let calls=0;
+ const run=async()=>{calls++;throw err(ERR.PROVIDER,'missing',{status:404,serverCode:'model_not_found'});};
+ for(let i=0;i<2;i++)await assert.rejects(q.enqueue({profile,run}),e=>e.status===404);
+ assert.equal(calls,1);
+});
 test('all models cooling wait until earliest unfreezes',async()=>{
  const q=make({maxAttempts:4}),profile=testProfile(),seen=[];let n=0;const start=Date.now();
  await q.enqueue({profile,run:async({model})=>{seen.push(model);if(n++<2)throw err(ERR.RATE_LIMITED,'429',{retryAfterMs:35});return model;}});

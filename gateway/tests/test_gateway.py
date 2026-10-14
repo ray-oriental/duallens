@@ -85,8 +85,8 @@ class GatewayTests(unittest.TestCase):
         for invalid in [True, 0, "300", 99999]:
             p = self.payload();p["max_tokens"] = invalid
             self.assertEqual(self.call("POST", "/v1/chat/completions", p)[0], 400)
-    def test_stream_and_multimodal_denied(self):
-        p = self.payload();p["stream"] = True
+    def test_invalid_stream_and_multimodal_denied(self):
+        p = self.payload();p["stream"] = "yes"
         self.assertEqual(self.call("POST", "/v1/chat/completions", p)[0], 400)
         p = self.payload();p["messages"][0]["content"] = [{"type": "image"}]
         self.assertEqual(self.call("POST", "/v1/chat/completions", p)[0], 400)

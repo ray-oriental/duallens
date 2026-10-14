@@ -6,6 +6,7 @@
 //   queue     see background/queue.js
 //   getSettings() -> Promise<settings>
 
+import { createTranslationStream } from '../shared/stream.js';
 import { ERR, PRIORITY } from '../shared/protocol.js';
 import { activeProfile, providerChain, getDefaultSettingsStore } from '../shared/settings.js';
 import { buildMessages, parseSegments, salvagePlain } from '../shared/prompt.js';
@@ -127,7 +128,8 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     const units = [];
     let uid = 0;
     for (const g of pending) {
-      g.pieces = splitLongText(g.text, Math.min(...chain.map(c => c.profile.maxChars || 4000)));
+      const budget = Math.min(...chain.map(c => c.profile.maxChars || 4000));
+      g.pieces = splitLongText(g.text, priority === PRIORITY.VISIBLE && !units.length ? Math.min(2000, budget) : budget);
       g.out = new Array(g.pieces.length);
       g.left = g.pieces.length;
       g.pieces.forEach((text, idx) => units.push({ uid: ++uid, g, idx, text }));
@@ -155,13 +157,20 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
 
     function completeUnit(u, text, model, usedProfile = profile) {
       const g = u.g;
-      if (g.state !== 'open') return;
+      if (g.state !== 'open' || u.completed) return;
+      u.completed = true; u.rendered = text;
       g.out[u.idx] = text;
       g.models.push({ model, profile: usedProfile });
       if (--g.left > 0) return;
       g.state = 'done';
       const full = g.pieces.length === 1 ? text : joinTranslations(g.out);
       emit(g.ids.map((id) => ({ id, text: full })));
+    }
+
+    function cacheCompleted(g) {
+      if (g.cached || g.state !== 'done' || !g.validated || g.validated.size !== g.pieces.length) return;
+      g.cached = true;
+      const full = g.pieces.length === 1 ? g.out[0] : joinTranslations(g.out);
       if (cacheOn && g.models.every((m) => m.model === g.models[0].model && m.profile.id === g.models[0].profile.id)) {
         const m = g.models[0];
         writes.push(keyerFor(m.model, m.profile).then(async (keyOf) => ({ k: await keyOf(g.text), t: full })));
@@ -187,7 +196,13 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
           reqId,
           signal,
           run: async ({ profile: selected, model, signal: s }) => {
-            const content=await provider({profile:selected,model,messages,signal:s});
+            const stream = createTranslationStream(batch.length, (index, text) => {
+              const u = batch[index];
+              if (req.streamItems === false) return;
+              if (s.aborted || /^(zh|ja|ko|ar|ru|th)/.test(to) && text === u.text && /[A-Za-z]/.test(stripMarkup(u.text))) return;
+              completeUnit(u, text, model, selected);
+            });
+            const content=await provider({profile:selected,model,messages,signal:s,onDelta: delta => stream.push(delta)});
             const parsed=parseSegments(content,idMap);
             if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
               for(const u of batch) {
@@ -205,7 +220,13 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       }
       const byUid = new Map(batch.map((u) => [u.uid, u]));
       const { results, missing } = parseSegments(out.content, idMap);
-      for (const [id, text] of results) completeUnit(byUid.get(id), text, out.model, out.profile);
+      for (const [id, text] of results) {
+        const u = byUid.get(id);
+        completeUnit(u, text, out.model, out.profile);
+        // Only fully validated, matching results may be persisted. A failed stream
+        // can display a prefix, but must never poison the cache on retry/fallback.
+        if (u.rendered === text) { (u.g.validated ||= new Set()).add(u.idx); cacheCompleted(u.g); }
+      }
       if (!missing.length) return;
 
       const lost = missing.map((id) => byUid.get(id));
@@ -226,6 +247,12 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       units.map((u) => ({ id: u.uid, text: u.text, unit: u })),
       { maxItems: Math.min(...chain.map(c => c.profile.maxItems || 20)), maxChars: Math.min(...chain.map(c => c.profile.maxChars || 4000)) },
     );
+    if (priority === PRIORITY.VISIBLE && batches.length) {
+      const first = batches.shift();
+      const small = makeBatches(first, { maxItems: 6, maxChars: 2000 });
+      const head = small[0];
+      batches.unshift(head, ...makeBatches(first.slice(head.length), { maxItems: Math.min(...chain.map(c => c.profile.maxItems || 20)), maxChars: Math.min(...chain.map(c => c.profile.maxChars || 4000)) }));
+    }
     await Promise.all(
       batches.map(async (b) => {
         const list = b.map((x) => x.unit);
@@ -249,7 +276,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
   async function translateText({ text, to, from, profileId, model }, { signal } = {}) {
     let result = null;
     await translate(
-      { reqId: null, to, from, profileId, model, priority: PRIORITY.VISIBLE, context: {}, items: [{ id: 't', text: escapeText(text) }] },
+      { reqId: null, to, from, profileId, model, streamItems: false, priority: PRIORITY.VISIBLE, context: {}, items: [{ id: 't', text: escapeText(text) }] },
       { onPartial: (r) => (result = r[0]), signal },
     );
     if (signal && signal.aborted) throw cancelledError();

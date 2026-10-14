@@ -51,7 +51,7 @@ test('gateway: POSTs to /chat/completions, never sends a key, temperature 0.2', 
   assert.equal(c.init.method, 'POST');
   assert.equal(c.body.model, 'ollama/qwen3:4b');
   assert.equal(c.body.temperature, 0.2);
-  assert.equal(c.body.stream, false);
+  assert.equal(c.body.stream, true);
   assert.deepEqual(c.body.messages, messages);
   assert.equal(c.init.headers.Authorization, undefined);
   assert.equal(c.init.credentials, 'omit');
