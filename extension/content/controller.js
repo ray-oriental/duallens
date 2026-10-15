@@ -4,13 +4,15 @@ import { siteRuleFor } from '../shared/settings.js';
 import { PRIORITY, ERR } from '../shared/protocol.js';
 import { parseMarkup } from '../shared/markup.js';
 import { looksLikeTarget, normalizeLang, sameLanguage } from '../shared/lang.js';
-import { collectRuns, iterateRuns, runsOf, blockContainerOf } from './walker.js';
-import { serializeRun, isTranslatable, buildFragment, textFragment } from './serialize.js';
+import { iterateRuns, runsOf, blockContainerOf } from './walker.js';
+import { serializeRun, isTranslatable, isShortText, buildFragment, textFragment } from './serialize.js';
 import * as inj from './injector.js';
 import { TranslateClient } from './client.js';
 import { IdleSlices } from './idle.js';
 import { LazyObserver, MutationWatcher, RouteWatcher } from './observer.js';
 import { joinSelectors, debounce } from './util.js';
+import { escapeText } from '../shared/markup.js';
+import { measurePresentation, measureColor } from './presentation.js';
 
 const MAX_REQUEST_ITEMS = 50;
 const CHURN_LIMIT = 12; // re-translations of one host within a minute before we leave it alone
@@ -23,6 +25,7 @@ export class PageTranslator {
     this.onChange = onChange || (() => {});
     this.units = new Map(); // id -> unit
     this.registry = new WeakMap(); // first node -> unit (dedupe across rescans)
+    this.attributes = new WeakMap();
     this.byHost = new Map(); // host -> Set<unit>
     this.churn = new WeakMap(); // host -> { n, t0 }
     this.client = new TranslateClient(platform);
@@ -91,7 +94,22 @@ export class PageTranslator {
     this.lazy.setMargin(this.s.lazy.rootMarginPx);
     this.watch.start();
     this.route.start();
-    for (const root of this.#roots()) this.#scan(root);
+    const roots = this.#roots();
+    // Prime visible blocks before the document-order scan. A novel can have thousands of
+    // offscreen nodes ahead of its scrolled reader; translated chrome must not move the reader
+    // out of the lazy window before it has even been discovered. Hit testing is bounded to 12
+    // points and uses the same range-aware scanner/dedupe, rather than scanning the whole DOM twice.
+    const visible = new Set();
+    if (scrollY > 0 || scrollX > 0) for (const y of [.12,.35,.6,.85]) for (const x of [.2,.5,.8]) {
+      for (const el of document.elementsFromPoint(innerWidth*x, innerHeight*y)) {
+        if (el.closest('dl-ui,dl-t,dl-o,dl-w')) continue;
+        const block = blockContainerOf(el);
+        if (block === document.body || block === document.documentElement || !roots.some(r => r.contains(block))) continue;
+        visible.add(block); break;
+      }
+    }
+    for (const block of visible) if (![...visible].some(other => other !== block && block.contains(other))) this.#scan(block);
+    for (const root of roots) this.#scan(root);
     this.emit();
   }
 
@@ -112,6 +130,7 @@ export class PageTranslator {
     this.units.clear();
     this.byHost.clear();
     this.registry = new WeakMap();
+    this.attributes = new WeakMap();
     this.emit();
   }
 
@@ -184,14 +203,11 @@ export class PageTranslator {
   }
 
   #scanOne(root, shallow) {
-    const opts = { minChars: this.s.minChars, exclude: this.#exclude(), known: this.#known, shallow };
-    if (this.platform.coarse) {
-      this.slices.run(iterateRuns(root, opts), (run) => {
-        if (run && this.active && run.host.isConnected && !this.#known(run.host, run.first)) this.#addUnit(run);
-      });
-    } else {
-      for (const run of collectRuns(root, opts)) this.#addUnit(run);
-    }
+    const opts = { minChars: this.s.translateShortText === false ? this.s.minChars : 1, exclude: this.#exclude(), known: this.#known,
+      attributeKnown: (el, key) => this.attributes.get(el)?.has(key), shallow };
+    this.slices.run(iterateRuns(root, opts), (run) => {
+      if (run && this.active && run.host.isConnected && (run.attribute ? !this.attributes.get(run.host)?.has(run.attribute) : !this.#known(run.host, run.first))) this.#addUnit(run);
+    });
   }
 
   #addUnit(run, { watch = true } = {}) {
@@ -201,6 +217,10 @@ export class PageTranslator {
       first: run.first,
       last: run.last,
       whole: run.whole,
+      paragraph: run.paragraph,
+      attribute: run.attribute,
+      source: run.source,
+      originalAttribute: run.attribute ? run.host.getAttribute(run.attribute) : null,
       state: 'idle', // idle | queued | pending | done | error | skip
       lang: this.s.targetLang,
       plain: '',
@@ -217,7 +237,11 @@ export class PageTranslator {
       peek: false,
     };
     this.units.set(unit.id, unit);
-    this.registry.set(unit.first, unit);
+    if (unit.attribute) {
+      let attrs = this.attributes.get(unit.host);
+      if (!attrs) this.attributes.set(unit.host, attrs = new Map());
+      attrs.set(unit.attribute, unit);
+    } else this.registry.set(unit.first, unit);
     let set = this.byHost.get(unit.host);
     if (!set) this.byHost.set(unit.host, (set = new Set()));
     set.add(unit);
@@ -228,7 +252,8 @@ export class PageTranslator {
   #drop(unit) {
     this.lazy.unwatch(unit);
     this.units.delete(unit.id);
-    this.registry.delete(unit.first);
+    if (unit.attribute) this.attributes.get(unit.host)?.delete(unit.attribute);
+    else this.registry.delete(unit.first);
     const set = this.byHost.get(unit.host);
     if (set) {
       set.delete(unit);
@@ -265,21 +290,24 @@ export class PageTranslator {
     // read phase: no DOM writes until every unit has been measured
     const ready = [];
     for (const u of batch) {
-      if (this.platform.coarse) await this.slices.yield();
+      await this.slices.yield();
       if (u.dead || this.units.get(u.id) !== u) continue;
       if (!inj.intact(u)) {
         this.#drop(u);
         continue;
       }
-      const r = serializeRun(u.first, u.last, { exclude });
+      const r = u.attribute ? { plain: u.source.trim(), text: escapeText(u.source.trim()), els: [] } : serializeRun(u.first, u.last, { exclude });
       u.plain = r.plain;
       u.src = r.text;
       u.els = r.els;
-      if (!isTranslatable(r.plain, s.minChars)) {
+      if (!isTranslatable(r.plain, s.translateShortText === false ? s.minChars : 1) ||
+          (s.translateShortText === false && isShortText(r.plain))) {
         this.#skip(u);
         continue;
       }
       u.flexHost = /flex|grid/.test(getComputedStyle(u.host).display);
+      u.presentation = u.attribute ? 'replace' : measurePresentation(u, s.inlineMaxChars);
+      u.translationColor = u.attribute ? null : measureColor(u.host);
       ready.push(u);
     }
 
@@ -358,8 +386,7 @@ export class PageTranslator {
         else this.#fail(u, r.error);
       } else this.#apply(u, r.text, r.stage === 'draft' ? 'draft' : 'final', r.engine || 'llm');
     });
-    if (this.platform.coarse) this.slices.run(results[Symbol.iterator](), (r) => { apply(r); this.emit(); });
-    else { for (const r of results) apply(r); this.emit(); }
+    this.slices.run(results[Symbol.iterator](), (r) => { apply(r); this.emit(); });
   }
 
   #fail(unit, error) {
@@ -397,7 +424,7 @@ export class PageTranslator {
     unit.state = 'done';
     unit.stage = stage;
     unit.engine = engine;
-    if (outPlain.toLowerCase() === unit.plain.replace(/\s+/g, ' ').toLowerCase()) {
+    if (outPlain.normalize('NFKC').replace(/\s+/g, '').toLowerCase() === unit.plain.normalize('NFKC').replace(/\s+/g, '').toLowerCase()) {
       inj.showNothing(unit); // the model returned the source unchanged
       return;
     }
@@ -444,6 +471,13 @@ export class PageTranslator {
 
     for (const el of dirty) {
       if (!el.isConnected) continue;
+      // Inline form controls belong to an ancestor block for text runs, but their visible
+      // attributes have independent identity. Invalidate those before the block-level rescan.
+      const attrs = this.attributes.get(el);
+      if (attrs?.size) {
+        for (const u of [...attrs.values()]) this.#drop(u);
+        rescan.add(el);
+      }
       const container = blockContainerOf(el);
       if (handled.has(container)) continue;
       handled.add(container);
@@ -512,7 +546,8 @@ export class PageTranslator {
 
   #create(el) {
     const container = blockContainerOf(el);
-    const runs = runsOf(container, { minChars: this.s.minChars, exclude: this.#exclude() });
+    const runs = runsOf(container, { minChars: this.s.translateShortText === false ? this.s.minChars : 1, exclude: this.#exclude(),
+      attributeKnown: (el, key) => this.attributes.get(el)?.has(key) });
     if (!runs.length) return null;
     let child = null;
     for (let a = el; a && a !== container; child = a, a = a.parentElement);
@@ -541,6 +576,7 @@ export class PageTranslator {
     let u = t ? this.units.get(t.getAttribute('data-dl-id')) : this.#locate(el);
     if (!u && mode !== 'collapse') u = this.#create(el);
     if (!u) return null;
+    if (u.state === 'error' && mode !== 'collapse') { this.retry(u.id); return 'translating'; }
     if (u.state === 'done' || u.state === 'pending' || u.state === 'error') {
       if (mode === 'translate') return null;
       if (u.hover) {

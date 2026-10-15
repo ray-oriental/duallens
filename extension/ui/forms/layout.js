@@ -70,6 +70,7 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(r.grid, 'displayMode', '显示方式', 'select', pairs([['bilingual', '双语对照'], ['translation-only', '仅译文']]));
   field(r.grid, 'style', '译文样式', 'select', STYLES);
   for (const [id, title] of [['minChars', '最短段落字符数'], ['inlineMaxChars', '行内译文阈值'], ['rootMarginPx', '预加载距离（px）'], ['batchDelayMs', '合批等待（ms）']]) field(r.grid, id, title, 'number');
+  field(r.grid, 'translateShortText', '翻译短文本（按钮、标签、导航项）', 'checkbox');
 
   const t = section('翻译方式');
   field(t.grid, 'translationMode', '翻译方式', 'select', TRANSLATION_MODES);

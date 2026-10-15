@@ -3,7 +3,7 @@
    currentColor so translations stay readable on light, dark and custom-themed pages alike. */
 
 dl-t {
-  --dl-fg: color-mix(in srgb, currentColor 62%, transparent);
+  --dl-fg: currentColor;
   --dl-line: color-mix(in srgb, currentColor 48%, transparent);
   --dl-soft: color-mix(in srgb, currentColor 7%, transparent);
   --dl-border: color-mix(in srgb, currentColor 22%, transparent);
@@ -32,7 +32,7 @@ dl-t {
 }
 
 dl-t[data-dl-stage="draft"] {
-  opacity: 0.88;
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -55,18 +55,17 @@ dl-t.dl-block {
 
 dl-t.dl-inline {
   display: inline;
+  font-size: .9em;
+  font-weight: normal;
 }
 
 dl-t.dl-inline::before {
-  content: " ";
+  content: " \00b7 ";
   white-space: pre;
 }
 
-/* a translated unit must not stay clamped to N lines, or the translation is cut off */
-[data-dl-state="done"] {
-  -webkit-line-clamp: unset !important;
-  line-clamp: none !important;
-}
+/* Keep authored clamps: constrained units replace their source instead of expanding the host. */
+dl-t.dl-block { max-inline-size: 100%; }
 
 /* styles --------------------------------------------------------------------------------- */
 
@@ -267,6 +266,13 @@ dl-t.dl-t.dl-solo {
 
 /* A virtual paragraph takes its own line/vertical column in translation-only readers. */
 dl-t.dl-block.dl-solo { display: block; }
+dl-t.dl-solo[data-dl-presentation="replace"] {
+  display: inline-block;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+}
 dl-t.dl-block[data-dl-state="done"] + br { display: none; }
 
 dl-t.dl-t.dl-solo::before,

@@ -48,7 +48,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     draftSecrets.set(id, secret);
     if (secretDialog) $('mt-key-status').textContent = secret ? '已设置' : '未设置'; else $('mtKey').value = secret;
   }
-  const simple = ['targetLang', 'sourceLang', 'displayMode', 'style', 'minChars', 'inlineMaxChars'];
+  const simple = ['targetLang', 'sourceLang', 'displayMode', 'style', 'minChars', 'inlineMaxChars', 'translateShortText'];
   const nums = new Set(['minChars', 'inlineMaxChars', 'rootMarginPx', 'batchDelayMs', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs', 'maxEntries', 'ttlDays']);
   const bind = {
     rootMarginPx: 'lazy.rootMarginPx', batchDelayMs: 'lazy.batchDelayMs', hoverEnabled: 'hover.enabled', hoverModifier: 'hover.modifier',

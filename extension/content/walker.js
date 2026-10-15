@@ -6,8 +6,9 @@
 // content. Block-ness comes from computed style, so flex/grid items count as blocks.
 
 import { isOurs, LETTER_RE } from './util.js';
-import { novelRoots, novelBody, pixivNovelDocument } from '../shared/site-adapters.js';
+import { novelBody, pixivNovelDocument } from '../shared/site-adapters.js';
 import { splitParagraphText } from './injector.js';
+import { denseLinkMenu } from './presentation.js';
 
 const SILENT_TAGS = new Set(['script', 'style', 'noscript', 'template', 'head', 'title', 'meta', 'link', 'base']);
 
@@ -19,7 +20,7 @@ export const EXCLUDED_TAGS = new Set([
 
 // SPEC §5.2 exclusions by attribute.
 const EXCLUDED_ATTR_SEL =
-  '[translate="no"],.notranslate,[aria-hidden="true"],[contenteditable]:not([contenteditable="false"])';
+  '[translate="no"],.notranslate,[aria-hidden="true"],.katex,.MathJax,mjx-container,[contenteditable]:not([contenteditable="false"])';
 
 // Used to find out whether an inline element wraps real blocks (e.g. <a><div>…</div></a>).
 const BLOCK_SEL =
@@ -38,6 +39,11 @@ export function isInlineLevel(display) {
 // Inline-level elements that still need to be scanned as containers.
 function needsContainer(el, display) {
   if (display === 'inline-flex' || display === 'inline-grid' || display === 'inline-table') return true;
+  if (!el.firstElementChild) return false;
+  if (pixivNovelDocument(el.ownerDocument) && el.querySelector('span.text-count')) return true;
+  if (el.querySelector('button,label,summary,[role="button"],[role="tab"],[role="menuitem"]')) return true;
+  if (el.querySelector('a') && (!el.closest('p,li,dd,td,figcaption,blockquote') ||
+      denseLinkMenu(el))) return true;
   return !!el.firstElementChild && !!el.querySelector(BLOCK_SEL);
 }
 
@@ -57,6 +63,11 @@ export function classify(el, exclude) {
   if (display === 'none' || cs.visibility === 'hidden') return 'hidden';
   const inlineLevel = isInlineLevel(display);
   if (isExcludedEl(el, tag, exclude)) return inlineLevel ? 'atom' : 'excluded-block';
+  if (novelBody(el)) return 'container';
+  // Interactive inline siblings must have independent translations and layout policies.
+  if (el.matches('button,label,summary,[role="button"],[role="tab"],[role="menuitem"]') ||
+      (tag === 'a' && (!el.closest('p,li,dd,td,figcaption,blockquote') ||
+        denseLinkMenu(el.parentElement)))) return 'container';
   if (inlineLevel && !needsContainer(el, display)) return 'inline';
   return 'container';
 }
@@ -72,6 +83,7 @@ export function blockContainerOf(node) {
   let el = node.nodeType === 1 ? node : node.parentElement;
   const root = document.body || document.documentElement;
   while (el && el !== document.documentElement) {
+    if (novelBody(el)) return el;
     const display = getComputedStyle(el).display;
     if (!isInlineLevel(display) || display === 'inline-flex' || display === 'inline-grid' || display === 'inline-table') {
       return el;
@@ -90,7 +102,7 @@ export function collectRuns(root, opts = {}) {
 }
 
 // Null yields are cooperative checkpoints, including containers that contain no text.
-export function* iterateRuns(root, opts = {}) {
+function* iterateTextRuns(root, opts = {}) {
   const minChars = opts.minChars ?? 2;
   const exclude = opts.exclude || null;
   const known = opts.known || null;
@@ -114,13 +126,13 @@ export function* iterateRuns(root, opts = {}) {
     let beforeBreak = null;
     // Pixiv text-count spans are author-entered lines, not CSS-wrapped visual rows. When there
     // are no explicit blank lines, each is already a paragraph (often one line of dialogue).
-    const paragraphLines = pixivNovelDocument(el.ownerDocument) && el.matches('p:has(> span.text-count)') &&
+    const paragraphLines = pixivNovelDocument(el.ownerDocument) && el.matches(':has(> span.text-count)') &&
       ![...el.querySelectorAll(':scope > span.text-count')].some(line=>!line.textContent.trim()) &&
       !el.querySelector(':scope > br + br');
 
     const flush = () => {
       if (first && letters && rough >= minChars && !(known && known(el, first))) {
-        const run = { host: el, first, last, whole: false };
+        const run = { host: el, first, last, whole: false, paragraph: paragraphLines || novelBody(el) };
         first = last = null; rough = 0; letters = false;
         return run;
       }
@@ -202,7 +214,7 @@ export function* iterateRuns(root, opts = {}) {
     if (first && !sawBlock) {
       // The single run covers the whole container: claim the container itself.
       if (letters && rough >= minChars && !(known && known(el, el.firstChild))) {
-        yield { host: el, first: el.firstChild, last: el.lastChild, whole: true };
+        yield { host: el, first: el.firstChild, last: el.lastChild, whole: true, paragraph: paragraphLines || novelBody(el) };
       }
       first = last = null;
     }
@@ -210,14 +222,32 @@ export function* iterateRuns(root, opts = {}) {
     if (run) yield run;
   }
 
-  const doc = root.ownerDocument;
-  if (pixivNovelDocument(doc)) {
-    const bodies = novelRoots(doc);
-    if (bodies.some(body => body === root || body.contains(root))) yield* scan(root);
-    else for (const body of bodies) if (root.contains(body)) yield* scan(body);
-    return;
-  }
   yield* scan(root);
+}
+
+export function* iterateRuns(root, opts = {}) {
+  if (root.nodeType !== 1) return;
+  const minChars = opts.minChars ?? 1, exclude = opts.exclude || null;
+  // Attributes cannot host dl-t children; their translations are restored independently.
+  for (const el of [root, ...root.querySelectorAll('[placeholder],button[title],a[title],[role="button"][title],option,input[type="button"],input[type="submit"],input[type="reset"]')]) {
+    yield null;
+    if (el.closest('dl-ui,dl-t,dl-o,dl-w,pre,code,kbd,samp,var,svg,math,.katex,.MathJax,mjx-container,' + EXCLUDED_ATTR_SEL) ||
+        (exclude && el.closest(exclude))) continue;
+    if (!el.getClientRects().length && el.localName !== 'option') continue;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility !== 'visible') continue;
+    const attributes = [];
+    if (el.matches('input[placeholder]:not([type="password"]),textarea[placeholder]') && !el.value) attributes.push(['placeholder', el.getAttribute('placeholder')]);
+    if (el.matches('button[title],a[title],[role="button"][title]') && !(el.innerText || '').trim()) attributes.push(['title', el.getAttribute('title')]);
+    if (el.localName === 'option') attributes.push(['label', el.getAttribute('label') || el.textContent]);
+    if (el.matches('input[type="button"],input[type="submit"],input[type="reset"]')) attributes.push(['value', el.getAttribute('value')]);
+    for (const [attribute, source] of attributes) {
+      if (source?.trim().length >= minChars && LETTER_RE.test(source) && !opts.attributeKnown?.(el, attribute)) {
+        yield { host: el, first: el, last: el, whole: false, attribute, source };
+      }
+    }
+  }
+  yield* iterateTextRuns(root, opts);
 }
 
 // Runs belonging to one block container only (no recursion); used by hover on an unscanned page.

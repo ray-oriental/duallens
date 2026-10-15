@@ -93,12 +93,28 @@ export function serializeRun(first, last, { exclude = null } = {}) {
 
 // Quick filter for strings that are not worth sending: no letters, bare URLs, e-mail addresses,
 // and lone code-ish tokens (v2.0, api_key, #id).
+let wordSegmenter;
+export function isShortText(plain) {
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(plain)) {
+    if (typeof Intl.Segmenter === 'function') {
+      wordSegmenter ||= new Intl.Segmenter(undefined, { granularity: 'word' });
+      let words = 0;
+      for (const segment of wordSegmenter.segment(plain)) if (segment.isWordLike && ++words > 3) return false;
+      return true;
+    }
+    return (plain.match(/\p{L}/gu) || []).length <= 3;
+  }
+  return (plain.match(/\S+/g) || []).length <= 3;
+}
+
 export function isTranslatable(plain, minChars) {
   if (plain.length < minChars) return false;
   if (!LETTER_RE.test(plain)) return false;
   if (/^(?:https?:\/\/|ftp:\/\/|www\.)\S+$/i.test(plain)) return false;
+  if (/^(?:[a-z0-9-]+\.)+(?:com|org|net|edu|gov|io|dev|app|cn|uk|jp|de|fr|ru)(?::\d+)?(?:\/\S*)?$/i.test(plain)) return false;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(plain)) return false;
-  if (!/\s/.test(plain) && /^[\x21-\x7e]+$/.test(plain) && /[0-9_/\\@#]/.test(plain)) return false;
+  if (/^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?[,]?\s+)?(?:\d{1,4}[-/:.]\d{1,2}[-/:.]\d{1,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})(?:[T\s].*)?$/i.test(plain)) return false;
+  if (/^(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}|\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?(?:\s*(?:UTC|GMT|[+-]\d{2}:?\d{2}))?|\d+\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago)$/i.test(plain)) return false;
   return true;
 }
 

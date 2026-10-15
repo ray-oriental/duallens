@@ -62,6 +62,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   displayMode: 'bilingual', // 'bilingual' | 'translation-only'
   style: 'muted',
   minChars: 2,
+  translateShortText: true,
   inlineMaxChars: 24, // units shorter than this get the inline layout
   lazy: { rootMarginPx: 600, batchDelayMs: 80 },
   comics: { enabled:true, language: 'jpn', canvasSites:['*.pixiv.net'], visionEnabled: false },

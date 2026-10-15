@@ -66,7 +66,7 @@ def novel_paragraphs(h):
     assert h.js('() => document.body.outerHTML')==before
 
 
-@e.case('novel_pixiv_scope', 'Public DOM marker scopes pixiv text to reader; vertical style and dynamic restore')
+@e.case('novel_pixiv_scope', 'Reader and page chrome translate; vertical style and dynamic restore')
 def novel_pixiv_scope(h):
     # Intercepted fixture is deliberately separate from the real-site integration runner.
     html=(e.FIXTURES/'pixiv-novel-like.html').read_text(encoding='utf-8')
@@ -78,7 +78,7 @@ def novel_pixiv_scope(h):
     before=h.js('() => document.body.outerHTML')
     h.command('toggle-page')
     h.wait_js("() => document.querySelectorAll('#br-reader dl-t[data-dl-state=done]').length===4")
-    assert h.js("() => document.querySelectorAll('nav dl-t,aside dl-t,footer dl-t,h1 dl-t').length===0")
+    h.wait_js("() => document.querySelector('nav dl-t[data-dl-state=done]')")
     assert h.js("() => getComputedStyle(document.querySelector('#br-reader dl-t')).writingMode==='vertical-rl'")
     assert h.js("() => getComputedStyle(document.querySelector('#br-reader dl-t')).fontSize==='20px'")
     h.command('toggle-page')
@@ -106,7 +106,7 @@ def novel_range_lazy(h):
     h.page.wait_for_timeout(500)
     first=h.js("() => document.querySelectorAll('dl-t[data-dl-state=done]').length")
     assert first<25,first
-    assert not h.js("() => document.querySelector('nav dl-t')")
+    h.wait_js("() => document.querySelector('nav dl-t[data-dl-state=done]')")
     h.command('toggle-translation-only')
     h.wait_js("() => document.querySelectorAll('dl-t[data-dl-state=done]').length>"+str(first))
     h.command('toggle-translation-only');h.wait_js("() => !document.querySelector('dl-o')")
@@ -127,6 +127,92 @@ def live_navigation_reads(h):
     assert h.page.url.endswith('/nav-stable') and count==2
     assert [p['done'] for p in reader_snapshot(h.page)['pairs']]==[False,True]
     return 'navigation-safe locator read; adjacent translated line cannot make missing line pass'
+
+@e.case('visible_controls', 'Visible controls, attributes, adaptive layout, exact restore and settings invalidation')
+def visible_controls(h):
+    h.open('article.html')
+    h.js("""() => {document.body.replaceChildren();
+      const fixture=document.createElement('section');
+      // Static fixture markup, never provider output.
+      fixture.innerHTML='<nav style="display:flex;gap:12px"><a id="nav" href="#x">Home</a><button id="button" style="height:30px;white-space:nowrap">Go</button></nav><p id="prose">Read this <a href="#test">helpful page</a> for more information.</p><label id="label">Search</label><input id="search" placeholder="Search articles"><button id="icon" title="Open settings"><svg width="12" height="12"><circle cx="6" cy="6" r="5"/></svg></button><select id="select"><option value="eng">English</option><option value="deu">German</option></select><table><tr><th id="head">Language</th><td id="cell">An extended cell with useful information about this language.</td></tr></table><details open><summary id="summary">More</summary><figcaption id="caption">A useful caption.</figcaption></details><div id="clamp" style="white-space:nowrap;overflow:hidden;width:140px">Useful content</div><p id="zh">这是中文内容。</p><p id="jp">これは日本語の文章です。</p><div class="katex">Mathematics</div><div id="later" hidden>Dynamic comment</div>';
+      document.body.append(fixture);
+      document.querySelector('#label').style.color='color(srgb .8 .8 .8)';
+      window.sourceNode=document.querySelector('#button').firstChild;
+    }""")
+    before=h.js('() => document.body.outerHTML')
+    h.command('toggle-page')
+    h.wait_js("() => document.querySelector('#cell dl-t[data-dl-state=done]') && document.querySelector('#search').placeholder.startsWith('【译】') && document.querySelector('option').label.startsWith('【译】')")
+    assert h.js("() => !document.querySelector('#zh dl-t,.katex dl-t') && !!document.querySelector('#jp dl-t')")
+    assert h.js("() => document.querySelector('#button dl-t').classList.contains('dl-solo') && document.querySelector('#clamp dl-t').classList.contains('dl-solo') && document.querySelector('#prose dl-t').classList.contains('dl-block')")
+    assert h.js("() => document.querySelector('#icon').title.startsWith('【译】') && document.querySelector('#button').title==='Go'")
+    assert h.js("() => document.querySelectorAll('#prose dl-t').length===1 && document.querySelector('#select').value==='eng'")
+    assert h.js("() => getComputedStyle(document.querySelector('#label dl-t'),'::before').content.includes('·')")
+    assert h.js("() => document.querySelector('#label dl-t').style.getPropertyValue('--dl-fg')==='rgb(0,0,0)'")
+    h.js("() => {document.querySelector('#search').placeholder='Find books';document.querySelector('#later').hidden=false}")
+    h.wait_js("() => document.querySelector('#search').placeholder==='【译】Find books' && document.querySelector('#later dl-t[data-dl-state=done]')")
+    h.settings({'translation':{'mode':'mt','mt':{'engine':'mock'}}})
+    h.wait_js("() => document.querySelector('#prose dl-t').getAttribute('data-dl-engine')==='mock' && document.querySelector('#search').placeholder.startsWith('【机翻】')")
+    h.command('toggle-page')
+    expected=before.replace('Search articles','Find books').replace('id="later" hidden=""','id="later"')
+    assert h.js('() => document.body.outerHTML')==expected
+    assert h.js("() => document.querySelector('#button').firstChild===window.sourceNode")
+    h.settings({'translateShortText':False})
+    h.page.wait_for_timeout(300)
+    h.command('toggle-page')
+    h.wait_js("() => document.querySelector('#prose dl-t[data-dl-state=done]')")
+    assert h.js("() => !document.querySelector('#button dl-t,#label dl-t')")
+    h.command('toggle-page')
+    return 'controls/attributes/JP/math; constrained replacement; dynamic reveal; MT mode invalidates; exact nodes and attributes'
+
+@e.case('novel_mobile_wrappers', 'Pixiv mobile non-p reader wrappers translate and restore')
+def novel_mobile_wrappers(h):
+    html='<meta charset="utf-8"><meta name="viewport" content="width=device-width"><nav>Home</nav><main><section><p><span><span id="reader"><span class="text-count">今日はいい天気です。庭を歩いていました。</span><br><span class="text-count">明日も晴れるでしょう。静かに笑いました。</span><br></span></span></p><div id="reader-div"><span class="text-count">庭には花が咲いていました。</span><br><span class="text-count">春の風を待っていました。</span><br></div></section></main>'
+    h.ctx.route('https://www.pixiv.net/novel/show.php?*',lambda route:route.fulfill(body=html,content_type='text/html'))
+    h.page=h.ctx.new_page();h.page.set_viewport_size({'width':375,'height':812})
+    h.page.goto('https://www.pixiv.net/novel/show.php?id=3#2')
+    h.tab_id=h.sw_eval(e.JS_FIND_TAB,h.page.url);h.wait_ready()
+    before=h.js('() => document.body.outerHTML')
+    h.command('toggle-page')
+    h.wait_js("() => document.querySelectorAll('#reader dl-t[data-dl-state=done]').length===2")
+    h.wait_js("() => document.querySelectorAll('#reader-div dl-t[data-dl-state=done]').length===2")
+    assert h.js("() => [...document.querySelectorAll('#reader dl-t')].every(t=>t.classList.contains('dl-block'))")
+    h.command('toggle-page');assert h.js('() => document.body.outerHTML')==before
+    return '375px p > span > span and div readers; four natural paragraphs; exact restore'
+
+@e.case('compact_navigation', 'Table-based link menus, whitespace echo and constrained failure preserve layout')
+def compact_navigation(h):
+    h.open('article.html')
+    h.page.set_viewport_size({'width':375,'height':812})
+    h.js("""() => {document.body.replaceChildren();
+      const table=document.createElement('table'),row=table.insertRow(),cell=row.insertCell(),span=document.createElement('span');
+      for(const text of ['new','past','comments','ask','show','jobs','submit']) {const a=document.createElement('a');a.href='#'+text;a.textContent=text;span.append(a,document.createTextNode(' | '));}
+      cell.append(span);document.body.append(table);
+      const metadata=table.insertRow().insertCell();metadata.id='metadata';
+      metadata.innerHTML='<span><span>130 points</span> by <a href="#author">Example Author</a> <span>2 hours ago</span> | <a href="#hide">hide</a> | <a href="#comments">48 comments</a></span>';
+      const h=document.createElement('h1');h.textContent='Array.prototype.map()';document.body.append(h);
+      const button=document.createElement('button');button.id='retry';button.title='Original tip';button.style.cssText='height:30px;white-space:nowrap';button.textContent='Retry';document.body.append(button);
+    }""")
+    before=h.js('() => document.body.outerHTML')
+    h.js("""async extension => {
+      const {PageTranslator}=await import(extension+'/content/controller.js');
+      const {DEFAULT_SETTINGS}=await import(extension+'/shared/settings.js');
+      let failed=false;
+      const platform={coarse:true,detectLanguage:async()=>null,translator:()=>({translateBatch(req,cb){
+        const timer=setTimeout(()=>cb(req.items.map(i=>{
+          if(i.text==='Retry'&&!failed){failed=true;return {id:i.id,error:{code:'network',message:'fixture failure'}}}
+          return {id:i.id,text:i.text==='Array.prototype.map()'?'Array.prototype.map （）':'【译】'+i.text};
+        })),30);return {cancel(){clearTimeout(timer)}};
+      }})};
+      window.compact=new PageTranslator({getSettings:()=>DEFAULT_SETTINGS,platform});compact.start();
+    }""",f'chrome-extension://{h.ext_id}')
+    h.wait_js("() => compact.getState().failed===1 && document.querySelectorAll('td a dl-t[data-dl-state=done]').length===7")
+    assert h.js("() => [...document.querySelectorAll('td a dl-t')].every(t=>t.classList.contains('dl-solo')) && !document.querySelector('h1 dl-t,#retry dl-t')")
+    assert h.js("() => document.querySelectorAll('#metadata dl-t').length===1 && document.querySelector('#metadata dl-t').textContent.includes('130 points by Example Author')")
+    h.js("() => compact.hoverToggle(document.querySelector('#retry'),'translate')")
+    h.wait_js("() => document.querySelector('#retry dl-t[data-dl-state=done]')")
+    h.js('() => compact.stop()')
+    assert h.js('() => document.body.outerHTML')==before
+    return '375px dense menu replacement; no duplicate code heading; failure preserves control; retry + exact restore'
 
 if __name__=='__main__':
     raise SystemExit(e.main(['--mock-only','--artifacts-dir',str(e.E2E_ROOT/'layout'/'offline'),*sys.argv[1:]]))

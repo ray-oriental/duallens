@@ -135,6 +135,14 @@ Android Edge + Tampermonkey                         │
 
 ## 5. 内容脚本流水线
 
+v0.4 覆盖修订：不再将 Pixiv 整页限制为正文根；导航、标签、表头、侧栏等可见文字同样扫描。
+`translateShortText:true` 将有效最短长度设为 1；关闭时按 `minChars` 且排除 1–3 词单元。
+select/option/input/textarea 仍不插入子节点；通过独立属性单元处理可见 placeholder、图标 title、option label、按钮型 input value，恢复原值并保留站点主动改写。
+正文中的普通链接继续并入原段落，导航及独立交互控件单独成段。
+`content/presentation.js:choosePresentation` 是纯呈现决策函数；测量与 DOM 写入分离，受限容器替换显示并保留可恢复的原文 title。
+扫描、测量与结果插入在桌面和触屏均分片；短单元沿用共享队列的批量上限，不逐项调用 MT。
+模式/引擎配置改动会重翻已启用页面。以下 P0 描述中的短文本阈值及仅按块级排版由这组规则补充。
+
 1. **切段（walker）**：从根节点深度优先，找「直接含有可见文本的块级容器」作为翻译单元。行内子元素并入
    所属单元，不单独成段。块级判定用计算样式 `display`（block、list-item、table-cell、flex/grid 的子项按块处理），
    不只看标签名。

@@ -50,6 +50,14 @@ export interface TranslatorService {
 
 ### v0.4 双引擎增量契约（未发布）
 
+网页覆盖与排版补充：`translateShortText:true` 默认开启，单字与 1–3 词控件参与合批；关闭后遵循 `minChars` 并跳过 1–3 词短单元。
+正文、列表及长单元格下方显示块级译文；短控件使用较小行内译文与细分隔；nowrap、裁剪、固定高度或单行 flex 控件显示译文，原文存于可恢复的 title。
+placeholder、无可见正文的图标按钮 title、原生 option label 及按钮型 input value 独立翻译；不翻译 alt、密码框或用户输入值。
+动态属性与展开状态会失效重扫；`translation` 模式/引擎变化会取消旧请求、恢复并重翻。
+译文颜色按原文字色与祖先纯色背景调和，计算对比度至少 4.5；背景图、渐变与祖先 opacity/filter 的最终像素对比度仍需真实页面检查。
+Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/span，穿透手机版 `p > span > span` 行内包装；正文之外的可见导航和标签也参与普通扫描。
+覆盖率与首段 ≤3 秒属于真实网页验收指标，不以 mock 成功或相同原文回显冒充已生成中文译文；站点拒绝访问须单列失败。
+
 - `translation = { mode:'mt+llm', refineTimeoutMs:90000, mt:{engine:'microsoft',fallback:true,region:''} }`。
   模式为 `mt` / `llm` / `mt+llm` / `auto`。新安装无需模型 key；用户触发翻译时，无可用 LLM 配置的混合模式降级为 MT。
   安装、打开设置本身不发翻译请求。`llm` 模式仍要求有效模型配置，也不会调用免费 MT。

@@ -6,6 +6,7 @@
 // first..last are consecutive siblings; for a whole unit they span every child of host.
 
 import { TAG_T, TAG_O, TAG_W, TAG_R } from './util.js';
+import { measurePresentation } from './presentation.js';
 
 // All writes go through this hook so the mutation observer can discard its own records.
 let guard = (fn) => fn();
@@ -17,8 +18,30 @@ export function write(fn) {
 }
 
 const HEAVY_SEL = 'iframe,video,audio,input,textarea,select,canvas,object,embed';
-const INLINE_HOST_SEL = 'button,summary,label,[role="button"],[role="tab"],[role="menuitem"],[role="option"]';
 const textSplits = new WeakMap();
+const titleClaims = new WeakMap();
+
+function claimTitle(unit) {
+  let record = titleClaims.get(unit.host);
+  if (!record) titleClaims.set(unit.host, record = { original: unit.host.getAttribute('title'), units: new Set(), written: null });
+  record.units.add(unit); unit.titleSaved = true;
+  record.written = [...record.units].map(u => u.plain).join(' ');
+  unit.host.setAttribute('title', record.written);
+}
+
+function releaseTitle(unit) {
+  const record = titleClaims.get(unit.host);
+  if (!unit.titleSaved || !record) return;
+  record.units.delete(unit); unit.titleSaved = false;
+  if (unit.host.getAttribute('title') === record.written) {
+    if (record.units.size) {
+      record.written = [...record.units].map(u => u.plain).join(' ');
+      unit.host.setAttribute('title', record.written);
+    } else if (record.original === null) unit.host.removeAttribute('title');
+    else unit.host.setAttribute('title', record.original);
+  }
+  if (!record.units.size) titleClaims.delete(unit.host);
+}
 
 // A pre-wrap reader can put several paragraphs in a single Text node. Retain that exact node
 // and its original data; every emitted range releases its claim during restore/drop.
@@ -67,6 +90,7 @@ export function nodesOf(unit) {
 
 // True while the unit's own nodes are still where we found them.
 export function intact(unit) {
+  if (unit.attribute) return unit.host.isConnected;
   if (!unit.host.isConnected || !unit.first.isConnected || !unit.last.isConnected) return false;
   return unit.first.parentNode === unit.last.parentNode;
 }
@@ -164,6 +188,7 @@ function cleanHostClass(unit) {
 }
 
 export function markPending(unit) {
+  if (unit.attribute) return;
   write(() => {
     const t = ensureT(unit);
     t.className = 'dl-t dl-inline';
@@ -177,20 +202,29 @@ export function decideInline(unit, inlineMaxChars) {
   // Virtual paragraphs in a line-break reader must remain separate even for short dialogue.
   if (!unit.whole && (unit.host.querySelector(':scope > br') || unit.host.matches('[data-novel-content]'))) return false;
   if(textSplits.has(unit.first)) return false;
-  if (unit.plain.length < inlineMaxChars) return true;
-  return unit.host.matches(INLINE_HOST_SEL);
+  return (unit.presentation || measurePresentation(unit, inlineMaxChars)) !== 'block';
 }
 
 // mode: 'bilingual' | 'translation-only'. stage: 'draft' (machine translation, an LLM result is
 // expected) | 'final'. A refinement reuses the same <dl-t> and class list: only its text changes.
 export function showTranslation(unit, fragment, { mode, style, inlineMaxChars, stage = 'final', engine = 'llm' }) {
   write(() => {
+    if (unit.attribute) {
+      // No markup, child nodes or form values are inserted into a visible attribute.
+      const current = unit.host.getAttribute(unit.attribute);
+      if (current !== (unit.attributeWritten ?? unit.originalAttribute)) return;
+      unit.attributeWritten = fragment.textContent;
+      unit.host.setAttribute(unit.attribute, unit.attributeWritten);
+      return;
+    }
     const t = ensureT(unit);
     unit.inline = decideInline(unit, inlineMaxChars);
     t.className = `dl-t ${unit.inline ? 'dl-inline' : 'dl-block'} dl-s-${style}`;
+    if (unit.translationColor) t.style.setProperty('--dl-fg', unit.translationColor);
     t.setAttribute('data-dl-state', 'done');
     t.setAttribute('data-dl-stage', stage);
     t.setAttribute('data-dl-engine', engine);
+    t.setAttribute('data-dl-presentation', unit.presentation || (unit.inline ? 'inline' : 'block'));
     t.replaceChildren(fragment);
     setHostState(unit, 'done');
     applyMode(unit, mode);
@@ -206,16 +240,23 @@ export function setStage(unit, stage, engine) {
 
 // Translation identical to the source: nothing to show.
 export function showNothing(unit) {
+  if (unit.attribute) return;
   write(() => {
     if (unit.tEl) unit.tEl.remove();
     unit.tEl = null;
     unwrapOriginal(unit);
+    cleanHostClass(unit);
+    releaseTitle(unit);
     adopt(unit);
     setHostState(unit, 'done');
   });
 }
 
 export function markError(unit, message) {
+  if (unit.attribute) return;
+  // A touch-sized retry button cannot fit a single-line menu or icon button. Leave the
+  // original control usable; page state still reports the error and hover can retry it.
+  if (unit.presentation === 'replace') { restore(unit); return; }
   write(() => {
     const t = ensureT(unit);
     t.className = 'dl-t dl-inline';
@@ -234,7 +275,9 @@ export function markError(unit, message) {
 function applyMode(unit, mode) {
   const t = unit.tEl;
   if (!t) return;
-  const solo = mode === 'translation-only' && unit.state === 'done';
+  const replace = unit.presentation === 'replace';
+  if (replace && !unit.titleSaved) claimTitle(unit);
+  const solo = (mode === 'translation-only' || replace) && unit.state === 'done';
   if (solo) {
     wrapOriginal(unit);
     // hasHeavy() may have refused to wrap; then the translation stays beside the original
@@ -280,6 +323,13 @@ export function setPeek(unit, on) {
 // Puts the DOM back exactly as the page had it.
 export function restore(unit) {
   write(() => {
+    if (unit.attribute) {
+      if (unit.attributeWritten !== undefined && unit.host.getAttribute(unit.attribute) === unit.attributeWritten) {
+        if (unit.originalAttribute === null) unit.host.removeAttribute(unit.attribute);
+        else unit.host.setAttribute(unit.attribute, unit.originalAttribute);
+      }
+      return;
+    }
     if (unit.tEl) unit.tEl.remove();
     unwrapOriginal(unit);
     if (unit.wEl) {
@@ -295,6 +345,7 @@ export function restore(unit) {
     unit.tEl = null;
     unit.wChecked = false;
     unit.adopted = false;
+    releaseTitle(unit);
     releaseTextSplit(unit);
   });
 }

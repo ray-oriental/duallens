@@ -543,6 +543,29 @@ function centered(blocks, textual, pageWidth, bodySize) {
   }
 }
 
+// Preserve an academic byline cluster locally. Require affiliation/mail evidence, a header
+// position, and name-shaped lines; a title-cased section heading alone is never an author.
+export function preserveIdentities(blocks, height) {
+  const abstract = blocks.find(b => /^abstract\b/i.test(b.text.trim()));
+  const limit = Math.min(height * .45, abstract?.box.top ?? Infinity);
+  const anchors = blocks.filter(b => b.box.bottom < limit && b.text.length < 240 && b.lines.length <= 4 &&
+    !/[.!?](?:\s|$)/.test(b.text) &&
+    (/^(?:\{[\p{L}\p{N}_.+,\-]+\}|[\p{L}\p{N}_.+\-]+)@[\p{L}\p{N}.\-]+\.[a-z]{2,}$/iu.test(b.text.trim().replace(/\{([^{}]+)\}/g, (_, names) => '{' + names.replace(/\s+/g,'') + '}')) ||
+      (/\b(?:University|Institute|Microsoft Research|Laboratory|Laboratories|Department of)\b/i.test(b.text) &&
+        !/\b(?:is|are|was|were|we|our|this|discussed|provides?)\b/i.test(b.text))));
+  if (!anchors.length) return;
+  const names = /^(?:[\p{Lu}][\p{L}’'\-]*\.?\s+){1,15}[\p{Lu}][\p{L}’'\-]*\.?$/u;
+  for (const block of blocks) {
+    if (block.kind !== 'text' || block.box.bottom >= limit) continue;
+    const nearby = anchors.some(a => Math.abs(a.box.top - block.box.bottom) < Math.max(block.size * 6, 70));
+    const nameLines = block.text.split(/[,;]|\s+and\s+/).map(s => s.replace(/[\d*†‡]+/g, '').trim()).filter(Boolean);
+    if (anchors.includes(block) || (nearby && block.size <= Math.max(...anchors.map(a => a.size)) * 1.15 &&
+        nameLines.length && nameLines.every(s => names.test(s)))) {
+      block.kind = 'identity'; block.role = 'identity';
+    }
+  }
+}
+
 // -> { blocks, bodySize }. Blocks are in reading order; `id` is the stable index on this page.
 export function segmentPage(items = [], { view, pageWidth = 0, pageHeight = 0, styles = {}, measure = estimateWidth } = {}) {
   const box = Array.isArray(view) && view.length === 4 && view.every(Number.isFinite) ? view : [0, 0, pageWidth, pageHeight];
@@ -555,6 +578,7 @@ export function segmentPage(items = [], { view, pageWidth = 0, pageHeight = 0, s
   markRows(lines, width);
   const ctx = { measure, pageHeight: height, bodySize };
   const blocks = buildBlocks(lines, measure).map(block => ({ ...describe(block, ctx), list: block.list }));
+  preserveIdentities(blocks, height);
   for (const f of isolated) {
     const text = f.text.trim();
     const r = { left: f.left, top: f.top, right: f.right, bottom: f.bottom };

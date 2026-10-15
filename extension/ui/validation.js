@@ -27,6 +27,7 @@ export function validateSettings(s) {
   const lang = code => LANGS.some(l => l.code === code);
   requireThat(lang(s.targetLang) && (s.sourceLang === 'auto' || lang(s.sourceLang)), '请选择有效的源语言和目标语言');
   requireThat(['bilingual','translation-only'].includes(s.displayMode), '显示模式无效');
+  requireThat(typeof s.translateShortText === 'boolean', '翻译短文本开关无效');
   requireThat(STYLES.some(v => v.id === s.style), '译文样式无效');
   requireThat(PROMPT_PRESETS.includes(s.prompt.preset) && typeof s.prompt.custom === 'string', '提示词设置无效');
   for (const [v, lo, hi, name] of [[s.minChars,2,1000,'最短段落'],[s.inlineMaxChars,0,500,'行内阈值'],[s.lazy.rootMarginPx,0,3000,'预加载距离'],[s.lazy.batchDelayMs,10,2000,'合批等待'],[s.cache.maxEntries,100,100000,'缓存条数'],[s.cache.ttlDays,1,365,'缓存天数']]) {

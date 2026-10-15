@@ -6,13 +6,13 @@ export function pixivNovelDocument(doc) {
 export function novelRoots(doc) {
   if (!pixivNovelDocument(doc)) return [];
   // text-count is the public reader's line marker; data-novel-content is an explicit reader hint.
-  const roots=[...doc.querySelectorAll('p:has(> span.text-count),[data-novel-content]')];
+  const roots=[...doc.querySelectorAll(':has(> span.text-count),[data-novel-content]')];
   return roots.filter(root=>!roots.some(other=>other!==root&&other.contains(root)));
 }
 
 export function novelBody(el) {
   return el.matches('[data-novel-content]') ||
-    (pixivNovelDocument(el.ownerDocument) && el.matches('p:has(> span.text-count)'));
+    (pixivNovelDocument(el.ownerDocument) && el.matches(':has(> span.text-count)'));
 }
 
 export function artworkImages(doc) {

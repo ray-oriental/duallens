@@ -61,6 +61,7 @@ export class LazyObserver {
   }
 
   #rect(unit) {
+    if (unit.attribute) return (unit.host.closest('select') || unit.host).getBoundingClientRect();
     if(unit.first?.isConnected && unit.last?.isConnected) {
       const range=document.createRange();range.setStartBefore(unit.first);range.setEndAfter(unit.last);
       const rect=range.getBoundingClientRect();if(rect.height || rect.width)return rect;
@@ -104,7 +105,8 @@ export class MutationWatcher {
   start() {
     if (this.mo) return;
     this.mo = new MutationObserver((records) => this.#collect(records));
-    this.mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    this.mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['placeholder','title','label','value','hidden','open','class','style','aria-hidden'] });
   }
 
   stop() {
@@ -132,7 +134,7 @@ export class MutationWatcher {
       const t = r.target;
       const el = t.nodeType === 1 ? t : t.parentElement;
       if (!el || el.closest('dl-t,dl-ui')) continue;
-      if (r.type === 'characterData') {
+      if (r.type === 'characterData' || r.type === 'attributes') {
         this.dirty.add(el);
         any = true;
         continue;
