@@ -85,6 +85,31 @@ export function tokens(source, file = '<source>') {
   return out;
 }
 
+// Size budget: drop comments and indentation, keep every token byte-for-byte. A gap between two
+// tokens holds only whitespace and comments (strings, templates and regex literals are tokens), so
+// rewriting gaps cannot touch program text. A gap without a comment keeps its bytes unless it holds a
+// newline, and a newline stays one newline, so automatic semicolon insertion behaves as before. The
+// result is re-tokenized and must be the same token sequence, otherwise the build fails.
+export function compactSource(source, file = '<source>') {
+  const list = tokens(source, file);
+  const gap = (text, previous) => {
+    if (!previous) return '';
+    if (!/\/[/*]/.test(text)) return /[\r\n\u2028\u2029]/.test(text) ? '\n' : text;
+    // A comment right after "\" or a bare "/" may really be part of a regex the tokenizer took for division.
+    if (previous.kind === 'punct' && (previous.value === '\\' || previous.value === '/')) fail(file, `ambiguous comment after ${previous.value}`);
+    return /[\r\n\u2028\u2029]/.test(text) ? '\n' : ' ';
+  };
+  let out = '', prevEnd = 0;
+  list.forEach((t, i) => {
+    out += gap(source.slice(prevEnd, t.start), list[i - 1]) + source.slice(t.start, t.end);
+    prevEnd = t.end;
+  });
+  out += /[\r\n\u2028\u2029]/.test(source.slice(prevEnd)) ? '\n' : '';
+  const again = tokens(out, file);
+  if (again.length !== list.length || again.some((t, i) => t.kind !== list[i].kind || t.value !== list[i].value)) fail(file, 'compaction changed the token stream');
+  return out;
+}
+
 function rejectRuntimeImports(list, file) {
   for (let i = 0; i < list.length; i++) {
     if (list[i].kind !== 'word' || list[i].value !== 'import' || list[i - 1]?.value === '.') continue;
@@ -228,6 +253,7 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
       }
       code = code.slice(0, edit.start) + replacement + code.slice(edit.end);
     }
+    code = compactSource(code, id(file));
     code += '\n' + mod.exports.map((e) => `Object.defineProperty(__exports, ${JSON.stringify(e.local)}, { enumerable: true, get: () => ${e.imported} });`).join('\n');
     factories.push(`${JSON.stringify(id(file))}: function(__exports, __require) {\n${code}\n}`);
   }

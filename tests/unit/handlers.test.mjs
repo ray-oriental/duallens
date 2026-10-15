@@ -5,6 +5,7 @@ import { createProviders } from '../../extension/background/providers.js';
 import { createMemoryCache } from '../../extension/background/cache.js';
 import { createQueue } from '../../extension/background/queue.js';
 import { createTranslator } from '../../extension/background/translator.js';
+import { createMT, MT_PLACEHOLDER } from '../../extension/background/mt.js';
 import { mergeSettings, DEFAULT_SETTINGS } from '../../extension/shared/settings.js';
 import { ERR } from '../../extension/shared/protocol.js';
 import {
@@ -15,15 +16,18 @@ import {
   MSG_CACHE_CLEAR,
   MSG_OPEN_OPTIONS,
 } from '../../extension/shared/protocol.js';
+import { MSG_MT_TEST } from '../../extension/background/handlers.js';
 import { FAST_QUEUE } from './helpers.mjs';
 
 // End to end through the real mock provider: handlers -> translator -> queue -> cache -> mock.
 function setup(overrides = {}) {
-  const settings = mergeSettings(DEFAULT_SETTINGS, { provider: { active: 'mock' }, ...overrides });
+  // These tests exercise the LLM path; the double-engine modes have their own tests.
+  const settings = mergeSettings(DEFAULT_SETTINGS, { translation: { mode: 'llm', mt: { engine: 'mock' } }, provider: { active: 'mock' }, ...overrides });
   const providers = createProviders({ sleep: async () => {}, random: () => 0 });
   const cache = createMemoryCache();
   const queue = createQueue(FAST_QUEUE);
-  const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: async () => settings });
+  const mt = createMT({ fetchImpl: () => { throw new Error('offline'); } });
+  const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: async () => settings, mt });
   const opened = [];
   const handlers = createHandlers({
     translator,
@@ -38,7 +42,27 @@ function setup(overrides = {}) {
 test('translate-text through the mock backend', async () => {
   const { handlers } = setup();
   const res = await handlers[MSG_TRANSLATE_TEXT]({ type: MSG_TRANSLATE_TEXT, text: 'Hello <world>', to: 'zh-CN', purpose: 'selection' });
-  assert.deepEqual(res, { ok: true, text: '【译】Hello <world>' });
+  assert.deepEqual(res, { ok: true, text: '【译】Hello <world>', by: 'llm' });
+});
+
+test('translate-text: purpose and mode pick the stage; refining on demand asks the LLM', async () => {
+  const { handlers } = setup({ translation: { mode: 'mt+llm', mt: { engine: 'mock' } } });
+  const quick = await handlers[MSG_TRANSLATE_TEXT]({ text: 'Hello', to: 'zh-CN', purpose: 'selection' });
+  assert.deepEqual(quick, { ok: true, text: MT_PLACEHOLDER + 'Hello', by: 'mt', engine: 'mock' });
+  const refined = await handlers[MSG_TRANSLATE_TEXT]({ text: 'Hello', to: 'zh-CN', purpose: 'selection', mode: 'llm' });
+  assert.deepEqual(refined, { ok: true, text: '【译】Hello', by: 'llm' });
+  const ignored = await handlers[MSG_TRANSLATE_TEXT]({ text: 'Hello', to: 'zh-CN', purpose: 'selection', mode: 'nonsense' });
+  assert.equal(ignored.by, 'mt', 'an unknown mode falls back to the configured one');
+});
+
+test('mt-test probes one engine and reports its sample', async () => {
+  const { handlers } = setup();
+  const ok = await handlers[MSG_MT_TEST]({ engine: 'mock' });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.engine, 'mock');
+  assert.equal(ok.sample, MT_PLACEHOLDER + 'Hello, world.');
+  const bad = await handlers[MSG_MT_TEST]({ engine: 'not-an-engine' });
+  assert.deepEqual([bad.ok, bad.error.code], [false, ERR.CONFIG]);
 });
 
 test('translate-text validates input', async () => {
@@ -117,6 +141,6 @@ test('every one-shot message type from the protocol has a handler', () => {
   const { handlers } = setup();
   assert.deepEqual(
     Object.keys(handlers).sort(),
-    [MSG_TRANSLATE_TEXT, MSG_LIST_MODELS, MSG_PROVIDER_TEST, MSG_CACHE_STATS, MSG_CACHE_CLEAR, MSG_OPEN_OPTIONS].sort(),
+    [MSG_TRANSLATE_TEXT, MSG_LIST_MODELS, MSG_PROVIDER_TEST, MSG_CACHE_STATS, MSG_CACHE_CLEAR, MSG_OPEN_OPTIONS, MSG_MT_TEST].sort(),
   );
 });

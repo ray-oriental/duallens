@@ -156,14 +156,18 @@ export class PageTranslator {
     let failed = 0;
     let done = 0;
     let total = 0;
+    let refining = 0; // showing a machine-translation draft; the LLM result is still on its way
     for (const u of this.units.values()) {
       if (u.state === 'skip') continue;
       total++;
       if (u.state === 'queued' || u.state === 'pending') pending++;
       else if (u.state === 'error') failed++;
-      else if (u.state === 'done') done++;
+      else if (u.state === 'done') {
+        done++;
+        if (u.stage === 'draft') refining++;
+      }
     }
-    return { translated: this.active, mode: this.s.displayMode, units: total, pending, failed, done };
+    return { translated: this.active, mode: this.s.displayMode, units: total, pending, failed, done, refining };
   }
 
 
@@ -203,6 +207,7 @@ export class PageTranslator {
       src: '',
       els: null,
       translated: null,
+      stage: null, // 'draft' while a machine-translation draft awaits the LLM result, then 'final'
       priority: PRIORITY.NEAR,
       top: 0,
       tEl: null,
@@ -322,18 +327,19 @@ export class PageTranslator {
     const s = this.s;
     const byPriority = new Map();
     for (const u of units) {
-      const key=JSON.stringify([u.priority,u.from||'auto']);
+      const key=JSON.stringify([u.priority,u.from||'auto',u.hover?'hover':'page']);
       if (!byPriority.has(key)) byPriority.set(key, []);
       byPriority.get(key).push(u);
     }
     for (const [key, list] of byPriority) {
-      const [priority,from]=JSON.parse(key);
+      const [priority,from,purpose]=JSON.parse(key);
       list.sort((a, b) => a.top - b.top);
       for (let i = 0; i < list.length; i += MAX_REQUEST_ITEMS) {
         const chunk = list.slice(i, i + MAX_REQUEST_ITEMS);
         const items = chunk.map((u) => ({ id: u.id, text: u.src }));
+        // draft: machine translation may answer first (stage 'draft'); the LLM result then replaces it in place.
         const reqId = this.client.request(
-          { items, priority, to: s.targetLang, from: s.sourceLang==='auto'?from:s.sourceLang||'auto', context: this.#context() },
+          { items, priority, to: s.targetLang, from: s.sourceLang==='auto'?from:s.sourceLang||'auto', context: this.#context(), draft: true, purpose },
           { onResults: (results) => this.#onResults(results), onDone: () => this.emit() },
         );
         for (const u of chunk) u.reqId = reqId;
@@ -344,10 +350,13 @@ export class PageTranslator {
   #onResults(results) {
     const apply = (r) => inj.write(() => {
       const u = this.units.get(r.id);
-      if (!u || u.dead || u.state !== 'pending') return;
+      // A unit showing a draft still accepts its final result (or the news that none will come).
+      if (!u || u.dead || (u.state !== 'pending' && !(u.state === 'done' && u.stage === 'draft'))) return;
       if (!inj.intact(u)) { this.#drop(u); return; }
-      if (r.error) this.#fail(u, r.error);
-      else this.#apply(u, r.text);
+      if (r.error) {
+        if (u.stage === 'draft') this.#settleDraft(u); // refinement failed: the draft stays, quietly
+        else this.#fail(u, r.error);
+      } else this.#apply(u, r.text, r.stage === 'draft' ? 'draft' : 'final', r.engine || 'llm');
     });
     if (this.platform.coarse) this.slices.run(results[Symbol.iterator](), (r) => { apply(r); this.emit(); });
     else { for (const r of results) apply(r); this.emit(); }
@@ -359,16 +368,35 @@ export class PageTranslator {
     inj.markError(unit, error && error.message);
   }
 
-  #apply(unit, text) {
+  // The LLM stage gave up on a unit that already shows its machine-translation draft: the draft stays.
+  #settleDraft(unit) {
+    unit.stage = 'final';
+    unit.refined = false;
+    inj.setStage(unit, 'final');
+  }
+
+  #apply(unit, text, stage = 'final', engine = 'llm') {
     const parsed = parseMarkup(text, { maxG: unit.els.length, maxX: unit.els.length });
     const fragment = parsed.ok ? buildFragment(parsed.nodes, unit.els) : textFragment(parsed.plain);
     const outPlain = (fragment.textContent || '').replace(/\s+/g, ' ').trim();
     if (!outPlain) {
-      this.#fail(unit, { code: ERR.PARSE, message: '译文为空' });
+      // An empty draft is ignored; an empty final result keeps an existing draft instead of failing the unit.
+      if (stage === 'draft') return;
+      if (unit.stage === 'draft') this.#settleDraft(unit);
+      else this.#fail(unit, { code: ERR.PARSE, message: '译文为空' });
+      return;
+    }
+    if (unit.translated === text && unit.tEl) {
+      unit.stage = stage;
+      unit.engine = engine;
+      unit.state = 'done';
+      inj.setStage(unit, stage, engine);
       return;
     }
     unit.translated = text;
     unit.state = 'done';
+    unit.stage = stage;
+    unit.engine = engine;
     if (outPlain.toLowerCase() === unit.plain.replace(/\s+/g, ' ').toLowerCase()) {
       inj.showNothing(unit); // the model returned the source unchanged
       return;
@@ -377,6 +405,8 @@ export class PageTranslator {
       mode: this.s.displayMode,
       style: this.style,
       inlineMaxChars: this.s.inlineMaxChars,
+      stage,
+      engine,
     });
     this.lazy.scroll();
   }
@@ -445,7 +475,7 @@ export class PageTranslator {
   #reshow(unit) {
     if (unit.translated == null) return;
     unit.state = 'pending';
-    inj.write(() => this.#apply(unit, unit.translated));
+    inj.write(() => this.#apply(unit, unit.translated, unit.stage || 'final', unit.engine || 'llm'));
   }
 
   #onRoute() {

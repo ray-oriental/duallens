@@ -41,12 +41,35 @@ export interface Platform {
 }
 
 export interface TranslatorService {
-  translateBatch({ items, to, from, priority, context }, onPartial): { cancel() };
-  translateText({ text, to, from, purpose }): Promise<{ ok, text?, error? }>;
+  translateBatch({ items, to, from, priority, context, draft?, purpose?, mode? }, onPartial): { cancel(), done? };
+  translateText({ text, to, from, purpose, mode? }): Promise<{ ok, text?, by?, engine?, error? }>;
   listModels(profileId): Promise<{ ok, models? }>;
   testProvider(profileId): Promise<{ ok, latencyMs?, sample?, error? }>;
 }
 ```
+
+### v0.4 双引擎增量契约（未发布）
+
+- `translation = { mode:'mt+llm', refineTimeoutMs:90000, mt:{engine:'microsoft',fallback:true,region:''} }`。
+  模式为 `mt` / `llm` / `mt+llm` / `auto`。新安装无需模型 key；用户触发翻译时，无可用 LLM 配置的混合模式降级为 MT。
+  安装、打开设置本身不发翻译请求。`llm` 模式仍要求有效模型配置，也不会调用免费 MT。
+- `mt+llm` 请求带 `draft:true` 时，先检查 LLM 缓存，未命中的项目并行请求 MT 与 LLM。
+  `onPartial` 接收 `[{id,text,stage:'draft'|'final',engine?,plain?,refined?}|{id,error}]`；同一 id 可先 draft 再 final。
+  draft **不算完成**；final 或 error 才终结 id。无 stage 的旧结果等同 final。取消后不再交付。
+  `draft` 缺省时保留旧调用方的一次终结结果语义，只在 LLM 失败/超时时使用 MT 兜底；PDF 调用方须显式启用 draft 并接受同 id 更新。
+- MT 失败时继续 LLM；LLM 失败或超过精修预算时，将已有 MT 作为 `stage:'final',refined:false` 返回，不显示精修错误。
+  两侧均失败才返回 error。`auto` 先等待 LLM 2.5 秒，仍无结果才请求 MT 草稿。`mt` 只用 MT。
+  `selection` / `hover` / `input` 在混合模式下默认 MT，MT 失败可回退 LLM；划词卡片的精修操作显式请求 `mode:'llm'`。
+- MT 引擎：`microsoft` / `google`（免费**非官方接口**，可能失效）、`microsoft-api` / `deepl`（用户官方 key）、`mock`（离线）。
+  默认 Microsoft → Google，关闭 `fallback` 后只调用选定 MT 引擎。官方 key 使用本机 `secrets['mt-microsoft-api'|'mt-deepl']`，不进入公共设置、明文导出或日志；加密导出可携带。
+- 免费 Microsoft 当前使用 `edge.microsoft.com/translate/translatetext` 的批量 POST；401/403 时尝试 `/translate/auth` → `api-edge.cognitive.microsofttranslator.com`，短期 token 只缓存于内存，过期前一分钟刷新。
+  2026-10-15 无凭据直连探测中 auth 返回 404，批量路径成功，因此不把 auth 作为唯一路径。
+  Google 使用 `clients5.google.com/translate_a/t?client=dict-chrome-ex` 等价批量表单接口；其限流不保证可用性。
+- 带占位符的项目采用 HTML/XML 文本模式，但只发送 `<gN>` / `<xN/>` 与文本，不发送真实网页 HTML/属性。
+  返回占位符必须数量一致且正确嵌套；否则降为转义纯文本草稿。所有结果仍经安全 DOM 构造，不进入 `innerHTML`。
+  MT/LLM 分层缓存，MT 缓存键包含引擎、源/目标语言和源文本。
+- 内容脚本复用同一个 `dl-t`，以 `data-dl-stage` 标识草稿/终稿，`data-dl-engine` 区分 MT 与 `llm`；精修失败保留草稿。不同长度译文仍可能改变段落高度；
+  不承诺任意页面零布局位移。免费服务的网络耗时也无法保证 ≤1 秒，实际测量与真机验收必须单独报告。
 
 - `content/main.js` 导出 `start(platform)`。扩展的 `loader.js` 构造 extension 平台后调用它；用户脚本的入口构造
   userscript 平台后调用它。内容脚本模块之间传递 `platform`，不读全局。

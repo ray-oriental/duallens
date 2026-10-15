@@ -25,6 +25,22 @@ dl-t {
   }
 }
 
+/* A machine-translation draft looks like the final text, only a touch softer; the LLM result replaces
+   it in the same element. Text of a different length can still change its height. */
+dl-t {
+  transition: opacity 0.25s ease;
+}
+
+dl-t[data-dl-stage="draft"] {
+  opacity: 0.88;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dl-t {
+    transition: none;
+  }
+}
+
 dl-w {
   display: block;
 }

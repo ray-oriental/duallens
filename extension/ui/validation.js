@@ -1,4 +1,5 @@
-import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, mergeSettings, publicSettings, SETTINGS_VERSION } from '../shared/settings.js';
+import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION } from '../shared/settings.js';
+import { isMtEngine } from '../background/mt.js';
 import { comicSites } from '../content/comics/sites.js';
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
 export function safeExport(value) {
@@ -19,6 +20,10 @@ export function validateSettings(s) {
   requireThat(typeof s.subtitles?.enabled === 'boolean' && ['bilingual', 'translation-only'].includes(s.subtitles.mode) &&
     Number.isInteger(s.subtitles.fontSize) && s.subtitles.fontSize >= 16 && s.subtitles.fontSize <= 48 &&
     ['top', 'bottom'].includes(s.subtitles.position), '字幕设置无效');
+  const tr = s.translation;
+  requireThat(TRANSLATION_MODES.some(m => m.id === tr?.mode) && isMtEngine(tr?.mt?.engine) && typeof tr.mt.fallback === 'boolean' &&
+    Number.isInteger(tr.refineTimeoutMs) && tr.refineTimeoutMs >= 1000 && tr.refineTimeoutMs <= 600000 &&
+    typeof tr.mt.region === 'string' && /^[A-Za-z0-9-]{0,40}$/.test(tr.mt.region), '翻译方式或机器翻译设置无效');
   const lang = code => LANGS.some(l => l.code === code);
   requireThat(lang(s.targetLang) && (s.sourceLang === 'auto' || lang(s.sourceLang)), '请选择有效的源语言和目标语言');
   requireThat(['bilingual','translation-only'].includes(s.displayMode), '显示模式无效');
