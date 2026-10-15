@@ -1,8 +1,9 @@
-"""Offline reader layout regressions using the canonical isolated MV3 runner."""
+"""Offline reader layout regressions using the canonical isolated MV3 runner.
+
+PDF reader checks live in run_pdf_e2e.py (mock-only by default).
+"""
 import run_e2e as e
-import json
 import sys
-from urllib.parse import quote
 
 e.CASES.clear()
 
@@ -40,45 +41,6 @@ def comic_flow(h):
     h.js('() => window.layoutComic.restore()')
     assert h.js('() => document.body.outerHTML')==before
     return '375px flow outside image link; distant image waits for scroll; close stays closed; exact source DOM'
-
-
-@e.case('math_pdf', 'Formula/inline variables survive; headers/numbers excluded; non-overlapping translation')
-def math_pdf(h):
-    h.page=h.ctx.new_page()
-    h.page.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html?file={quote(h.base+"/math-notes.pdf",safe="")}')
-    h.page.locator('.pdf-page[data-page="1"] .paragraphs p').first.wait_for(state='attached')
-    h.page.wait_for_timeout(400)
-    h.tab_id=h.page.evaluate('async()=>(await chrome.tabs.getCurrent()).id');h.wait_ready()
-    assert h.state()['ui']['floatBall']
-    first=h.page.locator('.pdf-page[data-page="1"] .paragraphs')
-    before=first.evaluate('el=>el.outerHTML')
-    formula=first.locator('.pdf-formula').all_text_contents()
-    assert any('x + y = 2' in text for text in formula),formula
-    assert first.locator('.pdf-formula sup').count()==1
-    assert first.locator('.pdf-math').count()>0
-    h.page.click('#translate')
-    h.page.locator('.pdf-page[data-page="1"] dl-t[data-dl-state="done"]').first.wait_for()
-    h.page.wait_for_timeout(400)
-    assert first.locator('.pdf-formula dl-t,.pdf-margin dl-t').count()==0
-    assert first.locator('dl-t .pdf-math').count()>0
-    assert first.locator('.pdf-formula').all_text_contents()==formula
-    assert first.evaluate("""el => {const ps=[...el.querySelectorAll(':scope > p')].filter(p=>p.getBoundingClientRect().height);return ps.every((p,i)=>!i || p.getBoundingClientRect().top>=ps[i-1].getBoundingClientRect().bottom)}""")
-    h.page.click('#restore');h.page.wait_for_timeout(100)
-    assert first.evaluate('el=>el.outerHTML')==before
-    popup=h.ctx.new_page()
-    popup.add_init_script('if(globalThis.chrome?.tabs)chrome.tabs.query=async()=>[{id:'+str(h.tab_id)+',url:'+json.dumps(h.page.url)+'}];')
-    popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
-    popup.locator('#toggle:enabled').wait_for();popup.click('#toggle')
-    h.page.locator('.pdf-page[data-page="1"] dl-t[data-dl-state="done"]').first.wait_for()
-    popup.select_option('#mode','translation-only')
-    for _ in range(100):
-        if h.page.evaluate("() => document.body.classList.contains('only')"):break
-        h.page.wait_for_timeout(50)
-    assert h.page.evaluate("() => document.body.classList.contains('only')")
-    h.command('toggle-page')
-    assert not h.page.locator('dl-t').count()
-    popup.close()
-    return 'original math PDF; opaque inline variables; untranslatable formulas/margins; flow alignment; exact restore'
 
 
 @e.case('novel_paragraphs', 'BR blank lines and block lines form natural paragraphs; exact restore')

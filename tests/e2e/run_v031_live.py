@@ -4,20 +4,18 @@ Uses the user's existing loopback gateway and direct system connection, caps cum
 forwarded attempts at 30, and keeps screenshots outside git. Only a verified
 local streaming rejection is excluded from that conservative budget.
 The model catalog is not itself evidence that a model works.
+The real PDF reader check lives in `run_pdf_e2e.py --live MODEL` (layout-preserving viewer).
 """
 import argparse
 import json
 import time
 import uuid
-from pathlib import Path
-from urllib.parse import quote
 import run_e2e as e
 from playwright.sync_api import Error as BrowserError
 
 URLS={
     'novel':'https://www.pixiv.net/novel/show.php?id=29352462#2',
     'artwork':'https://www.pixiv.net/artworks/140601819#1',
-    'pdf':'https://math.berkeley.edu/~andrewshi/teaching/math1560j-fa26/lecture-notes/lecture-notes.pdf',
 }
 OUT=e.E2E_ROOT/'v031'
 
@@ -61,13 +59,13 @@ def navigate(page,url):
             if attempt==4:raise
             page.wait_for_timeout(min(6000,1500*(attempt+1)))
 
-def click_ball(h,pdf=False):
+def click_ball(h):
     size=h.page.viewport_size
-    y=.6*size['height']+22 if pdf else round(.6*(size['height']-44))+22
+    y=round(.6*(size['height']-44))+22
     h.page.mouse.click(size['width']-28,y)
 
-def restore_ball(h,pdf=False):
-    click_ball(h,pdf)
+def restore_ball(h):
+    click_ball(h)
     wait(h.page,'() => document.querySelectorAll("dl-t,dl-o,dl-w,dl-r,dl-comic").length===0',10)
     h.page.wait_for_timeout(1000)
     return read(h.page,lambda:h.page.locator('dl-t,dl-o,dl-w,dl-r,dl-comic').count())==0
@@ -201,41 +199,8 @@ def artwork(h,result):
     result['completedTranslations']=sum(comic_done(i) for i in items)
     assert result['ocrRegions']>0 and result['japaneseRegions']>0 and result['chineseTranslations']>0 and result['imageDOMRestored'] and result['completedTranslations']==len(items)
 
-def pdf(h,result,numbers=(1,2,3)):
-    wait(h.page,'() => document.querySelector(".pdf-page .paragraphs p,#status.error")',70)
-    result['status']=h.page.locator('#status').inner_text();result['pages']=h.page.locator('.pdf-page').count()
-    assert result['pages']>0,result['status']
-    h.page.screenshot(path=str(OUT/'pdf-original.png'))
-    result['pageResults']=[]
-    for number in numbers:
-        h.page.fill('#page-number',str(number));h.page.click('#jump')
-        wait(h.page,f'() => document.querySelector(".pdf-page[data-page=\\"{number}\\"] .paragraphs p")',30)
-        selector=f'.pdf-page[data-page="{number}"] .paragraphs'
-        before=h.page.locator(selector).inner_html()
-        math_before=h.page.locator(selector+' .pdf-math,'+selector+' .pdf-formula').evaluate_all('els=>els.filter(el=>!el.closest("dl-t")).map(el=>el.textContent)')
-        h.page.click('#translate')
-        wait(h.page,f'''() => [...document.querySelectorAll('.pdf-page[data-page="{number}"] dl-t[data-dl-state=done]')]
-          .some(el=>{{const r=el.getBoundingClientRect();return r.top<innerHeight && r.bottom>0 && /[\u4e00-\u9fff]/.test(el.textContent);}})''',150)
-        h.page.wait_for_timeout(1200)
-        texts=h.page.locator(selector+' dl-t[data-dl-state=done]').evaluate_all('''els=>els.map(el=>{
-          const clone=el.cloneNode(true);clone.querySelectorAll('.pdf-math,.pdf-formula').forEach(n=>n.remove());return clone.textContent;})''')
-        math_after=h.page.locator(selector+' .pdf-math,'+selector+' .pdf-formula').evaluate_all('els=>els.filter(el=>!el.closest("dl-t")).map(el=>el.textContent)')
-        protected=h.page.locator(selector+' .pdf-math dl-t,'+selector+' .pdf-formula dl-t').count()==0
-        aligned=h.page.locator(selector).evaluate('''el=>{const ps=[...el.children];return ps.every((p,i)=>!i || p.getBoundingClientRect().top>=ps[i-1].getBoundingClientRect().bottom-1)}''')
-        h.page.screenshot(path=str(OUT/f'pdf-page-{number}-bilingual.png'))
-        restored=restore_ball(h,True)
-        # Layout margins are recalculated when translations resize; compare content/attributes except spacing.
-        html=h.page.locator(selector).inner_html()
-        normalize=lambda value:__import__('re').sub(r' style="margin-block-start: [^"]+"','',value)
-        exact=normalize(before)==normalize(html)
-        item={'page':number,'translationCount':len(texts),'chineseTranslations':sum(map(chinese,texts)),
-          'formulaCount':len(math_before),'formulasUnchanged':math_before==math_after,'protected':protected,'aligned':aligned,'restored':restored,'contentDOMRestored':exact}
-        result['pageResults'].append(item)
-        assert texts and any(map(chinese,texts)) and math_before==math_after and protected and aligned and exact,item
-
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--only',choices=list(URLS),action='append')
-    parser.add_argument('--pdf-page',type=int,action='append',help='Explicit additional PDF page probe instead of pages 1-3')
     parser.add_argument('--max-items',type=int,choices=range(1,21),default=20,help='Temporary profile batch size; does not alter device configuration')
     parser.add_argument('--sjtu-limit',type=int,choices=range(0,31),default=6,help='Per-run cap within the new cumulative 30-call streaming round')
     args=parser.parse_args()
@@ -291,13 +256,9 @@ def main():
                     if args.only and name not in args.only:continue
                     h.page=h.ctx.new_page();result={'page':name,'url':url,'batchMaxItems':args.max_items};print('REAL START',name,flush=True)
                     try:
-                        target=f'chrome-extension://{h.ext_id}/pdf/viewer.html?file='+quote(url,safe='') if name=='pdf' else url
-                        result['http']=navigate(h.page,target)
-                        if name!='pdf':
-                            h.page.wait_for_timeout(6000);h.tab_id=h.sw_eval(e.JS_FIND_TAB,h.page.url);h.wait_ready()
-                        else:h.tab_id=h.page.evaluate('async()=>(await chrome.tabs.getCurrent()).id')
-                        if name=='pdf':pdf(h,result,args.pdf_page or (1,2,3))
-                        else:{'novel':novel,'artwork':artwork}[name](h,result)
+                        result['http']=navigate(h.page,url)
+                        h.page.wait_for_timeout(6000);h.tab_id=h.sw_eval(e.JS_FIND_TAB,h.page.url);h.wait_ready()
+                        {'novel':novel,'artwork':artwork}[name](h,result)
                         result['outcome']='PASS'
                     except Exception as error:
                         result['outcome']='FAIL';result['error']=str(error)[:600]
@@ -316,12 +277,6 @@ def main():
                 result_file=OUT/'live-results.json'
                 previous=json.loads(result_file.read_text(encoding='utf-8')).get('results',[]) if result_file.exists() else []
                 merged={r['page']:r for r in previous}
-                if args.pdf_page and 'pdf' in merged:
-                    for result in results:
-                        if result['page']=='pdf':
-                            inspected={p['page']:p for p in merged['pdf'].get('pageResults',[])}
-                            inspected.update({p['page']:p for p in result.get('pageResults',[])})
-                            result['pageResults']=list(inspected.values())
                 merged.update({r['page']:r for r in results})
                 result_file.write_text(json.dumps({'results':list(merged.values()),'budget':budget},ensure_ascii=False,indent=2),encoding='utf-8')
                 print('REAL BUDGET',json.dumps(budget),flush=True)

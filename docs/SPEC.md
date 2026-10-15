@@ -126,6 +126,7 @@ Android Edge + Tampermonkey                         │
 ### 4.4 v0.3 功能接入
 
 - PDF 的 `pdf-status` / `pdf-open` 使用实际标签页 URL，仅在显式入口探测；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
+- PDF 阅读页默认宽屏同尺寸双栏对照：原页画布复制为译文底图，原坐标抹底覆盖译文并拟合字号；另有仅译文页、原文页、重排阅读。公式/图像/边距标识保留原像素，行内公式用本地裁图替换 `<xN/>`。文本分块在本地 Worker 中完成，翻译限视口与相邻页，经 `TranslatorService.translateBatch` 发送文本与公式占位符，不发送文件、图片、URL 或元数据。PDF 消费端支持可选的 `draft:true,purpose:'pdf'` 和同 id 的 `stage:'draft'/'final'` 回调；无 stage 当终稿，恢复取消并屏蔽旧请求结果。共享引擎/端口阶段传输需另外集成验收。
 - `open-sidepanel` / Alt+S 打开桌面文本侧栏；用户脚本用 `platform.openTextTranslation()` 打开原面板页签。
 - `platform.subtitles = { observe(callback), fetchTrack(url,{signal}) }` 注入受限 YouTube 取轨能力。`subtitle-track` / `subtitle-track-cancel` 只处理当前顶层 YouTube 视频的轨道；见 [SUBTITLES.md](SUBTITLES.md)。
 - 内容命令包含 `toggle-subtitles` / `restore-subtitles`、`translate-comics` / `restore-comics`；`get-state` 可包含字幕与漫画状态，不含签名轨道 URL 或机密。
