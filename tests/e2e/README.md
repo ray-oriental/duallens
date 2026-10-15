@@ -85,6 +85,17 @@ The explicitly renewed streaming round uses `sjtu-budget-novel-stream.json`, dis
 
 `python -B -m unittest discover -s tests/e2e -p test_live_runner.py` in the Playwright venv runs the read retry boundary tests without a browser or model. `run_layout_e2e.py` additionally exercises actual document navigation and a tall shared novel host using controlled offline fixtures.
 
+## Authorized v0.4 engine measurements
+
+`run_v04_engine_live.py` measures the requested public Wikipedia/Pixiv pages without login. Default `--llm none` uses only real free unofficial MT. `--llm ollama` explicitly uses the existing local `ollama/qwen3:4b` gateway profile with no other models; its default refinement budget is 20 seconds, or pass `--refine-timeout-ms 90000` for the normal setting. Clear `HTTP_PROXY` / `HTTPS_PROXY` for these direct-connection runs. Runtime profiles and screenshots stay under `~/.cache/duallens-e2e/`; no real-provider test belongs in mock CI.
+
+The runner freezes the original visible source cohort before insertion. `stage:'final'` alone is not proof of LLM success: engine metadata separately counts actual `llm` results, and timeout-retained MT is reported as unavailable/partial refinement. Functional coverage/restore and the 1000ms speed target are separate fields. The `phone` variant uses Android UA, mobile layout and coarse touch emulation; it remains desktop Chromium, not actual Android/Tampermonkey. Reports include filters/budget in their names to preserve separate runs. A failed real-page probe remains FAIL; it is not silently skipped. See [current validation limits](../../docs/VALIDATION.md).
+
+```powershell
+& $testPython -B -u tests/e2e/run_v04_engine_live.py --llm none
+& $testPython -B -u tests/e2e/run_v04_engine_live.py --llm ollama --only novel --viewport desktop --refine-timeout-ms 90000
+```
+
 ## Settings browser runner
 
 `tests/dom/run_settings_browser.py` stages an isolated extension using the canonical session helper and runs five checks: no-network fresh wizard, mocked OpenRouter discovery/test/save, encrypted/public backup, popup switching, and an injected shared form with Chrome APIs forbidden. It uses a 375×812 viewport and writes light/dark screenshots to `~/.cache/duallens-e2e/providers-settings/`. Run it directly; it accepts no case filters. This is separate from both the full extension suite and the userscript suite.

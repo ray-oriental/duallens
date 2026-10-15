@@ -22,9 +22,13 @@ export class ExtensionTranslateClient {
   valid() { return !!this.api.runtime?.id; }
 
   // handlers: { onResults(results[]), onDone() }. Returns the reqId.
-  request({ items, priority, to, from = 'auto', context }, handlers) {
+  request({ items, priority, to, from = 'auto', context, draft, purpose, mode }, handlers) {
     const reqId = `${this.tag}-${++this.seq}`;
     const msg = { type: MSG_TRANSLATE, reqId, to, from, priority, context, items };
+    // Optional engine hints: `draft` asks for machine-translation drafts before the LLM result.
+    if (draft === true) msg.draft = true;
+    if (typeof purpose === 'string') msg.purpose = purpose;
+    if (typeof mode === 'string') msg.mode = mode;
     this.reqs.set(reqId, {
       msg,
       remaining: new Set(items.map((i) => i.id)),
@@ -140,7 +144,8 @@ export class ExtensionTranslateClient {
     if (!m || !this.reqs.has(m.reqId)) return;
     const r = this.reqs.get(m.reqId);
     if (m.type === MSG_PARTIAL) {
-      const fresh = (m.results || []).filter((x) => r.remaining.delete(x.id));
+      // Drafts never close an id; only a final result or an error does.
+      const fresh = (m.results || []).filter((x) => (x.stage === 'draft' ? r.remaining.has(x.id) : r.remaining.delete(x.id)));
       if (fresh.length) r.onResults?.(fresh);
     } else if (m.type === MSG_DONE) {
       this.reqs.delete(m.reqId);

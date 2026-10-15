@@ -4,13 +4,23 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { buildBundle, metadata, buildUserscript } from '../../scripts/build_userscript.mjs';
+import { buildBundle, metadata, buildUserscript, compactSource } from '../../scripts/build_userscript.mjs';
 
 async function fixture(files, fn) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'duallens-bundle-'));
   try { for (const [name, code] of Object.entries(files)) await fs.writeFile(path.join(root, name), code); return await fn(root); }
   finally { await fs.rm(root, { recursive: true, force: true }); }
 }
+
+test('compaction preserves ASI, token boundaries, regex and template contents', () => {
+  for (const newline of ['\n', '\r', '\u2028', '\u2029']) {
+    const source = `function f() { return /* comment${newline} */ 42; }\nglobalThis.result = [f(), 1 /* gap */ + +2, /a[/*]b/.source, \`keep // text\`];`;
+    const before = {}, after = {};
+    vm.runInNewContext(source, before);
+    vm.runInNewContext(compactSource(source), after);
+    assert.equal(JSON.stringify(before.result), JSON.stringify(after.result));
+  }
+});
 
 test('bundler handles named, default, namespace, async and generator exports with isolated scope', async () => {
   await fixture({

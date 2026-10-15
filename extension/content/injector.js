@@ -181,16 +181,26 @@ export function decideInline(unit, inlineMaxChars) {
   return unit.host.matches(INLINE_HOST_SEL);
 }
 
-// mode: 'bilingual' | 'translation-only'
-export function showTranslation(unit, fragment, { mode, style, inlineMaxChars }) {
+// mode: 'bilingual' | 'translation-only'. stage: 'draft' (machine translation, an LLM result is
+// expected) | 'final'. A refinement reuses the same <dl-t> and class list: only its text changes.
+export function showTranslation(unit, fragment, { mode, style, inlineMaxChars, stage = 'final', engine = 'llm' }) {
   write(() => {
     const t = ensureT(unit);
     unit.inline = decideInline(unit, inlineMaxChars);
     t.className = `dl-t ${unit.inline ? 'dl-inline' : 'dl-block'} dl-s-${style}`;
     t.setAttribute('data-dl-state', 'done');
+    t.setAttribute('data-dl-stage', stage);
+    t.setAttribute('data-dl-engine', engine);
     t.replaceChildren(fragment);
     setHostState(unit, 'done');
     applyMode(unit, mode);
+  });
+}
+
+export function setStage(unit, stage, engine) {
+  if (unit.tEl) write(() => {
+    unit.tEl.setAttribute('data-dl-stage', stage);
+    if (engine) unit.tEl.setAttribute('data-dl-engine', engine);
   });
 }
 

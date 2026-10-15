@@ -2,7 +2,9 @@
 
 ## 中文
 
-DualLens 不收集、不出售、不上传遥测数据，也不建立用户账户。网页文本只会发送到用户在设置中明确选择的模型服务；服务商如何处理这些文本由用户与该服务商的协议决定。API key 只保存在当前浏览器的本机存储中，不进入同步设置、发布包、日志或我们的服务器。翻译缓存和偏好也保存在用户设备上。
+DualLens 不收集、不出售、不上传遥测数据，也不建立用户账户。v0.4 默认「机翻先出，大模型精修」：用户触发翻译后，未命中缓存的文字会发往默认 Microsoft 免费非官方机器翻译接口，失败可转往 Google 免费非官方接口；配置了大模型时还会发送给该模型服务。没有模型 key 时只用机器翻译。免费接口可能变动或失效，没有可用性保证。设置可更换引擎、关闭 MT 备用，或选择「只用大模型」以完全禁用 MT 传输；官方 Microsoft Translator / DeepL key 为可选。安装、打开设置本身不发送翻译请求，用户保存的自动翻译规则仍可触发请求。
+
+MT 只收到待翻译文字、占位符和语言，不收到页面 HTML 属性、URL、标题或 cookie；这些占位符并非原网页 HTML。服务商如何处理文字由用户与服务商的协议决定。API key（包括官方 MT key）只保存在当前浏览器的本机 secrets 中，不进入同步设置、发布包、日志或我们的服务器。用户明确选择带口令的加密导出时可以携带 key，明文导出始终不含 key。翻译缓存和偏好也保存在用户设备上。
 
 可选的本机网关只监听回环地址，并要求精确配置的扩展 Origin；它不会把本机服务公开到局域网或互联网。
 
@@ -18,7 +20,9 @@ PDF 类型只在用户打开 popup 或点击 PDF 右键菜单时按需判断。`
 
 ## English
 
-DualLens does not collect, sell, or upload telemetry and does not require an account. Webpage text is sent only to the model service explicitly selected by the user; that provider's handling is governed by the user's agreement with the provider. API keys remain in this browser's local storage and are not placed in sync settings, release packages, logs, or our servers. Translation cache and preferences remain on the user's device.
+DualLens does not collect, sell, or upload telemetry and does not require an account. The v0.4 default shows machine translation first, then optionally refines it with a configured LLM. On a translation action, uncached text goes to Microsoft's free unofficial translation endpoint, with Google's free unofficial endpoint as fallback, and to the configured LLM when available. Without an LLM key, only machine translation runs. These free endpoints can change or fail without a service guarantee. Settings can change engines, disable MT fallback, or select LLM-only mode to disable MT transmission entirely. Official Microsoft Translator/DeepL keys are optional. Installation and opening settings do not send translation requests; user-saved automatic translation rules can trigger requests.
+
+MT receives text, placeholder tags and languages, without page HTML attributes, URLs, titles or cookies; placeholders are not the original webpage HTML. Provider handling is governed by the user's agreement with that provider. API keys, including official MT keys, remain in local secrets, outside sync settings, release packages, logs and our servers. User-requested password-encrypted exports may include keys; plaintext exports never do. Translation cache and preferences remain on the user's device.
 
 The optional local gateway listens only on a loopback address and requires an exact, explicitly configured extension Origin. It does not expose the local service to the LAN or the public Internet.
 

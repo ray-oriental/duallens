@@ -3,7 +3,7 @@
 [![CI](https://github.com/ray-oriental/duallens/actions/workflows/ci.yml/badge.svg)](https://github.com/ray-oriental/duallens/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-独立实现的通用网页双语翻译插件：桌面 Chrome / Edge 用 Manifest V3 扩展，Android Edge 手机与平板用 Tampermonkey 用户脚本。填入自己的模型服务即可使用，本机网关是可选增强；没有账户体系、遥测或付费墙。
+独立实现的通用网页双语翻译插件：桌面 Chrome / Edge 用 Manifest V3 扩展，Android Edge 手机与平板用 Tampermonkey 用户脚本。v0.4 工作区默认免费机器翻译，无需 key；可填入自己的模型服务后台精修。本机网关是可选增强，没有账户体系、遥测或付费墙。
 
 **第一版 v0.1.0：网页核心功能。** PDF、EPUB、视频字幕、OCR、文档和 iframe 翻译尚未实现，见 [路线图](docs/ROADMAP.md)。这不是任何第三方翻译扩展的官方版本或代码分支。
 
@@ -20,7 +20,7 @@
 1. 打开 `chrome://extensions` 或 `edge://extensions`，开启「开发者模式」。
 2. 点击「加载已解压的扩展程序」，选择包含 `manifest.json` 的解压目录。
 3. 从源码安装时，选择本仓库的 `extension/` 目录。无需 npm install 或构建。
-4. 打开扩展设置，按首次使用向导添加并配置模型。新安装未选服务，不会自动联网或借用本机账户与校园服务。
+4. 新安装无需模型配置，用户点击翻译即可使用默认 Microsoft 免费非官方 MT（失败可转 Google）。想精修时再打开设置添加模型。安装/打开设置不请求翻译，不借用本机账户或校园服务。
 5. 打开普通网页，点击扩展按钮「翻译页面」。
 
 扩展固定 ID 为 `noodgdnebcnfkgipoabjjlgaebocgnkj`。manifest 的 key 是公开身份信息，无私钥。当前没有上架扩展商店；不支持 Firefox / Safari。
@@ -33,7 +33,7 @@ Android 手机与平板：
 
 1. 在 Edge 的「扩展」目录安装并启用 Tampermonkey，入口随 Edge 版本可能变化；也可参考 [Tampermonkey 官方 Edge 安装页](https://www.tampermonkey.net/index.php?browser=edge)。
 2. 打开 [最新 Release 的 duallens.user.js](https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js)，确认 Tampermonkey 安装提示，启用脚本。若对应 Release 尚未包含该资产，可从源码运行 `node scripts/build_userscript.mjs` 后安装 `dist/duallens.user.js`。
-3. 打开普通网页，从 Tampermonkey 的脚本菜单点「DualLens 设置」，或从悬浮球菜单打开设置。按下方 OpenRouter 示例配置，保存后点悬浮球翻译页面。
+3. 打开普通网页，点悬浮球即可机器翻译，无需 key。想精修时从 Tampermonkey 菜单或悬浮球打开设置，按下方 OpenRouter 示例配置并保存。
 4. 长按段落 500ms 翻译；移动手指或滚动会取消长按。划词按钮位于选区下方。输入法不方便打三连空格时，用悬浮球菜单的「翻译当前输入框」。
 5. 手机、平板与两台电脑之间，用带口令的加密配置导出/导入迁移服务和 key。GM 存储不会自动跟随桌面扩展同步；真机验收步骤见 [移动端清单](tests/e2e/MOBILE_ACCEPTANCE.md)。
 
@@ -90,6 +90,12 @@ python -B gateway/duallens_gateway.py serve --port 18790
 ### 离线演示
 
 选择「Mock（测试，不联网）」即可验证页面交互。译文只是在原句前加「【译】」，**不是真实翻译**，也不调用任何模型。
+
+## v0.4 双引擎（未发布）
+
+设置与 popup 可选「只机器翻译」「只大模型」「机翻先出，大模型精修」（默认）和「自动」（LLM 优先，2.5 秒后机翻兜底）。没有可用 LLM 时混合模式自动只用 MT。划词、悬停与输入框在混合模式下优先 MT，划词卡片可手动精修；精修失败保留机器译文。
+
+默认 Microsoft 与备选 Google 都是**免费非官方接口**，可能随时限流、变动或失效；用户触发翻译会将待译文字发送给它们。可关闭 MT 备用、更换官方 Microsoft Translator / DeepL（key 仅存本机），或选「只大模型」禁用 MT。打开设置不会发翻译请求。详见[隐私说明](docs/PRIVACY.md)和[双引擎契约](docs/PLATFORMS.md)。网络耗时不能保证每次 ≤1 秒，较长精修译文也可能改变段落高度；不承诺任意网页零位移。
 
 ## Windows 登录自启（可选）
 

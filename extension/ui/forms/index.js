@@ -2,6 +2,7 @@ import { providerChain } from '../../shared/settings.js';
 import { getPreset, profileFromPreset, recommendedFreeChain } from '../../shared/presets.js';
 import { exportConfig, importConfig } from '../../shared/configcrypto.js';
 import { createProviders, profileProblem } from '../../background/providers.js';
+import { createMT, MT_ENGINES, MT_SECRET_IDS } from '../../background/mt.js';
 import { buildMessages, parseSegments } from '../../shared/prompt.js';
 import { stripMarkup } from '../../shared/markup.js';
 import { validateSettings, importSettings, lines, terms } from './validation.js';
@@ -28,6 +29,25 @@ export async function mountSettingsForm(root, { store, platform }) {
     },
     getSecret: async id => modifiedSecrets.has(id) ? draftSecrets.get(id) : store.getSecret(id),
   });
+  const mtFetch = async (url, init) => {
+    const res = await platform.http({ url, ...init });
+    return { status: res.status, headers: res.headers, text: async () => typeof res.text === 'function' ? res.text() : res.text };
+  };
+  // Machine-translation probe: unsaved key drafts are honoured, exactly like the model test.
+  const mtProbe = platform.http && createMT({ fetchImpl: mtFetch,
+    getSecret: async id => modifiedSecrets.has(id) ? draftSecrets.get(id) : store.getSecret(id) });
+  const mtSecretId = () => MT_ENGINES.find(e => e.id === $('mtEngine').value)?.secretId;
+  let mtKeyToken = 0;
+  async function drawMtKey() {
+    const id = mtSecretId(), token = ++mtKeyToken;
+    $('mt-key-row').hidden = !id;
+    $('mtRegion').parentElement.hidden = $('mtEngine').value !== 'microsoft-api';
+    if (!id) return;
+    const secret = modifiedSecrets.has(id) ? draftSecrets.get(id) : await store.getSecret(id);
+    if (destroyed || token !== mtKeyToken) return;
+    draftSecrets.set(id, secret);
+    if (secretDialog) $('mt-key-status').textContent = secret ? '已设置' : '未设置'; else $('mtKey').value = secret;
+  }
   const simple = ['targetLang', 'sourceLang', 'displayMode', 'style', 'minChars', 'inlineMaxChars'];
   const nums = new Set(['minChars', 'inlineMaxChars', 'rootMarginPx', 'batchDelayMs', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs', 'maxEntries', 'ttlDays']);
   const bind = {
@@ -115,6 +135,9 @@ export async function mountSettingsForm(root, { store, platform }) {
     fill('glossary', settings.glossary.map(t => `${t.src} → ${t.dst}`).join('\n'));
     fill('always', settings.siteRules.always.join('\n')); fill('never', settings.siteRules.never.join('\n'));
     fill('customRules', JSON.stringify(settings.siteRules.custom, null, 2));
+    fill('translationMode', settings.translation.mode); fill('mtEngine', settings.translation.mt.engine);
+    fill('mtFallback', settings.translation.mt.fallback); fill('mtRegion', settings.translation.mt.region);
+    await drawMtKey();
     for (const o of $('autoLangs').options) o.selected = settings.autoTranslateLangs.includes(o.value);
     profileId = settings.provider.active;
     choices($('profile'), [{ id: '', name: '选择一个服务' }, ...settings.provider.profiles], profileId);
@@ -130,6 +153,8 @@ export async function mountSettingsForm(root, { store, platform }) {
     for (const [id, path] of Object.entries(bind)) {
       const parts = path.split('.'); next[parts[0]][parts[1]] = read(id);
     }
+    Object.assign(next.translation, { mode: read('translationMode') });
+    Object.assign(next.translation.mt, { engine: read('mtEngine'), fallback: read('mtFallback'), region: read('mtRegion').trim() });
     next.provider.active = profileId;
     next.provider.chain = JSON.parse(read('providerChain') || '[]');
     if (/^(claude|codex)\//.test(profile()?.model || '')) next.provider.chain = [{ profileId, model: profile().model }];
@@ -165,7 +190,9 @@ export async function mountSettingsForm(root, { store, platform }) {
     dirty = true;
     if (event.target === $('backupText')) $('backup-qr').hidden = true;
     if (event.target === $('apiKey') && profileId) modifiedSecrets.add(profileId);
+    if (!secretDialog && event.target === $('mtKey') && mtSecretId()) { draftSecrets.set(mtSecretId(), $('mtKey').value.trim()); modifiedSecrets.add(mtSecretId()); }
   });
+  on('mtEngine', 'change', () => { void drawMtKey(); });
   async function showLanguages() {
     const output=$('comics-languages');output.replaceChildren();
     const result=await platform.comics?.languages();
@@ -193,6 +220,22 @@ export async function mountSettingsForm(root, { store, platform }) {
       draftSecrets.set(id, key.trim()); modifiedSecrets.add(id); dirty = true;
       $('key-status').textContent = key.trim() ? '已设置' : '未设置';
       notice('密钥修改尚未保存；点击保存设置。');
+    });
+    action('mt-set-key', async () => {
+      const id = mtSecretId();
+      if (!id) return;
+      const key = await platform.promptSecret('输入此机器翻译服务的 key（留空清除；取消保留原值）');
+      if (key === null || destroyed || mtSecretId() !== id) return;
+      if (typeof key !== 'string' || /[^ -~]/.test(key.trim())) throw new Error('key 含有非法字符');
+      draftSecrets.set(id, key.trim()); modifiedSecrets.add(id); dirty = true;
+      $('mt-key-status').textContent = key.trim() ? '已设置' : '未设置';
+      notice('机器翻译 key 修改尚未保存；点击保存设置。');
+    });
+    action('mt-clear-key', async () => {
+      const id = mtSecretId();
+      if (!id) return;
+      draftSecrets.set(id, ''); modifiedSecrets.add(id); dirty = true;
+      $('mt-key-status').textContent = '未设置'; notice('机器翻译 key 清除尚未保存；点击保存设置。');
     });
     action('clear-key', async () => {
       if (!profileId || drawingProfile) return;
@@ -290,12 +333,18 @@ export async function mountSettingsForm(root, { store, platform }) {
       notice(`连接正常 · ${r.latencyMs} ms · ${r.sample || ''}`);
     }
   });
+  action('mt-test', async () => {
+    if (!mtProbe) throw new Error('此平台不能直接测试机器翻译');
+    const engine = read('mtEngine'); notice('正在测试机器翻译…');
+    const r = await mtProbe.test({ engine, region: read('mtRegion').trim() });
+    notice(`机器翻译正常 · ${engine} · ${r.latencyMs} ms · ${r.sample}`);
+  });
   action('export', async () => {
     const password = secretDialog ? await platform.promptSecret('配置导出口令（留空导出不含 key 的明文；取消停止导出）') : read('backupPassword');
     if (password === null || destroyed) { if (!destroyed) notice('已取消导出'); return; }
     await save(); const secrets = {};
-    if (password) for (const p of settings.provider.profiles) {
-      const apiKey = await store.getSecret(p.id); if (apiKey) secrets[p.id] = { apiKey };
+    if (password) for (const id of [...settings.provider.profiles.map(p => p.id), ...MT_SECRET_IDS]) {
+      const apiKey = await store.getSecret(id); if (apiKey) secrets[id] = { apiKey };
     }
     const text = await exportConfig(settings, { password, secrets });
     $('backup-qr').hidden = true;
@@ -310,7 +359,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     if (password === null || destroyed) return;
     if (!password) throw new Error('导出到手机必须设置加密口令');
     await save(); const secrets = {};
-    for (const p of settings.provider.profiles) { const apiKey = await store.getSecret(p.id); if (apiKey) secrets[p.id] = { apiKey }; }
+    for (const id of [...settings.provider.profiles.map(p => p.id), ...MT_SECRET_IDS]) { const apiKey = await store.getSecret(id); if (apiKey) secrets[id] = { apiKey }; }
     const text = await exportConfig(compactConfig(settings), { password, secrets });
     if (destroyed) return;
     fill('backupText', text); $('backup-qr').hidden = true;
@@ -337,7 +386,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     saving = true;
     try {
       settings = await store.save(next);
-      for (const [id, secret] of Object.entries(parsed.secrets || {})) if (next.provider.profiles.some(p => p.id === id)) await store.setSecret(id, secret.apiKey);
+      for (const [id, secret] of Object.entries(parsed.secrets || {})) if (next.provider.profiles.some(p => p.id === id) || MT_SECRET_IDS.includes(id)) await store.setSecret(id, secret.apiKey);
       draftSecrets.clear(); modifiedSecrets.clear(); dirty = false; if (!secretDialog) fill('backupPassword', ''); fill('backupText', ''); $('backup-qr').hidden = true; await draw(); notice('设置已导入');
     } finally { saving = false; }
   }
