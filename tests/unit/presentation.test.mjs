@@ -51,4 +51,6 @@ test('PDF local byline preservation requires a nearby header affiliation', () =>
   const heading=[b('Related Work',80)];preserveIdentities(heading,792);assert.equal(heading[0].kind,'text');
   const prose=[b('Contact user@example.com for more information',80),b('This University provides useful courses',120)];
   preserveIdentities(prose,792);assert.ok(prose.every(x=>x.kind==='text'));
+  const google=[b('Attention Is All You Need',40),b('Ashish Vaswani∗\nGoogle Brain\navaswani@google.com',100),b('Noam Shazeer∗',95),b('Google Brain',110),b('Illia Polosukhin∗ ‡ illia.polosukhin@gmail.com',380),b('Abstract',410)];
+  preserveIdentities(google,792);assert.deepEqual(google.map(x=>x.kind),['text','identity','identity','identity','identity','text']);
 });

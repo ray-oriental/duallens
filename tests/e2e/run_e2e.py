@@ -502,6 +502,9 @@ def exclusion_non_text_hidden(h: Session) -> None:
     h.command("toggle-page")
     h.wait_units(ARTICLE_UNITS)
     for sel in EXCLUDED_NON_TEXT:
+        if sel=='#p-aria-hidden':
+            h.wait_js("() => !!document.querySelector('#p-aria-hidden dl-t[data-dl-state=done]')")
+            continue  # aria-hidden alone is not a visual exclusion (leader v0.4 contract)
         n = h.js(f"() => {{ const el = document.querySelector({json.dumps(sel)}); "
                  f"return el ? el.querySelectorAll('dl-t').length : -1; }}")
         check(n != -1, f"fixture element {sel} missing")

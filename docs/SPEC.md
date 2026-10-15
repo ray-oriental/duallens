@@ -148,8 +148,8 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
    所属单元，不单独成段。块级判定用计算样式 `display`（block、list-item、table-cell、flex/grid 的子项按块处理），
    不只看标签名。
 2. **排除**：`script style noscript template textarea input select option svg math canvas iframe video audio
-   code pre kbd samp var`、`[contenteditable]`、`[translate=no]`、`.notranslate`、`[aria-hidden=true]`、
-   我们自己插入的元素、不可见元素；文本去空白后少于 `minChars` 或没有字母/汉字；纯数字、纯 URL、纯符号。
+   code pre kbd samp var`、`[contenteditable]`、`[translate=no]`、`.notranslate`、
+   我们自己插入的元素、不可见元素；文本去空白后少于 `minChars` 或没有字母/汉字；纯数字、纯 URL、纯符号。`aria-hidden` 但实际可见的文本仍翻译。
    站点规则的 `exclude` 选择器追加到这里，`include` 选择器限定根节点。
 3. **语言判定**：段落级用 `platform.detectLanguage`（扩展适配 chrome.i18n，用户脚本用 shared/lang 启发式），与目标语言同语种（`zh`、`zh-CN`、`zh-TW`
    按配置归一）且可信的段落跳过。中文目标额外用汉字占比做快速判断。

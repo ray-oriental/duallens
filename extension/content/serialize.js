@@ -26,7 +26,7 @@ const WS = /[ \t\n\r\f]+/g;
 // text:  placeholder string sent to the model
 // plain: visible text only, whitespace-normalised (for language checks and "same as source" tests)
 // els:   element table; index N is what <gN>/<xN/> refer to
-export function serializeRun(first, last, { exclude = null } = {}) {
+export function serializeRun(first, last, { exclude = null, terms } = {}) {
   const els = [];
   let s = '';
   let plain = '';
@@ -39,7 +39,12 @@ export function serializeRun(first, last, { exclude = null } = {}) {
   const walk = (node, depth) => {
     if (node.nodeType === 3) {
       const t = node.data.replace(WS, ' ');
-      s += escapeText(t);
+      let end=0;
+      for(const m of t.matchAll(/\b[A-Z][a-z][A-Za-z0-9]*\b/g)) if(terms?.has(m[0])) {
+        s+=escapeText(t.slice(end,m.index));
+        const span=node.ownerDocument.createElement('span');span.textContent=m[0];atom(span);end=m.index+m[0].length;
+      }
+      s += escapeText(t.slice(end));
       plain += t;
       return;
     }

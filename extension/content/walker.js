@@ -21,7 +21,7 @@ export const EXCLUDED_TAGS=new Set([
 
 // SPEC §5.2 exclusions by attribute.
 const EXCLUDED_ATTR_SEL=
-  '[translate="no"],.notranslate,[aria-hidden="true"],.katex,.MathJax,mjx-container,[contenteditable]:not([contenteditable="false"])';
+  '[translate="no"],.notranslate,.katex,.MathJax,mjx-container,[contenteditable]:not([contenteditable="false"])';
 
 // Used to find out whether an inline element wraps real blocks (e.g. <a><div>…</div></a>).
 const BLOCK_SEL=

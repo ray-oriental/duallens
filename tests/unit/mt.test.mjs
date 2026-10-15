@@ -1,9 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MT_ENGINES, MT_PLACEHOLDER, chunkItems, createMT, deeplTarget, finishItem, googleLang, hasMarkers, msLang, mtChain, sameMarkers,
+  MT_ENGINES, MT_LIMITS, MT_PLACEHOLDER, chunkItems, createMT, deeplTarget, finishItem, googleLang, hasMarkers, msLang, mtChain, sameMarkers,
 } from '../../extension/background/mt.js';
 import { ERR } from '../../extension/shared/protocol.js';
+
+test('a malformed batch does not globally cool a healthy HTTP 200 engine',async()=>{
+ let bad=true;const fetch=fakeFetch(()=>({body:bad?'[]':'[{"translations":[{"text":"译文"}]}]'}));
+ const mt=createMT({fetchImpl:fetch});
+ const first=await run(mt,[{id:1,text:'hello'}],{chain:['microsoft']});assert.equal(first.get(1).error.code,ERR.PARSE);
+ bad=false;const second=await run(mt,[{id:2,text:'other'}],{chain:['microsoft']});assert.equal(second.get(2).text,'译文');
+});
+test('visible MT waiting for a global slot precedes queued prefetch without exceeding capacity',async()=>{
+ const started=[];let release;
+ const fetch=fakeFetch(async(_url,init)=>{const text=JSON.parse(init.body)[0];started.push(text);if(text==='first')await new Promise(r=>release=r);return{body:'[{"translations":[{"text":"译文"}]}]'};});
+ const mt=createMT({fetchImpl:fetch,limits:{...MT_LIMITS,concurrency:1}});
+ const first=run(mt,[{id:1,text:'first'}],{priority:1});await new Promise(r=>setTimeout(r,0));
+ const near=run(mt,[{id:2,text:'near'}],{priority:2});const visible=run(mt,[{id:3,text:'visible'}],{priority:0});
+ release();await Promise.all([first,near,visible]);assert.deepEqual(started,['first','visible','near']);
+});
 
 // A scripted fetch: route(url, init, call) -> { status?, body, headers? } | throws.
 function fakeFetch(route) {

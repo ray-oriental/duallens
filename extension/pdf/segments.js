@@ -547,19 +547,21 @@ function centered(blocks, textual, pageWidth, bodySize) {
 // position, and name-shaped lines; a title-cased section heading alone is never an author.
 export function preserveIdentities(blocks, height) {
   const abstract = blocks.find(b => /^abstract\b/i.test(b.text.trim()));
-  const limit = Math.min(height * .45, abstract?.box.top ?? Infinity);
+  const limit = abstract?.box.top ?? height*.45;
+  const clean=s=>s.replace(/[\d*∗⋆†‡]+/g,'').trim();
+  const names = /^(?:[\p{Lu}][\p{L}’'\-]*\.?\s+){1,15}[\p{Lu}][\p{L}’'\-]*\.?$/u;
   const anchors = blocks.filter(b => b.box.bottom < limit && b.text.length < 240 && b.lines.length <= 4 &&
     !/[.!?](?:\s|$)/.test(b.text) &&
     (/^(?:\{[\p{L}\p{N}_.+,\-]+\}|[\p{L}\p{N}_.+\-]+)@[\p{L}\p{N}.\-]+\.[a-z]{2,}$/iu.test(b.text.trim().replace(/\{([^{}]+)\}/g, (_, names) => '{' + names.replace(/\s+/g,'') + '}')) ||
-      (/\b(?:University|Institute|Microsoft Research|Laboratory|Laboratories|Department of)\b/i.test(b.text) &&
+      (/\S+@\S+/.test(b.text)&&names.test(clean(b.text.replace(/\S+@\S+/g,'')))) ||
+      (/\b(?:University|Institute|Microsoft Research|Google Brain|Google Research|Laboratory|Laboratories|Department of)\b/i.test(b.text) &&
         !/\b(?:is|are|was|were|we|our|this|discussed|provides?)\b/i.test(b.text))));
   if (!anchors.length) return;
-  const names = /^(?:[\p{Lu}][\p{L}’'\-]*\.?\s+){1,15}[\p{Lu}][\p{L}’'\-]*\.?$/u;
   for (const block of blocks) {
     if (block.kind !== 'text' || block.box.bottom >= limit) continue;
     const nearby = anchors.some(a => Math.abs(a.box.top - block.box.bottom) < Math.max(block.size * 6, 70));
-    const nameLines = block.text.split(/[,;]|\s+and\s+/).map(s => s.replace(/[\d*†‡]+/g, '').trim()).filter(Boolean);
-    if (anchors.includes(block) || (nearby && block.size <= Math.max(...anchors.map(a => a.size)) * 1.15 &&
+    const nameLines = block.text.split(/[,;]|\s+and\s+/).map(clean).filter(Boolean);
+    if (anchors.includes(block) || (nearby && block.box.top>=Math.min(...anchors.map(a=>a.box.top))-35 && block.size <= Math.max(...anchors.map(a => a.size)) * 1.15 &&
         nameLines.length && nameLines.every(s => names.test(s)))) {
       block.kind = 'identity'; block.role = 'identity';
     }

@@ -1,9 +1,85 @@
 # Validation
 
-## v0.4 third layout pass (2026-10-16, working tree)
+## v0.4 fourth layout pass (2026-10-16, working tree)
 
-Based on `95febe1`, including the committed second pass and QA acceptance tooling. Changes remain
-uncommitted. No gateway, provider configuration, production browser profile or version change.
+Based on leader commit `fca8ae9`; no commit, version, gateway configuration or QA-owned tooling change.
+The leader independently deployed v0.4 and reported a 0.93-second draft / 4.6-second auto final;
+those timings are leader evidence, not this worktree's new provider acceptance.
+
+Changes: visible aria-hidden text follows visual visibility; author/channel/citation metadata stays
+original; the LLM prompt (version 5) retains product/person names. A repeated-capitalized-word
+atom heuristic was tried and removed: it kept ordinary words (Japan, Language) untranslated. A real Attention PDF local/mock probe found Unicode star
+markers and the old 45-percent cutoff excluding authors; all eight authors now classify as identity,
+while paper title and abstract remain text. Tests cover both merged email groups and title negatives.
+
+SPA scanning/result work uses bounded ordinary tasks rather than idle-only scheduling; language
+detection has a 50-ms deadline. YouTube navigation-ready events reprime visible blocks and terms.
+Global MT waiters prioritize visible work over prefetch; already started requests finish normally,
+including paragraphs displaced by earlier bilingual additions. A parse failure in one HTTP 200 batch no longer cools the whole engine;
+network/rate failures retain backoff. Page errors get at most two delayed retries, neutral small
+retry markers, and retain original source. These mechanisms do not guarantee public network latency.
+
+Class/style mutations refit existing translations and scan newly visible content without discarding
+all translated children. Local prose clipping may be released up to eight ancestors, bounded by
+page-level containers, retaining native subsequent style changes for restore. A live Amazon expanded
+description probe measured 280 px becoming about 1190 px with subsequent content in normal flow;
+the former severe overlap was absent in that screenshot. Title line-height and thumbnail text backing
+have browser regressions. Deterministic numeric module ids and reserved shorter packer bindings keep
+all mobile features and the 360000-byte working budget; current runtime bundle is 357529 bytes.
+
+Public diagnostics/artifacts stay outside the repository in `fix/round4/` and `acceptance/fix-r4-complete/`.
+All new live probes use anonymous free MT or offline mock; no campus, paid, local LLM or production
+profile is used. Final matrix/scroll results are recorded separately after the frozen-source run.
+Android viewport and GM emulation do not establish physical Edge/Tampermonkey support.
+
+Frozen-source fourth-pass checks passed 391 Node tests, 86 gateway tests, 22 release tests (one
+Windows symlink skip), 39 QA-tool tests, 32 canonical browser functional cases plus one INFO,
+12 layout cases, eight userscript cases, six PDF cases and six settings-browser cases. Project,
+release generation and packaged-project checks passed; the version stays 0.3.1.
+
+The complete requested ten-site/four-device MT-only matrix in `acceptance/fix-r4-complete/` reports
+`total=40 PASS=6 FAIL=34 UNREACHABLE=0 UNSUPPORTED=0 ERROR=0`. All 38 observed first translations
+were within three seconds; YouTube desktop/light/dark measured 0.452/0.461 seconds and NHK
+0.737/0.306 seconds. Raw coverage still counts newly protected authors and dates as missing;
+the raw FAIL verdicts are retained. There are 20 rows with geometry candidates, 22 with coverage
+below 95%, and 17 with structural restore failures. No extension residue was reported, but native
+node/attribute differences are not all explained by the controls; exact real-site restore is not
+established universally. Naver tablet retains real missing paragraph candidates.
+
+Independent sequential timing diagnostics registered YouTube units in about 12 ms and requested MT
+in 131–138 ms; first results arrived in 0.345/1.241 seconds. An earlier same-round trace registered
+in 14 ms and requested in 143 ms but returned at 3.03 seconds with HTTP 400/429 observations;
+network latency is not guaranteed. arXiv traces contained a 114-byte rejected MS request and one
+Google 429; maximum request size was 1207 bytes, not an oversized request. The old 80-error burst
+was not reproduced, and final arXiv rows reported no visible errors; its historical cause is not
+proven by these traces.
+
+The strict novel scroll probe performed ten one-screen moves per device, tracking only newly
+entering original reader Text nodes. Desktop completed all ten cohorts (first <=0.854 s, all
+<=1.232 s). Phone had nine new cohorts, all complete (first <=0.948 s, all <=2.374 s); screen two
+contains previously counted prose. Tablet had six new cohorts, all complete, but screen five first
+took 1.741 s and the slowest full cohort took 2.482 s. Tablet screen two is previously counted
+prose and screens 8–10 are after the chapter. Those zero-new-text screens are N/A, not timing
+passes. Footer pending controls remain separate from reader coverage. The <=1.5-second scroll
+target is therefore not fully met. Pure long-vowel divider lines are excluded from probe counts;
+the runtime still sometimes duplicates those separators.
+
+All 80 main matrix images, 20 additional ordinary mobile/tablet viewport images and 30 scroll
+images were inspected and hashed in `fix/round4/reviewed-images.json`. Same-page ordinary viewport
+screenshots show the GitHub phone title wrapped correctly before and after the QA CDP screenshot
+function, while that function's image crops it horizontally. The isolated width probe preserves
+all three images plus measured viewport/body/title widths. QA-owned code was not changed; raw
+matrix pictures and verdicts stay untouched. Ordinary screenshots also show the remaining actual
+Amazon navigation growth, cramped Pixiv cover-card heading, collapsed YouTube phone title and
+large blog headline. The first ordinary artwork-phone capture timed out waiting for fonts; a
+separate successful retry is retained. Fullscreen desktop artwork `#1` has no eligible DOM prose,
+so its empty cohort does not establish OCR or translation coverage. PDF 56/82-ms historical long
+tasks and physical device acceptance remain unverified in this pass.
+
+## v0.4 third layout pass (2026-10-16, committed as fca8ae9)
+
+Based on `95febe1`, including the committed second pass and QA acceptance tooling; this historical
+third pass was committed by the leader as `fca8ae9`. No gateway, provider configuration, production browser profile or version change.
 Automatic page/PDF hybrid refinement now selects prose/title/list/cell units with at least six words
 or twelve CJK characters. Controls, navigation, metadata, attributes and local glossary matches stay
 MT/dictionary finals. Malformed non-JSON output fails that chain model immediately; connection tests

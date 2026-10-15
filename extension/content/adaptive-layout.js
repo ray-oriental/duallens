@@ -10,10 +10,15 @@ export function prepareLayout(u) {
 }
 function free(el,u) {
   const existing=styles.get(el);
-  if(existing) {existing.owners.add(u);(u.layoutStyles||=new Set()).add(el);return;}
+  if(existing) {
+    existing.owners.add(u);(u.layoutStyles||=new Set()).add(el);
+    if(el.getAttribute('style')!==existing.written){existing.changed=true;for(const p of existing.props)if(el.style.getPropertyValue(p[0])!==p[1]){p[2]=el.style.getPropertyValue(p[0]);p[3]=el.style.getPropertyPriority(p[0]);}}
+    for(const [k,v]of existing.props)el.style.setProperty(k,v,'important');existing.written=el.getAttribute('style');return;
+  }
   const cs=getComputedStyle(el),props={},full=!u.layoutFacts?.interactive||u.layoutFacts.title;
   if(full&&cs.minWidth==='auto') props['min-width']='0';
   if(full&&el===u.host) props['overflow-wrap']='anywhere';
+  if(full&&u.layoutFacts?.title) {props['white-space']='normal';props['line-height']='1.3';}
   if(full&&(/hidden|clip/.test(cs.overflowX)||/hidden|clip/.test(cs.overflowY))) {props.overflow='visible';props['overflow-x']='visible';props['overflow-y']='visible';}
   if(cs.webkitLineClamp&&cs.webkitLineClamp!=='none') props['-webkit-line-clamp']='unset';
   if(cs.display.includes('webkit')) props.display='block';
@@ -44,7 +49,7 @@ export function fitLayout(u,apply) {
     }
   } else {
     // Headlines and prose keep both languages. Release clipping locally and in enclosing cards.
-    for(let el=u.host,n=0;el&&el!==document.body&&n<4;el=el.parentElement,n++) {
+    for(let el=u.host,n=0;el&&el!==document.body&&n<8;el=el.parentElement,n++) {
       if(el!==u.host&&el.matches('main,article,nav,header,[role="navigation"]')) break;
       free(el,u);
     }
@@ -58,7 +63,7 @@ export function releaseLayout(u) {
   for(const el of u.layoutStyles||[]) {
     const r=styles.get(el);r?.owners.delete(u);
     if(r&&!r.owners.size) {
-      if(el.getAttribute('style')===r.written) {if(r.original===null) el.removeAttribute('style');else el.setAttribute('style',r.original);}
+      if(!r.changed&&el.getAttribute('style')===r.written) {if(r.original===null) el.removeAttribute('style');else el.setAttribute('style',r.original);}
       else for(const [k,v,old,priority] of r.props) if(el.style.getPropertyValue(k)===v&&el.style.getPropertyPriority(k)==='important') {if(old) el.style.setProperty(k,old,priority);else el.style.removeProperty(k);}
       styles.delete(el);
     }

@@ -35,6 +35,7 @@ export class PageTranslator {
     this.watch=new MutationWatcher((batch)=> this.#onMutations(batch));
     this.route=new RouteWatcher(()=> this.#onRoute());
     this.active=false;
+    this.refresh=()=>{if(this.active){this.#prime();this.lazy.scroll();}};
     this.queue=[];
     this.flushTimer=0;
     this.seq=0;
@@ -96,6 +97,13 @@ export class PageTranslator {
     this.lazy.setMargin(this.s.lazy.rootMarginPx);
     this.watch.start();
     this.route.start();
+    document.addEventListener('yt-navigate-finish',this.refresh);
+    this.#prime();
+    for(const root of this.#roots()) this.#scan(root);
+    this.emit();
+  }
+
+  #prime() {
     const roots=this.#roots();
     // Prime visible blocks before the document-order scan. A novel can have thousands of
     // offscreen nodes ahead of its scrolled reader; translated chrome must not move the reader
@@ -111,8 +119,6 @@ export class PageTranslator {
       }
     }
     for(const block of visible) if(![...visible].some(other=> other !==block && block.contains(other))) this.#scan(block);
-    for(const root of roots) this.#scan(root);
-    this.emit();
   }
 
   stop() {
@@ -125,6 +131,7 @@ export class PageTranslator {
     this.onRouteDebounced.cancel();
     this.watch.stop();
     this.route.stop();
+    document.removeEventListener('yt-navigate-finish',this.refresh);
     this.lazy.disconnect();
     inj.write(()=> {
       for(const u of this.units.values()) {u.dead=true; inj.restore(u);}
@@ -348,7 +355,8 @@ export class PageTranslator {
     if(s.sourceLang==='auto') unit.from=looksLikeTarget(plain,'ja')?'ja':'auto';
     if(looksLikeTarget(plain,s.targetLang)) return true;
     if(plain.length < 24) return false;
-    const det=await this.platform.detectLanguage(plain.slice(0,400));
+    let timer;
+    const det=await Promise.race([Promise.resolve().then(()=>this.platform.detectLanguage(plain.slice(0,400))).catch(()=>null),new Promise(r=>timer=setTimeout(()=>r(null),50))]);clearTimeout(timer);
     const top=det && det.reliable && det.lang;
     if(!top) return false;
     const pct=det.percentage ?? 100;
@@ -402,6 +410,7 @@ export class PageTranslator {
     unit.state='error';
     unit.error=error;
     inj.markError(unit,error && error.message);
+    if((unit.retryCount||0)<2){unit.retryCount=(unit.retryCount||0)+1;setTimeout(()=>{if(!unit.dead&&this.active&&unit.state==='error'){unit.state='idle';this.lazy.watch(unit);}},error?.code===ERR.RATE_LIMITED?60000:16000);}
   }
 
   // The LLM stage gave up on a unit that already shows its machine-translation draft: the draft stays.
@@ -473,10 +482,11 @@ export class PageTranslator {
     }
   }
 
-  #onMutations({added,dirty}) {
+  #onMutations({added,dirty,layout=[]}) {
     if(!this.active) return;
     const rescan=new Set();
     const handled=new Set();
+    inj.write(()=>{for(const el of layout)if(el.isConnected){for(const u of this.units.values())if(el.contains(u.host))inj.refit(u,this.s.displayMode);rescan.add(el);}});
 
     for(const el of dirty) {
       if(!el.isConnected) continue;

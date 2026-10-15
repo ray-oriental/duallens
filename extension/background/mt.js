@@ -171,13 +171,14 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
   const capacity = Math.max(1, Math.min(3, runtimeLimits.concurrency || 3));
   // One bound across concurrent page/hover requests, including token requests. Cancelled waiters
   // never start HTTP or consume a slot. Runtime mobile caps do not change saved settings.
-  function slot(signal) {
+  function slot(signal,priority=1) {
     return new Promise((resolve, reject) => {
       const start = () => {
         signal?.removeEventListener('abort', abort);
         active++;
         resolve(() => { active--; waiting.shift()?.(); });
       };
+      start.priority=priority;
       const abort = () => {
         const index = waiting.indexOf(start);
         if (index >= 0) waiting.splice(index, 1);
@@ -185,12 +186,12 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
       };
       if (signal?.aborted) return abort();
       if (active < capacity) start();
-      else { waiting.push(start); signal?.addEventListener('abort', abort, { once: true }); }
+      else { waiting.push(start);waiting.sort((a,b)=>a.priority-b.priority); signal?.addEventListener('abort', abort, { once: true }); }
     });
   }
 
   async function http(job, { url, method = 'POST', headers = {}, body }) {
-    const release = await slot(job.signal);
+    const release = await slot(job.signal,job.priority);
     const ctrl = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs);
@@ -292,6 +293,7 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
 
   const ready = (engine) => (cooldowns.get(engine) || 0) <= now();
   function failed(engine, error) {
+    if(error?.code===ERR.PARSE)return; // one malformed batch must not poison unrelated work
     const n = (fails.get(engine) || 0) + 1;
     fails.set(engine, n);
     let wait = Math.min(300000, 15000 * 2 ** (n - 1));
@@ -333,7 +335,7 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
 
   // items: [{ id, text }] in serialized-markup form. onResults(list) is called once per finished
   // request with [{ id, text, plain?, engine } | { id, error }]. Resolves when every item reported.
-  async function translate({ items, to, from = 'auto', chain = ['microsoft', 'google'], region = '', signal, onResults = () => {}, limits = runtimeLimits }) {
+  async function translate({ items, to, from = 'auto', chain = ['microsoft', 'google'], region = '', signal,priority, onResults = () => {}, limits = runtimeLimits }) {
     if (signal?.aborted) throw cancelledError();
     // An exceptionally large inline group cannot be split with its markup intact. Send bounded
     // plain pieces instead; the LLM can restore its formatting. Never exceed vendor request limits.
@@ -381,7 +383,7 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
       while (!failure && next < jobs.length) {
         const job = jobs[next++];
         try {
-          const list = await runChunk({ ...job, to, from, region, signal }, chain);
+          const list = await runChunk({ ...job, to, from, region, signal,priority }, chain);
           deliver(list);
         } catch (e) { failure = e; }
       }

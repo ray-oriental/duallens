@@ -136,7 +136,7 @@ function names(list, file) {
 function parseModule(source, file) {
   const ts = tokens(source, file);
   rejectRuntimeImports(ts, file);
-  if (ts.some((t) => t.kind === 'word' && ['__exports', '__require', '__export', '__dlDefault'].includes(t.value))) {
+  if (ts.some((t) => t.kind === 'word' && ['__exports','__require','__export','__e', '__r', '__x', '__dlDefault'].includes(t.value))) {
     fail(file, 'reserved bundler binding');
   }
   const imports = [], exports = [], edits = [];
@@ -244,7 +244,8 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
     active.delete(file); return file;
   }
   const entryFile = await visit(entry);
-  const id = (file) => path.relative(root, file).replaceAll('\\', '/');
+  const ids=new Map([...graph.keys()].map((file,i)=>[file,i]));
+  const id=file=>ids.get(file);
   const factories = [];
   for (const [file, mod] of graph) {
     let code = mod.source;
@@ -252,17 +253,17 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
       let replacement = edit.replacement;
       if (edit.importIndex !== undefined) {
         const item = mod.imports[edit.importIndex];
-        const require = `__require(${JSON.stringify(id(item.file))})`;
+        const require = `__r(${JSON.stringify(id(item.file))})`;
         replacement = item.namespace ? `const ${item.namespace} = ${require};` : item.bindings.length
           ? `const { ${item.bindings.map((b) => `${b.imported}: ${b.local}`).join(', ')} } = ${require};` : `${require};`;
       }
       code = code.slice(0, edit.start) + replacement + code.slice(edit.end);
     }
-    code = compactSource(code, id(file));
-    code += '\n__export(__exports,{' + mod.exports.map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
-    factories.push(`${JSON.stringify(id(file))}:function(__exports,__require){\n${code}\n}`);
+    code = compactSource(code, path.relative(root,file));
+    code += '\n__x(__e,{' + mod.exports.map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
+    factories.push(`${JSON.stringify(id(file))}:function(__e,__r){\n${code}\n}`);
   }
-  const bundle = `(function() {\n'use strict';\nfunction __export(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __require(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __require);\n return out;\n}\n__require(${JSON.stringify(id(entryFile))});\n})();\n`;
+  const bundle = `// Modules: ${JSON.stringify([...graph.keys()].map(f=>path.relative(root,f).replaceAll('\\','/')))}\n(function() {\n'use strict';\nfunction __x(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __r(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __r);\n return out;\n}\n__r(${JSON.stringify(id(entryFile))});\n})();\n`;
   // Validate before touching the output. Unsupported/unrewritten ESM and top-level await fail.
   new vm.Script(bundle, { filename: 'duallens.user.js' });
   new Function(bundle);

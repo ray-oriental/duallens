@@ -6,7 +6,7 @@ dl-t[data-dl-stage="draft"]{opacity:1;}
 @media (prefers-reduced-motion:reduce){dl-t{transition:none;}
 }
 dl-w{display:block;}
-dl-t.dl-block{display:block;margin-block-start:0.3em;overflow-wrap:anywhere;}
+dl-t.dl-block{display:block;margin-block-start:0.3em;overflow-wrap:anywhere;line-height:1.45;}
 dl-t.dl-inline{display:inline;font-size:.9em;font-weight:normal;}
 dl-t.dl-inline::before{content:" \00b7 ";white-space:pre;}
 dl-t.dl-block{max-inline-size:100%;}
@@ -36,9 +36,9 @@ dl-t[data-dl-state="pending"]::after{content:"";display:inline-block;width:0.7em
 }
 @media (prefers-reduced-motion:reduce){dl-t[data-dl-state="pending"]::after{animation:none;border-top-color:var(--dl-line);opacity:0.6;}
 }
-dl-r{display:inline-block;box-sizing:border-box;width:1.4em;height:1.4em;line-height:1.2em;text-align:center;font:normal normal 0.8em/1.2em system-ui,sans-serif;color:#d1242f;border:1px solid currentColor;border-radius:50%;cursor:pointer;user-select:none;text-decoration:none;}
-dl-r:hover{background:rgba(209,36,47,0.12);}
-dl-r:focus-visible{outline:2px solid #d1242f;outline-offset:1px;}
+dl-r{display:inline-block;box-sizing:border-box;width:1.4em;height:1.4em;line-height:1.2em;text-align:center;font:normal normal 0.8em/1.2em system-ui,sans-serif;color:inherit;border:1px solid currentColor;border-radius:50%;cursor:pointer;user-select:none;text-decoration:none;}
+dl-r:hover{background:var(--dl-soft);}
+dl-r:focus-visible{outline:2px solid currentColor;outline-offset:1px;}
 dl-o.dl-hide{display:none !important;}
 dl-o.dl-hide.dl-peek{display:inline !important;}
 dl-t[data-dl-peek]{display:none !important;}
@@ -47,5 +47,6 @@ dl-t.dl-block.dl-solo{display:block;}
 dl-t.dl-solo[data-dl-presentation="replace"]{display:inline-block;max-inline-size:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:baseline;}
 dl-t.dl-block[data-dl-state="done"] + br{display:none;}
 dl-t.dl-t.dl-solo::before,dl-t.dl-t.dl-solo::after{content:none;}
-@media (pointer:coarse){dl-r{display:inline-flex;align-items:center;min-height:44px;min-width:44px;}
+@media (pointer:coarse){dl-r{display:inline-flex;align-items:center;}
 }
+ytm-shorts-lockup-view-model dl-t,ytm-shorts-lockup-view-model-v2 dl-t,[class*="shortsLockupViewModelHost"] dl-t{color:#fff!important;background:rgba(0,0,0,.85);text-shadow:none;padding:0 .12em;box-decoration-break:clone;-webkit-box-decoration-break:clone;}

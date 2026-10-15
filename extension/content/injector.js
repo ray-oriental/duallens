@@ -246,6 +246,7 @@ export function setStage(u,stage,engine) {
     if(engine) u.tEl.setAttribute('data-dl-engine',engine);
   });
 }
+export function refit(u,mode) {if(u.tEl)fitLayout(u,x=>applyMode(x,mode));}
 
 // Translation identical to the source: nothing to show.
 export function showNothing(u) {

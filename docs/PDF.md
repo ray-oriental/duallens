@@ -23,6 +23,7 @@
 - `translate.js: PdfTranslations` 独立于缩放保存状态，请求附加 `draft:true,purpose:'pdf'`。同一 id 的 `stage:'draft'` 可由 `stage:'final'`（或无 stage）替换；迟到草稿不覆盖终稿。精修失败保留草稿并注明。回调只解析为文本与受限公式原子，模型输出不进入 innerHTML。恢复取消请求、清除覆盖层并保留原页；旧请求、重试前的迟到结果不能写入新状态。
 - 纯链接、编号链接脚注和作者分组邮箱在本地识别并保留原样，不向服务发送。包含链接的正常正文仍翻译；短句不能仅因字数少就把漏翻当成功。
 - 页首在 Abstract 之前且有机构/邮箱证据的短作者组、机构行使用本地 `identity` 分类，保留原像素，不发送翻译。姓名须符合大写词形且字号不大于机构行的 1.15 倍；普通标题与正文中的机构提及仍参与翻译。这是保守启发式，非拉丁作者、复杂合并分块仍需逐页核对。
+  作者脚注同时识别 `* ∗ ⋆ † ‡`；包含姓名加邮箱的合并块、Google Brain/Research 机构行也作为证据。有 Abstract 时以其位置为边界，避免遗漏页高中部最后一组作者；无摘要仍用保守页首范围。姓名与机构须邻近，标题不因全为大写词形就被当成作者。
 - 上述双阶段呈现需翻译服务及运行时端口支持阶段字段；本 PDF 分支不修改共享引擎或端口。仅有旧接口时仍显示普通终稿，实际双引擎链路由集成方验收。
 - `pdfjs-dist` 5.4.624 源自 [npm tarball](https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-5.4.624.tgz)，已校验 npm SHA-512，附 SHA-256、Apache-2.0 和 codec 许可证；[上游 release](https://github.com/mozilla/pdf.js/releases/tag/v5.4.624)。只执行打包到扩展内的模块，不从 CDN 执行代码。详见 `extension/vendor/pdfjs/VENDOR.md` 与同内容 `VENDOR.txt`。
 

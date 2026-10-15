@@ -336,7 +336,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
 
   // Answers each source text from the MT cache (under any engine of the chain) or from the engines.
   // onEach([{ text, result: { text, engine, plain } } | { text, error }]) fires as answers arrive.
-  async function runMT(texts, { settings, to, from, signal, onEach }) {
+  async function runMT(texts, { settings, to, from, signal, onEach,priority }) {
     const mtSettings = settings.translation?.mt || {};
     const chainIds = mtChain(mtSettings);
     const cacheOn = !!cache && settings.cache && settings.cache.enabled !== false;
@@ -363,7 +363,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     if (!misses.length) return;
     const writes = [];
     await mt.translate({
-      items: misses.map((text, id) => ({ id, text })), to, from, chain: chainIds, region: mtSettings.region || '', signal,
+      items: misses.map((text, id) => ({ id, text })), to, from, chain: chainIds, region: mtSettings.region || '', signal,priority,
       onResults: (list) => {
         onEach(list.map(r => r.error ? { text: misses[r.id], error: r.error }
           : { text: misses[r.id], result: { text: r.text, engine: r.engine, ...(r.plain ? { plain: true } : {}) } }));
@@ -402,7 +402,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     deliver(blanks);
     const failed = [];
     try {
-      await runMT([...byText.keys()], { settings, to, from, signal, onEach: (entries) => {
+      await runMT([...byText.keys()], { settings, to, from, signal,priority:req.priority, onEach: (entries) => {
         const out = [];
         for (const e of entries) for (const id of byText.get(e.text)) {
           if (e.error) failed.push({ id, error: e.error });
@@ -477,7 +477,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
         texts.add(textOf.get(id));
       }
       if (!texts.size) return;
-      const job = runMT([...texts], { settings, to, from, signal: mtCtrl.signal, onEach: onMtAnswer })
+      const job = runMT([...texts], { settings, to, from,priority:req.priority, signal: mtCtrl.signal, onEach: onMtAnswer })
         .catch((e) => {
           if (isCancelled(e) || mtCtrl.signal.aborted) return;
           onMtAnswer([...texts].map(text => ({ text, error: toErrorInfo(e) })));

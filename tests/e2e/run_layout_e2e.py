@@ -266,6 +266,31 @@ def scoped_dynamic_body(h):
     assert h.js('() => document.body.outerHTML')==expected
     return 'body dirty/addition stays scoped; selected dynamic content translates; exact restore with page additions'
 
+@e.case('layout_round4', 'Bounded detection, live expander remeasurement, protected identities and image overlays')
+def layout_round4(h):
+    h.open('article.html');h.page.set_viewport_size({'width':375,'height':812})
+    h.js("() => {window.r4Idle=requestIdleCallback;window.requestIdleCallback=()=>0}")
+    h.js("""()=>{document.body.innerHTML='<div class="author">Joel Spolsky</div><a rel="author">Alice Smith</a><span itemprop="author">Bob Jones</span><ytd-channel-name>Blender</ytd-channel-name><h1 style="white-space:nowrap;font-size:28px;line-height:10px;overflow:hidden">An original headline should remain fully visible on mobile</h1><div id="expander" style="height:60px;overflow:hidden"><div><div><div><div><div><div><p>Use Blender to render a detailed original animated scene.</p><p>Try Blender to create another detailed original scene.</p></div></div></div></div></div></div></div><p id="after">The following section must remain below the expanded description.</p><span class="comhead"><a aria-hidden="true" href="#parent">parent</a></span><a aria-hidden="true" style="display:none">Invisible clone menu</a><ytm-shorts-lockup-view-model><div style="background-image:linear-gradient(red,blue)"><span>Read this original short video title</span></div></ytm-shorts-lockup-view-model>';window.r4Original=document.body.outerHTML}""")
+    h.js("() => {const clone=document.createElement('div');clone.style.cssText='position:absolute;left:-9999px;top:0';clone.setAttribute('aria-hidden','true');clone.textContent='Invisible clone menu';document.body.append(clone)}")
+    h.js("""async ext=>{const {PageTranslator}=await import(ext+'/content/controller.js');const {DEFAULT_SETTINGS}=await import(ext+'/shared/settings.js');window.r4Sent=[];window.r4Start=performance.now();window.r4=new PageTranslator({getSettings:()=>DEFAULT_SETTINGS,platform:{detectLanguage:()=>new Promise(()=>{}),translator:()=>({translateBatch(req,cb){r4Sent.push(...req.items);setTimeout(()=>cb(req.items.map(x=>({id:x.id,text:'【译】'+x.text}))),30);return{cancel(){}}}})}});r4.start()}""",f'chrome-extension://{h.ext_id}')
+    h.wait_js("() => document.querySelector('#expander dl-t[data-dl-state=done]') && document.querySelector('.comhead dl-t')")
+    assert h.js("() => performance.now()-r4Start<1500"),'stalled native language detector cannot hold the viewport'
+    assert h.js("() => !document.querySelector('.author dl-t,[rel=author] dl-t,[itemprop=author] dl-t,ytd-channel-name dl-t')")
+    # Capitalized words inside prose are sent for translation (no page-wide term atoms); names are protected by element.
+    assert h.js("() => r4Sent.filter(x=>x.text.includes('render')||x.text.includes('create')).every(x=>x.text.includes('Blender'))")
+    assert h.js("() => !r4Sent.some(x=>x.text.includes('Invisible clone'))")
+    h.js("() => {window.r4Translation=document.querySelector('#expander dl-t');document.querySelector('#expander').style.height='40px'}")
+    h.page.wait_for_timeout(650)
+    assert h.js("() => document.querySelector('#expander dl-t')===r4Translation && document.querySelector('#expander').getBoundingClientRect().bottom<=document.querySelector('#after').getBoundingClientRect().top+1")
+    assert h.js("() => getComputedStyle(document.querySelector('h1')).lineHeight!=='10px'")
+    h.page.locator('ytm-shorts-lockup-view-model').scroll_into_view_if_needed()
+    h.wait_js("() => document.querySelector('ytm-shorts-lockup-view-model dl-t[data-dl-state=done]')")
+    assert h.js("() => getComputedStyle(document.querySelector('ytm-shorts-lockup-view-model dl-t')).backgroundColor==='rgba(0, 0, 0, 0.85)'")
+    h.js('() => r4.stop()')
+    h.js('() => window.requestIdleCallback=r4Idle')
+    assert h.js("() => document.querySelector('#expander').style.height==='40px' && document.querySelector('h1').style.lineHeight==='10px' && !document.querySelector('dl-t,dl-w,dl-o')"),'restore keeps native expander change and exact original title styles'
+    return 'hanging detection bounded; deep expander refits without retranslating; product/author atoms; visible aria-hidden; thumbnail backing; native styles restored'
+
 @e.case('coverage_round3', 'Capitalized navigation, edge identifiers, compact metadata and original whitespace identity')
 def coverage_round3(h):
     html='''<meta charset="utf-8"><style>.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)} .titleline{display:block}</style><header><nav><a href="/news">News</a><a href="/sport">Sport</a><a href="/business">Business</a><button>Platform</button></nav></header><main><h2 class="sr-only">Hidden breadcrumb heading</h2><div id="identity">\n\t<a href="/file/main/build">build</a>\n\t<div style="display:flex"><span>Useful public paragraph with enough words.</span></div>\n</div><span class="titleline"><a href="https://example.com/story">Neural Networks Are Already Clean</a> <span class="sitebit">(goodfire.com)</span></span><div class="subtext">41 points by <a class="hnuser" href="/user?id=alice">alice</a> 2 hours ago | <a href="/hide">hide</a> | <a href="/item?id=1">11 comments</a></div><a data-hovercard-type="user" href="/Alice">Alice</a><span class="topic-tag">typescript</span><span class="branch-name">main</span></main>'''
@@ -289,7 +314,9 @@ def coverage_round3(h):
     assert h.js("() => !document.querySelector('.sr-only dl-t,.sig dl-t,.branch-name dl-t,.topic-tag dl-t,[data-hovercard-type] dl-t,a[href$=build] dl-t,[role=treeitem] dl-t') && !sent.some(it=>['Doc','Modules'].includes(it.text))"), 'invisible text and identifiers including file tree names'
     h.wait_js("() => document.querySelectorAll('form dl-t[data-dl-state=done]').length===3")
     h.wait_js("() => document.querySelector('.comhead dl-t')?.textContent.includes('根评论') && document.querySelector('.comhead dl-t').textContent.includes('下一页') && document.querySelector('.comhead dl-t').textContent.includes('上级')")
-    assert h.js("() => !document.querySelector('#date-metadata dl-t') && !sent.some(it=>it.text.includes('April'))"), 'unchanged date/aria-hidden metadata stays original without duplicate English or provider request'
+    h.page.locator('#date-metadata').scroll_into_view_if_needed()
+    h.wait_js("() => !!document.querySelector('#date-metadata dl-t[data-dl-state=done]')")
+    assert h.js("() => !sent.some(it=>it.text.includes('April'))"), 'actually visible aria-hidden navigation translates locally while dates stay original'
     assert h.js("() => sent.some(it=>it.text.includes('This article heading')&&it.refine===true)&&sent.filter(it=>['News','Sport','Business','Platform'].includes(it.text)).every(it=>it.refine===false)"), 'article header eligible, navigation ineligible'
     assert h.js("() => document.querySelectorAll('.subtext dl-t').length===1 && document.querySelector('.subtext dl-t').textContent==='41 分 来自 hide 2 小时前 | 隐藏 | 11 条评论'"), 'one metadata sentence without translating the hide username'
     h.js('() => round3.stop()')

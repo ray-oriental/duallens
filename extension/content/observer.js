@@ -33,7 +33,7 @@ export class LazyObserver {
 
   watch(unit) {
     const r = this.#rect(unit);
-    if (r.bottom > 0 && r.top < (window.innerHeight || 800)) {
+    if (r.bottom > 0 && r.top < (window.innerHeight || 800)&&!(r.right<=0||r.left>=innerWidth)) {
       this.onVisible(unit, 0, r.top); return;
     }
     if (!this.io) this.#make();
@@ -74,7 +74,7 @@ export class LazyObserver {
     const vh = window.innerHeight || 800;
     const bounds=host.getBoundingClientRect();if(bounds.bottom<=-this.margin || bounds.top>=vh+this.margin)return;
     for(const u of [...set]) {
-      const r=this.#rect(u);if(r.bottom<=-this.margin || r.top>=vh+this.margin)continue;
+      const r=this.#rect(u);if(r.bottom<=-this.margin || r.top>=vh+this.margin||r.right<=0||r.left>=innerWidth)continue;
       // 0 = on screen, 1 = within a screen's distance, 2 = further prefetch
       const priority = r.bottom > 0 && r.top < vh ? 0 : r.bottom > -vh && r.top < 2 * vh ? 1 : 2;
       this.unwatch(u);this.onVisible(u, priority, r.top);
@@ -100,6 +100,7 @@ export class MutationWatcher {
     this.timer = 0;
     this.added = new Set();
     this.dirty = new Set();
+    this.layout = new Set();
   }
 
   start() {
@@ -116,6 +117,7 @@ export class MutationWatcher {
     this.timer = 0;
     this.added.clear();
     this.dirty.clear();
+    this.layout.clear();
   }
 
   guard(fn) {
@@ -135,7 +137,7 @@ export class MutationWatcher {
       const el = t.nodeType === 1 ? t : t.parentElement;
       if (!el || el.closest('dl-t,dl-ui')) continue;
       if (r.type === 'characterData' || r.type === 'attributes') {
-        this.dirty.add(el);
+        (r.type==='attributes'&&/^(class|style)$/.test(r.attributeName)?this.layout:this.dirty).add(el);
         any = true;
         continue;
       }
@@ -165,9 +167,10 @@ export class MutationWatcher {
   }
 
   #emit() {
-    const batch = { added: [...this.added], dirty: [...this.dirty] };
+    const batch = { added: [...this.added], dirty: [...this.dirty],layout:[...this.layout] };
     this.added.clear();
     this.dirty.clear();
+    this.layout.clear();
     this.onBatch(batch);
   }
 }
