@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Authorized public-page acceptance; real free MT, optional isolated Ollama gateway.
+"""Authorized public-page acceptance; real free MT, optional isolated free gateway.
 
-No login, challenge bypass, real browser profile, remote LLM, or production gateway.
+No login, challenge bypass, real browser profile, paid LLM, or production gateway.
 See README.md for the independent coverage definition and limits of geometry checks.
 """
 from __future__ import annotations
@@ -13,12 +13,14 @@ import contextlib
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import socket
 import subprocess
 import sys
 import time
+import threading
 import urllib.error
 import urllib.request
 import uuid
@@ -33,6 +35,86 @@ MOBILE_UA = ('Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 '
 DEVICES = {'desktop': (1280, 800, False), 'phone': (375, 812, True), 'tablet': (800, 1280, True)}
 MT_HOSTS = {'edge.microsoft.com', 'api-edge.cognitive.microsofttranslator.com', 'clients5.google.com',
             'translate.googleapis.com', 'translate.google.com'}
+DESKTOP_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')
+SJTU_BUDGET = CACHE / 'v04' / 'acceptance' / 'sjtu-budget.json'
+
+
+def apply_restore_control(result, control):
+    """Only the same structural element/attribute may be explained by the control.
+
+    Text/order changes and dl residue are never excused. A failed control explains
+    nothing. Keep every raw delta (including strict body diff) for review.
+    """
+    allowed = {(x['path'], x['attribute']) for x in [*control.get('restore_attributes', []), *control.get('restore_attribute_activity', [])]
+               if x['attribute'] != '__element_removed__'} if control.get('complete') else set()
+    explained, unexplained = [], []
+    for delta in result.get('restore_attributes', []):
+        (explained if (delta['path'], delta['attribute']) in allowed else unexplained).append(delta)
+    result['restore_site_attribute_changes'] = explained
+    result['restore_unexplained_attributes'] = unexplained
+    result['restore_identical'] = not (unexplained or result.get('restore_text_changes') or result.get('restore_residue'))
+    return result
+
+
+def pdf_restore_verdict(result):
+    """Reader chrome is exempt; original layer/rendering and residue are not."""
+    return (result.get('pdf_source_dom_identical') is True and
+            result.get('pdf_original_pixels_identical') is True and
+            not result.get('restore_residue'))
+
+
+def gateway_policy(config):
+    """Mutate only the freshly loaded, in-memory test configuration."""
+    for backend in ('claude', 'codex'):
+        config[backend]['enabled'] = False
+    config['remote']['enabled'] = False
+    config['port'] = 18799
+    # The proxy's configured allowlist is authoritative; never add a paid model.
+    config['hermes']['models'] = [m for m in config['hermes'].get('models', []) if m.endswith(':free')]
+    if not config['hermes']['models']:
+        config['hermes']['enabled'] = False
+    config['sjtu']['daily_limit'] = min(15, config['sjtu'].get('daily_limit') or 15)
+    safe = []
+    for model in config['auto'].get('prefer', []):
+        backend, _, name = model.partition('/')
+        if backend in ('ollama', 'sjtu', 'hermes') and config[backend].get('enabled') and (
+                name in config[backend].get('models', []) or backend == 'hermes' and name == '*'):
+            safe.append(model)
+    for backend in ('hermes', 'sjtu', 'ollama'):
+        if config[backend].get('enabled'):
+            safe.extend(backend+'/'+m for m in config[backend].get('models', []) if backend+'/'+m not in safe)
+    config['auto']['prefer'] = safe
+    if not safe:
+        raise RuntimeError('No permitted configured free gateway candidates')
+    return config
+
+
+class SjtuBudget:
+    """Persistent attempt budget: count before upstream send, including failed retries.
+
+    Exclusive file lock prevents separate test processes from resetting/racing the
+    15-attempt allowance. Corrupt state or lock contention fails closed.
+    Nothing in this ledger contains source text or credentials.
+    """
+    def __init__(self, path, limit=15):
+        self.path, self.limit, self.lock = Path(path), min(15, limit), threading.Lock()
+
+    def take(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        lockfile = self.path.with_suffix('.lock')
+        with self.lock:
+            fd = os.open(lockfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                count = json.loads(self.path.read_text(encoding='utf-8'))['attempts'] if self.path.exists() else 0
+                if not isinstance(count, int) or count < 0 or count >= self.limit:
+                    raise RuntimeError('SJTU acceptance attempt budget exhausted or invalid')
+                temp = self.path.with_suffix('.tmp')
+                temp.write_text(json.dumps({'attempts': count+1, 'limit': self.limit}), encoding='utf-8')
+                temp.replace(self.path)
+            finally:
+                os.close(fd)
+                lockfile.unlink()
 
 
 def load_sites(path=HERE / 'acceptance_sites.json'):
@@ -69,7 +151,8 @@ def markdown(rows):
     for r in rows:
         coverage = f"{r['coverage']:.1%}" if r.get('coverage') is not None else '—'
         restored = {True: 'yes', False: 'NO', None: '—'}[r.get('restore_identical')]
-        lines.append(f"| {r['id']} | {r['device']} | {t(r.get('t_first'))} | {t(r.get('t_fill'))} | "
+        label = r['id'] + (f" (替补 {r['fallback_for']})" if r.get('fallback_for') else '')
+        lines.append(f"| {label} | {r['device']} | {t(r.get('t_first'))} | {t(r.get('t_fill'))} | "
                      f"{t(r.get('t_final'))} | {coverage} | {len(r.get('layout_issues', []))} | {restored} | {r['status']} |")
     return '\n'.join(lines) + '\n'
 
@@ -149,7 +232,7 @@ def gateway_child(repo, home):
     """Read existing configuration in memory; all writes go to the private test home.
 
     The serve CLI has no backend restriction flags. Instantiate its identical server
-    with an in-memory Ollama-only policy instead of rewriting user's gateway.json.
+    with an in-memory free-only policy instead of rewriting user's gateway.json.
     """
     if home.name != 'gateway' or not home.parent.name.startswith('run-acceptance-') or home.parent.parent != CACHE.resolve():
         raise ValueError('Test gateway state must be inside its owned acceptance cache directory')
@@ -157,19 +240,21 @@ def gateway_child(repo, home):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     config = module.config_load()  # never print/copy the user's configuration
-    for backend in ('sjtu', 'hermes', 'claude', 'codex'):
-        config[backend]['enabled'] = False
-    config['remote']['enabled'] = False
-    config['port'] = 18799
-    available = config['ollama'].get('models', [])
-    model = 'qwen3:4b' if 'qwen3:4b' in available else next((m for m in available if not re.search(r'(?:20|30|70)b', m)), None)
-    if not model:
-        raise RuntimeError('No permitted small Ollama model in existing configuration')
-    config['auto']['prefer'] = ['ollama/' + model]
+    gateway_policy(config)
     home.mkdir(parents=True, exist_ok=True)
     gateway = module.Gateway(home=home, config=config)
+    budget = SjtuBudget(SJTU_BUDGET)
+    count_usage = gateway.count_usage
+    def bounded_count(backend):
+        if backend == 'sjtu':
+            try:
+                budget.take()
+            except (OSError, ValueError, KeyError, RuntimeError):
+                raise module.GatewayError(429, 'daily_limit', 'Acceptance SJTU budget unavailable/exhausted', 600, local=True) from None
+        return count_usage(backend)
+    gateway.count_usage = bounded_count
     server = module.make_server(port=18799, gateway=gateway)
-    print('ACCEPTANCE gateway ready: port=18799 policy=ollama-only sjtu=0', flush=True)
+    print('ACCEPTANCE gateway ready: port=18799 policy=configured-free-only sjtu<=15', flush=True)
     try:
         server.serve_forever()
     finally:
@@ -197,21 +282,25 @@ async def start_gateway(repo, run):
 
 
 class Browser:
-    def __init__(self, pw, ext, bundle, run, device, llm):
+    def __init__(self, pw, ext, bundle, run, device, llm, headed=False):
         self.pw, self.ext, self.bundle, self.run, self.device, self.llm = pw, ext, bundle, run, device, llm
         self.ctx = self.sw = self.ext_id = None
         self.transport = {}
         self.http_tasks = {}
         self.profile = run / ('profile-' + device)
+        self.headed = headed
 
     async def start(self):
         width, height, touch = DEVICES[self.device]
         opts = dict(headless=False, viewport={'width': width, 'height': height},
-                    args=['--headless=new', '--no-first-run', '--no-default-browser-check', '--no-proxy-server'],
+                    args=['--no-first-run', '--no-default-browser-check', '--no-proxy-server'],
                     has_touch=touch, is_mobile=touch)
+        if not self.headed:
+            opts['args'].insert(0, '--headless=new')
         if touch:
             opts['user_agent'] = MOBILE_UA.replace(' Mobile', '') if self.device == 'tablet' else MOBILE_UA
         else:
+            opts['user_agent'] = DESKTOP_UA
             opts['args'] += [f'--disable-extensions-except={self.ext}', f'--load-extension={self.ext}']
             opts['ignore_default_args'] = ['--disable-extensions']
         self.ctx = await self.pw.chromium.launch_persistent_context(str(self.profile), **opts)
@@ -387,10 +476,43 @@ async def visible_errors(browser, page, tab):
     return errors, None
 
 
+async def restore_control(browser, site, out, theme, duration, capture_after):
+    """Fresh no-translation run, same device/theme, matched post-trigger duration.
+
+    Replay the native captures at the same elapsed offset. It is sequential, not
+    simultaneous: record actual time/URL and fail closed on a wall or redirect.
+    """
+    control = await browser.ctx.new_page()
+    try:
+        await control.emulate_media(color_scheme=theme)
+        response = await control.goto(site['url'], wait_until='domcontentloaded', timeout=25000)
+        await control.wait_for_timeout(2000)
+        reason = await unreachable(control, response)
+        if reason:
+            return {'complete': False, 'reason': reason}
+        await browser.attach(control)  # same installed UI, never issue a translation command
+        await control.evaluate(PROBE)
+        await control.evaluate('__dlAcceptance.freeze();__dlAcceptance.start()')
+        began = time.monotonic()
+        await control.wait_for_timeout(max(0, capture_after)*1000)
+        paths, errors = await screenshot(control, out, site['id']+'-'+browser.device+('-dark' if theme=='dark' else '')+'-control', [])
+        await control.wait_for_timeout(max(0, duration-(time.monotonic()-began))*1000)
+        result = await control.evaluate('__dlAcceptance.restoreResult()')
+        result.update(complete=not errors, window_seconds=time.monotonic()-began, requested_window_seconds=duration,
+                      url=control.url, screenshots=paths, screenshot_errors=errors)
+        return result
+    except Exception as exc:
+        return {'complete': False, 'reason': type(exc).__name__}
+    finally:
+        await control.close()
+
+
 async def web_case(browser, site, out, theme, timeout):
     device = browser.device + ('-dark' if theme == 'dark' else '')
     r = {'id': site['id'], 'category': site['category'], 'device': device, 'url': site['url'],
          'coverage_kind': 'frozen-visible-text-nodes-plus-placeholders', 'llm': browser.llm}
+    if site.get('fallback_for'):
+        r['fallback_for'] = site['fallback_for']
     page = await browser.ctx.new_page()
     page.set_default_timeout(15000)
     await page.emulate_media(color_scheme=theme)
@@ -433,12 +555,11 @@ async def web_case(browser, site, out, theme, timeout):
             r.update(status='FAIL', reason='No eligible visible text; coverage cannot be claimed')
             r['screenshots'], r['screenshot_errors'] = await screenshot(page, out, site['id']+'-'+device, [])
             return r
-        # A no-translation control interval makes dynamic-site restore failures reviewable.
-        await page.wait_for_timeout(500)
-        r['control_restore'] = await page.evaluate('__dlAcceptance.restoreResult()')
-        # Refresh the frozen cohort immediately before the one and only trigger.
+        # Refresh immediately before the one and only command. The independent
+        # matched-duration control runs after this case, with no translation.
         r['cohort'] = await page.evaluate('__dlAcceptance.freeze()')
         await page.evaluate('__dlAcceptance.start()')
+        restore_start = time.monotonic()
         await browser.toggle(page, tab)
         deadline = time.monotonic() + timeout
         idle_since = None
@@ -464,10 +585,17 @@ async def web_case(browser, site, out, theme, timeout):
         r['missing_diagnostics'] = await page.evaluate('__dlAcceptance.diagnose()')
         r['layout_issues'] = await page.evaluate('__dlAcceptance.layout(' + ('true' if theme == 'dark' else 'false') + ')')
         r['visible_errors'], r['state'] = await visible_errors(browser, page, tab)
+        capture_after = time.monotonic() - restore_start
         r['screenshots'], r['screenshot_errors'] = await screenshot(page, out, site['id']+'-'+device, r['layout_issues'])
         await browser.toggle(page, tab)
         await page.wait_for_function("!document.querySelector('dl-t,dl-o,dl-w,dl-r')", timeout=15000)
         r.update(await page.evaluate('__dlAcceptance.restoreResult()'))
+        duration = time.monotonic() - restore_start
+        r['control_restore'] = await restore_control(browser, site, out, theme, duration, capture_after)
+        if r['control_restore'].get('url') != r['final_url']:
+            r['control_restore']['complete'] = False
+            r['control_restore']['reason'] = 'Control final URL differs'
+        apply_restore_control(r, r['control_restore'])
         r['status'] = outcome(r)
     except Exception as exc:
         r.update(status='ERROR', reason=type(exc).__name__ + ': ' + str(exc).split('Call log:')[0][:300])
@@ -526,7 +654,8 @@ async def pdf_case(browser, site, out, number, theme, timeout):
         ids = await page.evaluate("""n=>__duallensPdfBlocks(n).filter(b=>b.kind==='text').map(b=>b.id)""", number)
         r['total'] = len(ids)
         original_selector = shell + ' .sheet.orig'
-        source_dom = await page.locator(original_selector).evaluate('e=>e.outerHTML')
+        text_layer = "e=>e.querySelector('.textLayer')?.outerHTML??null"
+        source_dom = await page.locator(original_selector).evaluate(text_layer)
         pixel_digest = """async e=>{const c=e.querySelector('canvas');if(!c)return null;
           const bytes=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
           const hash=await crypto.subtle.digest('SHA-256',bytes);
@@ -560,10 +689,18 @@ async def pdf_case(browser, site, out, number, theme, timeout):
         r['visible_errors'] = await page.locator('.tb-retry,.tb-wait,#status.error').all_text_contents()
         r['screenshots'], r['screenshot_errors'] = await screenshot(page, out, r['id']+'-'+device, r['layout_issues'])
         await page.locator('#restore').click()
+        # Native full-page capture can evict/recreate offscreen PDF canvases. Bring
+        # this original page back to the same view before comparing its rendering.
+        await page.locator(shell).scroll_into_view_if_needed()
+        await wait_eval("n=>!!document.querySelector(`.pdf-page[data-page=\"${n}\"] .sheet.orig canvas`)", number)
         await page.wait_for_timeout(400)
         r.update(await page.evaluate('__dlAcceptance.restoreResult()'))
-        r['pdf_source_dom_identical'] = source_dom == await page.locator(original_selector).evaluate('e=>e.outerHTML')
-        r['pdf_original_pixels_identical'] = source_pixels == await page.locator(original_selector).evaluate(pixel_digest)
+        r['pdf_source_dom_identical'] = source_dom is not None and source_dom == await page.locator(original_selector).evaluate(text_layer)
+        r['pdf_original_pixels_identical'] = source_pixels is not None and source_pixels == await page.locator(original_selector).evaluate(pixel_digest)
+        r['pdf_restore_pages'] = [{'page': number, 'text_layer_identical': r['pdf_source_dom_identical'],
+                                  'rendering_identical': r['pdf_original_pixels_identical']}]
+        r['restore_identical'] = pdf_restore_verdict(r)
+        r['restore_scope'] = 'requested-page-original-text-layer-and-rendering; no-dl-residue; toolbar-exempt'
         r['status'] = outcome(r)
     except Exception as exc:
         r.update(status='ERROR', reason=type(exc).__name__ + ': ' + str(exc).split('Call log:')[0][:300])
@@ -606,15 +743,18 @@ async def run(args):
     reports_allowed = previous is None
     completed = {(r['id'], r['device']) for r in rows}
     metadata = {'run_id': stamp, 'started_utc': datetime.now(timezone.utc).isoformat(), 'repo': str(repo),
-        'llm': args.llm, 'policy': 'real-free-MT; gateway auto restricted to local Ollama; SJTU=0; no Claude/Codex',
-        'emulation_only': True, 'coverage_version': 2, 'timeout_seconds': args.timeout or (95 if args.llm == 'gateway' else 25),
+        'llm': args.llm, 'policy': 'real-free-MT; configured Hermes :free + Ollama + SJTU<=15 persistent attempts; no Claude/Codex',
+        'emulation_only': True, 'coverage_version': 3, 'restore_version': 2, 'headed': args.headed,
+        'timeout_seconds': args.timeout or (95 if args.llm == 'gateway' else 25),
         'probe_sha256': hashlib.sha256(PROBE.encode('utf-8')).hexdigest(),
         'limits': ['Desktop Chromium only, not actual Chrome/Edge or physical Android',
                    'Structural Chinese-output coverage, not semantic translation quality',
                    'Layout findings are objective geometry candidates requiring screenshot review',
                    'Only initially visible text; no login, consent clicks, comment expansion, or caption opening',
                    'PDF denominator is reader text blocks on requested page; not comparable to web nodes',
-                   'Restoration compares body serialization, including autonomous site mutations']}
+                   'Restore requires original text/order/paths and attributes; matched control may explain only same-attribute changes',
+                   'Control is a sequential fresh navigation of matched duration, not simultaneous deterministic replay',
+                   'Name/identifier/unchanged-MT exclusions are auditable heuristics, not semantic model judgements']}
     if previous:
         if previous['metadata'].get('coverage_version') != metadata['coverage_version']:
             raise ValueError('Coverage algorithm changed; use a fresh output directory')
@@ -652,7 +792,7 @@ async def run(args):
         async with async_playwright() as pw:
             devices = list(DEVICES) if args.device == 'all' else [args.device]
             for device in devices:
-                browser = Browser(pw, ext, bundle, run_dir, device, args.llm)
+                browser = Browser(pw, ext, bundle, run_dir, device, args.llm, headed=args.headed)
                 try:
                     await browser.start()
                     metadata['browser_version'] = browser.ctx.browser.version if browser.ctx.browser else 'persistent Chromium'
@@ -678,7 +818,10 @@ async def run(args):
             await child.wait()
         if args.llm == 'gateway':
             metadata['gateway_stopped'] = child is not None and child.returncode is not None
-            metadata['sjtu_calls'] = 0
+            usage = run_dir / 'gateway' / 'usage.json'
+            counts = json.loads(usage.read_text(encoding='utf-8')) if usage.exists() else {}
+            metadata['sjtu_calls'] = sum(v for k,v in counts.items() if k.endswith('/sjtu'))
+            metadata['sjtu_attempt_budget_file'] = str(SJTU_BUDGET)
             log = run_dir / 'gateway' / 'gateway.log'
             if log.exists():
                 # Gateway log is source-free numeric metadata, but retain only a safe
@@ -702,6 +845,7 @@ def main():
     parser.add_argument('--out', type=Path)
     parser.add_argument('--resume', type=Path, help='Resume a checkpoint directory; extension/userscript hashes must match')
     parser.add_argument('--timeout', type=float, help='Observation deadline in seconds (default MT=25/gateway=95)')
+    parser.add_argument('--headed', action='store_true', help='Visible Chromium; no headless flag; ordinary desktop UA')
     parser.add_argument('--gateway-child', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.gateway_child:

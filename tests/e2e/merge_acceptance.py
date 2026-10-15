@@ -18,7 +18,7 @@ def merge(paths):
         current = data['metadata']
         if metadata is None:
             metadata = dict(current)
-        for field in ('extension_tree_sha256', 'userscript_sha256', 'llm', 'coverage_version'):
+        for field in ('extension_tree_sha256', 'userscript_sha256', 'llm', 'coverage_version', 'restore_version', 'probe_sha256', 'headed'):
             if current.get(field) != metadata.get(field):
                 raise ValueError('Incompatible acceptance inputs: ' + field)
         provenance.append({'directory': str(path.resolve()), 'run_id': current['run_id'],
