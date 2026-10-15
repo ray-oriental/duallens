@@ -68,8 +68,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
         kind: 'gateway', // Optional pairing credential uses the local secrets slot, like API keys.
         name: '本机网关',
         baseUrl: 'http://127.0.0.1:18790/v1',
-        model: 'ollama/qwen3:4b',
-        // claude/* and codex/* draw on paid subscriptions; they are never in the default chain.
+        model: 'auto', // Subscription models remain explicit-only.
         fallbackModels: [],
         jsonMode: true,
         maxItems: 20, // SJTU: keep one batch's output under ~900 tokens so a call stays < 1 min

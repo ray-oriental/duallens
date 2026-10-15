@@ -28,6 +28,12 @@ test('recommended gateway chain uses discovered SJTU then approved free Hermes t
   assert.deepEqual(gatewayChain(models.map(id => ({ id })), 'gateway'), ['sjtu/deepseek-chat', 'hermes/upstage/solar-mini4:free', 'ollama/qwen3:4b'].map(model => ({ profileId: 'gateway', model })));
 });
 
+test('a gateway that offers auto is used as one model: the gateway schedules, fails over and queues', () => {
+  const models = [{ id: 'auto' }, { id: 'sjtu/deepseek-chat' }, { id: 'ollama/qwen3:4b' }, { id: 'claude/sonnet' }, { id: 'codex/default' }];
+  assert.deepEqual(gatewayChain(models, 'gateway'), [{ profileId: 'gateway', model: 'auto' }]);
+  assert.equal(gatewayProfile('gateway', '本机网关', 'http://127.0.0.1:18790/v1').model, 'auto');
+});
+
 test('comic CDN metadata survives settings validation and configuration backup import', () => {
   const settings=structuredClone(DEFAULT_SETTINGS);
   const entry={host:'*.comic.test',imageHosts:['cdn.comic.test'],referer:'https://www.comic.test/'};

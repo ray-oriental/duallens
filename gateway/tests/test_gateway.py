@@ -104,15 +104,25 @@ class GatewayTests(unittest.TestCase):
         status, _, response = self.call("POST", "/v1/chat/completions", self.payload())
         self.assertEqual(status, 200)
         self.assertEqual(response["model"], "ollama/qwen3:4b")
-        self.assertEqual(self.calls[0][1]["reasoning_effort"], "none")
-        self.assertEqual(self.calls[0][1]["max_tokens"], 200)
+        # qwen3:4b is a thinking build: "none" makes it copy the source or abort, so it keeps thinking at "low"
+        # and gets extra max_tokens, because thinking tokens count against the limit.
+        self.assertEqual(self.calls[0][1]["reasoning_effort"], "low")
+        self.assertEqual(self.calls[0][1]["max_tokens"], 200 + 3072)
         self.assertNotIn("PRIVATE_SENTINEL", self.g.metadata_path.read_text())
     def test_sjtu_busy_precheck_does_not_send_text(self):
-        self.g.request = lambda *a, **kw: {"calls": 4, "paused_for": 0}
+        seen = []
+        def ledger_only(url, body=None, headers=None, timeout=120):
+            seen.append(url)
+            return {"calls": 4, "paused_for": 0}
+        self.g.request = ledger_only
+        self.g.config["auto"]["queue_s"] = 1  # shorter than the ~6 s the full ledger asks for
         with self.assertRaises(GatewayError) as ctx:
             self.g.chat(self.payload("sjtu/deepseek-chat"))
         self.assertEqual(ctx.exception.status, 429)
-        self.assertEqual(ctx.exception.retry_after, 15)
+        self.assertTrue(ctx.exception.local, "a deferral is not a backend fault")
+        self.assertEqual(ctx.exception.retry_after, 7)
+        self.assertTrue(all(url.endswith("/ledger") for url in seen), "no chat text reaches the relay")
+        self.assertEqual(self.g.cooldown, {}, "a local rate-window deferral must not cool the model")
     def test_upstream_cooldown_prevents_repeat(self):
         calls = []
         def fail(*args, **kwargs):
@@ -145,7 +155,8 @@ class RuntimePolicyTests(unittest.TestCase):
             gateway = Gateway(Path(tmp), config_load(Path(tmp)))
             models = [x["id"] for x in gateway.models()["data"]]
         self.assertTrue(models)
-        self.assertTrue(all(x.startswith("ollama/") for x in models))
+        self.assertEqual(models[0], "auto")
+        self.assertTrue(all(x == "auto" or x.startswith("ollama/") for x in models))
 
     def test_real_manifest_identity_is_used_for_origin_allowlist(self):
         from gateway.duallens_gateway import config_load
@@ -158,7 +169,7 @@ class RuntimePolicyTests(unittest.TestCase):
         from gateway.duallens_gateway import config_load
         with tempfile.TemporaryDirectory() as tmp:
             config = copy.deepcopy(DEFAULTS)
-            gateway = Gateway(Path(tmp), config)
+            gateway = Gateway(Path(tmp), config, proxy_probe=lambda host, proxy: proxy is None)
             captured = []
             class FakeProc:
                 pid = 1
