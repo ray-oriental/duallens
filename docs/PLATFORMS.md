@@ -54,8 +54,8 @@ export interface TranslatorService {
 正文、列表、标题、文章链接及长单元格下方显示块级译文；短控件先使用较小行内译文与细分隔。
 仅交互控件或 nav/header 导航链接、≤3 词且 ≤24 字符，并且追加双语后实测溢出、换行或裁切时，才允许回退为替换，原文存于可恢复的 title。
 标题、卡片标题及 >3 词内容始终保留原文；正文/标题临时放开自身及邻近容器的裁切/高度限制，并精确恢复原内联样式。控件保留用于隐藏辅助内容的裁切，避免编辑记录等内容扩开后压住邻近作者行。同结构兄弟元素先共同决定呈现方式。
-链接文字等于 href 最后路径段、代码式单 token、用户名/仓库/文件/分支/话题及语言/许可证专名保持原文；GitHub、问答标签、Reddit 子版块及 API 标识符有本地补充保护。
-常见英文短 UI 在简体中文目标且用户术语表为空时命中内置小词表，直接在本地生成；其余情况沿用翻译链，保留目标文字变体与自定义术语的处理。HN 元信息只追加 points/by/hide/comments/ago/discuss 等词片段译文，不复制作者、分数或整行。
+链接文字为全小写或含数字/代码式符号/camelCase 的单 token、且不在 UI 词表时，才采用 href 最后路径段相等的标识符保护；News/Sport 等首字母大写普通词正常翻译。用户名/仓库/文件/分支/话题及语言/许可证专名保持原文；GitHub、问答标签、Reddit 子版块及 API 标识符有本地补充保护。单元首尾的独立标识符子元素不进入翻译请求。
+常见英文短 UI 在简体中文目标且用户术语表为空时命中内置小词表，直接在本地生成；其余情况沿用翻译链，保留目标文字变体与自定义术语的处理。HN 元信息追加一条紧凑译文，保留作者和数值，以“2 小时前”等完整短语呈现时间；放不下时译文另起一行。
 placeholder、无可见正文的图标按钮 title、原生 option label 及按钮型 input value 独立翻译；不翻译 alt、密码框或用户输入值。
 动态属性与展开状态会失效重扫；`translation` 模式/引擎变化会取消旧请求、恢复并重翻。
 译文颜色按原文字色与祖先纯色背景调和，计算对比度至少 4.5；背景图、渐变与祖先 opacity/filter 的最终像素对比度仍需真实页面检查。
@@ -72,6 +72,8 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 - MT 失败时继续 LLM；LLM 失败或超过精修预算时，将已有 MT 作为 `stage:'final',refined:false` 返回，不显示精修错误。
   两侧均失败才返回 error。`auto` 先等待 LLM 2.5 秒，仍无结果才请求 MT 草稿。`mt` 只用 MT。
   `selection` / `hover` / `input` 在混合模式下默认 MT，MT 失败可回退 LLM；划词卡片的精修操作显式请求 `mode:'llm'`。
+- 自动网页/PDF 精修仅处理至少 6 个词或 12 个 CJK 字符的正文、标题、列表及单元格；内容端可用 item `refine:false` 排除导航、按钮、标签、属性和元信息。其余项目直接以 MT 终稿返回，MT 失败不唤醒 LLM。显式 `llm` 模式不受此筛选限制。
+  无法解析的模型正文计为当前链项失败并尝试下一项；有效 JSON 的缺项仍使用有限缩批重试。设置“测试连接”发送两项真实翻译探针，完整解析失败时显示非 JSON/思考型模型提示。
 - MT 引擎：`microsoft` / `google`（免费**非官方接口**，可能失效）、`microsoft-api` / `deepl`（用户官方 key）、`mock`（离线）。
   默认 Microsoft → Google，关闭 `fallback` 后只调用选定 MT 引擎。官方 key 使用本机 `secrets['mt-microsoft-api'|'mt-deepl']`，不进入公共设置、明文导出或日志；加密导出可携带。
 - 免费 Microsoft 当前使用 `edge.microsoft.com/translate/translatetext` 的批量 POST；401/403 时尝试 `/translate/auth` → `api-edge.cognitive.microsofttranslator.com`，短期 token 只缓存于内存，过期前一分钟刷新。
@@ -136,7 +138,7 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 - **加密导出/导入**（在两台电脑和手机之间搬配置）：PBKDF2-SHA256（≥ 310,000 次迭代）派生密钥，AES-GCM 加密，
   格式 `duallens-config:v1:<base64url(salt|iv|密文)>`。不填口令时导出的明文 JSON **不含**任何 key。
 - 共享表单通过可选 `platform.renderQr` 显示加密导出二维码；不静态导入二维码模块。缺少该能力时显示可复制的加密文本，导出/导入功能保持可用。
-  用户脚本启动产物必须小于 400000 字节，不包含二维码编码器、PDF.js / PDF 阅读页或扩展侧栏入口；共用的文本/字幕页签仍保留。
+  用户脚本启动产物硬上限仍为 400000 字节，本轮构建目标及检查收紧到不超过 360000 字节；不包含二维码编码器、PDF.js / PDF 阅读页或扩展侧栏入口；共用的文本/字幕页签仍保留。
 - 非机密字幕偏好 `subtitles = { enabled:false, mode:'bilingual', fontSize:22, position:'bottom' }` 随公共设置同步与备份。
   `mode` 为 `bilingual` / `translation-only`，字号为 16–48 的整数，位置为 `top` / `bottom`；旧备份缺少该字段时恢复默认值。
 

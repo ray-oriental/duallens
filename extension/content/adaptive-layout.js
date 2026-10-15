@@ -12,6 +12,8 @@ function free(el,u) {
   const existing=styles.get(el);
   if(existing) {existing.owners.add(u);(u.layoutStyles||=new Set()).add(el);return;}
   const cs=getComputedStyle(el),props={},full=!u.layoutFacts?.interactive||u.layoutFacts.title;
+  if(full&&cs.minWidth==='auto') props['min-width']='0';
+  if(full&&el===u.host) props['overflow-wrap']='anywhere';
   if(full&&(/hidden|clip/.test(cs.overflowX)||/hidden|clip/.test(cs.overflowY))) {props.overflow='visible';props['overflow-x']='visible';props['overflow-y']='visible';}
   if(cs.webkitLineClamp&&cs.webkitLineClamp!=='none') props['-webkit-line-clamp']='unset';
   if(cs.display.includes('webkit')) props.display='block';
@@ -26,6 +28,10 @@ function free(el,u) {
   r.written=el.getAttribute('style');
 }
 export function fitLayout(u,apply) {
+  if(u.layoutFacts?.metadata) {
+    if(u.tEl&&u.host.getBoundingClientRect().height>(u.layoutBefore?.[0]?.height||Infinity)*1.5) u.tEl.style.display='block';
+    return;
+  }
   const facts=u.layoutFacts||{},eligible=choosePresentation({...facts,measuredFailure:true})==='replace';
   if(eligible) {
     const failed=u.layoutBefore?.some(({el,height})=>{
@@ -38,7 +44,10 @@ export function fitLayout(u,apply) {
     }
   } else {
     // Headlines and prose keep both languages. Release clipping locally and in enclosing cards.
-    for(let el=u.host,n=0;el&&el!==document.body&&n<5;el=el.parentElement,n++) free(el,u);
+    for(let el=u.host,n=0;el&&el!==document.body&&n<4;el=el.parentElement,n++) {
+      if(el!==u.host&&el.matches('main,article,nav,header,[role="navigation"]')) break;
+      free(el,u);
+    }
   }
 }
 export function releaseLayout(u) {

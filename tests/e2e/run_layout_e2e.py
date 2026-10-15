@@ -49,6 +49,9 @@ def novel_paragraphs(h):
     h.js("() => window.originalReaderText=document.querySelector('#pre-wrap-reader').firstChild")
     before=h.js('() => document.body.outerHTML')
     h.command('toggle-page')
+    h.wait_js("() => document.querySelector('#br-reader dl-t[data-dl-state=done]')")
+    # Early viewport translations can push later paragraphs outside the lazy margin.
+    h.page.locator('#line-reader').scroll_into_view_if_needed()
     h.wait_js("() => document.querySelectorAll('#br-reader dl-t[data-dl-state=done]').length === 4 && document.querySelectorAll('#line-reader dl-t[data-dl-state=done]').length === 2")
     h.page.locator('#pre-wrap-reader').scroll_into_view_if_needed()
     h.wait_js("() => document.querySelectorAll('#pre-wrap-reader dl-t[data-dl-state=done]').length===2")
@@ -211,12 +214,12 @@ def compact_navigation(h):
     }""",f'chrome-extension://{h.ext_id}')
     h.wait_js("() => compact.getState().failed===1 && document.querySelectorAll('tr:first-child a dl-t[data-dl-state=done]').length===7")
     assert h.js("() => [...document.querySelectorAll('td a dl-t')].every(t=>!t.classList.contains('dl-solo')) && !document.querySelector('h1 dl-t,#retry dl-t')")
-    assert h.js("() => document.querySelectorAll('#metadata dl-t').length===5 && [...document.querySelectorAll('#metadata dl-t')].every(t=>t.classList.contains('dl-inline')&&!/Example Author|130/.test(t.textContent))")
+    assert h.js("() => document.querySelectorAll('#metadata dl-t').length===1 && document.querySelector('#metadata dl-t').textContent==='130 分 来自 Example Author 2 小时前 | 隐藏 | 48 条评论'")
     h.js("() => compact.hoverToggle(document.querySelector('#retry'),'translate')")
     h.wait_js("() => document.querySelector('#retry dl-t[data-dl-state=done]')")
     h.js('() => compact.stop()')
     assert h.js('() => document.body.outerHTML')==before
-    return '375px bilingual dense menu; metadata word fragments without author/score duplication; failure preserves control; retry + exact restore'
+    return '375px bilingual dense menu; one compact metadata line with meaningful time; failure preserves control; retry + exact restore'
 
 @e.case('bilingual_identifiers', 'Headlines retain both languages; only measured short controls replace; source styles restore')
 def bilingual_identifiers(h):
@@ -262,6 +265,46 @@ def scoped_dynamic_body(h):
     expected=before.replace('</section>','<p id="inside-later">New selected content should still translate.</p></section>').replace('</body>','<p id="outside-later">An outside body mutation must not widen the selected scope.</p></body>')
     assert h.js('() => document.body.outerHTML')==expected
     return 'body dirty/addition stays scoped; selected dynamic content translates; exact restore with page additions'
+
+@e.case('coverage_round3', 'Capitalized navigation, edge identifiers, compact metadata and original whitespace identity')
+def coverage_round3(h):
+    html='''<meta charset="utf-8"><style>.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)} .titleline{display:block}</style><header><nav><a href="/news">News</a><a href="/sport">Sport</a><a href="/business">Business</a><button>Platform</button></nav></header><main><h2 class="sr-only">Hidden breadcrumb heading</h2><div id="identity">\n\t<a href="/file/main/build">build</a>\n\t<div style="display:flex"><span>Useful public paragraph with enough words.</span></div>\n</div><span class="titleline"><a href="https://example.com/story">Neural Networks Are Already Clean</a> <span class="sitebit">(goodfire.com)</span></span><div class="subtext">41 points by <a class="hnuser" href="/user?id=alice">alice</a> 2 hours ago | <a href="/hide">hide</a> | <a href="/item?id=1">11 comments</a></div><a data-hovercard-type="user" href="/Alice">Alice</a><span class="topic-tag">typescript</span><span class="branch-name">main</span></main>'''
+    h.ctx.route('https://github.com/fixture',lambda route:route.fulfill(body=html,content_type='text/html'))
+    h.page=h.ctx.new_page();h.page.set_viewport_size({'width':375,'height':812});h.page.goto('https://github.com/fixture')
+    h.tab_id=h.sw_eval(e.JS_FIND_TAB,h.page.url);h.wait_ready()
+    h.js("""() => {const line=document.querySelector('.titleline');line.querySelector('.sitebit').innerHTML='(<a href="/from?site=goodfire.com"><span class="sitestr">goodfire.com</span></a>)';const table=document.createElement('table');line.before(table);table.insertRow().insertCell().append(line);const heading=document.createElement('h1');heading.textContent='This article heading has enough words for careful refinement.';document.querySelector('header').append(heading);const sig=document.createElement('dt');sig.className='sig';sig.textContent='list.append(value, /)';document.querySelector('main').append(sig)}""")
+    h.js("""() => {const section=document.createElement('div');section.className='mw-heading';section.innerHTML='<h2>Section</h2><span class="mw-editsection">[<a href="/w/index.php?action=edit">edit</a>]</span>';document.querySelector('main').append(section)}""")
+    h.js("() => {const user=document.querySelector('.hnuser');user.textContent='hide';user.href='/user?id=hide'}")
+    h.js("() => {const tree=document.createElement('ul');tree.setAttribute('role','tree');tree.innerHTML='<li role=\"treeitem\"><span>Doc</span></li><li role=\"treeitem\"><span>Modules</span></li>';document.querySelector('main').append(tree)}")
+    h.js("() => {const form=document.createElement('form');form.innerHTML='<div><label><input type=\"radio\"><span>Small</span></label></div><div><label><input type=\"radio\"><span>Standard</span></label></div><div><label><input type=\"radio\"><span>Large</span></label></div>';document.querySelector('main').append(form)}")
+    h.js("() => {const div=document.createElement('div');div.innerHTML='<span class=\"comhead\"><a class=\"hnuser\" href=\"/user?id=hide\">hide</a> on April 5, 2007 | <a href=\"#root\">root</a> | <a href=\"#next\">next</a> | <a href=\"#parent\">parent</a></span>';document.querySelector('main').append(div)}")
+    h.js("() => {const div=document.createElement('div');div.innerHTML='<span id=\"date-metadata\" class=\"comhead\"><a class=\"hnuser\" href=\"/user?id=hide\">hide</a> on April 5, 2007 | <a aria-hidden=\"true\" href=\"#next\">next</a></span>';document.querySelector('main').append(div)}")
+    h.js("() => window.domainOffset=document.querySelector('.sitebit').getBoundingClientRect().top-document.querySelector('.titleline a').getBoundingClientRect().top")
+    before=h.js('() => document.body.outerHTML')
+    h.js("""async ext=>{const {PageTranslator}=await import(ext+'/content/controller.js');const {DEFAULT_SETTINGS}=await import(ext+'/shared/settings.js');window.sent=[];window.originalTexts=[];const walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);for(let n;(n=walk.nextNode());)originalTexts.push({n,parent:n.parentNode,data:n.data});window.round3=new PageTranslator({getSettings:()=>DEFAULT_SETTINGS,platform:{detectLanguage:async()=>null,translator:()=>({translateBatch(req,cb){sent.push(...req.items);const timer=setTimeout(()=>cb(req.items.map(it=>({id:it.id,text:'【译】'+it.text}))),40);return{cancel(){clearTimeout(timer)}}}})}});round3.start()}""",f'chrome-extension://{h.ext_id}')
+    h.wait_js("() => document.querySelectorAll('nav dl-t[data-dl-state=done]').length===4 && document.querySelector('.titleline dl-t[data-dl-state=done]') && document.querySelector('.subtext dl-t')")
+    assert h.js("() => !sent.some(x=>x.text.includes('goodfire.com')) && document.querySelector('.sitebit').textContent==='(goodfire.com)'"), 'edge domain stayed outside the request'
+    assert h.js("() => Math.abs(document.querySelector('.sitebit').getBoundingClientRect().top-document.querySelector('.titleline a').getBoundingClientRect().top-domainOffset)<3"), 'domain retains its original headline-line offset'
+    assert h.js("() => document.querySelector('.mw-editsection dl-t.dl-inline') && document.querySelector('.mw-editsection').getBoundingClientRect().height<40"), 'edit tools stay compact'
+    assert h.js("() => !document.querySelector('.sr-only dl-t,.sig dl-t,.branch-name dl-t,.topic-tag dl-t,[data-hovercard-type] dl-t,a[href$=build] dl-t,[role=treeitem] dl-t') && !sent.some(it=>['Doc','Modules'].includes(it.text))"), 'invisible text and identifiers including file tree names'
+    h.wait_js("() => document.querySelectorAll('form dl-t[data-dl-state=done]').length===3")
+    h.wait_js("() => document.querySelector('.comhead dl-t')?.textContent.includes('根评论') && document.querySelector('.comhead dl-t').textContent.includes('下一页') && document.querySelector('.comhead dl-t').textContent.includes('上级')")
+    assert h.js("() => !document.querySelector('#date-metadata dl-t') && !sent.some(it=>it.text.includes('April'))"), 'unchanged date/aria-hidden metadata stays original without duplicate English or provider request'
+    assert h.js("() => sent.some(it=>it.text.includes('This article heading')&&it.refine===true)&&sent.filter(it=>['News','Sport','Business','Platform'].includes(it.text)).every(it=>it.refine===false)"), 'article header eligible, navigation ineligible'
+    assert h.js("() => document.querySelectorAll('.subtext dl-t').length===1 && document.querySelector('.subtext dl-t').textContent==='41 分 来自 hide 2 小时前 | 隐藏 | 11 条评论'"), 'one metadata sentence without translating the hide username'
+    h.js('() => round3.stop()')
+    assert h.js('() => document.body.outerHTML')==before, 'initial restore HTML'
+    h.js("() => {document.body.style.backgroundColor='rgb(13,17,23)';document.body.style.color='rgb(94,104,119)';document.querySelector('button').style.cssText='background:transparent;color:inherit'}")
+    dark_before=h.js('() => document.body.outerHTML')
+    h.js('() => round3.start()')
+    h.wait_js("() => document.querySelector('.titleline dl-t[data-dl-state=done]')")
+    contrasts=h.js(r"""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');return [...document.querySelectorAll('dl-t')].filter(t=>t.dataset.dlState==='done').map(t=>({text:t.textContent,color:getComputedStyle(t).color,variable:t.style.getPropertyValue('--dl-fg'),ratio:contrastRatio(getComputedStyle(t).color.match(/[\d.]+/g).slice(0,3).map(Number),[13,17,23])}))}""",f'chrome-extension://{h.ext_id}')
+    assert all(c['ratio']>=4.5 for c in contrasts), 'actual dark translated text contrast >=4.5: '+str(contrasts)
+    h.js('() => round3.stop()')
+    restored=h.js('() => document.body.outerHTML')
+    assert restored==dark_before, 'restore retains site-authored dark theme exactly'
+    assert h.js("() => {const current=[];const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);for(let n;(n=w.nextNode());)current.push(n);return originalTexts.every((x,i)=>current[i]===x.n&&x.n.parentNode===x.parent&&x.n.data===x.data)}"), 'text identity, parent, content and order'
+    return 'BBC-style capitalized navigation and GitHub identifiers; edge domain never sent; one metadata line; exact text-node order'
 
 if __name__=='__main__':
     raise SystemExit(e.main(['--mock-only','--artifacts-dir',str(e.E2E_ROOT/'layout'/'offline'),*sys.argv[1:]]))

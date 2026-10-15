@@ -7,8 +7,9 @@
 
 import {isOurs,LETTER_RE} from './util.js';
 import {novelBody,pixivNovelDocument,protectedElement} from '../shared/site-adapters.js';
-import {splitParagraphText,splitMetadata} from './injector.js';
+import {splitParagraphText} from './injector.js';
 import {denseLinkMenu} from './presentation.js';
+import {identifierText} from '../shared/identifiers.js';
 
 const SILENT_TAGS=new Set(['script','style','noscript','template','head','title','meta','link','base']);
 
@@ -36,7 +37,12 @@ export function isInlineLevel(display) {
   return display==='inline' || display==='contents' || display.startsWith('inline-') || display.startsWith('ruby');
 }
 
+function edgeIdentifier(el) {
+  return el?.nodeType===1&&el.matches('a,span,small,sup,sub')&&identifierText(el.textContent.trim().replace(/^\((.*)\)$/,'$1'))&&
+    !el.querySelector('button,input,select,label,[role="button"]')&&[...el.querySelectorAll('a')].every(protectedElement);
+}
 function proseLink(el) {
+  if(el.closest('nav,header,[role="navigation"],.related,[class*="breadcrumb" i]')) return false;
   return !!el.closest('p,li,dd,td,figcaption,blockquote,[role="note"]') ||
     [...el.parentElement.childNodes].filter(n=>n.nodeType===3).map(n=>n.data).join('').replace(/\P{L}/gu,'').length>12;
 }
@@ -45,6 +51,7 @@ function proseLink(el) {
 function needsContainer(el,display) {
   if(display==='inline-flex' || display==='inline-grid' || display==='inline-table') return true;
   if(!el.firstElementChild) return false;
+  if(edgeIdentifier(el.firstElementChild)||edgeIdentifier(el.lastElementChild)) return true;
   if(pixivNovelDocument(el.ownerDocument) && el.querySelector('span.text-count')) return true;
   if(el.querySelector('button,label,summary,[role="button"],[role="tab"],[role="menuitem"]')) return true;
   if(el.querySelector('a') &&(!proseLink(el.querySelector('a')) ||
@@ -54,7 +61,7 @@ function needsContainer(el,display) {
 
 function isExcludedEl(el,tag,exclude) {
   if(EXCLUDED_TAGS.has(tag)) return true;
-  if(protectedElement(el)) return true;
+  if(protectedElement(el)||edgeIdentifier(el)) return true;
   if(el.matches(EXCLUDED_ATTR_SEL)) return true;
   return !!exclude && el.matches(exclude);
 }
@@ -67,11 +74,12 @@ export function classify(el,exclude) {
   const cs=getComputedStyle(el);
   const display=cs.display;
   if(display==='none' || cs.visibility==='hidden') return 'hidden';
+  if(cs.opacity==='0'||((cs.clip!=='auto'||cs.clipPath!=='none')&&el.getBoundingClientRect().width<=2&&el.getBoundingClientRect().height<=2)) return 'hidden';
   const inlineLevel=isInlineLevel(display);
   if(isExcludedEl(el,tag,exclude)) return inlineLevel ? 'atom':'excluded-block';
   if(novelBody(el)) return 'container';
   // Interactive inline siblings must have independent translations and layout policies.
-  if(el.matches('button,label,summary,[role="button"],[role="tab"],[role="menuitem"]') ||
+  if(el.matches('.subtext,.comhead,button,label,summary,[role="button"],[role="tab"],[role="menuitem"]') ||
       (tag==='a' &&(!proseLink(el) ||
         denseLinkMenu(el.parentElement)))) return 'container';
   if(inlineLevel && !needsContainer(el,display)) return 'inline';
@@ -88,6 +96,9 @@ export function inExcludedContext(el,exclude) {
 // Nearest ancestor-or-self that lays out as a block (the container whose runs a node belongs to).
 export function blockContainerOf(node) {
   let el=node.nodeType===1 ? node:node.parentElement;
+  const reader=el?.closest('[data-novel-content]')||
+    (el&&pixivNovelDocument(el.ownerDocument)&&el.closest(':has(> span.text-count)'));
+  if(reader) return reader;
   const root=document.body || document.documentElement;
   while(el && el !==document.documentElement) {
     if(novelBody(el)) return el;
@@ -122,7 +133,10 @@ function* iterateTextRuns(root,opts={}) {
   function* scan(el) {
     yield null;
     if(el.hasAttribute('data-dl-id')) return; // already a whole unit; its children belong to it
-    if(el.matches('.subtext')) {yield* splitMetadata(el);return;}
+    if(el.matches('.subtext,.comhead')) {
+      if(!known?.(el,el.firstChild)&&el.textContent.trim()) yield {host:el,first:el.firstChild,last:el.lastChild,whole:true,metadata:true};
+      return;
+    }
     const textParagraphs=splitParagraphText(el,minChars);
     if(textParagraphs) {for(const run of textParagraphs) yield run;return;}
     let first=null;
@@ -235,6 +249,15 @@ function* iterateTextRuns(root,opts={}) {
 
 export function* iterateRuns(root,opts={}) {
   if(root.nodeType !==1) return;
+  for(const run of iterateTextRuns(root,opts)) {
+    if(!run||run.metadata) {yield run;continue;}
+    const boundary=n=>n.nodeType===3?!n.data.trim():n.nodeType===1&&(protectedElement(n)||edgeIdentifier(n));
+    const tail=run.last;
+    while(run.first!==run.last&&boundary(run.first)) run.first=run.first.nextSibling;
+    while(run.last!==run.first&&boundary(run.last)) run.last=run.last.previousSibling;
+    if(run.last!==tail) run.tail=tail;
+    yield run;
+  }
   const minChars=opts.minChars ?? 1,exclude=opts.exclude || null;
   // Attributes cannot host dl-t children; their translations are restored independently.
   for(const el of [root,...root.querySelectorAll('[placeholder],button[title],a[title],[role="button"][title],option,input[type="button"],input[type="submit"],input[type="reset"]')]) {
@@ -255,7 +278,6 @@ export function* iterateRuns(root,opts={}) {
       }
     }
   }
-  yield* iterateTextRuns(root,opts);
 }
 
 // Runs belonging to one block container only (no recursion); used by hover on an unscanned page.

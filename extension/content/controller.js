@@ -14,6 +14,7 @@ import {joinSelectors,debounce} from './util.js';
 import {escapeText} from '../shared/markup.js';
 import {measurePresentation,measureColor} from './presentation.js';
 import {uiTranslation} from '../shared/ui-glossary.js';
+import {metadataTranslation} from '../shared/metadata.js';
 
 const MAX_REQUEST_ITEMS=50;
 const CHURN_LIMIT=12; // re-translations of one host within a minute before we leave it alone
@@ -101,7 +102,7 @@ export class PageTranslator {
     // out of the lazy window before it has even been discovered. Hit testing is bounded to 12
     // points and uses the same range-aware scanner/dedupe, rather than scanning the whole DOM twice.
     const visible=new Set();
-    if(scrollY > 0 || scrollX > 0) for(const y of [.12,.35,.6,.85]) for(const x of [.2,.5,.8]) {
+    for(const y of [.12,.35,.6,.85]) for(const x of [.2,.5,.8]) {
       for(const el of document.elementsFromPoint(innerWidth*x,innerHeight*y)) {
         if(el.closest('dl-ui,dl-t,dl-o,dl-w')) continue;
         const block=blockContainerOf(el);
@@ -217,8 +218,10 @@ export class PageTranslator {
       host:run.host,
       first:run.first,
       last:run.last,
+      tail:run.tail,
       whole:run.whole,
       paragraph:run.paragraph,
+      metadata:run.metadata,
       attribute:run.attribute,
       source:run.source,
       originalAttribute:run.attribute ? run.host.getAttribute(run.attribute):null,
@@ -318,8 +321,9 @@ export class PageTranslator {
       if(u.dead || this.units.get(u.id) !==u || u.state !=='queued') return;
       if(skipFlags[i]) this.#skip(u);
       else {
-        const local=!s.glossary?.length&&uiTranslation(u.plain,s.targetLang);
-        if(local &&(s.sourceLang==='auto'||/^en(?:-|$)/.test(s.sourceLang))) this.#apply(u,escapeText(local),'final','dictionary');
+        const local=!s.glossary?.length&&(u.metadata?metadataTranslation(u.src,s.targetLang):uiTranslation(u.plain,s.targetLang));
+        if(u.metadata&&local===u.src)return this.#skip(u);
+        if(local &&(s.sourceLang==='auto'||/^en(?:-|$)/.test(s.sourceLang))) this.#apply(u,u.metadata?local:escapeText(local),'final','dictionary');
         else send.push(u);
       }
     });
@@ -369,7 +373,7 @@ export class PageTranslator {
       list.sort((a,b)=> a.top - b.top);
       for(let i=0; i < list.length; i +=MAX_REQUEST_ITEMS) {
         const chunk=list.slice(i,i + MAX_REQUEST_ITEMS);
-        const items=chunk.map((u)=>({id:u.id,text:u.src}));
+        const items=chunk.map(u=>({id:u.id,text:u.src,refine:!u.attribute&&!u.layoutFacts?.interactive&&!u.layoutFacts?.metadata&&!u.host.closest('nav,label,summary,[role="navigation"]')&&(!u.host.closest('header')||!!u.layoutFacts?.title)}));
         // draft: machine translation may answer first (stage 'draft'); the LLM result then replaces it in place.
         const reqId=this.client.request(
           {items,priority,to:s.targetLang,from:s.sourceLang==='auto'?from:s.sourceLang||'auto',context:this.#context(),draft:true,purpose},

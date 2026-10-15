@@ -12,6 +12,7 @@ import { DLError, cancelledError, isCancelled, toErrorInfo } from '../shared/err
 import { profileProblem } from './providers.js';
 import { makeKeyer } from './cache.js';
 import { createMT, mtChain, hasMarkers } from './mt.js';
+import { refinementEligible } from '../shared/refinement.js';
 
 const DAY_MS = 86400000;
 const DEFAULT_TTL_DAYS = 30;
@@ -252,6 +253,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
             });
             const content=await provider({profile:selected,model,messages,signal:s,onDelta: delta => stream.push(delta)});
             const parsed=parseSegments(content,idMap);
+            if(parsed.invalidJSON) throw new DLError(ERR.PARSE,'模型返回了非 JSON 内容（可能是思考型模型）',{serverCode:'invalid_translation'});
             if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
               const unchanged=batch.filter(u=>omitted(parsed.results.get(u.uid),u.text,selected.kind));
               if(unchanged.length) {
@@ -523,7 +525,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     }, budgetMs);
 
     try {
-      await runLLM(req, ctx, { onPartial: onLLM, signal: llmCtrl.signal, onCacheChecked: announce });
+      await runLLM({...req,streamItems:req.purpose==='page'||req.purpose==='pdf'?false:req.streamItems}, ctx, { onPartial: onLLM, signal: llmCtrl.signal, onCacheChecked: announce });
       clearTimeout(budget);
       sleeping.abort();
       await proactive;
@@ -548,6 +550,13 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     const plan = planFor(ctx.settings, req, ctx.chain.length > 0);
     if (plan.mode === 'llm') return runLLM(req, ctx, { onPartial, signal });
     if (plan.mode === 'mt') return translateMTOnly(req, ctx, plan, { onPartial, signal });
+    if(req.purpose==='page'||req.purpose==='pdf') {
+      const prose=ctx.items.filter(refinementEligible),quick=ctx.items.filter(it=>!refinementEligible(it));
+      return Promise.all([
+        quick.length&&translateMTOnly(req,{...ctx,items:quick},{...plan,llmFallback:false},{onPartial,signal}),
+        prose.length&&translateDouble(req,{...ctx,items:prose},plan,{onPartial,signal}),
+      ]);
+    }
     return translateDouble(req, ctx, plan, { onPartial, signal });
   }
 

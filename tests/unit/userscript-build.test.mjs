@@ -22,6 +22,19 @@ test('compaction preserves ASI, token boundaries, regex and template contents', 
   }
 });
 
+test('compaction preserves separated operators, nullish regex and return-newline ASI',()=>{
+  const code="let x=1;const re=null ?? /a+/;function f(){return\n 42;}globalThis.result=[x + +2,x - -2,re.source,f(),1 .toString()];";
+  const before={},after={};vm.runInNewContext(code,before);vm.runInNewContext(compactSource(code),after);
+  assert.equal(JSON.stringify(after.result),JSON.stringify(before.result));
+});
+
+test('shared export helper preserves live function bindings',async()=>{
+  await fixture({'dep.js':'export function value(){return 1;} export function change(){value=()=>2;}',
+    'entry.js':'import * as dep from "./dep.js"; const a=dep.value(); dep.change(); globalThis.result=[a,dep.value()];'},async root=>{
+    const c={};vm.runInNewContext(await buildBundle(path.join(root,'entry.js'),{root}),c);assert.deepEqual(Array.from(c.result),[1,2]);
+  });
+});
+
 test('bundler handles named, default, namespace, async and generator exports with isolated scope', async () => {
   await fixture({
     'dep.js': 'export const value = 3; export default function twice(x) { return x * 2; } export function* values() { yield value; } export async function answer() { return value; }',
@@ -81,7 +94,7 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
-    assert.ok(Buffer.byteLength(content)<400000,'ordinary startup bundle exceeds 400 KB');
+    assert.ok(Buffer.byteLength(content)<=360000,'ordinary startup bundle exceeds 360 KB');
     for (const module of ['ui/forms/qrcode.js', 'ui/forms/qrcodegen.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js']) {
       assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
     }

@@ -17,6 +17,14 @@ test('single 502 or network error switches models immediately',async()=>{
  for(const code of[ERR.PROVIDER,ERR.NETWORK]){const q=make(),seen=[];await q.enqueue({profile:testProfile(),run:async({model})=>{seen.push(model);if(model==='m1')throw err(code);return model;}});assert.deepEqual(seen,['m1','m2']);}
 });
 
+test('parse failures skip each chain item once and a single invalid model fails promptly',async()=>{
+ const q=make({cooldownMs:60000}),profile=testProfile(),seen=[];
+ const out=await q.enqueue({profile,run:async({model})=>{seen.push(model);if(model==='m1')throw err(ERR.PARSE,'invalid outer response');return model;}});
+ assert.equal(out,'m2');assert.deepEqual(seen,['m1','m2']);
+ let calls=0;await assert.rejects(q.enqueue({profile:testProfile({id:'single',fallbackModels:[]}),run:async()=>{calls++;throw err(ERR.PARSE);}}),e=>e.code===ERR.PARSE);
+ assert.equal(calls,1);
+});
+
 test('404 model_not_found immediately falls back and cools only that model for thirty minutes',async()=>{
  let clock=1000; const q=make({now:()=>clock}), profile=testProfile(), seen=[];
  const run=async({model})=>{seen.push(model);if(model==='m1')throw err(ERR.PROVIDER,'missing',{status:404,serverCode:'model_not_found'});return model;};

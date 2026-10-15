@@ -106,7 +106,7 @@ test('provider-test reports latency and a parsed sample', async () => {
   const res = await handlers[MSG_PROVIDER_TEST]({ profileId: 'mock' });
   assert.equal(res.ok, true);
   assert.equal(res.latencyMs, 25);
-  assert.equal(res.sample, '【译】Hello, world.');
+  assert.equal(res.sample, '【译】Hello, world. / 【译】Read the next paragraph.');
 });
 
 test('provider-test: unknown profile and unusable profile give config errors', async () => {
@@ -121,6 +121,18 @@ test('provider-test surfaces provider failures', async () => {
   const { handlers } = setup({ provider: { profiles: DEFAULT_SETTINGS.provider.profiles.map((p) => (p.id === 'mock' ? { ...p, model: 'mock-error' } : p)) } });
   const res = await handlers[MSG_PROVIDER_TEST]({ profileId: 'mock' });
   assert.deepEqual([res.ok, res.error.code], [false, ERR.PROVIDER]);
+});
+
+test('provider-test requires two parsed translation items and rejects thinking prose',async()=>{
+  const settings=mergeSettings(DEFAULT_SETTINGS,{});
+  for(const reply of ['好的，我现在需要处理翻译请求。','{"t":["你好"]}']) {
+    let probe;
+    const handlers=createHandlers({getSettings:async()=>settings,providers:{chat:async args=>{probe=args.messages;return reply;}}});
+    const result=await handlers[MSG_PROVIDER_TEST]({profileId:'mock'});
+    assert.equal(JSON.parse(probe[1].content.match(/\{[\s\S]*\}/)[0]).t.length,2);
+    assert.equal(result.ok,false);assert.equal(result.error.code,ERR.PARSE);
+    assert.equal(result.error.message,'模型返回了非 JSON 内容（可能是思考型模型）');
+  }
 });
 
 test('list-models', async () => {

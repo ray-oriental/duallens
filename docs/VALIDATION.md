@@ -1,8 +1,100 @@
 # Validation
 
-## v0.4 second layout pass (2026-10-16, working tree)
+## v0.4 third layout pass (2026-10-16, working tree)
 
-Based on leader commit `47c2060`; this pass is uncommitted. Headlines, article links and long
+Based on `95febe1`, including the committed second pass and QA acceptance tooling. Changes remain
+uncommitted. No gateway, provider configuration, production browser profile or version change.
+Automatic page/PDF hybrid refinement now selects prose/title/list/cell units with at least six words
+or twelve CJK characters. Controls, navigation, metadata, attributes and local glossary matches stay
+MT/dictionary finals. Malformed non-JSON output fails that chain model immediately; connection tests
+require both items of a real translation probe. Offline tests exercise a thinking-text response and
+failover without contacting a model. Deployment of the leader's v0.4 gateway remains separate.
+
+Capitalized UI words no longer match the lowercase href-identifier shortcut. GitHub file tables and
+semantic file trees, usernames, Sphinx signatures and other requested identifiers retain source text.
+Boundary identifiers (including nested HN domains) stay beside the original headline and outside the
+translation request. HN metadata uses one compact sentence, preserves protected usernames through
+the normal safe placeholder serializer, and translates whole relative-time phrases. Viewport priming
+also runs at scroll zero; idle scanning yields after an eight-millisecond slice and prioritizes source
+text before attribute enumeration. Pixiv reader priming and normal traversal share logical roots.
+
+Prose clipping changes stop before page-level containers; targeted flexible-prose regressions can
+shrink without horizontal overflow. This does not establish layout acceptance on all sites below.
+Partial source ranges have explicit association wrappers and restore exact original Text
+node identity, content, parent and order in the browser regression, including surrounding whitespace.
+Wiki edit tools remain compact inline UI. Every translated output path uses the computed foreground
+color; the dark fixture checks actual contrast >=4.5 against its background, including low-contrast
+source text. Real sites with images/gradients and native opacity still require screenshot review.
+PDF restore removes an empty body class introduced by the reader's translation state.
+
+The QR encoder was already outside the userscript import graph at this baseline. The graph regression
+also excludes PDF.js, the PDF viewer and the desktop sidebar/platform. Mobile OCR/comic functionality
+and shared text/subtitle tabs remain. Dependency-free token-preserving packing and shared live-export
+getters reduce the bundle to **359771 bytes**, leaving 40229 bytes below the unchanged 400000-byte
+ceiling. The current build enforces the stricter 360000-byte target; extension loading stays zero-build.
+
+Public evidence for this pass is stored only under `~/.cache/duallens-e2e/v04/fix/round3/` and
+`~/.cache/duallens-e2e/v04/acceptance/`. Runs use anonymous free MT with `--llm none`; no campus,
+paid, subscription or local LLM inference is used. Android sizes are isolated Chromium/GM emulation,
+not physical Android or Tampermonkey acceptance. Raw QA FAIL results are retained without adjusting
+the QA-owned denominator or restoration rules. Final results and screenshot-review notes follow in
+the external delivery report; earlier interrupted runs are diagnostics, not a combined acceptance run.
+
+Offline checks on the final runtime: 387 Node tests, 86 gateway tests, 22 release tests (one Windows
+symlink skip), 39 QA-tool tests, project validation; canonical extension
+`SUMMARY total=33 PASS=32 FAIL=0 SKIP=0 INFO=1` (synthetic Alt+A INFO), layout
+`SUMMARY total=11 PASS=11 FAIL=0 SKIP=0 INFO=0`, userscript
+`SUMMARY userscript total=8 PASS=8 FAIL=0 SKIP=0`, PDF `PDF E2E: 6 PASS, 0 FAIL, 0 SKIP`,
+settings `SUMMARY settings-browser total=6 PASS=6 FAIL=0 mock-only viewport=375x812`.
+The final layout regression also verifies radio labels in a whitespace-free form remain eligible:
+edge-identifier recognition cannot treat an aggregate form/container as a camelCase identifier.
+HN inline comment heads use the same metadata path. When their only remaining source is a date and
+protected/aria-hidden fragments, unchanged local output is skipped rather than duplicated or claimed
+as an unchanged MT response. The regression covers both eligible navigation and aria-hidden navigation.
+
+Three additional real PDF first-page probes (Attention, ResNet and the public lecture PDF) recorded
+first finals of 601.8 / 681.5 / 187.2 ms, unchanged source layers, no residual reader attributes, and
+no observed >50 ms long task. The only reported slow sheet step was 18 ms. The old 56/82 ms events
+were not reproduced; this sample does not establish a universal bound or identify pdf.js as their cause.
+No new scheduling rewrite is claimed for these samples.
+
+Final public run `acceptance/fix-r3-delivered` (the exact requested fifteen-site/all-device command):
+**60 total, 11 PASS, 48 FAIL, 1 UNREACHABLE**. Overlapping failure categories: coverage 30 rows,
+layout 28, restore 21, first translation above three seconds 1. YouTube desktop recorded **3.472 s**;
+the timing requirement is not met. Supplementary NHK: 2 FAIL, first translation 0.761/0.313 s,
+coverage 100%, four overflow candidates each. Its native overseas-access modal clips lower content
+after bilingual additions. Supplementary real PDF: 8 total, 2 PASS, 6 FAIL. All eight have no reader
+residue; six preserve both original text layer and canvas pixels, two dark rows do not. A separate
+Attention/page-11 dark probe did not reproduce the source-layer/pixel difference; this is not proof
+that the original FAIL was false. The QA PDF error collector includes offscreen wait elements and
+does not filter visibility; four PDF FAIL rows contain only empty pending markers. Contrast candidates
+include real red-on-white labels below 4.5, plus a white-on-green definition whose canvas background
+is absent from the CSS-only background calculation. Raw results remain unchanged.
+
+Manual review covered all 60 translated viewport images and all 60 full captures, six native-control
+viewports, and 28 NHK/PDF viewport/full/detail images. SHA-256 and individual notes are in external
+`delivered-reviewed-images.json` and `supplemental-reviewed-images.json`; full captures expose later
+offscreen English/Japanese and pending units that first-viewport coverage cannot measure. Remaining
+real defects include severe expanded-description overlap on Amazon desktop, untranslated mobile
+Amazon description, tight Naver title line height, GitHub issue phone title clipping, unwanted author
+translations (arXiv HTML/PDF, Pixiv, blog byline), and weak thumbnail-overlay text contrast on YouTube
+phone. The phone blog byline can replace the original name. Pixiv phone novel body remains largely
+Japanese/pending in the full capture. The arXiv dark run has 80 failed units; transport cause is not
+established. Neither raw PASS nor this review constitutes full-page or physical-device acceptance.
+
+Some coverage FAILs include required exceptions: Python Sphinx API signature fragments, GitHub branch
+and semantic tree file names, HN dates and aria-hidden navigation, arXiv identifiers/timestamps. The
+QA-owned denominator was not changed. Wikipedia desktop's first whitespace-order difference is
+identical in the no-translation control (index 208); this does not demonstrate an unwrap regression.
+Other live-site attribute changes remain unresolved rather than broadly excused; Naver desktop has
+one residual class candidate. BBC consent overlays and desktop Pixiv's fullscreen image-only viewer
+prevent clean content acceptance; the latter is not a crash or an OCR test. The Naver phone load
+failed with ERR_CONNECTION_CLOSED. Details for every non-PASS row, raw matrices, and review notes
+are in external `fix/round3/complete-report.md`. These results do **not** satisfy release acceptance.
+
+## v0.4 second layout pass (2026-10-16, committed baseline)
+
+Based on leader commit `47c2060`; committed as `b3893a0`. Headlines, article links and long
 source text remain bilingual. Short controls try inline output before measured failure can permit
 replacement. Clipping styles have shared ownership and exact restoration, including preservation
 of site-authored style changes. Legacy horizontal WebKit boxes switch to ordinary block flow for

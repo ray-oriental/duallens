@@ -7,6 +7,42 @@ import { createTranslator, planFor } from '../../extension/background/translator
 import { createMT, MT_PLACEHOLDER } from '../../extension/background/mt.js';
 import { DEFAULT_SETTINGS, mergeSettings } from '../../extension/shared/settings.js';
 import { ERR, FAST_QUEUE, err, fakeProvider, run, sleep, testProfile, testSettings, writeSegs } from './helpers.mjs';
+import { refinementEligible } from '../../extension/shared/refinement.js';
+
+test('automatic refinement counts six words or twelve CJK letters and excludes UI metadata',()=>{
+  assert.equal(refinementEligible({text:'These five words stay machine translated'}),true);
+  assert.equal(refinementEligible({text:'Just five words in here'}),false);
+  assert.equal(refinementEligible({text:'<g0>These six words should receive language refinement</g0>',refine:false}),false);
+  assert.equal(refinementEligible({text:'あ'.repeat(11)}),false);
+  assert.equal(refinementEligible({text:'あ'.repeat(12)}),true);
+});
+
+test('page hybrid sends only eligible prose to LLM; UI and short units end at MT without drafts',async()=>{
+  const r=rig();
+  const list=[{id:'body',text:'A full paragraph deserves a careful language refinement.'},
+    {id:'ui',text:'A long navigation label is still an interactive control.',refine:false},{id:'short',text:'Read more'},
+    ...Array.from({length:20},(_,i)=>({id:'nav'+i,text:'This long navigation label must stay machine translated.',refine:false}))];
+  const out=await log(r,{purpose:'page',draft:true,items:list});
+  const llmTexts=r.provider.calls.flatMap(c=>c.segs.map(s=>s.text));
+  assert.deepEqual(llmTexts,[list[0].text]);
+  for(const id of list.filter(it=>it.id!=='body').map(it=>it.id)) {
+    const events=out.filter(x=>x.id===id);
+    assert.equal(events.length,1);assert.equal(events[0].stage,'final');assert.equal(events[0].engine,'mock');
+  }
+});
+
+test('page refinement never publishes a streamed prefix from an unparseable thinking reply',async()=>{
+  const models=[];
+  const provider=async({model,onDelta})=>{
+    models.push(model);
+    if(model==='m1') {onDelta?.('{"t":["未验证的片段"]');return '好的，我正在思考如何翻译。';}
+    return '{"t":["完整验证的备用译文"]}';
+  };
+  const r=rig({provider});const out=await log(r,{purpose:'page',draft:true,items:[{id:'prose',text:'This public paragraph contains enough words for refinement.'}]});
+  assert.deepEqual(models,['m1','m2']);
+  assert.ok(out.every(x=>x.text!=='未验证的片段'));
+  assert.equal(out.at(-1).text,'完整验证的备用译文');
+});
 
 const offline = () => { throw new Error('the network must not be used'); };
 const LLM = (t) => `【译】${t}`;

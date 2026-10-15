@@ -36,13 +36,13 @@ export function parseSegments(content,idMap){
   if(!Array.isArray(list)||list.length!==idMap.size)throw new Error('length');
   list.forEach((value,i)=>{if(typeof value==='string'&&value.trim())results.set(idMap.get(i+1),value.trim());});
  }catch{
-  if(parsedJSON)return{results:new Map(),missing:[...idMap.values()]};
+  if(parsedJSON)return{results:new Map(),missing:[...idMap.values()],invalidJSON:false};
   // Legacy reply compatibility only; outgoing requests always use JSON.
   for(const m of text.matchAll(/<seg\s+id\s*=\s*["']?(\d+)["']?\s*>([\s\S]*?)<\/seg\s*>/gi)){
    const id=idMap.get(Number(m[1]));if(id!==undefined&&!results.has(id)&&m[2].trim())results.set(id,m[2].trim());
   }
  }
- return{results,missing:[...idMap.values()].filter(id=>!results.has(id))};
+ return{results,missing:[...idMap.values()].filter(id=>!results.has(id)),invalidJSON:!parsedJSON&&!results.size};
 }
 export function salvagePlain(content,sourceText){
  const text=stripThinking(content).trim().replace(/^\x60{3}[a-z]*\n?/i,'').replace(/\n?\x60{3}$/,'').trim();

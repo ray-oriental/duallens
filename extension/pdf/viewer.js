@@ -148,12 +148,16 @@ ball.addEventListener('pointerdown', event => {
 
 // ---- status --------------------------------------------------------------------------------
 function message(text, error = false) { $('status').textContent = text; $('status').classList.toggle('error', error); }
+function updateTranslating(active) {
+  document.body.classList.toggle('translating',active);
+  if(!document.body.className) document.body.removeAttribute('class');
+}
 function stateChanged() {
   const stats = session.stats();
   ball.disabled = !pdf; ball.setAttribute('aria-pressed', String(session.active));
   $('translate').textContent = session.active ? (stats.failed ? '重试失败' : '继续翻译') : '翻译';
   $('restore').disabled = !session.active;
-  document.body.classList.toggle('translating', session.active);
+  updateTranslating(session.active);
   if (!session.active) return;
   const parts = [`已翻译 ${stats.done}/${stats.total} 块`];
   if (stats.draft) parts.push(`草稿 ${stats.draft}`);
@@ -651,7 +655,7 @@ function activate() {
   if (!session.active) {
     session.start();
     metrics.activated = performance.now(); metrics.firstDraft = metrics.firstFinal = 0;
-    document.body.classList.add('translating');
+    updateTranslating(true);
     for (const page of resident) scheduleSheet(page);
     for (const page of pages) if (page.reflowBuilt) paintReflowAll(page);
   } else {
@@ -665,7 +669,7 @@ function activate() {
 function deactivate() {
   session.stop();
   paintQueue.clear();
-  document.body.classList.remove('translating');
+  updateTranslating(false);
   for (const page of pages) {
     if (page.transBuilt) clearTranslated(page);
     for (const node of page.rfEls.values()) node.remove();
@@ -781,7 +785,7 @@ async function open(data) {
   pdf = null;
   await task?.destroy();
   if (generation !== epoch) return;
-  document.body.classList.remove('translating');
+  updateTranslating(false);
   pages = []; $('pdf-pages').replaceChildren();
   const loading = getDocument({ data: checkPDFBytes(data), isEvalSupported: false,
     enableXfa: false, wasmUrl: new URL('../vendor/pdfjs/wasm/', import.meta.url).href,

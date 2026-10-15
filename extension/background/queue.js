@@ -64,7 +64,7 @@ export function createQueue(options = {}) {
         if (job.settled) return;
         if (isCancelled(error)) return settle(job, false, cancelledError());
         if (error?.code === ERR.CONFIG) return settle(job, false, error);
-        if(error?.serverCode==='untranslated_items') {
+        if(error?.serverCode==='untranslated_items'||error?.code===ERR.PARSE) {
           job.skipped.add(JSON.stringify([profile.id,model]));job.contentError=error;return;
         }
         // Busy replies requeue without cooldown.

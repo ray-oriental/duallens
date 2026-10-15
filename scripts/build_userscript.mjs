@@ -9,6 +9,7 @@ import { OCR_RESOURCES } from '../extension/content/comics/runtime-resources.js'
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(HERE, '..');
 const identifier = /^[A-Za-z_$][\w$]*$/;
+const operators=/^(?:>>>=|===|!==|\*\*=|&&=|\|\|=|\?\?=|>>>|<<=|>>=|=>|==|!=|<=|>=|\+\+|--|\*\*|&&|\|\||\?\?|\?\.|<<|>>|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|\.\.\.)/;
 const fail = (file, message) => { throw new Error(`${file}: ${message}`); };
 
 // Keep offsets into the original source. Comments, strings, templates and regex literals must
@@ -66,7 +67,7 @@ export function tokens(source, file = '<source>') {
       kind = 'word'; i++; while (i < source.length && /[\w$]/.test(source[i])) i++; value = source.slice(start, i);
     } else if (/\d/.test(c)) {
       kind = 'number'; i++; while (i < source.length && /[\w.]/.test(source[i])) i++; value = source.slice(start, i);
-    } else if (c === '/' && (!out.length || /^(?:=|\(|\[|\{|,|:|;|!|\?|&|\||return|throw|yield|=>)$/.test(out.at(-1).value))) {
+    } else if (c === '/' && (!out.length || /^(?:=|\(|\[|\{|,|:|;|!|\?|&|\||&&|\|\||\?\?|return|throw|yield|=>)$/.test(out.at(-1).value))) {
       kind = 'regex'; i++; let group = false, closed = false;
       while (i < source.length) {
         const ch = source[i++];
@@ -79,7 +80,7 @@ export function tokens(source, file = '<source>') {
       if (!closed) fail(file, 'unterminated regex');
       while (i < source.length && /[a-z]/i.test(source[i])) i++;
       value = '<regex>';
-    } else { value = c; i++; }
+    } else { value=source.slice(i).match(operators)?.[0]||c;i+=value.length; }
     out.push({ kind, value, start, end: i });
   }
   return out;
@@ -88,20 +89,24 @@ export function tokens(source, file = '<source>') {
 // Size budget: drop comments and indentation, keep every token byte-for-byte. A gap between two
 // tokens holds only whitespace and comments (strings, templates and regex literals are tokens), so
 // rewriting gaps cannot touch program text. A gap without a comment keeps its bytes unless it holds a
-// newline, and a newline stays one newline, so automatic semicolon insertion behaves as before. The
+// newline. Newlines at structural separators can be removed; other newlines preserve ASI. The
 // result is re-tokenized and must be the same token sequence, otherwise the build fails.
 export function compactSource(source, file = '<source>') {
   const list = tokens(source, file);
-  const gap = (text, previous) => {
+  const gap = (text, previous, next) => {
     if (!previous) return '';
-    if (!/\/[/*]/.test(text)) return /[\r\n\u2028\u2029]/.test(text) ? '\n' : text;
+    if (/[\r\n\u2028\u2029]/.test(text)) return [';','{','(', '[',','].includes(previous.value)||next.value==='}'?'':'\n';
     // A comment right after "\" or a bare "/" may really be part of a regex the tokenizer took for division.
-    if (previous.kind === 'punct' && (previous.value === '\\' || previous.value === '/')) fail(file, `ambiguous comment after ${previous.value}`);
-    return /[\r\n\u2028\u2029]/.test(text) ? '\n' : ' ';
+    if (/\/[/*]/.test(text) && previous.kind === 'punct' && (previous.value === '\\' || previous.value === '/')) fail(file, `ambiguous comment after ${previous.value}`);
+    if(!text) return '';
+    // Keep lexical separators and separated operators; never join + +, / / or numeric dots.
+    return /^(word|number)$/.test(previous.kind)&&/^(word|number)$/.test(next.kind)||
+      previous.kind==='punct'&&next.kind==='punct'&&(operators.test(previous.value+next.value)||/\/[/*]/.test(previous.value+next.value))||previous.kind==='regex'&&next.kind==='word'||
+      previous.kind==='number'&&next.value==='.'?' ':'';
   };
   let out = '', prevEnd = 0;
   list.forEach((t, i) => {
-    out += gap(source.slice(prevEnd, t.start), list[i - 1]) + source.slice(t.start, t.end);
+    out += gap(source.slice(prevEnd, t.start), list[i - 1],t) + source.slice(t.start, t.end);
     prevEnd = t.end;
   });
   out += /[\r\n\u2028\u2029]/.test(source.slice(prevEnd)) ? '\n' : '';
@@ -131,7 +136,7 @@ function names(list, file) {
 function parseModule(source, file) {
   const ts = tokens(source, file);
   rejectRuntimeImports(ts, file);
-  if (ts.some((t) => t.kind === 'word' && ['__exports', '__require', '__dlDefault'].includes(t.value))) {
+  if (ts.some((t) => t.kind === 'word' && ['__exports', '__require', '__export', '__dlDefault'].includes(t.value))) {
     fail(file, 'reserved bundler binding');
   }
   const imports = [], exports = [], edits = [];
@@ -254,10 +259,10 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
       code = code.slice(0, edit.start) + replacement + code.slice(edit.end);
     }
     code = compactSource(code, id(file));
-    code += '\n' + mod.exports.map((e) => `Object.defineProperty(__exports, ${JSON.stringify(e.local)}, { enumerable: true, get: () => ${e.imported} });`).join('\n');
-    factories.push(`${JSON.stringify(id(file))}: function(__exports, __require) {\n${code}\n}`);
+    code += '\n__export(__exports,{' + mod.exports.map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
+    factories.push(`${JSON.stringify(id(file))}:function(__exports,__require){\n${code}\n}`);
   }
-  const bundle = `(function() {\n'use strict';\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __require(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __require);\n return out;\n}\n__require(${JSON.stringify(id(entryFile))});\n})();\n`;
+  const bundle = `(function() {\n'use strict';\nfunction __export(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __require(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __require);\n return out;\n}\n__require(${JSON.stringify(id(entryFile))});\n})();\n`;
   // Validate before touching the output. Unsupported/unrewritten ESM and top-level await fail.
   new vm.Script(bundle, { filename: 'duallens.user.js' });
   new Function(bundle);
@@ -295,7 +300,7 @@ export async function buildUserscript({ project = PROJECT, output = path.join(pr
   const manifest = JSON.parse((await fs.readFile(path.join(project, 'extension', 'manifest.json'), 'utf8')).replace(/^\uFEFF/, ''));
   const bundle = await buildBundle(path.join(project, 'extension', 'userscript', 'entry.js'), { root: path.join(project, 'extension') });
   const content = metadata(manifest.version) + bundle;
-  if(Buffer.byteLength(content)>=400000) throw new Error('Userscript exceeds the 400 KB startup budget');
+  if(Buffer.byteLength(content)>360000) throw new Error('Userscript exceeds the 360 KB startup budget');
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, content, 'utf8');
   return { output, bytes: Buffer.byteLength(content), version: manifest.version };

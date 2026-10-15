@@ -115,7 +115,7 @@ export function isTranslatable(plain, minChars) {
   if (/^(?:https?:\/\/|ftp:\/\/|www\.)\S+$/i.test(plain)) return false;
   if (/^(?:[a-z0-9-]+\.)+(?:com|org|net|edu|gov|io|dev|app|cn|uk|jp|de|fr|ru)(?::\d+)?(?:\/\S*)?$/i.test(plain)) return false;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(plain)) return false;
-  if (/^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?[,]?\s+)?(?:\d{1,4}[-/:.]\d{1,2}[-/:.]\d{1,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})(?:[T\s].*)?$/i.test(plain)) return false;
+  if (/^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?[,]?\s+)?(?:\d{1,4}[-/:.]\d{1,2}[-/:.]\d{1,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})(?:[T\s]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s*(?:[ap]m|UTC|GMT|Z|[+-]\d{2}:?\d{2}))?(?:\s*\([\d,.]+\s*[KMGT]?B\))?)?$/i.test(plain)) return false;
   if (/^(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}|\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?(?:\s*(?:UTC|GMT|[+-]\d{2}:?\d{2}))?|\d+\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago)$/i.test(plain)) return false;
   return true;
 }

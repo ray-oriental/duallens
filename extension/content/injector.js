@@ -3,7 +3,8 @@
 //
 // Unit shape (owned by controller.js): { id, host, first, last, whole, plain, state, lang,
 //   tEl, oEl, wEl, hadClass, inline, peek }
-// first..last are consecutive siblings; for a whole unit they span every child of host.
+// first..last are consecutive siblings. Whole units claim the host, but boundary identifiers
+// may remain outside that source range; tail keeps the translation after an excluded suffix.
 
 import {TAG_T,TAG_O,TAG_W,TAG_R} from './util.js';
 import {measurePresentation} from './presentation.js';
@@ -21,21 +22,6 @@ export function write(fn) {
 const HEAVY_SEL='iframe,video,audio,input,textarea,select,canvas,object,embed';
 const textSplits=new WeakMap();
 const titleClaims=new WeakMap();
-
-export function splitMetadata(host) {
-  const runs=[],walk=document.createTreeWalker(host,NodeFilter.SHOW_TEXT),texts=[];
-  for(let n;(n=walk.nextNode());) if(!textSplits.has(n)&&/\b(points?|by|hide|comments?|ago|discuss)\b/i.test(n.data)&&!n.parentElement.closest('dl-t,dl-o,.hnuser')) texts.push(n);
-  write(()=>{for(const original of texts) {
-    const data=original.data,parts=data.split(/\b(points?|by|hide|comments?|ago|discuss)\b/gi),parent=original.parentNode,after=original.nextSibling;
-    const rec={original,data,nodes:[],active:new Set(),host:parent};
-    parts.forEach((part,i)=>{
-      const node=i?document.createTextNode(part):original;node.data=part;if(i) parent.insertBefore(node,after);
-      rec.nodes.push({node,data:part});
-      if(i%2) {rec.active.add(node);textSplits.set(node,rec);runs.push({host:parent,first:node,last:node,whole:false});}
-    });
-  }});
-  return runs;
-}
 
 function claimTitle(u) {
   let rec=titleClaims.get(u.host);
@@ -124,6 +110,7 @@ function adopt(u) {
 
 function setHostState(u,state) {
   if(u.whole) u.host.setAttribute('data-dl-state',state);
+  if(u.wEl) u.wEl.setAttribute('data-dl-state',state);
 }
 
 function createT(u) {
@@ -141,17 +128,19 @@ function ensureWrapper(u) {
   u.wChecked=true;
   // flexHost is measured by the controller in its read phase to avoid forced style recalculation
   const flex=u.flexHost ?? /flex|grid/.test(getComputedStyle(u.host).display);
-  if(!flex) return;
+  if(u.whole&&(!flex||u.presentation!=='block')) return;
   const parent=u.first.parentNode;
-  const nodes=nodesOf(u);
+  const nodes=nodesOf({first:u.first,last:u.tail||u.last});
   const w=document.createElement(TAG_W);
+  w.setAttribute('data-dl-id',u.id);
+  if(!u.whole) w.style.display=u.presentation==='block'?'block':'inline';
   parent.insertBefore(w,u.first);
   for(const n of nodes) w.appendChild(n);
   u.wEl=w;
 }
 
 function place(u,t) {
-  const anchor=u.oEl || u.last;
+  const anchor=u.tail&&(u.tail.parentNode===u.host||u.tail.parentNode===u.wEl)?u.tail:u.oEl||u.last;
   anchor.parentNode.insertBefore(t,anchor.nextSibling);
 }
 
@@ -269,7 +258,7 @@ export function showNothing(u) {
     releaseTitle(u);
     releaseLayout(u);
     adopt(u);
-    setHostState(u,'done');
+    setHostState(u,'same');
   });
 }
 

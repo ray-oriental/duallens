@@ -33,6 +33,7 @@ export function protectedElement(el) {
   if (!text) return false;
   if ((!el.childElementCount && identifierText(text)) || (el.localName==='a' && (identifierText(text)||linkIdentifier(text,el.getAttribute('href'),el.baseURI)))) return true;
   const host=el.ownerDocument.location?.hostname||'';
-  if (host==='github.com' && el.closest('.topic-tag,a[href*="/milestone/"],.react-directory-filename-column,.react-directory-row-name-cell,.commit-author,.author,.user-mention,a[href*="?author="],a[aria-label^="commits by "],[data-hovercard-type="user"],[data-hovercard-type="organization"],[itemprop="author"],[itemprop="name"],#repository-container-header .AppHeader-context,[data-testid="repos-header-breadcrumb"],[data-testid="anchor-button"],[data-testid="branch-picker-repo-header"],.branch-select-menu,.branch-name,[data-hotkey="w"]')) return true;
-  return !!el.closest('.post-tag,.s-tag,[data-testid="subreddit-name"],.hnuser,[rel="author"],[itemprop="author"],[class*="AuthorName"]');
+  if (host==='github.com' && el.closest('.topic-tag,[role="treeitem"],a[href*="/milestone/"],.react-directory-filename-column,.react-directory-row-name-cell,.commit-author,.author,.user-mention,a[href*="?author="],a[aria-label^="commits by "],[data-hovercard-type="user"],[data-hovercard-type="organization"],[itemprop="author"],[itemprop="name"],#repository-container-header .AppHeader-context,[data-testid="repos-header-breadcrumb"],[data-testid="anchor-button"],[data-testid="branch-picker-repo-header"],.branch-select-menu,.branch-name,[data-hotkey="w"]')) return true;
+  if(/(^|\.)reddit\.com$/.test(host)&&el.closest('.author,a[href^="/user/"],a[href^="/u/"]')) return true;
+  return !!el.closest('.sig,.sig-name,.sig-param,.post-tag,.s-tag,.subreddit,[data-testid="subreddit-name"],.hnuser,[rel="author"],[itemprop="author"],[class*="AuthorName"]');
 }

@@ -65,9 +65,9 @@ export function presentationFacts(unit) {
   const h=unit.host,text=unit.plain||h.textContent.trim();
   const control=h.closest('button,select,option,[role="button"],[role="tab"],[role="menuitem"],nav a,header a,[role="navigation"] a');
   const menu=denseLinkMenu(h.parentElement)||denseLinkMenu(h.parentElement?.parentElement);
-  const title=!!h.closest('h1,h2,h3,h4,h5,h6,[class*="title" i],[class*="headline" i],[class*="heading" i]') ||(h.localName==='a'&&!control&&!menu&&!h.closest('.subtext'));
+  const title=!control&&!h.closest('.mw-editsection')&&(!!h.closest('h1,h2,h3,h4,h5,h6,[class*="title" i],[class*="headline" i],[class*="heading" i]') ||(h.localName==='a'&&!menu&&!h.closest('.subtext,.comhead')));
   return {tag:h.localName,role:h.getAttribute('role')||'',textLength:text.length,words:text.split(/\s+/).length,title,
-    paragraph:unit.paragraph||(!unit.whole&&!!h.querySelector(':scope > br')),metadata:!!h.closest('.subtext,[class~="metadata"]'),interactive:!!control};
+    paragraph:unit.paragraph||(!unit.whole&&!!h.querySelector(':scope > br')),metadata:unit.metadata||!!h.closest('.subtext,.comhead,[class~="metadata"]'),interactive:!!control};
 }
 export function measurePresentation(unit,inlineMaxChars) {
   unit.layoutFacts=presentationFacts(unit);

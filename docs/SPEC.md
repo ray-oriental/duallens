@@ -97,7 +97,7 @@ Android Edge + Tampermonkey                         │
 { type: 'translate', reqId, to, from: 'auto', draft: true, purpose: 'page', mode?,
   priority: 0|1|2,            // 0 = 视口内，1 = 视口附近，2 = 预取
   context: { title, host, url },
-  items: [{ id, text }] }      // text 是带占位符的序列化段落（见 §6）
+  items: [{ id, text, refine? }] } // text 是带占位符的序列化段落；refine:false 排除自动精修
 { type: 'cancel', reqId }
 // B → C（draft:true 可先草稿再终稿；其余调用每个 id 只终结一次）
 { type: 'partial', reqId, results: [{ id, text, stage?, engine?, plain?, refined? } | { id, error: { code, message } }] }
@@ -236,6 +236,9 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
 默认 MT 是 Microsoft 免费非官方接口，Google 作为非官方备选，用户可关闭备选、选择官方带 key 引擎或只用 LLM。
 
 网页请求显式 `draft:true`，同一 id 可先收到 `stage:'draft'` 再收到 `stage:'final'`，只有终稿/错误才关闭请求。
+自动网页/PDF 精修仅处理至少 6 个词或 12 个 CJK 字符的正文单元；导航、控件、属性、元信息通过 `refine:false` 排除，短项直接以 MT 终稿结束，且失败不回退 LLM。显式 `llm` 模式仍可翻译短文本。
+非结构化模型正文令当前模型失败并尝试链下一项；有效 JSON 缺项保留有限缩批恢复。设置连接测试发送两项真实翻译并验证完整结果，不以接口可达冒充翻译成功。
+网页/PDF 的自动精修等待完整响应验证后才发布 LLM 终稿，避免思考文本中的未验证 JSON 片段抢先覆盖 MT 草稿。
 未启用 draft 的既有消费者保留单次终结结果；LLM 失败时 MT 兜底。精修超时默认 90 秒，取消 LLM 并将草稿作为
 `refined:false` 终稿；已有草稿时不显示精修错误。`auto` 等待 LLM 2.5 秒后才请求草稿。
 内容侧复用同一 `dl-t`，`data-dl-stage` 标记阶段、`data-dl-engine` 标记 MT 引擎或 `llm`；不同长度仍可能改变高度。

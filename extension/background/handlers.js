@@ -77,7 +77,7 @@ export function createHandlers({ translator, cache, providers, getSettings, open
       const problem = profileProblem(profile);
       if (problem) throw new DLError(ERR.CONFIG, problem);
       const { messages, idMap } = buildMessages({
-        items: [{ id: 1, text: 'Hello, world.' }],
+        items: [{ id: 1, text: 'Hello, world.' }, {id:2,text:'Read the next paragraph.'}],
         to: 'zh-CN',
         from: 'en',
         context: {},
@@ -88,8 +88,9 @@ export function createHandlers({ translator, cache, providers, getSettings, open
       const started = now();
       const content = await providers.chat({ profile, model: profile.model, messages });
       const latencyMs = now() - started;
-      const parsed = parseSegments(content, idMap).results.get(1);
-      return { ok: true, latencyMs, sample: stripMarkup(parsed ?? content).trim().slice(0, 200) };
+      const parsed=parseSegments(content,idMap);
+      if(parsed.missing.length) throw new DLError(ERR.PARSE,'模型返回了非 JSON 内容（可能是思考型模型）');
+      return { ok: true, latencyMs, sample: [...parsed.results.values()].map(stripMarkup).join(' / ').trim().slice(0,200) };
     }),
 
     [MSG_CACHE_STATS]: wrap(async () => ({ ok: true, entries: await cache.count() })),
