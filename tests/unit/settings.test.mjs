@@ -99,6 +99,6 @@ test('fresh installation requires a configured provider instead of borrowing loc
   assert.equal(profile.baseUrl, '');
   assert.equal(profile.apiKey, undefined);
   const gateway = DEFAULT_SETTINGS.provider.profiles.find(p => p.id === 'gateway');
-  assert.equal(gateway.model, 'ollama/qwen3:4b');
+  assert.equal(gateway.model, 'auto');
   assert.deepEqual(gateway.fallbackModels, []);
 });

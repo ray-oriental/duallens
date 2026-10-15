@@ -4,7 +4,7 @@ import { cancelledError, isCancelled } from '../shared/errors.js';
 
 export function createQueue(options = {}) {
   const cfg = { baseBackoffMs: 2000, maxBackoffMs: 60000, cooldownMs: 60000,
-    maxAttempts: 4, now: () => Date.now(), ...options };
+    maxAttempts: 4, maxBusyRetries: 12, busyMinMs: 500, now: () => Date.now(), ...options };
   const states = new Map(), live = new Set();
   let seq = 0, timer = null;
   function state(profile) {
@@ -42,6 +42,7 @@ export function createQueue(options = {}) {
     const pending = [...live].filter(j => !j.running && !j.settled).sort((a, b) => a.priority - b.priority || a.seq - b.seq);
     let earliest = Infinity;
     for (const job of pending) {
+      if (job.notBefore > cfg.now()) { earliest = Math.min(earliest, job.notBefore); continue; }
       const eligible=job.chain.filter(c=>!job.skipped.has(JSON.stringify([c.profile.id,c.model])));
       if(!eligible.length) {settle(job,false,job.contentError);continue;}
       const missing = eligible.map(c => state(c.profile).missing.get(c.model));
@@ -53,7 +54,6 @@ export function createQueue(options = {}) {
         for (const c of eligible) if (capacity(c)) earliest = Math.min(earliest, state(c.profile).cooldowns.get(c.model) || 0);
         continue;
       }
-      // A busy primary queues normally; only cooldown/failure makes a backup eligible.
       if (!capacity(candidate)) continue;
       const { profile, model } = candidate, s = state(profile);
       job.running = true; job.attempts++; s.running++;
@@ -64,9 +64,15 @@ export function createQueue(options = {}) {
         if (job.settled) return;
         if (isCancelled(error)) return settle(job, false, cancelledError());
         if (error?.code === ERR.CONFIG) return settle(job, false, error);
-        // Content omissions affect this job, not availability of the whole model.
         if(error?.serverCode==='untranslated_items') {
           job.skipped.add(JSON.stringify([profile.id,model]));job.contentError=error;return;
+        }
+        // Busy replies requeue without cooldown.
+        if (error?.serverCode === 'gateway_busy') {
+          job.attempts--;
+          if (++job.busy > cfg.maxBusyRetries) return settle(job, false, error);
+          job.notBefore = cfg.now() + Math.min(10000, Math.max(cfg.busyMinMs, error.retryAfterMs ?? 2000));
+          return;
         }
         const missingModel = error?.status === 404 && ['model_not_found', 'unknown_model'].includes(error.serverCode);
         if (Number.isInteger(error?.status) && ![429, 502, 503, 504].includes(error.status) && !missingModel) return settle(job, false, error);
@@ -76,6 +82,9 @@ export function createQueue(options = {}) {
           wait = Number.isFinite(error.retryAfterMs) ? Math.max(0, error.retryAfterMs)
             : Math.min(cfg.maxBackoffMs, cfg.baseBackoffMs * 2 ** (streak - 1));
         }
+        // Gateway already attempted backend failover.
+        if (profile.kind === 'gateway' && !missingModel && error?.code !== ERR.RATE_LIMITED)
+          wait = Math.min(wait, Number.isFinite(error?.retryAfterMs) ? Math.max(1000, error.retryAfterMs) : model === 'auto' ? 5000 : wait);
         s.cooldowns.set(model, Math.max(s.cooldowns.get(model) || 0, cfg.now() + wait));
         if (missingModel) s.missing.set(model, { until: cfg.now() + wait, error });
         if (job.attempts >= Math.max(cfg.maxAttempts, job.chain.length)) settle(job, false, error);
@@ -89,7 +98,7 @@ export function createQueue(options = {}) {
       const list = candidates(profile, chain);
       if (!list.length) return reject(new Error('No model configured'));
       const job = { seq: ++seq, chain: list, priority, reqId, run, resolve, reject,
-        attempts: 0, skipped:new Set(), ctrl: new AbortController(), settled: false, running: false };
+        attempts: 0, busy: 0, notBefore: 0, skipped:new Set(), ctrl: new AbortController(), settled: false, running: false };
       if (signal) {
         const abort = () => cancelJob(job); signal.addEventListener('abort', abort, { once: true });
         job.unlink = () => signal.removeEventListener('abort', abort);

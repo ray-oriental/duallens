@@ -289,7 +289,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     p.model = chain[0]?.model || ''; p.fallbackModels = chain.slice(1).map(c => c.model);
     upsert(p); discovered.set(p.id, models); choices($('models'), models);
     await selectGateway(p.id, chain);
-    notice(chain.length ? '已建立交大 → Hermes 免费模型 → Ollama 推荐链；点击保存。订阅模型仅手动选择。' : '网关可用，但没有推荐模型；请手动获取并选择模型后保存。');
+    notice(chain.length ? (chain[0].model === 'auto' ? '已选用网关 auto；点击保存。' : '已建立网关备选链；点击保存。') : '没有可用模型；请检查网关配置。');
   });
   action('import-pairing', async () => {
     const text = secretDialog ? await platform.promptSecret('粘贴完整网关配对串（视同密钥；取消停止导入）') : read('pairingText');
