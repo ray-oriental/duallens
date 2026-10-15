@@ -6,16 +6,23 @@ import { isTranslatable, isShortText } from '../../extension/content/serialize.j
 
 test('presentation keeps prose below its source and short controls inline', () => {
   for (const tag of ['p','li','blockquote','dd','figcaption']) assert.equal(choosePresentation({tag,textLength:8}), 'block');
-  for (const tag of ['a','button','label','summary','th','h2']) assert.equal(choosePresentation({tag,textLength:30}), 'inline');
+  for (const tag of ['a','button','label','summary','th']) assert.equal(choosePresentation({tag,textLength:30}), 'inline');
+  assert.equal(choosePresentation({tag:'h2',textLength:8}), 'block');
   assert.equal(choosePresentation({tag:'td',textLength:120}), 'block');
   assert.equal(choosePresentation({tag:'span',textLength:6}), 'inline');
   assert.equal(choosePresentation({tag:'span',paragraph:true,textLength:6}), 'block');
 });
-test('constrained presentation replaces without expanding the original container', () => {
+test('replacement requires a measured failure of an eligible short interactive control', () => {
   for (const constraint of [{whiteSpace:'nowrap'},{overflowX:'hidden'},{overflowY:'clip'},
     {textOverflow:'ellipsis'},{fixedHeight:true},{singleLineFlex:true},{iconOnly:true},{tag:'option'}]) {
-    assert.equal(choosePresentation({tag:'p',textLength:100,...constraint}), 'replace');
+    assert.equal(choosePresentation({tag:'p',textLength:100,words:9,...constraint}), 'block');
   }
+  assert.equal(choosePresentation({tag:'button',textLength:8,interactive:true}), 'inline');
+  assert.equal(choosePresentation({tag:'button',textLength:8,interactive:true,measuredFailure:true}), 'replace');
+  assert.equal(choosePresentation({tag:'a',textLength:8,title:true,interactive:true,measuredFailure:true}), 'block');
+  assert.equal(choosePresentation({tag:'button',textLength:25,interactive:true,measuredFailure:true}), 'inline');
+  assert.equal(choosePresentation({tag:'button',textLength:20,words:4,interactive:true,measuredFailure:true}), 'block');
+  assert.equal(choosePresentation({tag:'td',textLength:70,words:14,metadata:true}), 'inline');
 });
 test('translation colours soften only while contrast remains at least 4.5 on light and dark backgrounds', () => {
   for (const [fg,bg] of [[[20,20,20],[255,255,255]],[[230,230,230],[20,20,20]],[[150,150,150],[255,255,255]],[[90,90,90],[100,100,100]]]) {
@@ -24,7 +31,8 @@ test('translation colours soften only while contrast remains at least 4.5 on lig
   }
 });
 test('visible short words and product labels translate; identifiers and dates do not', () => {
-  for (const s of ['Go','I','Top 10','API_v2','Page_1','Sign in']) assert.ok(isTranslatable(s,1),s);
+  for (const s of ['Go','I','Top 10','Sign in']) assert.ok(isTranslatable(s,1),s);
+  for (const s of ['API_v2','Page_1','Array.prototype.map()','owner/repo','v1.2.0','camelCase','MIT license','TypeScript']) assert.equal(isTranslatable(s,1),false,s);
   for (const s of ['https://example.com','code.visualstudio.com','a@example.com','2026-10-15T12:00:00Z','Oct 15, 2026','12:30 PM','2 hours ago','1234','!?']) assert.equal(isTranslatable(s,1),false,s);
 });
 test('disabling short labels does not exclude a Japanese paragraph without spaces', () => {

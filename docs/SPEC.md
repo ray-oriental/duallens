@@ -139,7 +139,8 @@ v0.4 覆盖修订：不再将 Pixiv 整页限制为正文根；导航、标签�
 `translateShortText:true` 将有效最短长度设为 1；关闭时按 `minChars` 且排除 1–3 词单元。
 select/option/input/textarea 仍不插入子节点；通过独立属性单元处理可见 placeholder、图标 title、option label、按钮型 input value，恢复原值并保留站点主动改写。
 正文中的普通链接继续并入原段落，导航及独立交互控件单独成段。
-`content/presentation.js:choosePresentation` 是纯呈现决策函数；测量与 DOM 写入分离，受限容器替换显示并保留可恢复的原文 title。
+`content/presentation.js:choosePresentation` 是纯呈现决策函数；标题与长文本始终保留双语，短控件先行内追加，只有符合 PLATFORMS 的短交互控件在实际测量失败后才替换并保留原文 title。
+`adaptive-layout.js` 保存并恢复临时放开的截断样式，合并相同结构呈现决策；`shared/identifiers.js`、站点提示与 `shared/ui-glossary.js` 在本地保护标识符及翻译常用 UI。
 扫描、测量与结果插入在桌面和触屏均分片；短单元沿用共享队列的批量上限，不逐项调用 MT。
 模式/引擎配置改动会重翻已启用页面。以下 P0 描述中的短文本阈值及仅按块级排版由这组规则补充。
 

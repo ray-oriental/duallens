@@ -451,8 +451,8 @@ def translate_basic(h: Session) -> None:
     check(not bad, f"translations not starting with {MOCK_PREFIX}: {bad[:3]}")
     check(h.js(JS_ERROR_STATE) == 0, "units in data-dl-state=error")
     # pending dl-t only has "dl-t dl-inline", so the layout class is checked on done runs only
-    check(h.js("() => !!document.querySelector('#h2-short dl-t.dl-inline[data-dl-state=\"done\"]')"),
-          "short heading is not laid out as dl-inline")
+    check(h.js("() => !!document.querySelector('#h2-short dl-t.dl-block[data-dl-state=\"done\"]') && !document.querySelector('#h2-short dl-o')"),
+          "short headline must retain its source with a block translation")
     check(h.js("() => !!document.querySelector('#p-plain dl-t.dl-block[data-dl-state=\"done\"]')"),
           "long paragraph is not laid out as dl-block")
     n1 = h.js(JS_COUNT_DL)

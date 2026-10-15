@@ -7,6 +7,7 @@
 import { escapeText } from '../shared/markup.js';
 import { classify } from './walker.js';
 import { LETTER_RE } from './util.js';
+import { identifierText } from '../shared/identifiers.js';
 
 // Inline wrappers that get a <gN> tag (SPEC §6).
 const G_TAGS = new Set('a b strong em i u s mark sub sup small abbr cite q span font'.split(' '));
@@ -108,6 +109,7 @@ export function isShortText(plain) {
 }
 
 export function isTranslatable(plain, minChars) {
+  if (identifierText(plain)) return false;
   if (plain.length < minChars) return false;
   if (!LETTER_RE.test(plain)) return false;
   if (/^(?:https?:\/\/|ftp:\/\/|www\.)\S+$/i.test(plain)) return false;

@@ -1,6 +1,100 @@
 # Validation
 
-## v0.4 coverage and layout fix (2026-10-15, unmerged)
+## v0.4 second layout pass (2026-10-16, working tree)
+
+Based on leader commit `47c2060`; this pass is uncommitted. Headlines, article links and long
+source text remain bilingual. Short controls try inline output before measured failure can permit
+replacement. Clipping styles have shared ownership and exact restoration, including preservation
+of site-authored style changes. Legacy horizontal WebKit boxes switch to ordinary block flow for
+prose; native control clipping remains intact so hidden issue edit-history text cannot cover authors.
+Sibling headings share policy, prose links in note containers remain one sentence, and HN metadata
+translates points/by/hide/comments/ago/discuss fragments without copying authors or scores.
+
+Public identifiers are filtered locally, including GitHub paths, authors, branches, topics, milestones,
+licenses and language names, question tags, subreddit names and API calls such as `map()`.
+A 70-entry Simplified Chinese UI glossary answers common English labels locally, including Go to file,
+More items, Labels, New issue, Contributor and opened. Other Chinese variants and configurations
+with a user glossary retain the existing provider path. No runtime dependency or gateway change.
+CSS and token-preserving JavaScript whitespace reductions keep the generated userscript at
+399971 bytes, strictly below 400000; only 29 bytes remain to the limit. Further integration should
+budget bundle size before adding runtime code. Extension loading remains zero-build.
+
+Offline checks: 377 Node tests; 86 gateway tests; 22 release tests (one Windows symlink skip);
+three navigation-read tests; project/import/manifest/syntax and release checks;
+canonical MV3 `SUMMARY total=33 PASS=32 FAIL=0 SKIP=0 INFO=1`; layout
+`SUMMARY total=10 PASS=10 FAIL=0 SKIP=0 INFO=0`; userscript
+`SUMMARY userscript total=8 PASS=8 FAIL=0 SKIP=0`; PDF `PDF E2E: 6 PASS, 0 FAIL, 0 SKIP`.
+The canonical INFO remains synthetic Alt+A. Added browser regressions cover constrained short
+controls versus headlines, horizontal legacy boxes without line-clamp, native metadata clipping,
+identifier protection, local UI words, word-fragment metadata, and exact restore after site style edits.
+An initial final-run visible_controls assertion raced independently completed translation batches;
+the test now waits for every inspected unit and icon attribute before checking layout. Its focused
+rerun and subsequent complete layout run passed; runtime behavior was not changed for that failure.
+A bounded refinement probe exposed a body-mutation rescan escaping a custom include selector;
+the body special case is removed. The new scoped_dynamic_body regression verifies that outside
+mutations remain unselected, inside additions still translate, and restore retains page additions.
+
+Authorized public checks use anonymous free MT only, headed isolated Chromium for desktop and
+375x812 Android-UA GM transport simulation for phone. No website login, CAPTCHA interaction,
+campus request, subscription model or paid model call. BBC consent was dismissed only inside
+disposable test contexts. Final phone confirmations use an explicit persistent profile under the
+generated E2E cache run; initial diagnostic nonpersistent contexts used Playwright's auto-cleaned
+system temporary profile. Screenshots, probes,
+raw logs, reviewed screenshot hashes and final per-page data remain outside the repository in
+`~/.cache/duallens-e2e/v04/fix/round2/` (`final-results.json`). All 22 after screenshots were inspected.
+
+The final records combine the complete 22-case run with targeted HN/GitHub/issue confirmations
+and all 11 phone cases refreshed using the explicit cache profile:
+`FINAL PUBLIC SUMMARY total=22 PASS=18 FAIL=4`. Content-first timing below counts a readable
+content translation or main-content heading, excludes navigation/buttons, and allows a locally
+translated content heading. Raw first-UI timing is retained separately. Coverage freezes visible
+top-document source nodes, excludes the requested identifiers and unchanged MT proper names,
+and verifies grouped MV3 source ranges. It is not pixel/OCR coverage or coverage of iframe ads.
+The native control metadata and dictionary confirmations did not change the other page layouts.
+
+A separate one-source-line Pixiv probe configured only `ollama/qwen3:4b` via the existing loopback
+gateway in a 375px MV3 context (not the GM userscript or a physical phone). JSON mode on/off
+connection tests returned success (181 / 4235 ms), but both page results settled as MT with zero
+confirmed LLM finals: first reader result 1063 / 828 ms, one unit, zero pending, same translation
+node retained, clean restore. The local gateway models endpoint and Ollama tags
+listed Qwen; a minimal direct local chat returned 200. These checks do not establish successful
+in-page refinement. The initial scope guard aborted a broader text-count span; the corrected
+probe preflights one wrapped actual source line before enabling translation. No paid/campus
+fallback is configured. See `refine-json-mode.json`, `refine-result.json` and `refine.log`; leader should diagnose the
+remaining refinement path separately. The full 22-case timings below remain MT measurements.
+
+Desktop / phone content-first milliseconds and coverage:
+
+- Wikipedia Machine translation: 782 / 1032 ms; 100% / 100%. Full source sentences and bilingual
+  note/link flow; the literal href-identifier rule also preserves linked nouns such as language.
+- GitHub microsoft/vscode: 1968 / 312 ms; 96.67% (29/30) / 100%. One frozen Releases node was
+  replaced by GitHub hydration and conservatively counted uncovered; names/files/topics/license stay original.
+- Hacker News: 797 / 1047 ms; 100% / 100%. Bilingual titles, compact menu and word-fragment metadata.
+- GitHub issue 295783: 656 / 1078 ms; 100% / 100%. Actual issue rather than a redirected PR;
+  source/author names and On Deck remain; edit-history clipping prevents the prior phone overlap.
+- BBC News home: 719 / 1094 ms; 100% / 100%. Both headline languages; zero pending spinners.
+- BBC article c6zjx7jexz1do: 375 / 1016 ms; 100% / 100%. Paul Adams retained and role translated.
+  BBC advertising/subscription overlays can still cover screen edges; iframe text is outside this metric.
+- MDN Array.prototype.map: 672 / 1750 ms; 100% / 100%. API names retained; long API heading wraps at 375px.
+- Pixiv novel 29352462: 781 / 1312 ms; 100% / 100%. Reader starts at the first text-count line;
+  original Japanese and Chinese paragraphs are visible on both sizes.
+- Pixiv artwork 150822243: 359 / 1140 ms; 100% / 100%. Title/description bilingual, no new phone
+  overflow. Text painted into the artwork is not translated by this DOM probe.
+- Superuser question 477314: timing/coverage N/A on both; headed Chromium still received 403.
+  Translating the security page is explicitly not counted as question acceptance.
+- Reddit post 14trtla: timing/coverage N/A on both. The normal site presented a humanity challenge;
+  old.reddit.com redirected to a login wall. No post-body acceptance was possible without login.
+
+All available page cases finished with zero pending/error markers, no new horizontal document
+overflow and no restore markers. The literal link-identifier rule may preserve ordinary words on
+encyclopedia pages; leader should review that tradeoff. MT semantics remain imperfect, and the
+existing floating controls or site ads can obscure a few edge pixels. Real-site long tasks include
+website work and still exceed 50 ms in some captures; no attribution or elimination claim is made.
+The earlier real PDF 56/82 ms observations were not addressed in this pass. Physical Windows
+Chrome/Edge pairs, Android Edge/Tampermonkey sandbox isolation and actual tablet operation remain
+leader/user acceptance work. The QA-owned acceptance matrix section is unchanged.
+
+## v0.4 coverage and layout fix (2026-10-15, baseline 47c2060)
 
 This worktree adds independent visible controls/attributes, a pure block/inline/replacement policy,
 Unicode-aware short-text preferences, mode/engine invalidation and local PDF byline preservation.
