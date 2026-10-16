@@ -163,14 +163,17 @@ export class SelectionUI {
     const title = el('span', 'title', 'DualLens');
     const bMode = el('button', 'tool', '双语');
     bMode.title = '切换双语 / 仅译文';
+    const bRefine = el('button', 'tool', '精修');
+    bRefine.title = '用大模型精修这段译文';
+    bRefine.hidden = true;
     const bSpeak = el('button', 'tool', '朗读');
     bSpeak.title = '朗读译文';
     bSpeak.hidden = true;
     const bCopy = el('button', 'tool', '复制');
     const bClose = el('button', 'tool', '✕');
     bClose.title = '关闭 (Esc)';
-    for (const b of [bMode, bSpeak, bCopy, bClose]) b.type = 'button';
-    head.append(title, bMode, bSpeak, bCopy, bClose);
+    for (const b of [bMode, bRefine, bSpeak, bCopy, bClose]) b.type = 'button';
+    head.append(title, bMode, bRefine, bSpeak, bCopy, bClose);
     const body = el('div', 'body');
     const src = el('p', 'src');
     const dst = el('p', 'dst');
@@ -182,6 +185,7 @@ export class SelectionUI {
       this.cardMode = this.cardMode === 'translation-only' ? 'bilingual' : 'translation-only';
       this.#applyCardMode();
     });
+    bRefine.addEventListener('click', () => this.#refine());
     bSpeak.addEventListener('click', () => this.#speak());
     bCopy.addEventListener('click', async () => {
       const text = this.cardState?.text || '';
@@ -202,7 +206,7 @@ export class SelectionUI {
     bClose.addEventListener('click', () => this.closeCard());
     this.#makeDraggable(head, card);
 
-    Object.assign(this, { iconEl: icon, card, src, dst, bMode, bSpeak });
+    Object.assign(this, { iconEl: icon, card, src, dst, bMode, bSpeak, bRefine });
   }
 
   #makeDraggable(handle, card) {
@@ -274,6 +278,10 @@ export class SelectionUI {
     this.dst.textContent = '';
     this.dst.className = 'dst dots';
     this.cardState = { visible: true, text: '', source: value };
+    this.refineOf = null;
+    this.bRefine.hidden = true;
+    this.bRefine.textContent = '精修';
+    this.bRefine.title = '用大模型精修这段译文';
     this.#applyCardMode();
     this.card.classList.add('show');
     this.#place(rect);
@@ -292,6 +300,11 @@ export class SelectionUI {
       this.dst.className = 'dst';
       this.dst.textContent = res.text;
       this.cardState = { visible: true, text: res.text, source: value };
+      // Machine translation answered at once; offer the LLM as an explicit second opinion.
+      this.refineOf = res.by === 'mt' && ['mt+llm', 'auto'].includes(settings.translation?.mode)
+        ? { value, to: settings.targetLang, from: settings.sourceLang || 'auto' } : null;
+      this.bRefine.hidden = !this.refineOf;
+      this.bRefine.disabled = false;
     } else {
       this.dst.className = 'dst err';
       this.dst.textContent = `翻译失败：${(res.error && res.error.message) || '未知错误'}`;
@@ -301,6 +314,30 @@ export class SelectionUI {
       this.dst.append(document.createElement('br'), retry);
     }
     this.#place(rect, true);
+  }
+
+  // "用大模型精修": ask the LLM for this one selection. A failure leaves the machine translation in place.
+  async #refine() {
+    const job = this.refineOf;
+    if (!job || this.bRefine.disabled) return;
+    const token = this.token;
+    const draft = this.cardState?.text || '';
+    this.bRefine.disabled = true;
+    this.bRefine.textContent = '精修中…';
+    const res = await this.platform.translator().translateText({ text: job.value, to: job.to, from: job.from, purpose: 'selection', mode: 'llm' });
+    if (token !== this.token || !this.#cardVisible()) return;
+    this.bRefine.textContent = '精修';
+    if (res.ok) {
+      this.dst.className = 'dst';
+      this.dst.textContent = res.text;
+      this.cardState = { visible: true, text: res.text, source: job.value };
+      this.refineOf = null;
+      this.bRefine.hidden = true;
+    } else {
+      this.dst.textContent = draft;
+      this.bRefine.disabled = false;
+      this.bRefine.title = `大模型暂不可用（${(res.error && res.error.message) || '未知错误'}），已保留机器翻译；点击重试`;
+    }
   }
 
   #place(rect, keepIfMoved = false) {

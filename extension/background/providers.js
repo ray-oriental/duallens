@@ -1,9 +1,4 @@
-// Model providers. `chat` is the function the translator/queue call:
-//   chat({ profile, model, messages, signal }) -> Promise<string>   (assistant text)
-// kinds: 'gateway' (optional pairing Bearer credential), 'openai' (user endpoint,
-// Bearer key), 'mock' (no network; deterministic fake for tests and demos).
-// Resolve keys from injected local secrets at request time. Legacy transient profile keys are
-// accepted as an adapter input, never stored, logged or included in error text.
+// Injected providers resolve local secrets per request; keys never enter logs or errors.
 
 import { ERR } from '../shared/protocol.js';
 import { DLError, cancelledError } from '../shared/errors.js';
@@ -13,6 +8,7 @@ import { profileFromPreset } from '../shared/presets.js';
 
 const TEMPERATURE = 0.2;
 const MODELS_TIMEOUT_MS = 15000;
+const STREAM_IDLE_MS = 12000;
 
 export function parseRetryAfter(value, nowMs = Date.now()) {
   if (value == null) return undefined;
@@ -161,12 +157,13 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     return { ...profile, apiKey: await getSecret(profile.id) || (profile.kind === 'openai' ? profile.apiKey : '') || '' };
   }
 
-  async function request(profile, { url, method, body, timeoutMs, signal, onDelta }) {
+  async function request(profile, { url, method, body, timeoutMs, idleMs = timeoutMs, signal, onDelta }) {
     const ctrl = new AbortController();
     let timedOut = false;
     let timer;
-    const reset = () => { clearTimeout(timer); timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs); };
-    reset();
+    let limit = timeoutMs;
+    const reset = ms => { clearTimeout(timer); limit = ms; timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, ms); };
+    reset(timeoutMs);
     let content = '', streamed = false, done = false, carry = '';
     const key = String(profile.apiKey || '').trim();
     const emitDelta = delta => {
@@ -188,7 +185,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       try { event = JSON.parse(data); } catch { throw new DLError(ERR.PARSE, '无效的流式响应'); }
       if (event.error) throw new DLError(ERR.PROVIDER, '流式接口返回错误', { status: 502 });
       const delta = event.choices?.[0]?.delta;
-      if (delta?.content || delta?.reasoning_content) reset();
+      if (delta?.content || delta?.reasoning_content) reset(idleMs);
       if (typeof delta?.content === 'string') {
         content += delta.content;
         if (content.length > 4 * 1024 * 1024) throw new DLError(ERR.PARSE, '流式响应过大');
@@ -240,7 +237,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     } catch (e) {
       if (signal && signal.aborted) throw cancelledError();
       if (e instanceof DLError) throw e;
-      if (timedOut) throw new DLError(ERR.NETWORK, `请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+      if (timedOut) throw new DLError(ERR.NETWORK, `请求超时（${Math.round(limit / 1000)} 秒）`);
       const hint = profile.kind === 'gateway' ? '，请确认本机网关已启动' : '';
       throw new DLError(ERR.NETWORK, `无法连接 ${hostOf(profile)}${hint}`);
     } finally {
@@ -254,12 +251,9 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     const suffix = detail ? `：${detail}` : '';
     let serverCode;
     try { serverCode = JSON.parse(res.text)?.error?.code; } catch {}
-    const extra = { status: res.status, serverCode };
+    const extra = { status: res.status, serverCode, retryAfterMs: parseRetryAfter(res.retryAfter) };
     if (res.status === 429) {
-      return new DLError(ERR.RATE_LIMITED, `被限流（429）${suffix}`, {
-        ...extra,
-        retryAfterMs: parseRetryAfter(res.retryAfter),
-      });
+      return new DLError(ERR.RATE_LIMITED, `被限流（429）${suffix}`, extra);
     }
     if ((res.status === 401 || res.status === 403) && profile.kind !== 'gateway') {
       return new DLError(ERR.CONFIG, `认证失败（${res.status}），请检查 API key${suffix}`, extra);
@@ -294,12 +288,13 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     const jsonKey=profile.id+'|'+profile.baseUrl+'|'+(model||profile.model);
     if (noStream.has(jsonKey)) payload.stream = false;
     if(profile.jsonMode!==false&&!noJson.has(jsonKey)) payload.response_format={type:'json_object'};
+    const sjtuDirect = profile.kind !== 'gateway' && (/^sjtu\//.test(payload.model) || /models\.sjtu\.edu\.cn/.test(profile.baseUrl));
     const send=()=>request(profile, {
       url: endpoint(profile, '/chat/completions'),
       method: 'POST',
       body: JSON.stringify(payload),
-        timeoutMs: /^(sjtu\/)/.test(payload.model) || /models\.sjtu\.edu\.cn/.test(profile.baseUrl)
-          ? Math.min(profile.timeoutMs || 12000, 12000) : profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
+        timeoutMs: sjtuDirect ? Math.min(profile.timeoutMs || 50000, 50000) : profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
+        idleMs: sjtuDirect || profile.kind === 'gateway' ? STREAM_IDLE_MS : undefined,
       signal, onDelta: onDelta || (() => {}),
     });
     let res=await send();

@@ -152,7 +152,9 @@ class App {
       prev.targetLang !== next.targetLang ||
       prev.sourceLang !== next.sourceLang ||
       prev.minChars !== next.minChars ||
+      prev.translateShortText !== next.translateShortText ||
       customChanged ||
+      !settingsEqual(prev.translation, next.translation) ||
       !settingsEqual(prev.provider, next.provider) ||
       !settingsEqual(prev.prompt, next.prompt) ||
       !settingsEqual(prev.glossary, next.glossary)

@@ -52,6 +52,7 @@ ARTIFACTS = E2E_ROOT / "artifacts"
 GATEWAY_HEALTH = "http://127.0.0.1:18790/health"
 REQUIRE_GATEWAY = False
 MOCK_PREFIX = "【译】"
+MT_PREFIX = "【机翻】"
 VIEWPORT = {"width": 1280, "height": 800}
 
 GATEWAY_PROFILE = {
@@ -298,7 +299,10 @@ class Session:
         )
         sw = get_sw(self.ctx)
         self.ext_id = sw.url.split("/")[2]
-        self.settings({"provider": {"active": "mock"}})
+        # Legacy cases exercise the LLM path; the double-engine cases below pick their own mode.
+        self.settings({"provider": {"active": "mock"}, "translation": {"mode": "llm", "mt": {"engine": "mock"}}})
+        # The worker migrates this legacy write asynchronously; a second write racing that migration can be overwritten.
+        time.sleep(0.5)
 
     def close(self) -> None:
         try:
@@ -447,8 +451,8 @@ def translate_basic(h: Session) -> None:
     check(not bad, f"translations not starting with {MOCK_PREFIX}: {bad[:3]}")
     check(h.js(JS_ERROR_STATE) == 0, "units in data-dl-state=error")
     # pending dl-t only has "dl-t dl-inline", so the layout class is checked on done runs only
-    check(h.js("() => !!document.querySelector('#h2-short dl-t.dl-inline[data-dl-state=\"done\"]')"),
-          "short heading is not laid out as dl-inline")
+    check(h.js("() => !!document.querySelector('#h2-short dl-t.dl-block[data-dl-state=\"done\"]') && !document.querySelector('#h2-short dl-o')"),
+          "short headline must retain its source with a block translation")
     check(h.js("() => !!document.querySelector('#p-plain dl-t.dl-block[data-dl-state=\"done\"]')"),
           "long paragraph is not laid out as dl-block")
     n1 = h.js(JS_COUNT_DL)
@@ -498,6 +502,9 @@ def exclusion_non_text_hidden(h: Session) -> None:
     h.command("toggle-page")
     h.wait_units(ARTICLE_UNITS)
     for sel in EXCLUDED_NON_TEXT:
+        if sel=='#p-aria-hidden':
+            h.wait_js("() => !!document.querySelector('#p-aria-hidden dl-t[data-dl-state=done]')")
+            continue  # aria-hidden alone is not a visual exclusion (leader v0.4 contract)
         n = h.js(f"() => {{ const el = document.querySelector({json.dumps(sel)}); "
                  f"return el ? el.querySelectorAll('dl-t').length : -1; }}")
         check(n != -1, f"fixture element {sel} missing")
@@ -832,6 +839,139 @@ def toast_expiry_cleanup(h: Session) -> None:
     h.settings({'siteRules': {'never': ['127.0.0.1']}})
     h.wait_state(lambda s:s['dormant'],5,'site dormant')
     check(h.js("() => document.querySelectorAll('dl-ui').length") == 0,'never site retained toast or other UI hosts')
+
+
+JS_STAGE_PROBE = """(sel) => { const t = document.querySelector(sel + ' dl-t'); return t ? { stage: t.getAttribute('data-dl-stage'),
+  state: t.getAttribute('data-dl-state'), text: t.textContent.trim(), probe: t.getAttribute('data-probe'), cls: t.className } : null; }"""
+
+SLOW_MOCK = {"provider": {"active": "mock", "profiles": [{"id": "mock", "kind": "mock", "name": "mock", "model": "mock-slow"}]}}
+ERROR_MOCK = {"provider": {"active": "mock", "profiles": [{"id": "mock", "kind": "mock", "name": "mock", "model": "mock-error"}]}}
+DOUBLE = {"translation": {"mode": "mt+llm", "mt": {"engine": "mock"}}}
+
+
+@case("double_draft_then_final", "mt+llm：机翻草稿先出（data-dl-stage=draft，【机翻】），慢模型结果原位替换同一 dl-t；恢复后 DOM 逐字节一致")
+def double_draft_then_final(h: Session) -> str:
+    h.settings({**DOUBLE, **SLOW_MOCK})
+    h.open("article.html")
+    time.sleep(1)
+    h.screenshot("double_before")  # Playwright's screenshot leaves empty style attributes on form fields; take the baseline after one
+    before = h.js("() => document.body.outerHTML")
+    t0 = time.time()
+    h.command("toggle-page")
+    h.wait_js("""() => { const t = document.querySelector('#p-plain dl-t'); return !!t && t.getAttribute('data-dl-stage') === 'draft'; }""",
+              10, what="machine draft in #p-plain")
+    draft_ms = int((time.time() - t0) * 1000)
+    first = h.js(JS_STAGE_PROBE, "#p-plain")
+    check(first["text"].startswith(MT_PREFIX), f"draft is not the machine translation: {first['text'][:40]!r}")
+    check(first["state"] == "done", f"draft state is {first['state']!r}")
+    st = h.wait_state(lambda s: s["pending"] == 0 and s["refining"] > 0, 5, "every unit shows its draft while the slow model works")
+    shot = h.screenshot("double_draft")
+    h.js("() => document.querySelector('#p-plain dl-t').setAttribute('data-probe', 'same-element')")
+    h.wait_js("""() => document.querySelector('#p-plain dl-t')?.getAttribute('data-dl-stage') === 'final'""", 15, what="LLM final replaces the draft")
+    last = h.js(JS_STAGE_PROBE, "#p-plain")
+    check(last["text"].startswith(MOCK_PREFIX), f"final is not the LLM text: {last['text'][:40]!r}")
+    check(last["probe"] == "same-element", "the draft element was replaced instead of updated in place")
+    check(last["cls"] == first["cls"], f"class list changed between draft and final: {first['cls']!r} -> {last['cls']!r}")
+    h.wait_state(lambda s: s["refining"] == 0 and s["pending"] == 0, 15, "refinement settled")
+    check(h.js("() => document.querySelectorAll('dl-t[data-dl-stage=\"draft\"]').length") == 0, "a draft is left behind")
+    h.command("toggle-page")
+    h.wait_js(JS_NO_TRACE, 10, what="extension markup removed after restore")
+    after = h.js("() => document.body.outerHTML")
+    check(after == before, "restore did not give back identical DOM: " + first_diff(before, after))
+    return f"draft after {draft_ms} ms (screenshot {shot})"
+
+
+@case("double_translation_only_in_place", "仅译文模式下草稿→终稿同样原位替换，原文保持隐藏")
+def double_translation_only_in_place(h: Session) -> None:
+    h.settings({"displayMode": "translation-only", **DOUBLE, **SLOW_MOCK})
+    h.open("article.html")
+    h.command("toggle-page")
+    h.wait_js("""() => document.querySelector('#p-plain dl-t')?.getAttribute('data-dl-stage') === 'draft'""", 10, what="draft")
+    check(h.js("() => !!document.querySelector('#p-plain dl-o.dl-hide') && document.querySelector('#p-plain dl-t').classList.contains('dl-solo')"),
+          "translation-only layout is missing during the draft")
+    h.wait_js("""() => document.querySelector('#p-plain dl-t')?.getAttribute('data-dl-stage') === 'final'""", 15, what="final")
+    check(h.js("() => document.querySelectorAll('#p-plain dl-o').length") == 1, "original wrapper was duplicated or lost")
+    check(h.js("() => document.querySelector('#p-plain dl-t').textContent.trim()").startswith(MOCK_PREFIX), "final text missing")
+
+
+@case('double_cancel_before_final', '草稿可读时恢复原文，迟到的 LLM 结果不得重新插入 DOM')
+def double_cancel_before_final(h: Session) -> None:
+    h.settings({**DOUBLE, **SLOW_MOCK})
+    h.open('article.html')
+    before = h.js('() => document.body.outerHTML')
+    h.command('toggle-page')
+    h.wait_js("() => document.querySelector('#p-plain dl-t')?.getAttribute('data-dl-stage') === 'draft'", 10, what='draft before cancellation')
+    h.command('toggle-page')
+    h.wait_js(JS_NO_TRACE, 10, what='restore after draft')
+    h.page.wait_for_timeout(2500)
+    check(h.js('() => document.body.outerHTML') == before, 'late refinement changed the restored DOM')
+
+
+@case("no_llm_still_translates", "新安装（没有任何模型配置）：默认模式 mt+llm 退化为机器翻译，页面直接出译文，无错误标记")
+def no_llm_still_translates(h: Session) -> None:
+    h.settings({**DOUBLE, "provider": {"active": "", "chain": []}})
+    h.open("article.html")
+    h.command("toggle-page")
+    h.wait_units(ARTICLE_UNITS)
+    texts = h.js("() => [...document.querySelectorAll('dl-t')].map((t) => t.textContent.trim())")
+    bad = [t[:40] for t in texts if not t.startswith(MT_PREFIX)]
+    check(texts and not bad, f"machine translation expected everywhere, got {bad[:3]}")
+    check(h.js(JS_ERROR_STATE) == 0, "units in error state")
+    check(h.js("() => document.querySelectorAll('dl-t[data-dl-stage=\"final\"]').length") == len(texts), "machine-only results must be final")
+    h.command("toggle-page")
+    h.wait_js(JS_NO_TRACE, 10, what="clean restore")
+
+
+@case("llm_failure_keeps_draft", "大模型失败时保留机翻草稿：没有错误标记、没有重试控件")
+def llm_failure_keeps_draft(h: Session) -> None:
+    # The failing model would be retried with a cooldown for minutes; the refinement budget ends that wait.
+    h.settings({"translation": {"mode": "mt+llm", "refineTimeoutMs": 3000, "mt": {"engine": "mock"}}, **ERROR_MOCK})
+    h.open("article.html")
+    h.command("toggle-page")
+    h.wait_state(lambda s: s["units"] > 5 and s["pending"] == 0 and s["refining"] == 0, 20, "settled with machine results only")
+    check(h.js(JS_ERROR_STATE) == 0, "an error marker appeared although the draft was good")
+    check(h.js("() => document.querySelectorAll('dl-r').length") == 0, "retry control shown")
+    first = h.js(JS_STAGE_PROBE, "#p-plain")
+    check(first["text"].startswith(MT_PREFIX) and first["stage"] == "final", f"draft not kept: {first}")
+
+
+@case("selection_machine_first", "划词卡片默认机翻；translate-text 带 mode=llm 即「精修」返回大模型译文")
+def selection_machine_first(h: Session) -> None:
+    h.settings(DOUBLE)
+    h.open("article.html")
+    h.page.locator("#p-plain").click(click_count=3)
+    h.wait_state(lambda s: ((s.get("ui") or {}).get("selectionIcon")) is True, 10, "selection icon")
+    pick = h.js("""() => { const rects = getSelection().getRangeAt(0).getClientRects(); const r = rects[rects.length - 1];
+      return { x: Math.min(innerWidth - 36, Math.max(4, r.right + 4)) + 14, y: Math.min(innerHeight - 36, Math.max(4, r.bottom + 6)) + 14 }; }""")
+    h.page.mouse.click(pick["x"], pick["y"])
+    st = h.wait_state(lambda s: (((s.get("ui") or {}).get("selectionCard") or {}).get("text") or "").startswith(MT_PREFIX), 10,
+                      "card shows the machine translation")
+    check(((st["ui"]["selectionCard"]) or {}).get("visible"), "card hidden")
+    shot = h.screenshot("selection_machine_first")
+    page = h.ctx.new_page()
+    page.goto(f"chrome-extension://{h.ext_id}/ui/options.html")
+    send = """async (extra) => chrome.runtime.sendMessage({ type: 'translate-text', text: 'Good translation tools', to: 'zh-CN', purpose: 'selection', ...extra })"""
+    refined = page.evaluate(send, {"mode": "llm"})
+    check(refined.get("ok") and refined.get("by") == "llm" and refined["text"].startswith(MOCK_PREFIX), f"refine request: {refined}")
+    quick = page.evaluate(send, {})
+    page.close()
+    check(quick.get("by") == "mt" and quick["text"].startswith(MT_PREFIX), f"default selection translation: {quick}")
+
+
+@case("hover_uses_machine_translation", "悬停翻译默认走机翻（秒出），不等 2 秒的慢模型")
+def hover_uses_machine_translation(h: Session) -> None:
+    h.settings({**DOUBLE, **SLOW_MOCK})
+    h.open("article.html")
+    box = h.page.locator("#p-plain").bounding_box()
+    h.page.mouse.move(5, 5)
+    h.page.mouse.move(box["x"] + 30, box["y"] + 10, steps=5)
+    h.page.keyboard.down("Shift")
+    try:
+        h.page.mouse.move(box["x"] + 40, box["y"] + 12, steps=5)
+        h.wait_js("""() => [...document.querySelectorAll('#p-plain dl-t[data-dl-state="done"]')].some((t) => t.textContent.trim().startsWith('【机翻】'))""",
+                  1.8, what="machine hover translation well before the 2 s slow model")
+    finally:
+        h.page.keyboard.up("Shift")
 
 
 @case("gateway_article", "本机网关 gateway + ollama/qwen3:4b 真实翻译 article.html，译文含中文（可选）")

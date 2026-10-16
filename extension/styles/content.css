@@ -1,263 +1,52 @@
-/* DualLens page styles. Injected on every page, so every selector starts from one of our own
-   elements (dl-t, dl-o, dl-w, dl-r) or from the data-dl-* attributes we set. Colours derive from
-   currentColor so translations stay readable on light, dark and custom-themed pages alike. */
-
-dl-t {
-  --dl-fg: color-mix(in srgb, currentColor 62%, transparent);
-  --dl-line: color-mix(in srgb, currentColor 48%, transparent);
-  --dl-soft: color-mix(in srgb, currentColor 7%, transparent);
-  --dl-border: color-mix(in srgb, currentColor 22%, transparent);
-  --dl-mask: color-mix(in srgb, currentColor 82%, transparent);
-  --dl-accent: #4263eb;
-  --dl-hl: rgba(255, 213, 79, 0.4);
-  --dl-mk: rgba(255, 224, 102, 0.8);
-  text-indent: 0;
-  white-space: normal;
-  text-overflow: clip;
-  text-shadow: none;
+dl-t{--dl-fg:currentColor;--dl-line:color-mix(in srgb,currentColor 48%,transparent);--dl-soft:color-mix(in srgb,currentColor 7%,transparent);--dl-border:color-mix(in srgb,currentColor 22%,transparent);--dl-mask:color-mix(in srgb,currentColor 82%,transparent);--dl-accent:#4263eb;--dl-hl:rgba(255,213,79,0.4);--dl-mk:rgba(255,224,102,0.8);text-indent:0;white-space:normal;text-overflow:clip;text-shadow:none;}
+@media (prefers-color-scheme:dark){dl-t{--dl-accent:#748ffc;--dl-hl:rgba(255,213,79,0.28);--dl-mk:rgba(255,224,102,0.5);}
 }
-
-@media (prefers-color-scheme: dark) {
-  dl-t {
-    --dl-accent: #748ffc;
-    --dl-hl: rgba(255, 213, 79, 0.28);
-    --dl-mk: rgba(255, 224, 102, 0.5);
-  }
+dl-t{color:var(--dl-fg);transition:opacity 0.25s ease;}
+dl-t[data-dl-stage="draft"]{opacity:1;}
+@media (prefers-reduced-motion:reduce){dl-t{transition:none;}
 }
-
-dl-w {
-  display: block;
+dl-w{display:block;}
+dl-t.dl-block{display:block;margin-block-start:0.3em;overflow-wrap:anywhere;line-height:1.45;}
+dl-t.dl-inline{display:inline;font-size:.9em;font-weight:normal;}
+dl-t.dl-inline::before{content:" \00b7 ";white-space:pre;}
+dl-t.dl-block{max-inline-size:100%;}
+dl-t.dl-s-muted{color:var(--dl-fg);}
+dl-t.dl-s-underline,dl-t.dl-s-dashed,dl-t.dl-s-dotted,dl-t.dl-s-wavy{text-decoration-line:underline;text-decoration-color:var(--dl-line);text-underline-offset:0.22em;text-decoration-thickness:1px;}
+dl-t.dl-s-dashed{text-decoration-style:dashed;}
+dl-t.dl-s-dotted{text-decoration-style:dotted;text-decoration-thickness:2px;}
+dl-t.dl-s-wavy{text-decoration-style:wavy;text-decoration-color:var(--dl-accent);}
+dl-t.dl-s-highlight{background:var(--dl-hl);border-radius:3px;padding:0 0.2em;-webkit-box-decoration-break:clone;box-decoration-break:clone;}
+dl-t.dl-s-marker{background:linear-gradient(transparent 58%,var(--dl-mk) 58%);-webkit-box-decoration-break:clone;box-decoration-break:clone;}
+dl-t.dl-s-quote.dl-block{border-left:3px solid var(--dl-accent);padding-left:0.75em;color:var(--dl-fg);}
+dl-t.dl-s-quote.dl-inline{border-left:2px solid var(--dl-accent);padding-left:0.4em;margin-left:0.35em;color:var(--dl-fg);}
+dl-t.dl-s-card{background:var(--dl-soft);border:1px solid var(--dl-border);border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone;}
+dl-t.dl-s-card.dl-block{padding:0.35em 0.7em;margin-top:0.4em;}
+dl-t.dl-s-card.dl-inline{padding:0 0.4em;}
+dl-t.dl-s-divider.dl-block{border-top:1px dashed var(--dl-border);padding-top:0.35em;margin-top:0.45em;}
+dl-t.dl-s-divider.dl-inline{border-left:1px solid var(--dl-border);padding-left:0.5em;margin-left:0.4em;}
+dl-t.dl-s-italic{font-style:italic;}
+dl-t.dl-s-bold{font-weight:700;}
+dl-t.dl-s-blur{filter:blur(5px);transition:filter 0.2s ease;}
+dl-t.dl-s-blur:hover{filter:none;}
+dl-t.dl-s-mask{position:relative;}
+dl-t.dl-s-mask::after{content:"";position:absolute;inset:-1px -3px;border-radius:3px;background:var(--dl-mask);transition:opacity 0.2s ease;pointer-events:none;}
+dl-t.dl-s-mask:hover::after{opacity:0;}
+dl-t[data-dl-state="pending"]::after{content:"";display:inline-block;width:0.7em;height:0.7em;margin-left:0.35em;vertical-align:-0.08em;border-radius:50%;border:2px solid var(--dl-line);border-top-color:transparent;animation:dl-spin 0.8s linear infinite;}
+@keyframes dl-spin{to{transform:rotate(360deg);}
 }
-
-/* layout --------------------------------------------------------------------------------- */
-
-dl-t.dl-block {
-  display: block;
-  margin-block-start: 0.3em;
-  overflow-wrap: anywhere;
+@media (prefers-reduced-motion:reduce){dl-t[data-dl-state="pending"]::after{animation:none;border-top-color:var(--dl-line);opacity:0.6;}
 }
-
-dl-t.dl-inline {
-  display: inline;
+dl-r{display:inline-block;box-sizing:border-box;width:1.4em;height:1.4em;line-height:1.2em;text-align:center;font:normal normal 0.8em/1.2em system-ui,sans-serif;color:inherit;border:1px solid currentColor;border-radius:50%;cursor:pointer;user-select:none;text-decoration:none;}
+dl-r:hover{background:var(--dl-soft);}
+dl-r:focus-visible{outline:2px solid currentColor;outline-offset:1px;}
+dl-o.dl-hide{display:none !important;}
+dl-o.dl-hide.dl-peek{display:inline !important;}
+dl-t[data-dl-peek]{display:none !important;}
+dl-t.dl-t.dl-solo{all:unset;display:inline;color:var(--dl-fg,currentColor);}
+dl-t.dl-block.dl-solo{display:block;}
+dl-t.dl-solo[data-dl-presentation="replace"]{display:inline-block;max-inline-size:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:baseline;}
+dl-t.dl-block[data-dl-state="done"] + br{display:none;}
+dl-t.dl-t.dl-solo::before,dl-t.dl-t.dl-solo::after{content:none;}
+@media (pointer:coarse){dl-r{display:inline-flex;align-items:center;}
 }
-
-dl-t.dl-inline::before {
-  content: " ";
-  white-space: pre;
-}
-
-/* a translated unit must not stay clamped to N lines, or the translation is cut off */
-[data-dl-state="done"] {
-  -webkit-line-clamp: unset !important;
-  line-clamp: none !important;
-}
-
-/* styles --------------------------------------------------------------------------------- */
-
-dl-t.dl-s-muted {
-  color: var(--dl-fg);
-}
-
-dl-t.dl-s-underline,
-dl-t.dl-s-dashed,
-dl-t.dl-s-dotted,
-dl-t.dl-s-wavy {
-  text-decoration-line: underline;
-  text-decoration-color: var(--dl-line);
-  text-underline-offset: 0.22em;
-  text-decoration-thickness: 1px;
-}
-
-dl-t.dl-s-dashed {
-  text-decoration-style: dashed;
-}
-
-dl-t.dl-s-dotted {
-  text-decoration-style: dotted;
-  text-decoration-thickness: 2px;
-}
-
-dl-t.dl-s-wavy {
-  text-decoration-style: wavy;
-  text-decoration-color: var(--dl-accent);
-}
-
-dl-t.dl-s-highlight {
-  background: var(--dl-hl);
-  border-radius: 3px;
-  padding: 0 0.2em;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-
-dl-t.dl-s-marker {
-  background: linear-gradient(transparent 58%, var(--dl-mk) 58%);
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-
-dl-t.dl-s-quote.dl-block {
-  border-left: 3px solid var(--dl-accent);
-  padding-left: 0.75em;
-  color: var(--dl-fg);
-}
-
-dl-t.dl-s-quote.dl-inline {
-  border-left: 2px solid var(--dl-accent);
-  padding-left: 0.4em;
-  margin-left: 0.35em;
-  color: var(--dl-fg);
-}
-
-dl-t.dl-s-card {
-  background: var(--dl-soft);
-  border: 1px solid var(--dl-border);
-  border-radius: 6px;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-
-dl-t.dl-s-card.dl-block {
-  padding: 0.35em 0.7em;
-  margin-top: 0.4em;
-}
-
-dl-t.dl-s-card.dl-inline {
-  padding: 0 0.4em;
-}
-
-dl-t.dl-s-divider.dl-block {
-  border-top: 1px dashed var(--dl-border);
-  padding-top: 0.35em;
-  margin-top: 0.45em;
-}
-
-dl-t.dl-s-divider.dl-inline {
-  border-left: 1px solid var(--dl-border);
-  padding-left: 0.5em;
-  margin-left: 0.4em;
-}
-
-dl-t.dl-s-italic {
-  font-style: italic;
-}
-
-dl-t.dl-s-bold {
-  font-weight: 700;
-}
-
-/* hidden until hovered, for self-testing while reading */
-dl-t.dl-s-blur {
-  filter: blur(5px);
-  transition: filter 0.2s ease;
-}
-
-dl-t.dl-s-blur:hover {
-  filter: none;
-}
-
-dl-t.dl-s-mask {
-  position: relative;
-}
-
-dl-t.dl-s-mask::after {
-  content: "";
-  position: absolute;
-  inset: -1px -3px;
-  border-radius: 3px;
-  background: var(--dl-mask);
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-
-dl-t.dl-s-mask:hover::after {
-  opacity: 0;
-}
-
-/* state ---------------------------------------------------------------------------------- */
-
-dl-t[data-dl-state="pending"]::after {
-  content: "";
-  display: inline-block;
-  width: 0.7em;
-  height: 0.7em;
-  margin-left: 0.35em;
-  vertical-align: -0.08em;
-  border-radius: 50%;
-  border: 2px solid var(--dl-line);
-  border-top-color: transparent;
-  animation: dl-spin 0.8s linear infinite;
-}
-
-@keyframes dl-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  dl-t[data-dl-state="pending"]::after {
-    animation: none;
-    border-top-color: var(--dl-line);
-    opacity: 0.6;
-  }
-}
-
-dl-r {
-  display: inline-block;
-  box-sizing: border-box;
-  width: 1.4em;
-  height: 1.4em;
-  line-height: 1.2em;
-  text-align: center;
-  font: normal normal 0.8em/1.2em system-ui, sans-serif;
-  color: #d1242f;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  cursor: pointer;
-  user-select: none;
-  text-decoration: none;
-}
-
-dl-r:hover {
-  background: rgba(209, 36, 47, 0.12);
-}
-
-dl-r:focus-visible {
-  outline: 2px solid #d1242f;
-  outline-offset: 1px;
-}
-
-/* modes ---------------------------------------------------------------------------------- */
-
-dl-o.dl-hide {
-  display: none !important;
-}
-
-/* temporary peek (hover toggle): show the other side of the pair */
-dl-o.dl-hide.dl-peek {
-  display: inline !important;
-}
-
-dl-t[data-dl-peek] {
-  display: none !important;
-}
-
-/* translation-only: the translation takes the original's place, inheriting everything */
-dl-t.dl-t.dl-solo {
-  all: unset;
-  display: inline;
-}
-
-/* A virtual paragraph takes its own line/vertical column in translation-only readers. */
-dl-t.dl-block.dl-solo { display: block; }
-dl-t.dl-block[data-dl-state="done"] + br { display: none; }
-
-dl-t.dl-t.dl-solo::before,
-dl-t.dl-t.dl-solo::after {
-  content: none;
-}
-
-@media (pointer: coarse) {
-  dl-r { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
-}
+ytm-shorts-lockup-view-model dl-t,ytm-shorts-lockup-view-model-v2 dl-t,[class*="shortsLockupViewModelHost"] dl-t{color:#fff!important;background:rgba(0,0,0,.85);text-shadow:none;padding:0 .12em;box-decoration-break:clone;-webkit-box-decoration-break:clone;}

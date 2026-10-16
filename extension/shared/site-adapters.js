@@ -6,13 +6,13 @@ export function pixivNovelDocument(doc) {
 export function novelRoots(doc) {
   if (!pixivNovelDocument(doc)) return [];
   // text-count is the public reader's line marker; data-novel-content is an explicit reader hint.
-  const roots=[...doc.querySelectorAll('p:has(> span.text-count),[data-novel-content]')];
+  const roots=[...doc.querySelectorAll(':has(> span.text-count),[data-novel-content]')];
   return roots.filter(root=>!roots.some(other=>other!==root&&other.contains(root)));
 }
 
 export function novelBody(el) {
   return el.matches('[data-novel-content]') ||
-    (pixivNovelDocument(el.ownerDocument) && el.matches('p:has(> span.text-count)'));
+    (pixivNovelDocument(el.ownerDocument) && el.matches(':has(> span.text-count)'));
 }
 
 export function artworkImages(doc) {
@@ -25,4 +25,20 @@ export function artworkImages(doc) {
       new RegExp('/'+id+'_p\\d+').test(new URL(img.currentSrc || img.src, doc.baseURI).pathname) &&
       !img.closest('aside,nav,[role="complementary"]'); } catch { return false; }
   });
+}
+import { identifierText, linkIdentifier } from './identifiers.js';
+
+export const citationName=s=>String(s).split(',').reverse().join(' ').replace(/\s+/g,' ').trim();
+
+export function protectedElement(el) {
+  const text=el.textContent.trim();
+  if (!text) return false;
+  if ((!el.childElementCount && identifierText(text)) || (el.localName==='a' && (identifierText(text)||linkIdentifier(text,el.getAttribute('href'),el.baseURI)))) return true;
+  const host=el.ownerDocument.location?.hostname||'';
+  if(el.closest('[rel~="author"],.author,[itemprop="author"],#channel-name,ytd-channel-name')) return true;
+  if(/(^|\.)arxiv\.org$/.test(host)&&(el.closest('.authors a')||text.length<100&&[...el.ownerDocument.querySelectorAll('meta[name="citation_author"]')].some(m=>citationName(m.content)===text))) return true;
+  if(/(^|\.)pixiv\.net$/.test(host)&&el.closest('a[href*="/users/"]')) return true;
+  if (host==='github.com' && el.closest('.topic-tag,[role="treeitem"],a[href*="/milestone/"],.react-directory-filename-column,.react-directory-row-name-cell,.commit-author,.author,.user-mention,a[href*="?author="],a[aria-label^="commits by "],[data-hovercard-type="user"],[data-hovercard-type="organization"],[itemprop="author"],[itemprop="name"],#repository-container-header .AppHeader-context,[data-testid="repos-header-breadcrumb"],[data-testid="anchor-button"],[data-testid="branch-picker-repo-header"],.branch-select-menu,.branch-name,[data-hotkey="w"]')) return true;
+  if(/(^|\.)reddit\.com$/.test(host)&&el.closest('.author,a[href^="/user/"],a[href^="/u/"]')) return true;
+  return !!el.closest('.sig,.sig-name,.sig-param,.post-tag,.s-tag,.subreddit,[data-testid="subreddit-name"],.hnuser,[rel="author"],[itemprop="author"],[class*="AuthorName"]');
 }

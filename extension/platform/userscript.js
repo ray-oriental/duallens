@@ -6,6 +6,7 @@ import { createStoredCache } from './cache.js';
 import { createProviders } from '../background/providers.js';
 import { createQueue } from '../background/queue.js';
 import { createTranslator } from '../background/translator.js';
+import { createMT, MT_LIMITS } from '../background/mt.js';
 import { createHandlers } from '../background/handlers.js';
 import { toErrorInfo } from '../shared/errors.js';
 import { looksLikeTarget } from '../shared/lang.js';
@@ -124,7 +125,10 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
   const getSecret = id => store.getSecret(id);
   const providers = createProviders({ fetchImpl: asFetch(platform.http), getSecret });
   const cache = createStoredCache(localArea);
-  const translator = createTranslator({ provider: providers.chat, cache, queue: createQueue(), getSettings, getSecret });
+  // Machine translation goes through the same anonymous GM transport as the model providers.
+  const translator = createTranslator({ provider: providers.chat, cache, queue: createQueue(), getSettings, getSecret,
+    mt: createMT({ fetchImpl: asFetch(platform.http), getSecret,
+      limits: coarse ? { ...MT_LIMITS, maxItems: 12, concurrency: 2 } : MT_LIMITS }) });
   const handlers = createHandlers({ translator, cache, providers, getSettings });
   platform.clearCache = () => cache.clear();
   let seq = 0;
@@ -133,7 +137,7 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
       const ctrl = new AbortController();
       const seen = new Set();
       const done = translator.translate({ ...req, reqId: 'gm-' + ++seq }, {
-        signal: ctrl.signal, onPartial(results) { for (const r of results) seen.add(r.id); onPartial(results); },
+        signal: ctrl.signal, onPartial(results) { for (const r of results) if (r.stage !== 'draft') seen.add(r.id); onPartial(results); },
       }).catch((e) => {
         if (!ctrl.signal.aborted) onPartial(req.items.filter((i) => !seen.has(i.id)).map((i) => ({ id: i.id, error: toErrorInfo(e) })));
       });

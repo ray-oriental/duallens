@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-16
+
+- Dual engine: free machine translation (Microsoft Edge endpoint, Google fallback) shows drafts instantly; the LLM refines prose units in place (`translation.mode` mt / llm / mt+llm default / auto). Works with no model configured.
+- Short UI text, navigation and metadata use MT or a built-in UI glossary; only prose goes to the LLM. Non-JSON model output fails over; the provider test runs a real two-item translation.
+- Translate all visible text (controls, labels, placeholders, captions, footers, comments, dynamic content) with per-container presentation: block for prose, inline for short labels, measured replace-only for tiny controls; titles always keep the original.
+- Protect identifiers (paths, users, branches, topics, licenses) and author/channel/citation names; compact metadata lines; computed translation colour for dark sites; first-screen priority scheduling; re-translate after mode/engine changes.
+- Layout-preserving bilingual PDF pages (same-size translated page over the original render, four views, author/affiliation lines kept).
+- Gateway: `auto` virtual model across SJTU / free Hermes / Ollama (never subscriptions), queueing instead of instant 503, SJTU token bucket, phased timeouts, richer `/health`; one-click gateway setup defaults to `auto`.
+- Real-site acceptance matrix tool (`tests/e2e/run_acceptance.py`); userscript startup budget lowered to 360 KB.
+
 ## [0.3.1] - 2026-10-14
 
 - Schedule novel paragraphs by their own source ranges rather than a shared tall host; preserve scroll discovery and avoid whole-story requests.

@@ -17,6 +17,8 @@ import { profileProblem } from './providers.js';
 import { profileFromPreset } from '../shared/presets.js';
 
 const MAX_TEXT_CHARS = 20000;
+export const MSG_MT_TEST = 'mt-test';
+const PURPOSES = new Set(['page', 'selection', 'input', 'hover', 'text', 'pdf']);
 
 export function createHandlers({ translator, cache, providers, getSettings, openOptions = async () => {}, now = () => Date.now() }) {
   const wrap = (fn) => async (msg, sender) => {
@@ -40,13 +42,29 @@ export function createHandlers({ translator, cache, providers, getSettings, open
       if (!text.trim()) throw new DLError(ERR.CONFIG, '没有要翻译的文字');
       if (text.length > MAX_TEXT_CHARS) throw new DLError(ERR.CONFIG, `文字太长（上限 ${MAX_TEXT_CHARS} 字）`);
       const settings = await getSettings();
-      const out = await translator.translateText({
+      const out = await translator.translateTextEx({
         text,
         to: msg.to || settings.targetLang,
         from: msg.from || settings.sourceLang,
+        ...(PURPOSES.has(msg.purpose) ? { purpose: msg.purpose } : {}),
+        ...(typeof msg.mode === 'string' ? { mode: msg.mode } : {}), // refine on demand: 'llm'
         ...(msg.profileId !== undefined || msg.model !== undefined ? { profileId: msg.profileId, model: msg.model } : {}),
       });
-      return { ok: true, text: out };
+      // `by` says which stage produced the text ('mt' machine translation | 'llm'); `engine` names the MT engine.
+      return { ok: true, text: out.text, by: out.by, ...(out.engine ? { engine: out.engine } : {}) };
+    }),
+
+    // Settings-page probe of one machine-translation engine (no fallback to the others).
+    [MSG_MT_TEST]: wrap(async (msg) => {
+      const settings = await getSettings();
+      const cfg = settings.translation?.mt || {};
+      const result = await translator.mt.test({
+        engine: typeof msg.engine === 'string' ? msg.engine : cfg.engine,
+        region: typeof msg.region === 'string' ? msg.region : cfg.region || '',
+        to: 'zh-CN',
+        from: 'en',
+      });
+      return { ok: true, ...result };
     }),
 
     [MSG_LIST_MODELS]: wrap(async (msg) => {
@@ -59,7 +77,7 @@ export function createHandlers({ translator, cache, providers, getSettings, open
       const problem = profileProblem(profile);
       if (problem) throw new DLError(ERR.CONFIG, problem);
       const { messages, idMap } = buildMessages({
-        items: [{ id: 1, text: 'Hello, world.' }],
+        items: [{ id: 1, text: 'Hello, world.' }, {id:2,text:'Read the next paragraph.'}],
         to: 'zh-CN',
         from: 'en',
         context: {},
@@ -70,8 +88,9 @@ export function createHandlers({ translator, cache, providers, getSettings, open
       const started = now();
       const content = await providers.chat({ profile, model: profile.model, messages });
       const latencyMs = now() - started;
-      const parsed = parseSegments(content, idMap).results.get(1);
-      return { ok: true, latencyMs, sample: stripMarkup(parsed ?? content).trim().slice(0, 200) };
+      const parsed=parseSegments(content,idMap);
+      if(parsed.missing.length) throw new DLError(ERR.PARSE,'模型返回了非 JSON 内容（可能是思考型模型）');
+      return { ok: true, latencyMs, sample: [...parsed.results.values()].map(stripMarkup).join(' / ').trim().slice(0,200) };
     }),
 
     [MSG_CACHE_STATS]: wrap(async () => ({ ok: true, entries: await cache.count() })),

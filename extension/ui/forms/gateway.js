@@ -3,8 +3,7 @@ import { DEFAULT_SETTINGS } from '../../shared/settings.js';
 import { isPairingHost } from '../../background/providers.js';
 
 export const PAIR_PREFIX = 'duallens-pair:v1:';
-// Conservative automatic choice: the proxy can list models that actually return 404.
-// Other configured Hermes models remain available for explicit manual selection.
+// Other Hermes models require manual selection.
 export const FREE_HERMES = new Set(['hermes/upstage/solar-mini4:free']);
 export function pairingUrl(value) {
   if (typeof value !== 'string') throw new Error('配对地址无效');
@@ -27,10 +26,9 @@ export function parsePairing(text) {
   } catch { throw new Error('配对串无效；请重新复制终端中的完整配对串'); }
 }
 export function gatewayProfile(id, name, baseUrl) {
-  return { ...profileFromPreset('gateway', id), name, baseUrl, model: 'ollama/qwen3:4b' };
+  return { ...profileFromPreset('gateway', id), name, baseUrl, model: 'auto' };
 }
-
-// Import restores these documented defaults. Compact only the mobile backup, not stored settings.
+// Compact backups only; import restores defaults.
 export function compactConfig(settings) {
   const diff = (value, base) => {
     if (JSON.stringify(value) === JSON.stringify(base)) return undefined;
@@ -49,6 +47,7 @@ export function compactConfig(settings) {
 }
 export function gatewayChain(models, profileId) {
   const ids = [...new Set(models.map(m => typeof m === 'string' ? m : m.id).filter(m => typeof m === 'string'))];
+  if (ids.includes('auto')) return [{ profileId, model: 'auto' }];
   return [...ids.filter(id => id.startsWith('sjtu/')), ...ids.filter(id => FREE_HERMES.has(id)),
     ...ids.filter(id => id === 'ollama/qwen3:4b')].map(model => ({ profileId, model }));
 }
