@@ -15,6 +15,10 @@ class GatewayTests(unittest.TestCase):
         self.config = copy.deepcopy(DEFAULTS)
         for backend in ("sjtu", "hermes", "ollama", "claude", "codex"):
             self.config[backend]["enabled"] = True
+        # Never read the machine's real relay credential (~/.ddl-hub/config.json); CI has none.
+        relay = Path(self.temp.name) / "relay.json"
+        relay.write_text(json.dumps({"proxy_token": "test-not-real"}), encoding="utf-8")
+        self.config["sjtu"]["token_file"] = str(relay)
         def request(url, body=None, headers=None, timeout=120):
             self.calls.append((url, body, headers))
             if url.endswith("/ledger"):
