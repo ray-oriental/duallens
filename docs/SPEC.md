@@ -162,7 +162,9 @@ siteRules: {
 - iframe 增量：子 frame 经平台 `frameSnapshot()` 发送 `frame-snapshot`，后台只接受浏览器提供的非零 frameId 与 tabId，
   定向向同一 tab 的 frameId:0 发送 `frame-top-state`。顶层返回 `{active,settings,context:{host,url,title}}`，
   仅含公共设置；失败或无顶层响应时代理停止。子 frame 不注册命令、不显示 UI、不按自身站点自动启用。
-  同源扫描与跨域代理的所有权、可见性、轮询与用户脚本限制见 PLATFORMS.md 的 iframe 增量。
+  启动快照之后，顶层平台 `pushFrameState(state)` 发送 `frame-publish`，后台只接受 frameId:0，按 sender.tab.id
+  广播 `{type:'frame-state',state:{active,settings,context}}`，不增加快照字段。顶层忽略广播，仅子 frame 代理接收。
+  同源/开放 ShadowRoot 扫描、跨域代理、事件驱动可见性与用户脚本限制见 PLATFORMS.md 的 iframe 增量。
 
 - PDF 的 `pdf-status` / `pdf-open` 使用实际标签页 URL，仅在显式入口探测；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
 - PDF 阅读页默认宽屏同尺寸双栏对照：原页画布复制为译文底图，原坐标抹底覆盖译文并拟合字号；另有仅译文页、原文页、重排阅读。公式/图像/边距标识保留原像素，行内公式用本地裁图替换 `<xN/>`。文本分块在本地 Worker 中完成，翻译限视口与相邻页，经 `TranslatorService.translateBatch` 发送文本与公式占位符，不发送文件、图片、URL 或元数据。PDF 消费端支持可选的 `draft:true,purpose:'pdf'` 和同 id 的 `stage:'draft'/'final'` 回调；无 stage 当终稿，恢复取消并屏蔽旧请求结果。共享引擎/端口阶段传输需另外集成验收。

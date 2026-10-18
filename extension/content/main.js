@@ -40,6 +40,7 @@ class App {
       platform,
       getSettings: this.getSettings,
       onChange: () => this.ball?.update(),
+      onActiveChange: () => this.#pushFrames(),
     });
     this.selection = new SelectionUI({ platform, getSettings: this.getSettings });
     this.input = new InputBox({ platform, getSettings: this.getSettings });
@@ -75,7 +76,7 @@ class App {
       // v2 onChange is an invalidation signal, not a settings snapshot. Ignore stale loads.
       const token = ++revision;
       this.store.load().then((next) => {
-        if (token === revision) this.#applySettings(performanceSettings(next, this.platform.coarse));
+        if (token === revision) {this.#applySettings(performanceSettings(next, this.platform.coarse));this.#pushFrames();}
       }).catch(() => {});
     });
     for (const name of Object.values(P.COMMANDS)) this.platform.registerCommand(name, {
@@ -87,6 +88,18 @@ class App {
     this.platform.registerCommand('open-sidepanel', 'DualLens 文本翻译', () => this.platform.openTextTranslation());
     this.platform.registerCommand('toggle-subtitles', '启用 / 恢复 YouTube 双语字幕', () => this.#command('toggle-subtitles'));
     this.#wake(true);
+    this.#pushFrames();
+  }
+
+  #frameState() {
+    return {active:this.translator.isActive(),settings:this.settings,
+      context:{host:location.hostname,url:location.href,title:document.title}};
+  }
+
+  #pushFrames() {
+    if(!this.platform.pushFrameState || this.pushing)return;
+    this.pushing=true;
+    queueMicrotask(()=>{this.pushing=false;void this.platform.pushFrameState(this.#frameState());});
   }
 
   // Attach every interaction module. `initial` runs the auto-translate decision as well.
@@ -190,8 +203,7 @@ class App {
     if (!msg || typeof msg.type !== 'string') return false;
     switch (msg.type) {
       case 'frame-top-state':
-        sendResponse({active:this.translator.isActive() && !this.dormant,settings:this.settings,
-          context:{host:HOST,url:location.href,title:document.title}});
+        sendResponse(this.#frameState());
         return false;
       case P.MSG_GET_STATE:
         sendResponse(this.state());

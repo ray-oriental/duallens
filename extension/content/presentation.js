@@ -51,11 +51,12 @@ export function measureColor(host) {
   // Resolve ordinary transparent backgrounds from the outside in. Unpainted pages use the
   // browser canvas colour. Images/gradients remain a visual acceptance case.
   const backgrounds=[];
-  for(let el=host; el; el=el.parentElement) {
+  for(let el=host; el; el=el.parentElement || el.getRootNode().host) {
     const rgba=parse(getComputedStyle(el).backgroundColor);
     if(rgba?.length >=3) backgrounds.unshift(rgba);
   }
-  let bg=matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(document.documentElement).colorScheme.includes('dark') ? [18,18,18]:[255,255,255];
+  const doc=host.ownerDocument;
+  let bg=doc.defaultView.matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(doc.documentElement).colorScheme.includes('dark') ? [18,18,18]:[255,255,255];
   for(const c of backgrounds) bg=bg.map((v,i)=> c[i] *(c[3] ?? 1) + v *(1 -(c[3] ?? 1)));
   const color=fg.slice(0,3).map((v,i)=> v *(fg[3] ?? 1) + bg[i] *(1 -(fg[3] ?? 1)));
   return translationColor(color,bg);

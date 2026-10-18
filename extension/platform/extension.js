@@ -17,6 +17,7 @@ export function createExtensionPlatform(api = globalThis.chrome) {
   const platform = {
     kind: 'extension', coarse, syncArea, localArea,
     frameSnapshot: () => one({type:'frame-snapshot'}),
+    pushFrameState: state => one({type:'frame-publish',state}),
     subtitles: {
       observe: observeTimedtext,
       async fetchTrack(raw, { signal } = {}) {

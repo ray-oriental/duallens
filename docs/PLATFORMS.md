@@ -108,18 +108,25 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 
 扩展与用户脚本由顶层控制器递归发现同源 iframe（含无 src、about:blank、srcdoc），
 复用扫描、变更观察、Range 懒加载与恢复；frame 内临时注入内容 CSS，停止时移除。
-监听 load 并每 400 ms 检查 Document/body 替换，以覆盖 document.open/write/close 的邮箱正文。
+监听 load、DOM 变更和 frame 尺寸事件发现 Document/body 替换，以覆盖 document.open/write/close 的邮箱正文；扫描根不使用周期定时器。
 Range 按祖先 frame 的视口裁切并映射至控制器视口；隐藏或小于 200×100 的 frame 不参与。
 
 扩展内容脚本 all_frames:true、match_about_blank:true；同源父文档可访问时子脚本退出，避免重复翻译。
 跨域子文档只启动无 UI 代理，通过后台按浏览器提供的 tabId/frameId 向 frameId:0 查询顶层状态，
-每 400 ms 跟随翻译/恢复、显示模式和设置；站点规则与请求上下文取顶层页面。
+启动请求一次快照，之后只接收翻译/恢复、显示模式和设置变化的推送；站点规则与请求上下文取顶层页面。
 代理用 IntersectionObserver 的实际相交区域跳过隐藏、离屏或完全被裁切的 frame，并跳过视口小于 200×100 的 frame。
-每次轮询续订可见性观察；最后一次回调超过 1 秒即保守停止，覆盖 Chromium 隐藏子文档暂停绘制的情况。
-浏览器后台节流可能延迟状态跟随；顶层进度统计包含同源文档，不汇总独立跨域代理的段落计数。
+可见性由 IntersectionObserver、ResizeObserver 和 visibilitychange 本地驱动，不查询后台、不使用过期计时器。
+跨域 frame 隐藏（含 display:none）时保留已有译文，不再发起新请求；顶层恢复和显示模式推送不受可见性影响，立即应用。
+重新可见且顶层仍在翻译时，依靠 IntersectionObserver/ResizeObserver 事件在 1 秒内继续新可见内容；不增加父子可见性提示通道或定时补查。
+顶层通过 frame-publish 广播 frame-state；后台只接受 frameId:0 发布者，顶层忽略广播、子 frame 消费推送。
+空闲且未翻译时没有周期定时器或周期消息；顶层进度统计包含同源文档，不汇总独立跨域代理计数。
 不新增 permissions/host_permissions，不通过网页 postMessage 传递状态或配置。
 用户脚本仍保留 @noframes，仅由顶层访问同源文档，**不支持跨域 iframe**。
 浏览器禁止注入的特殊页面、非 HTML 文档仍不处理；这不代表 Zimbra 登录页面或物理设备已验收。
+
+开放 ShadowRoot 与同源 iframe 文档共用 FrameRoots 的额外扫描根生命周期，递归发现、注入/移除样式并观察变化。
+slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫描 slot fallback。动态新增的开放组件也会被发现。
+关闭的 shadow root 不可访问，跳过；DualLens 自身 closed-shadow UI 保持原样。
 
 ## 2. 打包
 

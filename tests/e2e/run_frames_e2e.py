@@ -1,8 +1,9 @@
-"""Mock-only iframe regressions, using canonical extension staging and GM fixture transport."""
+"""Mock-only iframe/open-shadow regressions, using canonical staging and GM transport."""
 import json
 import subprocess
 import uuid
 import traceback
+import time
 from playwright.sync_api import sync_playwright
 import run_e2e as e
 from run_userscript_e2e import STUB, command
@@ -23,7 +24,7 @@ def translated(frame):
     assert frame.locator('dl-t dl-t').count() == 0
 
 
-def exercise(page, toggle, mode, extension):
+def exercise(page, toggle, mode, extension, idle_check=None, request_count=None):
     ids = ['mail', 'srcdoc', 'blank', 'cross', 'small', 'small-cross', 'hidden-cross']
     frames = {key: child(page, '#' + key) for key in ids}
     originals = {key: f.evaluate('document.body.outerHTML') for key, f in frames.items()}
@@ -35,6 +36,7 @@ def exercise(page, toggle, mode, extension):
     for key in ['small', 'small-cross', 'hidden-cross'] + ([] if extension else ['cross']):
         assert frames[key].locator('dl-t').count() == 0, key + ' must be skipped'
     assert all(f.locator('dl-ui').count() == 0 for f in frames.values()), 'child frame created UI'
+    if idle_check: idle_check()
     mode()
     for key in ['mail', 'srcdoc', 'blank'] + (['cross'] if extension else []):
         wait(frames[key], "!!document.querySelector('dl-o.dl-hide')")
@@ -45,6 +47,7 @@ def exercise(page, toggle, mode, extension):
         assert f.evaluate('document.body.outerHTML') == originals[key], key + ' restore mismatch'
     for key in ['mail', 'srcdoc', 'blank']:
         assert frames[key].locator('style').count() == 0, key + ' leaked style'
+    if idle_check: idle_check()
     mode()  # back to bilingual
     toggle(); translated(frames['mail'])
     page.evaluate('replaceMailLater()')
@@ -57,7 +60,32 @@ def exercise(page, toggle, mode, extension):
         page.locator('#hidden-cross').evaluate("e=>e.style.display='block'")
         translated(frames['hidden-cross'])
         page.locator('#hidden-cross').evaluate("e=>e.style.display='none'")
-        wait(frames['hidden-cross'], "!document.querySelector('dl-t')")
+        hidden=frames['hidden-cross']
+        existing=hidden.locator('dl-t').count()
+        requests=request_count()
+        added=hidden.evaluate("""() => {const p=document.createElement('p');p.id='hidden-new';p.textContent='This new message must wait until the hidden frame becomes visible again.';document.body.append(p);return p.outerHTML;}""")
+        originals['hidden-cross']=originals['hidden-cross'].replace('</body>',added+'</body>')
+        page.wait_for_timeout(600)
+        assert hidden.locator('dl-t').count()==existing, 'hiding removed existing translations or translated new text'
+        assert request_count()==requests, 'hidden frame started a new translation request'
+        mode()
+        hidden.wait_for_function("!!document.querySelector('p.dl-only dl-o.dl-hide')",polling=50,timeout=1000)
+        mode()
+        hidden.wait_for_function("!document.querySelector('dl-o.dl-hide')",polling=50,timeout=1000)
+        toggle()
+        hidden.wait_for_function("!document.querySelector('dl-t,dl-o,dl-w,dl-r')",polling=50,timeout=1000)
+        assert hidden.evaluate('document.body.outerHTML')==originals['hidden-cross'], 'top restore did not restore hidden frame exactly'
+        toggle()
+        page.wait_for_timeout(300)
+        assert request_count()==requests, 'top activation translated a hidden frame'
+        started=time.monotonic()
+        page.locator('#hidden-cross').evaluate("e=>e.style.display='block'")
+        hidden.wait_for_function("!!document.querySelector('#hidden-new dl-t')",polling=20,timeout=1000)
+        resumed=time.monotonic()-started
+        assert resumed<=1, f'visible frame took {resumed:.3f}s to resume'
+        assert request_count()>requests, 'visible frame did not submit its queued translation'
+        translated(hidden)
+        page.locator('#hidden-cross').evaluate("e=>e.style.display='none'")
     # Late iframe insertion, visibility changes and document navigation are independent discoveries.
     page.evaluate("""() => {const f=document.createElement('iframe');f.id='late';f.srcdoc='<p>A newly inserted frame needs translation after the initial scan.</p>';document.querySelector('.frames').prepend(f);} """)
     late = child(page, '#late'); translated(late)
@@ -84,11 +112,41 @@ def exercise(page, toggle, mode, extension):
     return 'blank/srcdoc/dynamic roots, 1s mail rewrite, child mode/navigation/visibility, tiny exclusion, frame scroll laziness, no child UI, exact restore'
 
 
+def shadow_exercise(page,toggle,mode):
+    before=page.evaluate('document.body.outerHTML')
+    ready="shadowRoots.every(r=>r.querySelector('p dl-t[data-dl-state=done]')) && document.querySelector('#projected dl-t[data-dl-state=done]')"
+    toggle(); wait(page,ready)
+    wait(page,"shadowRoots[0].querySelectorAll('dl-t[data-dl-state=done]').length>=2")
+    assert page.locator('#projected dl-t').count()==1, 'slot source translated more than once'
+    assert page.evaluate("!shadowRoots[0].querySelector('#fallback dl-t')"), 'assigned slot fallback was translated'
+    assert page.evaluate('closedNotice.innerHTML===closedExpected'), 'closed shadow root was accessed'
+    assert page.evaluate("shadowRoots.every(r=>getComputedStyle(r.querySelector('p dl-t')).color.match(/[0-9.]+/g).slice(0,3).map(Number).reduce((a,b)=>a+b)>600)"), 'shadow host dark background ignored'
+    mode(); wait(page,"shadowRoots.every(r=>r.querySelector('p.dl-only'))")
+    toggle(); wait(page,"shadowRoots.every((r,i)=>r.innerHTML===shadowExpected[i])")
+    assert page.evaluate('document.body.outerHTML')==before, 'light DOM restore mismatch'
+    mode(); toggle(); wait(page,ready)
+    page.evaluate('addShadowLater()')
+    wait(page,"shadowRoots.length===3 && shadowRoots[0].querySelector('#dynamic dl-t[data-dl-state=done]') && shadowRoots[2].querySelector('dl-t[data-dl-state=done]')")
+    assert page.locator('#projected dl-t').count()==1
+    toggle(); wait(page,"shadowRoots.every((r,i)=>r.innerHTML===shadowExpected[i])")
+    assert page.evaluate('document.body.outerHTML')==before
+    assert page.evaluate('closedNotice.innerHTML===closedExpected')
+    return 'open/nested/direct shadow text, projected slot once, 1s dynamic paragraph/new component, exact shadow/light restore'
+
+
 def main():
     first, base = e.start_fixtures(); second, remote = e.start_fixtures()
     remote = remote.replace('127.0.0.1', 'localhost')
     run = e.E2E_ROOT / ('run-frames-' + uuid.uuid4().hex[:8]); run.mkdir(parents=True)
     results = []
+    def record(name,action):
+        try:
+            detail=action();results.append({'name':name,'status':'PASS','detail':detail})
+            print('PASS '+name+': '+detail,flush=True)
+        except Exception as exc:
+            traceback.print_exc(limit=5)
+            results.append({'name':name,'status':'FAIL','detail':str(exc)})
+            print('FAIL '+name+': '+str(exc),flush=True)
     try:
         ext, missing = e.stage_extension(run); e.check(not missing, str(missing))
         bundle = run / 'duallens.user.js'
@@ -97,30 +155,42 @@ def main():
             h = e.Session(pw, ext, base, 'frames')
             try:
                 h.start()
+                h.sw_eval("""() => {globalThis.frameMessages={};globalThis.frameTranslationCounts={};chrome.runtime.onConnect.addListener(port=>{
+                  if(port.name==='dl-translate')port.onMessage.addListener(msg=>{if(msg.type==='translate')frameTranslationCounts[port.sender.frameId]=(frameTranslationCounts[port.sender.frameId]||0)+1;});
+                });chrome.runtime.onMessage.addListener(msg=>{
+                  if(msg.type==='frame-snapshot'||msg.type==='frame-publish')frameMessages[msg.type]=(frameMessages[msg.type]||0)+1;return false;
+                });}""")
                 # A child-origin never rule must not override top-page consent/state.
                 h.settings({'siteRules':{'never':['localhost']}})
-                h.open('frames.html?remote=' + remote)
-                detail = exercise(h.page, lambda: h.command('toggle-page'), lambda: h.command('toggle-translation-only'), True)
-                results.append({'name':'extension','status':'PASS','detail':detail})
-                print('PASS frames extension: ' + detail, flush=True)
-            except Exception as exc:
-                traceback.print_exc(limit=5)
-                results.append({'name':'extension','status':'FAIL','detail':str(exc)})
-                print('FAIL frames extension: ' + str(exc), flush=True); h.screenshot('frames-extension')
+                def idle_check():
+                    counts=h.sw_eval('() => frameMessages')
+                    h.page.wait_for_timeout(5000)
+                    assert h.sw_eval('() => frameMessages')==counts, 'frame snapshot/publish messages grew during 5s idle'
+                def frame_case():
+                    h.open('frames.html?remote='+remote)
+                    frame_id=h.sw_eval("""async tabId => {const rows=await chrome.scripting.executeScript({target:{tabId,allFrames:true},func:()=>window.name});return rows.find(r=>r.result==='visibility-fixture').frameId;}""",h.tab_id)
+                    return exercise(h.page,lambda:h.command('toggle-page'),lambda:h.command('toggle-translation-only'),True,idle_check,
+                        lambda:h.sw_eval('(id)=>frameTranslationCounts[id]||0',frame_id))
+                def shadow_case():
+                    h.open('shadow.html')
+                    return shadow_exercise(h.page,lambda:h.command('toggle-page'),lambda:h.command('toggle-translation-only'))
+                record('frames-extension',frame_case)
+                record('shadow-extension',shadow_case)
             finally: h.close()
             browser = pw.chromium.launch(headless=True)
             try:
                 context = browser.new_context(viewport=e.VIEWPORT)
                 context.add_init_script(script=STUB); context.add_init_script(path=str(bundle))
-                page = context.new_page(); page.goto(base + '/frames.html?remote=' + remote)
-                wait(page, "__platformFixture.hasCommand('翻译 / 恢复当前页面')")
-                detail = exercise(page, lambda: command(page,'翻译 / 恢复当前页面'), lambda: command(page,'切换双语 / 仅译文'), False)
-                results.append({'name':'userscript','status':'PASS','detail':detail})
-                print('PASS frames userscript: ' + detail, flush=True)
-            except Exception as exc:
-                traceback.print_exc(limit=5)
-                results.append({'name':'userscript','status':'FAIL','detail':str(exc)})
-                print('FAIL frames userscript: ' + str(exc), flush=True)
+                def userscript_case(path,shadow=False):
+                    page=context.new_page()
+                    try:
+                        page.goto(base+'/'+path);wait(page,"__platformFixture.hasCommand('翻译 / 恢复当前页面')")
+                        toggle=lambda:command(page,'翻译 / 恢复当前页面')
+                        mode=lambda:command(page,'切换双语 / 仅译文')
+                        return shadow_exercise(page,toggle,mode) if shadow else exercise(page,toggle,mode,False)
+                    finally: page.close()
+                record('frames-userscript',lambda:userscript_case('frames.html?remote='+remote))
+                record('shadow-userscript',lambda:userscript_case('shadow.html',True))
             finally: browser.close()
     finally:
         first.shutdown(); second.shutdown(); e.remove_runtime_dir(run)

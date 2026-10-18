@@ -28,12 +28,12 @@ export class LazyObserver {
   addDocument(doc) {
     if(this.documents.has(doc))return;
     this.documents.add(doc);
-    doc.defaultView?.addEventListener('scroll',this.scroll,{passive:true,capture:true});
+    (doc.defaultView || doc).addEventListener('scroll',this.scroll,{passive:true,capture:true});
   }
 
   removeDocument(doc) {
     this.documents.delete(doc);
-    doc.defaultView?.removeEventListener('scroll',this.scroll,true);
+    (doc.defaultView || doc).removeEventListener('scroll',this.scroll,true);
   }
 
   setMargin(px) {
@@ -160,8 +160,8 @@ export class MutationWatcher {
     let any = false;
     for (const r of records) {
       const t = r.target;
-      const el = t.nodeType === 1 ? t : t.parentElement;
-      if (!el || el.closest('dl-t,dl-ui')) continue;
+      const el = t.nodeType === 1 || t.nodeType === 11 ? t : t.parentNode?.nodeType===11 ? t.parentNode : t.parentElement || t.documentElement;
+      if (!el || el.closest?.('dl-t,dl-ui')) continue;
       if (r.type === 'characterData' || r.type === 'attributes') {
         (r.type==='attributes'&&/^(class|style)$/.test(r.attributeName)?this.layout:this.dirty).add(el);
         any = true;

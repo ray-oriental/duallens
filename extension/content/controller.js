@@ -21,12 +21,14 @@ const MAX_REQUEST_ITEMS=50;
 const CHURN_LIMIT=12; // re-translations of one host within a minute before we leave it alone
 
 export class PageTranslator {
-  constructor({getSettings,onChange,platform,getContext}) {
+  constructor({getSettings,onChange,platform,getContext,onActiveChange,canRequest=()=>true}) {
     this.platform=platform;
+    this.canRequest=canRequest;
     this.getContext=getContext || (()=>({title:document.title,host:location.hostname,url:location.href}));
     this.slices=new IdleSlices();
     this.getSettings=getSettings;
     this.onChange=onChange ||(()=> {});
+    this.onActiveChange=onActiveChange ||(()=> {});
     this.units=new Map(); // id -> unit
     this.registry=new WeakMap(); // first node -> unit (dedupe across rescans)
     this.attributes=new WeakMap();
@@ -66,7 +68,7 @@ export class PageTranslator {
       removed:doc=>{
         this.watch.removeDocument(doc);this.lazy.removeDocument(doc);
         doc.removeEventListener('click',this.retryHandler,true);doc.removeEventListener('keydown',this.retryHandler,true);
-        inj.write(()=>{for(const u of [...this.units.values()])if(u.host.ownerDocument===doc)this.#drop(u);});
+        inj.write(()=>{for(const u of [...this.units.values()])if(doc.nodeType===9 ? u.host.ownerDocument===doc : doc.contains(u.first))this.#drop(u);});
       },changed:()=>this.lazy.scroll()});
   }
 
@@ -93,7 +95,7 @@ export class PageTranslator {
       const all=[...doc.querySelectorAll(include)];
       return all.filter((el)=> !all.some((o)=> o !==el && o.contains(el)));
     }
-    return doc.body ? [doc.body]:[];
+    return [doc.body || doc];
   }
 
   #context() {
@@ -103,6 +105,15 @@ export class PageTranslator {
 
   isActive() {
     return this.active;
+  }
+
+  setPaused(paused) {
+    const was=this.paused;this.paused=paused;
+    if(paused){this.route.stop();return;}
+    if(!this.active)return;
+    if(was){this.route.start();for(const u of this.units.values())if(u.state==='idle')this.lazy.watch(u);}
+    this.lazy.scroll();
+    if(this.queue.length && !this.flushTimer)this.flushTimer=setTimeout(()=>this.#flush(),this.s.lazy.batchDelayMs);
   }
 
   start() {
@@ -116,10 +127,11 @@ export class PageTranslator {
     this.#prime();
     for(const root of this.#roots()) this.#scan(root);
     this.emit();
+    this.onActiveChange();
   }
 
   #prime(doc=document) {
-    const roots=this.#roots(doc),view=doc.defaultView;
+    const roots=this.#roots(doc),view=(doc.ownerDocument || doc).defaultView;
     // Prime visible blocks before the document-order scan. A novel can have thousands of
     // offscreen nodes ahead of its scrolled reader; translated chrome must not move the reader
     // out of the lazy window before it has even been discovered. Hit testing is bounded to 12
@@ -137,6 +149,7 @@ export class PageTranslator {
   }
 
   stop() {
+    const was=this.active;
     this.active=false;
     this.slices.cancel();
     clearTimeout(this.flushTimer);
@@ -157,6 +170,7 @@ export class PageTranslator {
     this.registry=new WeakMap();
     this.attributes=new WeakMap();
     this.emit();
+    if(was)this.onActiveChange();
   }
 
   toggle() {
@@ -218,10 +232,10 @@ export class PageTranslator {
   #known=(host,first)=> this.registry.has(first);
 
   #scan(root,shallow=false) {
-    if(root.ownerDocument!==document && !this.frames.entries.has(root.ownerDocument))return;
+    if(root.getRootNode()!==document && !this.frames.entries.has(root.getRootNode()))return;
     const include=joinSelectors(this.siteCustom?.include);
     // inside an include-limited site, an arbitrary added node only counts when it lies in scope
-    if(include && !shallow && !root.closest(include)) {
+    if(include && !shallow && !root.closest?.(include)) {
       for(const m of root.querySelectorAll(include)) this.#scanOne(m,false);
       return;
     }
@@ -232,7 +246,7 @@ export class PageTranslator {
     const opts={minChars:this.s.translateShortText===false ? this.s.minChars:1,exclude:this.#exclude(),known:this.#known,
       attributeKnown:(el,key)=> this.attributes.get(el)?.has(key),shallow};
     this.slices.run(iterateRuns(root,opts),(run)=> {
-      if(run && this.active && run.host.isConnected && (run.host.ownerDocument===document || this.frames.entries.has(run.host.ownerDocument)) &&(run.attribute ? !this.attributes.get(run.host)?.has(run.attribute):!this.#known(run.host,run.first))) this.#addUnit(run);
+      if(run && this.active && run.host.isConnected && (run.first.getRootNode()===document || this.frames.entries.has(run.first.getRootNode())) &&(run.attribute ? !this.attributes.get(run.host)?.has(run.attribute):!this.#known(run.host,run.first))) this.#addUnit(run);
     });
   }
 
@@ -293,6 +307,7 @@ export class PageTranslator {
 
 
   #enqueue(unit,priority,top,immediate=false) {
+    if(this.paused)return;
     if(unit.state !=='idle' || unit.dead) return;
     if(!this.active && !unit.hover) return;
     unit.state='queued';
@@ -310,6 +325,7 @@ export class PageTranslator {
 
   async #flush() {
     this.flushTimer=0;
+    if(this.paused || !this.canRequest())return;
     const batch=this.queue.splice(0).filter((u)=> u.state==='queued' && !u.dead);
     if(!batch.length) return;
     const s=this.s;
@@ -386,6 +402,10 @@ export class PageTranslator {
   }
 
   #dispatch(units) {
+    if(this.paused || !this.canRequest()) {
+      for(const u of units)if(!u.dead){u.state='queued';this.queue.push(u);}
+      return;
+    }
     const s=this.s;
     const byPriority=new Map();
     for(const u of units) {
@@ -501,12 +521,14 @@ export class PageTranslator {
 
   #onMutations({added,dirty,layout=[]}) {
     if(!this.active) return;
+    this.frames.update();
     const rescan=new Set();
     const handled=new Set();
     inj.write(()=>{for(const el of layout)if(el.isConnected){for(const u of this.units.values())if(el.contains(u.host))inj.refit(u,this.s.displayMode);rescan.add(el);}});
 
     for(const el of dirty) {
       if(!el.isConnected) continue;
+      if(el.nodeType===11){for(const u of [...this.units.values()])if(el.contains(u.first))this.#drop(u);rescan.add(el);continue;}
       // Inline form controls belong to an ancestor block for text runs, but their visible
       // attributes have independent identity. Invalidate those before the block-level rescan.
       const attrs=this.attributes.get(el);

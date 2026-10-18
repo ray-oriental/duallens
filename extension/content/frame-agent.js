@@ -1,45 +1,54 @@
-// Extension-only child-frame entry: no interaction modules, commands, auto-start or UI.
+// Extension-only child entry: one startup snapshot, then pushes. No polling or interaction UI.
 import {PageTranslator} from './controller.js';
 import {settingsEqual} from '../platform/settings-store.js';
 import {parentOwnsDocument} from './frames.js';
 
 export function startFrameAgent(platform) {
-  if(parentOwnsDocument()) return;
-  let snapshot=null, visible=false, running=false, disposed=false, root=null, translator=null, observedAt=0;
+  if(parentOwnsDocument())return;
+  let snapshot=null,visible=false,root=null,translator=null,disposed=false,pushed=false;
   const stop=()=>{if(translator?.isActive())translator.stop();};
-  const observer=new IntersectionObserver(entries=>{
-    // A short document can be <100px tall inside a large frame. Size is the frame viewport,
-    // while intersection only answers visibility (including clipping by cross-origin ancestors).
-    visible=entries.some(e=>e.isIntersecting && e.intersectionRect.width>0 && e.intersectionRect.height>0);
-    observedAt=Date.now();
-    if(!visible)stop();
-  });
-  const tick=async()=>{
-    if(running || disposed)return;
-    running=true;
-    try {
-      if(root!==document.documentElement){observer.disconnect();root=document.documentElement;visible=false;if(root)observer.observe(root);}
-      // Chromium can suspend rendering (and IO callbacks) for display:none child frames.
-      // Renew the observation and expire old visibility instead of trusting a stale true value.
-      if(Date.now()-observedAt>1000)visible=false;
-      if(root){observer.unobserve(root);observer.observe(root);}
-      if(!visible || innerWidth<200 || innerHeight<100 || parentOwnsDocument()){stop();return;}
-      const next=await platform.frameSnapshot();
-      if(disposed)return;
-      const changed=snapshot && (!settingsEqual(snapshot.settings,next?.settings)||!settingsEqual(snapshot.context,next?.context));
-      snapshot=next;
-      if(!next?.active || !visible) stop();
-      else {
-        translator ||=new PageTranslator({platform,getSettings:()=>snapshot.settings,getContext:()=>snapshot.context});
-        if(changed)translator.retranslate();
-        translator.start();
-      }
-    } catch {stop();} finally {running=false;}
+  const canRequest=()=>visible && !document.hidden && !!root?.getBoundingClientRect().width && innerWidth>=200 && innerHeight>=100;
+  const reconcile=()=>{
+    if(disposed || !snapshot?.active){stop();return;}
+    if(!canRequest()){translator?.setPaused(true);return;}
+    translator ||=new PageTranslator({platform,getSettings:()=>snapshot.settings,getContext:()=>snapshot.context,canRequest});
+    translator.start();
+    translator.setPaused(false);
   };
-  const timer=setInterval(()=>{void tick();},400);
-  void tick();
-  window.addEventListener('pagehide',event=>{
-    if(event.persisted){stop();return;}
-    disposed=true;clearInterval(timer);observer.disconnect();translator?.destroy();
+  const receive=next=>{
+    if(disposed)return;
+    const modeOnly=snapshot?.settings && next?.settings && settingsEqual({...snapshot.settings,displayMode:next.settings.displayMode},next.settings) && settingsEqual(snapshot.context,next.context);
+    const changed=snapshot && !modeOnly && (!settingsEqual(snapshot.settings,next?.settings)||!settingsEqual(snapshot.context,next?.context));
+    if(changed)stop();
+    snapshot=next;
+    if(modeOnly)translator?.setDisplayMode(next.settings.displayMode);
+    reconcile();
+  };
+  const io=new IntersectionObserver(entries=>{
+    visible=entries.some(e=>e.isIntersecting && e.intersectionRect.width>0 && e.intersectionRect.height>0);
+    reconcile();
   });
+  const refresh=()=>{
+    if(root!==document.documentElement){io.disconnect();ro.disconnect();root=document.documentElement;}
+    visible=false;translator?.setPaused(true);
+    if(root){io.unobserve(root);io.observe(root);ro.observe(root);}
+  };
+  const ro=new ResizeObserver(entries=>{
+    if(entries.some(e=>e.contentRect.width===0 || e.contentRect.height===0)){visible=false;translator?.setPaused(true);}
+    else {visible=false;io.unobserve(root);io.observe(root);}
+  });
+  const mo=new MutationObserver(()=>{if(root!==document.documentElement)refresh();});
+  mo.observe(document,{childList:true});
+  const remove=platform.onMessage((msg)=>{
+    if(msg?.type==='frame-state'){pushed=true;receive(msg.state);}return false;
+  });
+  const snapshotOnce=()=>{pushed=false;void platform.frameSnapshot().then(next=>{if(!pushed)receive(next);}).catch(()=>receive(null));};
+  document.addEventListener('visibilitychange',refresh);
+  window.addEventListener('resize',refresh);
+  window.addEventListener('pageshow',event=>{if(event.persisted){refresh();snapshotOnce();}});
+  window.addEventListener('pagehide',event=>{
+    stop();
+    if(!event.persisted){disposed=true;remove();io.disconnect();ro.disconnect();mo.disconnect();translator?.destroy();}
+  });
+  refresh();snapshotOnce();
 }

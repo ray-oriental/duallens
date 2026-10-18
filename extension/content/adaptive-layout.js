@@ -2,7 +2,7 @@ import { choosePresentation } from './presentation.js';
 const styles=new WeakMap(),groups=new WeakMap();
 const signature=el=>el?el.localName+'.'+[...el.classList].filter(x=>!x.startsWith('dl-')).sort().join('.'):'';
 export function prepareLayout(u) {
-  const h=u.host,p=h.parentElement;
+  const h=u.host,p=h.parentElement || h.getRootNode().host;
   u.layoutBefore=[h,p].filter(Boolean).map(el=>({el,height:el.getBoundingClientRect().height}));
   const key=[signature(h),signature(p),signature(p?.parentElement),u.presentation].join('|');
   let map=groups.get(p);if(!map) groups.set(p,map=new Map());

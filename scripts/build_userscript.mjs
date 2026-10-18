@@ -262,7 +262,7 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
         const item = mod.imports[edit.importIndex];
         const require = `__r(${JSON.stringify(id(item.file))})`;
         replacement = item.namespace ? `const ${item.namespace} = ${require};` : item.bindings.length
-          ? `const { ${item.bindings.map((b) => `${b.imported}: ${b.local}`).join(', ')} } = ${require};` : `${require};`;
+          ? `const { ${item.bindings.map((b) => b.imported===b.local ? b.local : `${b.imported}: ${b.local}`).join(', ')} } = ${require};` : `${require};`;
       }
       code = code.slice(0, edit.start) + replacement + code.slice(edit.end);
     }

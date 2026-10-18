@@ -29,49 +29,58 @@ export function frameRect(rect, doc, root = document) {
   return r;
 }
 
+// One lifecycle for accessible iframe Documents and open ShadowRoots. Discovery is event-driven.
 export class FrameRoots {
-  constructor({doc = document, css = '', added, removed, changed}) {
-    Object.assign(this, {doc,css,added,removed,changed});
-    this.entries = new Map();
-    this.loads = new Map();
-    this.refresh = () => this.update();
+  constructor({doc=document,css='',added,removed,changed}) {
+    Object.assign(this,{doc,css,added,removed,changed});
+    this.entries=new Map();this.loads=new Set();
+    this.refresh=()=>{if(this.running)this.update();};
   }
-  start() { this.update(); this.timer = setInterval(this.refresh, 400); }
+  start() {
+    this.running=true;
+    this.resize=new ResizeObserver(this.refresh);
+    this.doc.defaultView?.addEventListener('resize',this.refresh);
+    this.update();
+  }
   update() {
-    const seen = new Set([this.doc]), frames = new Set();
-    const visit = doc => {
-      for (const frame of doc.querySelectorAll('iframe')) {
-        frames.add(frame);
-        if (!this.loads.has(frame)) { frame.addEventListener('load',this.refresh); this.loads.set(frame,true); }
-        if (!frameVisible(frame)) continue;
-        let child;
-        try { child = frame.contentDocument; } catch { continue; }
-        if (!child?.body || !/html/i.test(child.contentType || 'text/html') || seen.has(child)) continue;
-        seen.add(child);
-        let entry = this.entries.get(child);
-        // document.open/write may keep the Document but replace its entire element tree.
-        if (entry && entry.body !== child.body) { this.remove(child); entry = null; }
-        if (!entry) {
-          const style = child.createElement('style');
-          style.textContent = this.css;
-          (child.head || child.documentElement).append(style);
-          entry = {body:child.body,style}; this.entries.set(child,entry);
-          this.added(child);
-        } else if (!entry.style.isConnected) (child.head || child.documentElement).append(entry.style);
-        visit(child);
+    const seen=new Set([this.doc]),frames=new Set();
+    const add=root=>{
+      if(seen.has(root))return;
+      seen.add(root);
+      let entry=this.entries.get(root);
+      if(entry && entry.body!==root.body){this.remove(root);entry=null;}
+      if(!entry) {
+        const style=(root.ownerDocument || root).createElement('style');style.textContent=this.css;
+        entry={body:root.body,style};this.entries.set(root,entry);
+        (root.head || (root.host ? root:root.documentElement)).append(style);
+        this.added(root);
+      } else if(!entry.style.isConnected)(root.head || root).append(entry.style);
+      visit(root);
+    };
+    const visit=root=>{
+      for(const el of root.querySelectorAll('*')) {
+        if(el.shadowRoot && !el.localName.startsWith('dl-'))add(el.shadowRoot);
+        if(el.localName!=='iframe')continue;
+        frames.add(el);
+        if(!this.loads.has(el)){el.addEventListener('load',this.refresh);this.loads.add(el);this.resize?.observe(el);}
+        if(!frameVisible(el))continue;
+        let child;try{child=el.contentDocument;}catch{continue;}
+        if(child?.body && /html/i.test(child.contentType || 'text/html'))add(child);
       }
     };
     visit(this.doc);
-    for (const doc of this.entries.keys()) if (!seen.has(doc)) this.remove(doc);
-    for (const frame of this.loads.keys()) if (!frames.has(frame)) {frame.removeEventListener('load',this.refresh);this.loads.delete(frame);}
+    for(const root of this.entries.keys())if(!seen.has(root))this.remove(root);
+    for(const el of this.loads)if(!frames.has(el)){el.removeEventListener('load',this.refresh);this.resize?.unobserve(el);this.loads.delete(el);}
     this.changed?.();
   }
-  remove(doc) { const e = this.entries.get(doc); this.entries.delete(doc); this.removed(doc); e.style.remove(); }
-  documents() { return [this.doc,...this.entries.keys()]; }
+  remove(root) {
+    const entry=this.entries.get(root);this.entries.delete(root);this.removed(root);entry.style.remove();
+  }
   stop() {
-    clearInterval(this.timer);
-    for (const frame of this.loads.keys()) frame.removeEventListener('load',this.refresh);
+    this.running=false;this.resize?.disconnect();
+    this.doc.defaultView?.removeEventListener('resize',this.refresh);
+    for(const el of this.loads)el.removeEventListener('load',this.refresh);
     this.loads.clear();
-    for (const doc of this.entries.keys()) this.remove(doc);
+    for(const root of this.entries.keys())this.remove(root);
   }
 }
