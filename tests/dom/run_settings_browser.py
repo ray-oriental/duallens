@@ -170,6 +170,24 @@ def main():
             assert not errors, "Settings page has JS errors"
             print("PASS popup_service_switch: selected mock and saved without horizontal overflow")
 
+            # Real shared rule controls, including malformed-pattern feedback and synchronized readback.
+            page.locator('#rule-match').fill('https://example.com/mail/*')
+            page.locator('#rule-page').select_option('never')
+            for field in ['selection', 'hover', 'input']:
+                page.locator('#rule-' + field).select_option('off')
+            page.click('#site-rule-add')
+            page.click('#save')
+            page.locator('#status').filter(has_text='已保存').wait_for()
+            saved = h.sw_eval("async () => (await chrome.storage.sync.get('settings.sites'))['settings.sites'].siteRules.custom")
+            assert saved == [{'match':'https://example.com/mail/*','page':'never','selection':'off','hover':'off','input':'off'}]
+            page.locator('#rule-match').fill('example.com/mail/*?private=1')
+            page.click('#site-rule-add')
+            page.locator('#status').filter(has_text='无效').wait_for()
+            assert json.loads(page.locator('#customRules').input_value()) == saved
+            page.screenshot(path=str(artifact / 'site-rules-375.png'))
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            print('PASS site_rules_editor: path and four controls, invalid-pattern feedback, sync readback, 375px')
+
             class Handler(SimpleHTTPRequestHandler):
                 def __init__(self, *args, **kwargs):
                     super().__init__(*args, directory=str(PROJECT), **kwargs)
@@ -232,7 +250,7 @@ def main():
         finally:
             h.close()
             e2e.remove_runtime_dir(run)
-    print("SUMMARY settings-browser total=6 PASS=6 FAIL=0 mock-only viewport=375x812")
+    print("SUMMARY settings-browser total=7 PASS=7 FAIL=0 mock-only viewport=375x812")
     print("ARTIFACTS " + str(artifact))
     return 0
 

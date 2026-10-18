@@ -460,6 +460,7 @@ def mobile_cases(page, base):
 
 
 def main():
+    from site_rules_cases import userscript_case
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--only', action='append', default=[])
     args = ap.parse_args()
@@ -469,7 +470,8 @@ def main():
              ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
              ('isolated_prompt', 1280, 800, False, isolated_prompt_case),
              ('mobile_375', 375, 812, True, mobile_cases), ('tablet_800', 800, 1280, True, mobile_cases),
-             ('machine_first', 1280, 800, False, machine_first_case), ('machine_first_375', 375, 812, True, machine_first_case)]
+             ('machine_first', 1280, 800, False, machine_first_case), ('machine_first_375', 375, 812, True, machine_first_case),
+             ('site_rules', 1280, 800, False, userscript_case), ('site_rules_375', 375, 812, True, userscript_case)]
     if args.only: cases = [c for c in cases if any(o in c[0] for o in args.only)]
     if not cases: print('no matching cases'); return 2
     E2E_ROOT.mkdir(parents=True, exist_ok=True); ARTIFACTS.mkdir(parents=True, exist_ok=True)

@@ -88,6 +88,40 @@ Android Edge + Tampermonkey                         │
 字段与默认值仍以设置模块为准。触屏运行时将 rootMargin 限至 400px、每批至多 12 段、并发至多 2；
 不把性能限值回写用户配置。
 
+### 3.1 站点与路径规则（v0.5 增量）
+
+规则仍位于同步键 `settings.sites.siteRules`，不改设置版本。旧的 `always` / `never` 域名列表与
+`custom:[{match,include?,exclude?,style?}]` 无需迁移。列表也接受路径模式；共享设置表单和用户脚本面板提供逐条编辑器。
+新字段示例：
+
+```js
+siteRules: {
+  always: ['example.com/articles/*'],
+  never: [],
+  custom: [{ match:'https://example.com/mail/*', page:'never',
+             selection:'off', hover:'off', input:'default' }]
+}
+```
+
+- `match` 支持精确域名、`*.example.com`（含根域）、可选 `http://` / `https://`、可选端口与路径。
+  如 `mail.sjtu.edu.cn/zimbra/*`、`*.example.com/checkout/*`、`example.com/docs/*/api`；路径中的 `*` 匹配任意字符（含 `/`）。
+  协议和域名不区分大小写；路径区分大小写。查询串、片段不参与匹配。无路径表示全部路径，显式 `/` 只匹配根路径；
+  `/docs/*` 匹配 `/docs/` 及其子路径，不匹配 `/docs`。省略端口匹配任意端口，显式端口匹配有效端口（HTTPS 默认 443、HTTP 默认 80）。
+  非 HTTP(S) 协议、凭据、查询串、片段、空白、非法域名/端口或超过 2048 字符的模式在保存/导入时以中文提示拒绝。
+- 多条命中时按路径非通配字符长度降序、通配符数量升序、域名长度降序、显式端口和协议优先排序。
+  完全同分保持列表顺序；新 `custom.page` 优先于同分旧列表，旧 `never` 优先于同分 `always`。
+  只有一条最具体 `custom` 提供三个功能开关及选择器/样式，不合并不同层级的功能开关。
+  为保留旧选择器行为，未写 `page` 的 custom 不参与网页模式排序；显式 `page:'default'` 可覆盖宽泛自动规则。
+- `page` 为 `always`（自动）、`never`（从不自动）、`default`（沿用按需/自动语言），缺省保留旧列表行为。
+  **现状修正**：v0.4 实际代码的 never 曾连手动命令及所有交互一起禁用；v0.5 按本轮要求仅禁止自动网页翻译并隐藏悬浮球，
+  弹出页、快捷键和用户脚本菜单仍可手动翻译/恢复。进入 never 路由时取消并恢复已有网页译文。
+- `selection` / `hover` / `input` 为 `on` / `off` / `default`，缺省等同 default，沿用相应全局开关。
+  off 时卸下对应事件/UI，并阻止显式入口；触屏 hover 同样控制长按。运行时覆盖不回写全局偏好。
+- `pushState` / `replaceState`、`popstate`、hash/navigation 事件重新判定；独立规则 RouteWatcher 在未翻译/never 时也运行，
+  隔离世界未收到事件时以 1 秒轮询兜底。异步语言检测不能把上一条路由的自动决定带入下一页。
+- 弹出页“仅当前路径”生成 `host[:port]/first-segment/*`（根路径为 `host[:port]/*`）。
+  回到默认写入显式 default，而非删除继承关系。非机密明文/加密备份均保留新增字段；密钥规则不变。
+
 ## 4. 消息协议（`extension/shared/protocol.js`）
 
 ### 4.1 网页翻译：长连接端口 `dl-translate`（content → background）

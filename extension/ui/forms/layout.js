@@ -2,41 +2,7 @@ import { LANGS, STYLES, TRANSLATION_MODES } from '../../shared/settings.js';
 import { PROVIDER_PRESETS } from '../../shared/presets.js';
 import { MT_ENGINES } from '../../background/mt.js';
 
-export const FORM_CSS = `
-.dl-settings{color-scheme:light dark;--bg:#f5f7fb;--panel:#fff;--fg:#182339;--muted:#58677d;--line:#d9e0ec;--accent:#365edd;color:var(--fg);background:var(--bg);font:14px/1.6 system-ui,sans-serif;padding:16px;max-width:960px;margin:auto;overflow-wrap:anywhere;}
-.dl-settings *{box-sizing:border-box;min-width:0;}
-.dl-settings section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0;}
-.dl-settings h2{font-size:18px;margin:0 0 12px;}
-.dl-settings p{margin:8px 0;}
-.dl-settings .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-.dl-settings .wide{grid-column:1/-1;}
-.dl-settings label{display:block;color:var(--muted);}
-.dl-settings input,.dl-settings select,.dl-settings textarea,.dl-settings button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;min-height:44px;max-width:100%;padding:9px;}
-.dl-settings input,.dl-settings select,.dl-settings textarea{display:block;width:100%;margin-top:5px;}
-.dl-settings textarea{min-height:90px;resize:vertical;}
-.dl-settings input[type=checkbox]{display:inline-block;width:20px;min-height:20px;margin:0 8px 0 0;}
-.dl-settings .check{display:flex;align-items:center;min-height:44px;}
-.dl-settings .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}
-.dl-settings button{cursor:pointer;background:var(--panel);}
-.dl-settings button:disabled{opacity:.6;cursor:wait;}
-.dl-settings .primary{background:var(--accent);color:#fff;}
-.dl-settings .hint{color:var(--muted);font-size:13px;}
-.dl-settings a{color:var(--accent);}
-.dl-settings .status{min-height:24px;}
-.dl-settings .error{color:#ba2440;}
-.dl-settings .savebar{position:sticky;bottom:0;background:var(--panel);padding:12px;display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:12px;}
-.dl-settings [hidden]{display:none!important;}
-.dl-settings:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-@media(prefers-color-scheme:dark){.dl-settings{--bg:#111821;--panel:#1a2432;--fg:#e7edf6;--muted:#a0afc4;--line:#34435a;--accent:#365edd;}
-.dl-settings a{color:#aac0ff;}
-.dl-settings .error{color:#ff94a3;}
-}
-@media(max-width:599px){.dl-settings{padding:8px;width:100%;}
-.dl-settings .grid{grid-template-columns:1fr;}
-.dl-settings section{padding:12px;}
-.dl-settings .savebar{padding:8px;}
-}
-`;
+export const FORM_CSS = `.dl-settings{color-scheme:light dark;--bg:#f5f7fb;--panel:#fff;--fg:#182339;--muted:#58677d;--line:#d9e0ec;--accent:#365edd;color:var(--fg);background:var(--bg);font:14px/1.6 system-ui,sans-serif;padding:16px;max-width:960px;margin:auto;overflow-wrap:anywhere}.dl-settings *{box-sizing:border-box;min-width:0}.dl-settings section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}.dl-settings h2{font-size:18px;margin:0 0 12px}.dl-settings p{margin:8px 0}.dl-settings .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.dl-settings .wide{grid-column:1/-1}.dl-settings label{display:block;color:var(--muted)}.dl-settings input,.dl-settings select,.dl-settings textarea,.dl-settings button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;min-height:44px;max-width:100%;padding:9px}.dl-settings input,.dl-settings select,.dl-settings textarea{display:block;width:100%;margin-top:5px}.dl-settings textarea{min-height:90px;resize:vertical}.dl-settings input[type=checkbox]{display:inline-block;width:20px;min-height:20px;margin:0 8px 0 0}.dl-settings .check{display:flex;align-items:center;min-height:44px}.dl-settings .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.dl-settings button{cursor:pointer;background:var(--panel)}.dl-settings button:disabled{opacity:.6;cursor:wait}.dl-settings .primary{background:var(--accent);color:#fff}.dl-settings .hint{color:var(--muted);font-size:13px}.dl-settings a{color:var(--accent)}.dl-settings .status{min-height:24px}.dl-settings .error{color:#ba2440}.dl-settings .savebar{position:sticky;bottom:0;background:var(--panel);padding:12px;display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:12px}.dl-settings [hidden]{display:none!important}.dl-settings:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media(prefers-color-scheme:dark){.dl-settings{--bg:#111821;--panel:#1a2432;--fg:#e7edf6;--muted:#a0afc4;--line:#34435a;--accent:#365edd}.dl-settings a{color:#aac0ff}.dl-settings .error{color:#ff94a3}}@media(max-width:599px){.dl-settings{padding:8px;width:100%}.dl-settings .grid{grid-template-columns:1fr}.dl-settings section{padding:12px}.dl-settings .savebar{padding:8px}}`;
 
 export function drawLayout(root, { secretDialog = false } = {}) {
   const doc = root.ownerDocument;
@@ -96,8 +62,8 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   }
   const mtActions = el('div', '', { class: 'actions wide' }); t.grid.append(mtActions);
   button(mtActions, 'mt-test', '测试机器翻译');
-  t.box.append(el('p', '机翻先出译文（通常不到 1 秒），已配置的大模型随后在原位替换为精修结果；大模型失败时保留机翻，不打扰阅读。划词、悬停与输入框默认直接用机翻，划词卡片可「精修」。', { class: 'hint' }),
-    el('p', '默认的 Microsoft 与 Google 是免费的非官方接口，可能随时变动或失效，也没有服务保证；它们会收到需要翻译的网页文字。不想让网页文字发往它们，请选择「只用大模型」，或改用官方带 key 的引擎。', { class: 'hint' }));
+  t.box.append(el('p', '机翻先显示，大模型随后原位精修；失败保留机翻。划词、悬停、输入框优先机翻，划词可「精修」。', { class: 'hint' }),
+    el('p', '免费 Microsoft/Google 为非官方接口，无可用性保证，会收到待译文字。可改用「只用大模型」或带 key 的官方引擎。', { class: 'hint' }));
 
   const p = section('模型服务');
   field(p.grid, 'profile', '编辑 / 切换服务', 'select');
@@ -150,9 +116,14 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(pr.grid, 'preset', '翻译风格', 'select', pairs([['general', '通用'], ['tech', '技术'], ['academic', '学术'], ['news', '新闻'], ['social', '口语'], ['custom', '自定义']]));
   field(pr.grid, 'customPrompt', '自定义风格要求', 'textarea'); field(pr.grid, 'glossary', '术语表（每行 原词 → 译词）', 'textarea');
   const sites = section('站点规则');
-  field(sites.grid, 'always', '总是翻译（域名，每行一个）', 'textarea'); field(sites.grid, 'never', '从不翻译（域名，每行一个）', 'textarea');
+  field(sites.grid, 'always', '自动翻译模式（每行一个）', 'textarea'); field(sites.grid, 'never', '从不自动翻译模式（每行一个）', 'textarea');
   field(sites.grid, 'autoLangs', '这些源语言自动翻译', 'select', LANGS, { multiple: '', size: '5' });
-  field(sites.grid, 'customRules', '自定义选择器规则（JSON 数组）', 'textarea');
+  sites.box.append(el('p', '* 匹配任意路径字符，区分大小写；忽略查询串/片段。最具体规则优先。「从不」允许手动，但隐藏悬浮球；功能默认沿用全局。', { class: 'hint' }));
+  field(sites.grid, 'rule-match', '新增 / 编辑路径模式');
+  field(sites.grid, 'rule-page', '网页翻译', 'select', pairs([['default','默认'],['always','自动'],['never','从不（允许手动）']]));
+  for (const [id, title] of [['selection','划词'],['hover','悬停 / 长按'],['input','输入框']]) field(sites.grid, 'rule-' + id, title, 'select', pairs([['default','默认'],['on','开'],['off','关']]));
+  button(sites.box, 'site-rule-add', '添加 / 更新此规则');
+  field(sites.grid, 'customRules', '规则列表（JSON，可修改或删除）', 'textarea');
   const backup = section('本机缓存与配置备份');
   field(backup.grid, 'cacheEnabled', '缓存译文', 'checkbox');
   field(backup.grid, 'maxEntries', '缓存条数上限', 'number'); field(backup.grid, 'ttlDays', '缓存有效天数', 'number');
