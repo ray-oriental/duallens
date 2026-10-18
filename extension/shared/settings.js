@@ -120,10 +120,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   prompt: { preset: 'general', custom: '' },
   glossary: [], // [{ src, dst }]
 
-  hover: { enabled: true, modifier: 'Shift' }, // 'Shift' | 'Alt' | 'Control' | 'none'
+  hover: { enabled: true, modifier: 'Shift', profileId: '', model: '' }, // empty = inherit page
   selection: { enabled: true, showIcon: true },
   // A leading "/xx " (e.g. "/ja ") overrides targetLang for that one translation.
-  input: { enabled: true, trigger: 'triple-space', targetLang: 'en', prefixOverride: true },
+  input: { enabled: true, trigger: 'triple-space', targetLang: 'en', prefixOverride: true,
+    mode: 'replace', order: 'source-first', profileId: '', model: '' },
   floatBall: { enabled: true, side: 'right', topRatio: 0.6 },
 
   siteRules: {
@@ -220,6 +221,7 @@ export function createSettingsStore({ syncArea, localArea }) {
     const s = publicSettings(mergeSettings(DEFAULT_SETTINGS, input));
     s.version = SETTINGS_VERSION;
     validateSiteRules(s.siteRules);
+    validateInteractionSettings(s);
     for (const p of s.provider.profiles) {
       safeId(p.id);
       if (p.baseUrl) {
@@ -385,5 +387,16 @@ export function validateSiteRules(rules) {
     valid(r.match);
     if (r.page != null && !['always', 'never', 'default'].includes(r.page)) throw new Error('网页规则须为自动、从不或默认');
     for (const f of ['selection', 'hover', 'input']) if (r[f] != null && !['on', 'off', 'default'].includes(r[f])) throw new Error('划词、悬停和输入框规则须为开、关或默认');
+  }
+}
+
+export function validateInteractionSettings(s) {
+  if (!['replace', 'bilingual'].includes(s.input?.mode) ||
+      !['source-first', 'translation-first'].includes(s.input?.order)) throw new Error('输入框双语模式或顺序无效');
+  for (const name of ['hover', 'input']) {
+    const c = s[name];
+    if (typeof c?.profileId !== 'string' || typeof c.model !== 'string' ||
+        c.model.length > 256 || /[\x00-\x1f\x7f]/.test(c.model) ||
+        c.profileId && !s.provider?.profiles?.some(p => p.id === c.profileId)) throw new Error('交互服务或模型选择无效');
   }
 }

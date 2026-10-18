@@ -7,7 +7,7 @@
 
 import { blockContainerOf } from './walker.js';
 import { editableOf } from './inputbox.js';
-import { deepActiveElement } from './util.js';
+import { deepActiveElement, hoverService } from './util.js';
 
 const HOLD_MS = 130;
 const REST_MS = 500;
@@ -22,6 +22,7 @@ export class HoverTranslate {
     this.onTouchEnd = () => this.#cancelTouch();
     this.getSettings = getSettings;
     this.controller = controller;
+    if (controller.client) controller.client.service = hoverService(controller.client.service, getSettings);
     this.on = false;
     this.target = null;
     this.armed = false;

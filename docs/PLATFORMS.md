@@ -42,7 +42,7 @@ export interface Platform {
 
 export interface TranslatorService {
   translateBatch({ items, to, from, priority, context, draft?, purpose?, mode? }, onPartial): { cancel(), done? };
-  translateText({ text, to, from, purpose, mode? }): Promise<{ ok, text?, by?, engine?, error? }>;
+  translateText({ text, to, from, purpose, mode?, profileId?, model? }): Promise<{ ok, text?, by?, engine?, error? }>;
   listModels(profileId): Promise<{ ok, models? }>;
   testProvider(profileId): Promise<{ ok, latencyMs?, sample?, error? }>;
 }
@@ -193,6 +193,25 @@ never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页�
 并保留 `popstate` / `hashchange`，不轮询；仅不支持时以 1 秒轮询兜底，页面隐藏时暂停，重新可见时立即检查。
 弹出页可选整个站点或当前第一段路径；手机面板可直接编辑同样的路径规则和四项开关。
 新增字段继续进入非机密同步/明文及加密备份，不改变 GM 私有存储与真机验收边界。
+
+### 输入、划词与悬停（v0.5 增量）
+
+- `input.mode:'replace'|'bilingual'`（默认 replace），`input.order:'source-first'|'translation-first'`（默认 source-first）。
+  双语仅组合本次选中文字和译文；textarea/contenteditable 以换行、单行 input 以空格分隔。选区外文本保留。
+  原有语言前缀与三空格触发仍可用；三空格产生的尾随空格不保留在翻译结果中。
+- `input` 与 `hover` 各增加 `profileId:''`、`model:''`：空 profileId 继承网页链/翻译模式；指定已有 profile 时，
+  单次请求带 profileId/model 与 `mode:'llm'`，空模型使用该服务默认模型。继承时忽略 model。
+  划词卡片可临时选择已有服务及填写模型，点击“重新翻译”生效；新卡片回到继承，不保存临时选择。
+  沿用后台单次覆盖语义：指定候选优先，既有网页链仍可作为备选，但持久链、active 与服务默认模型均不改写。
+- 悬停指定服务经控制器私有 client 的服务适配器，按单元使用现有一次性文本接口，返回安全转义的纯文本译文；
+  原网页 DOM 与控制器插入/恢复、进度及取消流程不变。取消丢弃迟到结果；一次性接口不支持中止已发 HTTP。
+  继承服务时保留原有带格式合批路径。
+- 写回依次尝试原生 setter + input（表单）或局部 Range + input（contenteditable）、execCommand、可取消的 beforeinput。
+  每次经过一个 32ms 任务等待后读回完整字段，必须与预期一致；编辑器返回成功但未接收结果仍继续尝试。
+  非预期内容变化立即停止，不用下一策略覆盖；全部拒绝时显示中文提示和可选的复制译文按钮/只读文本。
+  不向编辑器传 HTML。组合输入期间不触发；等待期间任何 input/beforeinput/compositionstart、富文本 DOM 变动、
+  功能停用或节点失效都会使旧结果失效（含编辑后撤销）。不保证识别无事件且改回原值的表单脚本改写，或 32ms 后才发生的任意编辑器回滚。
+  富文本使用文本节点、BR 与常见块标签的文本视图；无法安全映射的选区拒绝写回。真实编辑器与物理 Android 仍需人工验收。
 
 - 触屏没有 Shift 悬停：「悬停翻译」在触屏上换成**长按段落 500ms**，可在设置里关闭。
 - 划词图标放在选区**下方**，避开系统选择菜单；所有触控目标 ≥ 44px；悬浮球用 pointer 事件拖动，并避开安全区。

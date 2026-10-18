@@ -1,10 +1,10 @@
 // Input-box translation: press space three times quickly (or Alt+I) in a text field and its
-// content is replaced by the translation into settings.input.targetLang. A leading "/ja " style
+// content is replaced or combined with the translation into settings.input.targetLang. A leading "/ja " style
 // prefix overrides the target language for that one translation.
 
 import { LANGS } from '../shared/settings.js';
 import { createOverlay, toast } from './overlay.js';
-import { deepActiveElement } from './util.js';
+import { deepActiveElement, interactionRequest } from './util.js';
 
 const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel']);
 const PREFIX = /^\s*\/([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)[ \t ]+/;
@@ -39,68 +39,98 @@ function resolveLang(code) {
   return hit ? hit.code : null;
 }
 
-// React tracks the value property itself; assigning through the prototype setter and then firing
-// "input" is what makes a controlled component notice the change.
-function setNativeValue(el, value) {
-  const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-  const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-  setter.call(el, value);
-  el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+// A canonical plain-text view keeps BR/block separators and stable offsets across editor rerenders.
+function richText(el, points) {
+  let text = '';
+  const add = (value, node, start, after) => {
+    if (points) for (let i = 0; i < value.length; i++) points.push([node, start + i]);
+    text += value;
+    if (points) points.end = after;
+  };
+  const walk = node => {
+    if (node.nodeType === 3) { add(node.data, node, 0, [node, node.length]); return; }
+    let index = 0;
+    for (const child of node.childNodes) {
+      if (child.nodeName === 'BR') add('\n', node, index, [node, index + 1]);
+      else {
+        if (/^(DIV|P|LI|BLOCKQUOTE)$/.test(child.nodeName) && child.previousSibling && text && !text.endsWith('\n')) add('\n', node, index, [child, 0]);
+        walk(child);
+      }
+      index++;
+    }
+  };
+  walk(el);
+  if (points) points.push(points.end || [el, 0]);
+  return text;
 }
 
-function accessor(el, useSelection) {
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-    const v = el.value;
-    let s = 0;
-    let e = v.length;
-    if (useSelection && el.selectionStart !== el.selectionEnd) {
-      s = el.selectionStart;
-      e = el.selectionEnd;
+export function inputOutput(source, translated, cfg, singleLine) {
+  if (cfg.mode !== 'bilingual') return translated;
+  const parts = cfg.order === 'translation-first' ? [translated, source] : [source, translated];
+  return parts.join(singleLine ? ' ' : '\n');
+}
+
+export function inputAccessor(el, useSelection) {
+  const doc = el.ownerDocument, win = doc.defaultView;
+  const field = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA';
+  const current = () => field ? el.value : richText(el);
+  const before = current();
+  let start = 0, end = before.length;
+  if (field) {
+    if (useSelection && Number.isInteger(el.selectionStart) && el.selectionStart !== el.selectionEnd) {
+      start = el.selectionStart; end = el.selectionEnd;
     }
-    return {
-      text: v.slice(s, e),
-      current: () => el.value,
-      apply(out) {
-        setNativeValue(el, v.slice(0, s) + out + v.slice(e));
-        const pos = s + out.length;
-        try {
-          el.setSelectionRange(pos, pos);
-        } catch {
-          /* some input types have no selection API */
-        }
-      },
-    };
+  } else {
+    const sel = win.getSelection();
+    if (useSelection && sel?.rangeCount && !sel.isCollapsed && el.contains(sel.anchorNode) && el.contains(sel.focusNode)) {
+      const r = sel.getRangeAt(0), prefix = r.cloneRange();
+      prefix.selectNodeContents(el); prefix.setEnd(r.startContainer, r.startOffset);
+      start = richText(prefix.cloneContents()).length;
+      const selected = richText(r.cloneContents());
+      end = start + selected.length;
+      if (before.slice(start, end) !== selected) throw Error('选区结构无法安全写回');
+    }
   }
-  const sel = getSelection();
-  const partial =
-    useSelection && sel.rangeCount && !sel.isCollapsed && el.contains(sel.anchorNode) && el.contains(sel.focusNode);
-  const saved = partial ? sel.getRangeAt(0).cloneRange() : null;
-  return {
-    text: partial ? sel.toString() : el.innerText,
-    current: () => el.innerText,
-    apply(out) {
-      el.focus();
-      const s = getSelection();
-      s.removeAllRanges();
-      if (saved) s.addRange(saved);
-      else {
-        const r = document.createRange();
-        r.selectNodeContents(el);
-        s.addRange(r);
+  function select() {
+    el.focus();
+    if (field) { el.setSelectionRange(start, end); return; }
+    const points = []; richText(el, points);
+    const r = doc.createRange();
+    r.setStart(...points[start]); r.setEnd(...points[end]);
+    const sel = win.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    return r;
+  }
+  const event = (type, out) => new win.InputEvent(type, { bubbles:true, composed:true,
+    cancelable:type === 'beforeinput', inputType:'insertText', data:out });
+  return { text:before.slice(start, end), current, before,
+    async apply(out, valid, writing = () => {}) {
+      const expected = before.slice(0, start) + out + before.slice(end);
+      const input = () => el.dispatchEvent(event('input', out));
+      const native = () => {
+        const proto = el.tagName === 'TEXTAREA' ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, expected); input();
+      };
+      const direct = () => {
+        const range = select(), fragment = doc.createDocumentFragment();
+        out.split('\n').forEach((line, i) => { if (i) fragment.append(doc.createElement('br')); fragment.append(doc.createTextNode(line)); });
+        range.deleteContents(); range.insertNode(fragment); input();
+      };
+      const strategies = [
+        field ? native : direct,
+        () => { select(); doc.execCommand('insertText', false, out); },
+        () => { select(); if (el.dispatchEvent(event('beforeinput', out))) { if (field) native(); else direct(); } },
+      ];
+      for (const write of strategies) {
+        if (!valid() || current() !== before) return false;
+        writing(true);
+        try { write(); } catch { /* unsupported strategy: try the next only if unchanged */ }
+        finally { writing(false); }
+        await new Promise(resolve => setTimeout(resolve, 32));
+        if (!valid()) return false;
+        if (current() === expected) return true;
+        if (current() !== before) return false; // unexpected editor/user changes are never overwritten
       }
-      // execCommand keeps the editor's undo stack and fires the events rich editors listen to
-      const ok = document.execCommand('insertText', false, out);
-      if (!ok) {
-        if (saved) {
-          saved.deleteContents();
-          const node = document.createTextNode(out);
-          saved.insertNode(node);
-          saved.setStartAfter(node);
-          saved.collapse(true);
-          s.removeAllRanges(); s.addRange(saved);
-        } else el.textContent = out;
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: out }));
-      }
+      return false;
     },
   };
 }
@@ -111,6 +141,13 @@ export class InputBox {
     this.getSettings = getSettings;
     this.hits = [];
     this.busy = new WeakSet();
+    this.composing = new WeakSet();
+    this.epoch = 0;
+    this.onComposition = e => {
+      const el = editableOf(e.composedPath()[0]);
+      if (el) this.composing[e.type === 'compositionstart' ? 'add' : 'delete'](el);
+      this.hits.length = 0;
+    };
     this.on = false;
     this.chip = null;
     this.lastEditable = null;
@@ -126,6 +163,8 @@ export class InputBox {
   enable() {
     if (this.on) return;
     this.on = true;
+    document.addEventListener('compositionstart', this.onComposition, true);
+    document.addEventListener('compositionend', this.onComposition, true);
     document.addEventListener('keydown', this.onKeyDown, true);
     document.addEventListener('focusin', this.onFocus, true);
   }
@@ -133,9 +172,14 @@ export class InputBox {
   disable() {
     if (!this.on) return;
     this.on = false;
+    this.epoch++;
+    this.composing = new WeakSet();
+    document.removeEventListener('compositionstart', this.onComposition, true);
+    document.removeEventListener('compositionend', this.onComposition, true);
     document.removeEventListener('keydown', this.onKeyDown, true);
     document.removeEventListener('focusin', this.onFocus, true);
     this.lastEditable = null;
+    this.failure?.detach();
     this.chip?.ui.detach();
     this.chip = null;
   }
@@ -143,7 +187,7 @@ export class InputBox {
   #keydown(e) {
     const cfg = this.getSettings().input;
     if (!cfg.enabled || cfg.trigger !== 'triple-space') return;
-    if (e.isComposing || e.keyCode === 229) {
+    if (e.isComposing || e.keyCode === 229 || this.composing.has(editableOf(e.composedPath()[0]))) {
       this.hits.length = 0;
       return;
     }
@@ -203,12 +247,13 @@ export class InputBox {
   }
 
   async run(el, useSelection) {
-    if (this.busy.has(el)) return;
+    if (this.busy.has(el) || this.composing.has(el) || !editableOf(el)) return;
     const cfg = this.getSettings();
     if (!cfg.input.enabled) return;
-    const acc = accessor(el, useSelection);
+    let acc;
+    try { acc = inputAccessor(el, useSelection); } catch { toast('选区结构无法安全写回，请调整选区', 'error'); return; }
     // the first two spaces of a triple-space trigger are already in the field
-    let text = acc.text.replace(/[  ]+$/, '');
+    let text = useSelection ? acc.text : acc.text.replace(/[  ]+$/, '');
     let target = cfg.input.targetLang;
     if (cfg.input.prefixOverride) {
       const m = PREFIX.exec(text);
@@ -222,26 +267,45 @@ export class InputBox {
       toast('输入框是空的', 'error');
       return;
     }
-    const before = acc.current();
+    const epoch = this.epoch;
+    let edited = false, writing = false;
+    const changed = e => { if (!writing || e.type === 'compositionstart') edited = true; };
+    const observer = new MutationObserver(() => { if (!writing) edited = true; });
+    if (el.isContentEditable) observer.observe(el, { subtree:true, childList:true, characterData:true, attributes:true });
+    for (const type of ['input', 'beforeinput', 'compositionstart']) el.addEventListener(type, changed, true);
+    const valid = () => !edited && this.on && this.epoch === epoch && this.getSettings().input.enabled &&
+      el.isConnected && !!editableOf(el) && !this.composing.has(el);
     this.busy.add(el);
     this.#showChip(el);
-    const res = await this.platform.translator().translateText({
-      text,
-      to: target,
-      from: 'auto',
-      purpose: 'input',
-    });
-    this.busy.delete(el);
-    this.#hideChip();
-    if (!this.on || !this.getSettings().input.enabled) return;
-    if (!res.ok) {
-      toast(`输入框翻译失败：${(res.error && res.error.message) || '未知错误'}`, 'error', 4000);
-      return;
+    try {
+      const res = await this.platform.translator().translateText({ text, to:target, from:'auto', purpose:'input', ...interactionRequest(cfg.input) });
+      if (!valid()) return;
+      if (!res.ok || typeof res.text !== 'string' || !res.text.trim()) {
+        toast('输入框翻译失败，请重试', 'error', 4000); return;
+      }
+      if (acc.current() !== acc.before) { toast('翻译期间输入框内容变了，已放弃写回', 'error', 3500); return; }
+      // Drain pending mutations before allowing our own writes.
+      if (observer.takeRecords().length) return;
+      observer.disconnect(); writing = true;
+      const out = inputOutput(text, res.text, cfg.input, el.tagName === 'INPUT');
+      if (!await acc.apply(out, valid, value => { writing = value; }) && valid()) this.#writeFailure(res.text);
+    } catch { toast('输入框翻译失败，请重试', 'error', 4000); }
+    finally {
+      observer.disconnect();
+      for (const type of ['input', 'beforeinput', 'compositionstart']) el.removeEventListener(type, changed, true);
+      this.busy.delete(el); this.#hideChip();
     }
-    if (!this.on || !el.isConnected || !editableOf(el) || acc.current() !== before) {
-      toast('翻译期间输入框内容变了，已放弃替换', 'error', 3500);
-      return;
-    }
-    acc.apply(res.text);
+  }
+
+  #writeFailure(text) {
+    this.failure?.detach();
+    const ui = createOverlay('.failure{position:fixed;bottom:24px;left:8px;max-width:calc(100vw - 16px);padding:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);pointer-events:auto}.failure button{min-height:44px}.failure textarea{display:block;max-width:100%;width:320px}');
+    const box = document.createElement('div'); box.className = 'failure'; box.setAttribute('role', 'alert');
+    const label = document.createElement('p'); label.textContent = '编辑器未确认写回，请复制译文后粘贴。';
+    const value = document.createElement('textarea'); value.readOnly = true; value.value = text; value.setAttribute('aria-label', '未写回的译文');
+    const copy = document.createElement('button'); copy.textContent = '复制译文';
+    copy.onclick = async () => { try { await navigator.clipboard.writeText(text); copy.textContent = '已复制'; } catch { value.select(); } };
+    const close = document.createElement('button'); close.textContent = '关闭'; close.onclick = () => ui.detach();
+    box.append(label, value, copy, close); ui.el.append(box); ui.attach(); this.failure = ui;
   }
 }

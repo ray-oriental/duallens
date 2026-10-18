@@ -67,6 +67,33 @@ def main():
             page.screenshot(path=str(artifact / "wizard-375.png"))
             print("PASS fresh_wizard: no selected provider and no automatic network")
 
+            page.select_option('#inputMode', 'bilingual')
+            page.select_option('#inputOrder', 'translation-first')
+            page.select_option('#inputProfile', 'mock')
+            page.locator('#inputModel').fill('input-model')
+            page.select_option('#hoverProfile', 'mock')
+            page.locator('#hoverModel').fill('hover-model')
+            page.click('#save')
+            page.locator('#status').filter(has_text='已保存').wait_for()
+            page.reload()
+            page.locator('#status').filter(has_text='修改后').wait_for()
+            assert page.locator('#inputMode').input_value() == 'bilingual'
+            assert page.locator('#inputOrder').input_value() == 'translation-first'
+            assert page.locator('#inputProfile').input_value() == 'mock'
+            assert page.locator('#inputModel').input_value() == 'input-model'
+            assert page.locator('#hoverProfile').input_value() == 'mock'
+            assert page.locator('#hoverModel').input_value() == 'hover-model'
+            assert calls == [], 'Interaction settings unexpectedly made provider requests'
+            page.select_option('#inputMode', 'replace')
+            page.select_option('#inputOrder', 'source-first')
+            page.select_option('#inputProfile', '')
+            page.select_option('#hoverProfile', '')
+            page.locator('#inputModel').fill('')
+            page.locator('#hoverModel').fill('')
+            page.click('#save')
+            page.locator('#status').filter(has_text='已保存').wait_for()
+            print('PASS interaction_settings: bilingual order and independent service/model save/reload, no network')
+
             page.select_option("#providerPreset", "openrouter")
             page.click("#add-profile")
             page.locator("#apiKey").fill("sk-test-not-real")
@@ -253,7 +280,7 @@ def main():
         finally:
             h.close()
             e2e.remove_runtime_dir(run)
-    print("SUMMARY settings-browser total=7 PASS=7 FAIL=0 mock-only viewport=375x812")
+    print("SUMMARY settings-browser total=8 PASS=8 FAIL=0 mock-only viewport=375x812")
     print("ARTIFACTS " + str(artifact))
     return 0
 

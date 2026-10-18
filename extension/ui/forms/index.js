@@ -56,6 +56,8 @@ export async function mountSettingsForm(root, { store, platform }) {
     rootMarginPx: 'lazy.rootMarginPx', batchDelayMs: 'lazy.batchDelayMs', hoverEnabled: 'hover.enabled', hoverModifier: 'hover.modifier',
     selectionEnabled: 'selection.enabled', showIcon: 'selection.showIcon', inputEnabled: 'input.enabled', inputLang: 'input.targetLang',
     inputTrigger: 'input.trigger', prefixOverride: 'input.prefixOverride', floatEnabled: 'floatBall.enabled', floatSide: 'floatBall.side',
+    inputMode: 'input.mode', inputOrder: 'input.order', hoverProfile: 'hover.profileId', hoverModel: 'hover.model',
+    inputProfile: 'input.profileId', inputModel: 'input.model',
     preset: 'prompt.preset', customPrompt: 'prompt.custom', cacheEnabled: 'cache.enabled', maxEntries: 'cache.maxEntries', ttlDays: 'cache.ttlDays',
     comicsEnabled:'comics.enabled',comicsLanguage:'comics.language',
   };
@@ -131,6 +133,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     fill('providerChain', JSON.stringify(chain, null, 2));
   }
   async function draw() {
+    for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: '继承网页翻译' }, ...s.provider.profiles]);
     fill('comicsSites',s.comics.canvasSites.map(site=>typeof site==='string'?site:JSON.stringify(site)).join('\n'));
     for (const id of simple) fill(id, s[id]);
     for (const [id, path] of Object.entries(bind)) fill(id, path.split('.').reduce((v, k) => v[k], s));
@@ -271,6 +274,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     let id = preset, count = 2; while (s.provider.profiles.some(p => p.id === id)) id = preset + '-' + count++;
     const p = profileFromPreset(preset, id); s.provider.profiles.push(p); s.provider.active = id; pid = id; dirty = true;
     choices($('profile'), [{ id: '', name: '选择一个服务' }, ...s.provider.profiles], id);
+    for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: '继承网页翻译' }, ...s.provider.profiles], read(name + 'Profile'));
     await drawProfile(); setSelectedChain(); notice('填写 key，获取模型并测试；最后保存。');
   });
   function upsert(p) {
@@ -280,6 +284,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   async function selectGateway(id, chain) {
     pid = id; s.provider.active = id; s.provider.chain = chain; dirty = true;
     choices($('profile'), [{ id: '', name: '选择一个服务' }, ...s.provider.profiles], id);
+    for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: '继承网页翻译' }, ...s.provider.profiles], read(name + 'Profile'));
     fill('providerChain', JSON.stringify(chain, null, 2)); await drawProfile();
   }
   action('connect-gateway', async () => {

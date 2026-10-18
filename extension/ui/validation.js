@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION, validateSiteRules } from '../shared/settings.js';
+import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION, validateSiteRules, validateInteractionSettings } from '../shared/settings.js';
 import { isMtEngine } from '../background/mt.js';
 import { comicSites } from '../content/comics/sites.js';
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
@@ -15,6 +15,7 @@ export function terms(text) {
   });
 }
 export function validateSettings(s) {
+  validateInteractionSettings(s);
   requireThat(typeof s.comics?.enabled==='boolean' && ['jpn','jpn_vert','kor','eng'].includes(s.comics.language),'漫画开关或源语言无效');
   s.comics.canvasSites=comicSites(s.comics.canvasSites);
   requireThat(typeof s.subtitles?.enabled === 'boolean' && ['bilingual', 'translation-only'].includes(s.subtitles.mode) &&

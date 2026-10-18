@@ -3,7 +3,7 @@
 
 import { lensIcon } from './visual.js';
 import { createOverlay } from './overlay.js';
-import { deepActiveElement } from './util.js';
+import { deepActiveElement, interactionRequest } from './util.js';
 
 const MAX_CHARS = 4000;
 
@@ -140,8 +140,23 @@ export class SelectionUI {
     const body = el('div', 'body');
     const src = el('p', 'src');
     const dst = el('p', 'dst');
+    const services = el('div', 'services');
+    services.style.cssText = 'display:flex;gap:4px;padding:6px;flex-wrap:wrap';
+    const profile = el('select'); profile.setAttribute('aria-label', '划词服务');
+    const model = el('input'); model.setAttribute('aria-label', '划词模型');
+    model.placeholder = '模型（留空用默认）'; model.maxLength = 256;
+    const apply = el('button', 'retry', '重新翻译'); apply.type = 'button';
+    for (const n of [profile, model, apply]) n.style.cssText = 'min-height:44px;max-width:100%;min-width:0';
+    model.style.flex = '1';
+    services.append(profile, model, apply);
+    this.serviceProfile = profile; this.serviceModel = model;
+    profile.addEventListener('change', () => { model.value = ''; });
+    apply.addEventListener('click', () => {
+      this.choice = { profileId: profile.value, model: model.value };
+      if (this.cardState?.source) this.openCard(this.cardState.source, null, true);
+    });
     body.append(src, dst);
-    card.append(head, body);
+    card.append(head, services, body);
     this.ui.el.append(icon, card);
 
     bMode.addEventListener('click', () => {
@@ -174,7 +189,7 @@ export class SelectionUI {
 
   #makeDraggable(handle, card) {
     handle.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('button')) return;
+      if (e.target.closest('button,select,input')) return;
       const r = card.getBoundingClientRect();
       const dx = e.clientX - r.left;
       const dy = e.clientY - r.top;
@@ -230,11 +245,18 @@ export class SelectionUI {
   // ---- card --------------------------------------------------------------------------------
 
   // rect may be null (context-menu path without a usable selection rectangle)
-  async openCard(text, rect) {
+  async openCard(text, rect, keepChoice = false) {
     const s = this.getSettings();
     const value = String(text || '').trim().slice(0, MAX_CHARS);
     if (!value) return;
     this.#build();
+    if (!keepChoice) this.choice = {};
+    this.serviceProfile.replaceChildren();
+    for (const p of [{ id: '', name: '继承网页翻译' }, ...s.provider.profiles]) {
+      const option = el('option', '', p.name || p.id); option.value = p.id; this.serviceProfile.append(option);
+    }
+    this.serviceProfile.value = this.choice.profileId || '';
+    this.serviceModel.value = this.choice.model || '';
     this.ui.attach();
     this.cardMode = this.cardMode || s.displayMode;
     this.src.textContent = value;
@@ -256,7 +278,8 @@ export class SelectionUI {
       to: s.targetLang,
       from: s.sourceLang || 'auto',
       purpose: 'selection',
-    });
+      ...interactionRequest(this.choice),
+    }).catch(() => ({ ok: false }));
     if (token !== this.token || !this.#cardVisible()) return;
     this.dst.replaceChildren();
     if (res.ok) {
@@ -273,7 +296,7 @@ export class SelectionUI {
       this.dst.textContent = `翻译失败：${(res.error && res.error.message) || '未知错误'}`;
       const retry = el('button', 'retry', '重试');
       retry.type = 'button';
-      retry.addEventListener('click', () => this.openCard(value, rect));
+      retry.addEventListener('click', () => this.openCard(value, rect, true));
       this.dst.append(document.createElement('br'), retry);
     }
     this.#place(rect, true);
