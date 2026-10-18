@@ -1,12 +1,26 @@
-# YouTube 字幕与文本侧栏（P1，待主控合并）
+# 网页视频字幕、本地字幕文件与文本侧栏（P1，待主控合并）
 
-本分支只实现 YouTube 平台已有的字幕轨和自由文本翻译，不提供语音识别、直播字幕服务、其他视频网站或文件翻译。扩展保持原生 ES 模块、零构建；用户脚本复用相同核心与用户配置的服务，无需本机网关。所有验证均使用离线夹具和 mock，未验证真实服务质量或真机浏览器。
+本分支支持 YouTube 已有轨道、HTML5 标准字幕轨、用户导入的 SRT/VTT 字幕文件和自由文本翻译。不提供语音识别、私有播放器专用适配或一般文档翻译。扩展保持原生 ES 模块、零构建；用户脚本复用相同核心与用户配置的服务，无需本机网关。所有验证使用离线夹具和 mock，未验证真实服务质量或真机浏览器。
+
+## v0.5 通用字幕与本地文件增量
+
+- 非 YouTube 页面从标准 `video.textTracks` 读取已显示的 subtitles/captions 轨道，也支持网站通过 `addTextTrack` 创建的 hidden/captions 轨道。优先用户当前 showing 轨道；不擅自启用 disabled 轨道。用户需先在播放器打开字幕。没有可读 cue 的视频不创建覆盖层或翻译请求；多个视频分别调度。
+- `<track src>` 由浏览器原生加载器执行同源/CORS 校验。跨域不允许或 cues 不可读时保留原播放器，不使用后台/GM 绕过 CORS，也不读取播放器私有接口。后台 `subtitle-track` 仍严格限定 YouTube，无权限和消息协议扩张。
+- 复用既有五条一组、当前位置优先、seek 取消并重排的 `SubtitleScheduler`。译文通过 `textContent` 插入。当前 cue 有译文时将选中 showing 轨临时设为 hidden；空档/失败保留原生字幕；关闭、移除视频、换轨和重新配置时恢复由 DualLens 临时修改的 mode。不修改 `<track>` 元素、cue 或播放器样式。原生已 hidden 轨保持 hidden。
+- 覆盖层按视频矩形定位，监听滚动/尺寸/全屏事件；容器全屏时移入容器，视频元素全屏时使用浏览器 top-layer popover。关闭移除覆盖层及所有监听。Android 系统原生播放器全屏与实际 Tampermonkey 隔离环境仍须真机验收。
+- 字幕页签可选 `.srt` / `.vtt`，先按 File.size 检查 **2 MiB（2,097,152 字节；界面标记 2 MB）**，解析器再按 UTF-8 字节检查；超限显示「字幕文件不能超过 2 MB」。最多 10,000 条 cue，UTF-8 文本支持 BOM/CRLF、多行、样式标签、实体和标准时间格式。丢弃样式、VTT NOTE/STYLE/REGION 与定位元数据，不保留原始 cue ID；导出顺序编号、保留毫秒时间轴。
+- 导入只在本地解析并预览前 20 条。点击「翻译字幕文件」才通过当前 TranslatorService 逐组发送 cue 文字和语言，不发送文件名、时间轴或整个文件。可取消、重试失败项；换文件、关闭页签或语言/服务设置变化会取消旧请求并屏蔽迟到结果。语言/服务变化清空旧译文，避免混合导出。缓存仍由既有翻译服务管理。
+- 全部条目成功后可下载双语 SRT 或 VTT，每条包含原文、译文，保留原有多行。文本中的 `<>&` 转义，避免导出后被当作样式；导出为本地 Blob，不上传。双语文件可能大于原文件，重新导入同样遵守 2 MiB 限制。标准字幕重叠时显示最后开始的一条，不保留逐词动画或位置样式。
+
+文件分工：`controller.js` 选择 YouTube/HTML5 控制器；原 YouTube 实现迁至 `youtube.js`；`html5.js` 管理标准播放器生命周期，复用原控制器的渲染、取消和状态逻辑；`files.js` 提供纯解析/生成函数；`sidepanel/subtitle-form.js` 在现有字幕表单下加入文件流程。main.js 只更换字幕控制器导入与实例化。
+
+**尚未达成的预算项：** 基线启动包实测 311,939 字节；本增量的完整内联实现超过 +9,000 字节，虽然仍低于总目标 330,000。通用模块按需 `@resource` 打包需要更改分工外的 `scripts/build_userscript.mjs`，以及资源发布/校验白名单和 GM 测试桩；本工作区没有改动这些文件。需 leader 授权或接手资源拆分后才能声称完全达到本轮验收。最终精确字节数见交付报告。
 
 ## 使用
 
 - 桌面 Chrome / Edge：Alt+S 或右键「DualLens 文本翻译」打开浏览器侧栏。输入文本，选择语言、服务和模型后翻译；可复制或调用系统朗读。默认使用当前备选链。模型列表只在点击「获取模型」时请求。
 - 用户脚本：Tampermonkey 菜单「DualLens 文本翻译」或 Alt+S 打开原有 DualLens 面板的「文本翻译」页签；另有「设置」「视频字幕」页签。手机使用菜单入口，不要求实体键盘。
-- 字幕：侧栏的字幕设置、用户脚本的视频字幕页签或 YouTube 上的右键菜单启用。默认关闭。启用后打开播放器 CC 选择字幕轨；DualLens 收到轨道请求后开始翻译。可设置双语/仅译文、16–48 px 字号和顶部/底部位置。
+- 字幕：侧栏的字幕设置、用户脚本的视频字幕页签或既有字幕命令启用。默认关闭。YouTube 打开 CC 选择字幕轨，其他 HTML5 播放器打开可用的标准轨。可设置双语/仅译文、16–48 px 字号和顶部/底部位置。既有 GM 菜单文案仍为「启用 / 恢复 YouTube 双语字幕」，实际命令现已支持标准轨；需 leader 与公共入口文案统一。
 - 关闭字幕、字幕恢复命令或网页恢复命令移除覆盖层与遮挡原字幕的样式，取消取轨和未完成批次，保留播放器 CC 开关与原字幕 DOM。播放器容器全屏仍显示覆盖层；Android 的系统原生视频全屏需要真机验收。
 
 ## 取轨与安全边界
@@ -53,6 +67,7 @@ API 行为依据 [Chrome sidePanel 文档](https://developer.chrome.com/docs/ext
 
 ```powershell
 node --test tests/unit/subtitles.test.mjs
+node --test tests/unit/subtitle-files.test.mjs
 node scripts/build_userscript.mjs
 $env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
 & "$env:USERPROFILE\.venvs\duallens-e2e\Scripts\python.exe" -B -u tests/e2e/run_media_e2e.py
@@ -63,3 +78,5 @@ $env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
 测试不注入产品测试钩子；用户脚本等价 GM 桩里的 closed shadow root 由 E2E init script 外部审计，扩展通过既有 get-state 消息核查实际显示状态。合成按键不能触发浏览器系统级扩展 command，Alt+S 的命令分发另用离线后台监听器测试，原生 sidePanel.open 使用扩展手势调用实测。系统朗读调用与按钮验证不等于设备实际有可用中文声音。
 
 真实 YouTube（签名地址、区域限制、广告、字幕格式变化）、两台 Windows Chrome/Edge 及 Android Edge + Tampermonkey 的实际行为仍由 leader / 用户最终验收。Android Chrome 的 bookmarklet 不在本任务内；不宣称支持 Chrome Android 扩展。v0.3 集成已将本文件加入发布文档白名单。
+
+v0.5 专项另含 `html5.html`：本地标准 VTT 与支持 HTTP Range 的静音 WAV，通过真实 currentTime 验证扩展隔离世界与用户脚本 375×812 / 800×1280；测试容器及 video 元素全屏、无轨视频无覆盖层、原生 mode 与 DOM 精确恢复、in-band TextTrack。文件用例在扩展侧栏与用户脚本中实际导入、mock 翻译、下载两种格式并重新导入，检查时间轴、多行与超限中文提示。桌面 Chromium/GM 桩结果不能代替真机兼容结论。

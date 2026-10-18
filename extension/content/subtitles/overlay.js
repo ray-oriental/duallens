@@ -9,7 +9,7 @@ const CSS = `
 `;
 
 export class SubtitleOverlay {
-  constructor(player) {
+  constructor(player, video = null) {
     this.player = player;
     this.host = document.createElement('dl-ui');
     this.host.setAttribute('data-dl-subtitles', '');
@@ -27,9 +27,26 @@ export class SubtitleOverlay {
     this.position = player.style.getPropertyValue('position');
     this.positionPriority = player.style.getPropertyPriority('position');
     this.hadStyle = player.hasAttribute('style');
-    this.changedPosition = getComputedStyle(player).position === 'static';
+    this.changedPosition = !video && getComputedStyle(player).position === 'static';
     if (this.changedPosition) player.style.setProperty('position', 'relative');
-    player.append(this.nativeStyle, this.host);
+    if (!video) player.append(this.nativeStyle, this.host);
+    else {
+      // A top-layer popover can remain above an element-fullscreen <video>,
+      // whose fallback children cannot render. No player/track DOM is changed.
+      this.host.setAttribute('popover', 'manual');
+      this.reposition = () => {
+        const full = document.fullscreenElement;
+        const parent = full && full !== video && full.contains(video) ? full : document.body;
+        if (this.host.parentNode !== parent) parent.append(this.host);
+        if (full === video && !this.host.matches(':popover-open')) this.host.showPopover?.();
+        else if (full !== video && this.host.matches(':popover-open')) this.host.hidePopover?.();
+        const r = video.getBoundingClientRect();
+        this.host.style.cssText = `all:initial!important;position:fixed!important;inset:auto!important;left:${r.left}px!important;top:${r.top}px!important;width:${r.width}px!important;height:${r.height}px!important;margin:0!important;padding:0!important;border:0!important;pointer-events:none!important;z-index:2147483647!important;display:block!important;`;
+      };
+      for (const type of ['resize', 'scroll', 'fullscreenchange']) window.addEventListener(type, this.reposition, true);
+      this.resize = new ResizeObserver(this.reposition); this.resize.observe(video);
+      this.reposition();
+    }
     this.render(null, {});
   }
   render(cue, options) {
@@ -47,6 +64,8 @@ export class SubtitleOverlay {
       fontSize: this.box.style.fontSize, position: this.box.classList.contains('top') ? 'top' : 'bottom' };
   }
   destroy() {
+    for (const type of ['resize', 'scroll', 'fullscreenchange']) window.removeEventListener(type, this.reposition, true);
+    this.resize?.disconnect();
     this.host.remove(); this.nativeStyle.remove();
     if (this.changedPosition && this.player.style.getPropertyValue('position') === 'relative') {
       if (this.position) this.player.style.setProperty('position', this.position, this.positionPriority);

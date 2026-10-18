@@ -15,7 +15,7 @@ import { InputBox } from './inputbox.js';
 import { HoverTranslate } from './hover.js';
 import { FloatBall } from './floatball.js';
 import { ComicTranslator } from './comics/controller.js';
-import { YouTubeSubtitles } from './subtitles/controller.js';
+import { VideoSubtitles } from './subtitles/controller.js';
 import { subtitleOptions } from './subtitles/track.js';
 import { clearToast } from './overlay.js';
 
@@ -34,7 +34,7 @@ class App {
       return this.effectiveSettings;
     };
     this.comics = new ComicTranslator({ platform, getSettings: this.getSettings });
-    this.subtitles = new YouTubeSubtitles({ platform, getSettings: this.getSettings });
+    this.subtitles = new VideoSubtitles({ platform, getSettings: this.getSettings });
 
     this.translator = new PageTranslator({
       platform,

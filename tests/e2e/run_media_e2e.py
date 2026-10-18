@@ -25,6 +25,153 @@ TRACK = {'events': [{'tStartMs': i * 1000, 'dDurationMs': 1000,
                     'segs': [{'utf8': f'Sentence {i}. <plain text>'}]} for i in range(30)]}
 
 
+def local_html5(context):
+    """Real native VTT loader, with currentTime driven independently of decoding."""
+    vtt = 'WEBVTT\n\n' + '\n\n'.join(f'{i}\n00:{i//60:02}:{i%60:02}.000 --> 00:{(i+1)//60:02}:{(i+1)%60:02}.000\nSentence {i}.\nsecond line' for i in range(30))
+    audio = io.BytesIO()
+    with wave.open(audio, 'wb') as stream:
+        stream.setnchannels(1); stream.setsampwidth(2); stream.setframerate(8000); stream.writeframes(b'\0\0' * 8000 * 35)
+    def route(r):
+        url = urlsplit(r.request.url)
+        if url.scheme in ('chrome-extension', 'data', 'about', 'blob'):
+            r.continue_(); return
+        if url.hostname != 'standard.test':
+            r.abort(); return
+        if url.path == '/standard.vtt':
+            r.fulfill(status=200, content_type='text/vtt', body=vtt); return
+        if url.path == '/fixture.wav':
+            body = audio.getvalue(); match = re.fullmatch(r'bytes=(\d+)-(\d*)', r.request.headers.get('range', ''))
+            if match:
+                begin = int(match[1]); end = min(int(match[2]) if match[2] else len(body)-1, len(body)-1)
+                r.fulfill(status=206, content_type='audio/wav', body=body[begin:end+1], headers={'Accept-Ranges':'bytes','Content-Range':f'bytes {begin}-{end}/{len(body)}'})
+            else:
+                r.fulfill(status=200, content_type='audio/wav', body=body, headers={'Accept-Ranges':'bytes'})
+            return
+        r.fulfill(status=200, content_type='text/html', body=(FIXTURE.parent / 'html5.html').read_text(encoding='utf-8'))
+    context.route('**/*', route)
+
+
+def html5_case(pw, extension=None, width=1280, height=800):
+    session = None; context = None; profile = None
+    try:
+        if extension:
+            session = Session(pw, extension, '', 'standard-subtitles'); session.start(); context = session.ctx
+            session.sw_eval("() => {globalThis.fetch=()=>{throw Error('Offline worker forbids network');};}")
+        else:
+            profile = E2E_ROOT / ('profile-standard-gm-' + uuid.uuid4().hex[:8])
+            context = pw.chromium.launch_persistent_context(str(profile), headless=True,
+                viewport={'width': width, 'height': height}, has_touch=width<1000, is_mobile=width<1000)
+            context.add_init_script(script=STUB + '\n' + (REPO / 'dist' / 'duallens.user.js').read_text(encoding='utf-8'))
+        local_html5(context)
+        page = context.new_page(); page.goto('https://standard.test/watch')
+        page.wait_for_function('document.querySelector("#standard").textTracks[0].cues?.length===30')
+        page.wait_for_function('document.querySelector("#standard").currentTime>17')
+        if session:
+            session.page = page; session.tab_id = session.sw_eval(JS_FIND_TAB, page.url); session.wait_ready()
+            session.command('toggle-subtitles')
+            state = session.wait_state(lambda s: s['subtitles']['visible'], 10, 'standard subtitles')['subtitles']
+            check(state['order'][0] == 3, 'standard track did not start near playhead')
+        else:
+            page.wait_for_function("__platformFixture.hasCommand('启用 / 恢复 YouTube 双语字幕')")
+            check(page.locator('dl-ui[data-dl-subtitles]').count() == 0, 'default-off track translated')
+            gm_command(page, '启用 / 恢复 YouTube 双语字幕')
+        page.wait_for_selector('dl-ui[data-dl-subtitles][data-ready]')
+        check(page.locator('dl-ui[data-dl-subtitles]').count() == 1, 'trackless video got an overlay')
+        page.wait_for_function('document.querySelector("#standard").textTracks[0].mode==="hidden"')
+        if session:
+            check('Sentence 17.' in state['current']['source'], 'standard current cue incorrect')
+        else:
+            page.wait_for_function("__platformFixture.elements('.target').some(e=>e.textContent.includes('Sentence 17.'))")
+        page.evaluate('fixtureSeek(1.3)')
+        if session:
+            session.wait_state(lambda s: s['subtitles']['current'] and 'Sentence 1.' in s['subtitles']['current']['source'], 5, 'standard seek')
+        else:
+            page.wait_for_function("__platformFixture.elements('.target').some(e=>e.textContent.includes('Sentence 1.'))")
+        for button in ['#full', '#full-video']:
+            page.locator(button).click(); page.wait_for_function('!!document.fullscreenElement')
+            if button == '#full':
+                page.wait_for_function('document.fullscreenElement.contains(document.querySelector("dl-ui[data-dl-subtitles]"))')
+            else:
+                page.wait_for_function('document.querySelector("dl-ui[data-dl-subtitles]").matches(":popover-open")')
+            box = page.locator('dl-ui[data-dl-subtitles]').bounding_box(); check(box and box['width'] > 0, 'fullscreen overlay has no bounds')
+            page.evaluate('document.exitFullscreen()'); page.wait_for_function('!document.fullscreenElement')
+        if session:
+            session.command('restore-subtitles'); session.wait_state(lambda s: not s['subtitles']['overlay'], 5, 'standard restore')
+        else:
+            gm_command(page, '启用 / 恢复 YouTube 双语字幕'); page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
+        check(page.evaluate('document.querySelector("#standard").textTracks[0].mode') == 'showing', 'native track mode not restored')
+        check(page.evaluate('document.querySelector("#standard-player").outerHTML===fixtureBefore'), 'standard restore changed DOM')
+        # In-band tracks created by standard APIs need no <track> element.
+        page.evaluate("""() => {const v=document.querySelector('#standard');v.textTracks[0].mode='disabled';const t=v.addTextTrack('captions','In-band','en');t.addCue(new VTTCue(1,2,'In-band sentence.'));t.mode='showing';}""")
+        if session:
+            session.command('toggle-subtitles')
+            session.wait_state(lambda s: s['subtitles']['visible'] and 'In-band' in s['subtitles']['current']['source'], 10, 'in-band caption')
+            session.command('restore-subtitles'); session.wait_state(lambda s: not s['subtitles']['overlay'], 5, 'in-band restore')
+        else:
+            gm_command(page, '启用 / 恢复 YouTube 双语字幕')
+            page.wait_for_function("__platformFixture.elements('.target').some(e=>e.textContent.includes('In-band'))")
+            gm_command(page, '启用 / 恢复 YouTube 双语字幕'); page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
+        check(page.evaluate('[...document.querySelector("#standard").textTracks].map(t=>t.mode)') == ['disabled','showing'], 'in-band restore changed track selection')
+        return 'native same-origin VTT + in-band TextTrack, default-off, current-group-first, multiline, seek, container/video fullscreen, mode and exact DOM restore'
+    finally:
+        if session: session.close()
+        elif context: context.close()
+        if profile: remove_runtime_dir(profile)
+
+
+def subtitle_file_case(pw, extension=None):
+    session = None; context = None; profile = None
+    text = '1\n00:00:01,234 --> 00:00:02,345\n<i>First</i> &amp; plain\nsecond line\n\n2\n01:00:00,001 --> 01:00:01,002\nLast\n'
+    try:
+        if extension:
+            session = Session(pw, extension, '', 'subtitle-file'); session.start(); context = session.ctx
+            context.route('https://**/*', lambda r: r.abort())
+            page = context.new_page(); page.goto(f'chrome-extension://{session.ext_id}/sidepanel/index.html')
+            page.evaluate('window.findSubtitle=s=>[...document.querySelectorAll(s)]')
+        else:
+            profile = E2E_ROOT / ('profile-subtitle-file-' + uuid.uuid4().hex[:8])
+            context = pw.chromium.launch_persistent_context(str(profile), headless=True, accept_downloads=True, viewport={'width':375,'height':812}, is_mobile=True, has_touch=True)
+            local_html5(context)
+            context.add_init_script(script=STUB + '\n' + (REPO / 'dist' / 'duallens.user.js').read_text(encoding='utf-8'))
+            page = context.new_page(); page.goto('https://standard.test/watch')
+            page.wait_for_function("__platformFixture.hasCommand('DualLens 文本翻译')"); gm_command(page, 'DualLens 文本翻译')
+            click_shadow(page, '[data-tab=subtitles]')
+            page.evaluate('window.findSubtitle=s=>__platformFixture.elements(s)')
+        def wait_js(expression):
+            until = time.monotonic() + 15
+            while time.monotonic() < until:
+                if page.evaluate(expression): return
+                page.wait_for_timeout(30)
+            raise AssertionError('subtitle file UI did not reach expected state: ' + expression)
+        wait_js('findSubtitle("[name=subtitle-file]").length===1')
+        def upload(source, name):
+            page.evaluate("""([text,name])=>{const input=findSubtitle('[name=subtitle-file]')[0];const dt=new DataTransfer();dt.items.add(new File([text],name,{type:'text/plain'}));input.files=dt.files;input.dispatchEvent(new Event('change'));}""", [source,name])
+        upload(text, 'fixture.srt')
+        wait_js("findSubtitle('.subtitle-preview')[0].textContent.includes('second line')")
+        check('【译】' not in page.evaluate("findSubtitle('.subtitle-preview')[0].textContent"), 'file translated before explicit click')
+        page.evaluate("findSubtitle('button').find(b=>b.textContent==='翻译字幕文件').click()")
+        wait_js("findSubtitle('.subtitle-file-status')[0].textContent.startsWith('2 / 2')")
+        downloaded = []
+        for fmt in ['SRT', 'VTT']:
+            with page.expect_download() as item:
+                page.evaluate("fmt=>findSubtitle('button').find(b=>b.textContent==='导出双语 '+fmt).click()", fmt)
+            content = Path(item.value.path()).read_text(encoding='utf-8')
+            check('First &amp; plain\nsecond line\n【译】' in content, 'bilingual export missing source/translation multiline')
+            check('00:00:01'+(',' if fmt=='SRT' else '.')+'234' in content, 'export changed timing')
+            downloaded.append((fmt, content))
+        for fmt, content in downloaded:
+            upload(content, 'roundtrip.' + fmt.lower())
+            wait_js("findSubtitle('.subtitle-preview')[0].textContent.includes('【译】')")
+        upload('x' * (2*1024*1024+1), 'oversized.srt')
+        wait_js("findSubtitle('.subtitle-file-status')[0].textContent.includes('不能超过 2 MB')")
+        check(page.evaluate("findSubtitle('button').find(b=>b.textContent==='翻译字幕文件').disabled"), 'oversized upload remained translatable')
+        return 'explicit local SRT import, multiline/style/entity preview, mock translation, bilingual SRT/VTT downloads and reimport, 2MB Chinese error'
+    finally:
+        if session: session.close()
+        elif context: context.close()
+        if profile: remove_runtime_dir(profile)
+
+
 def local_youtube(context, requests):
     audio = io.BytesIO()
     with wave.open(audio, 'wb') as stream:
@@ -220,6 +367,11 @@ def main():
         extension, missing = stage_extension(run); check(not missing, 'missing extension assets')
         with sync_playwright() as pw:
             cases = [('extension_www', lambda: extension_case(pw, extension, 'www.youtube.com')),
+                     ('html5_extension', lambda: html5_case(pw, extension)),
+                     ('html5_userscript_phone', lambda: html5_case(pw, width=375, height=812)),
+                     ('html5_userscript_tablet', lambda: html5_case(pw, width=800, height=1280)),
+                     ('subtitle_file_extension', lambda: subtitle_file_case(pw, extension)),
+                     ('subtitle_file_userscript', lambda: subtitle_file_case(pw)),
                      ('extension_mobile_host', lambda: extension_case(pw, extension, 'm.youtube.com')),
                      ('sidepanel', lambda: sidepanel_case(pw, extension)),
                      ('userscript_desktop', lambda: userscript_case(pw, 'www.youtube.com', 1280, 800, False)),

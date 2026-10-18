@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Standard HTML5 captions</title>
+<style>body{margin:0;background:#171717;color:white}#standard-player{width:100%;height:360px}video{width:100%;height:100%;background:#252525}button{min-height:44px}</style></head><body>
+<div id="standard-player"><video id="standard" src="/fixture.wav" preload="auto"><track default kind="subtitles" srclang="en" label="English" src="/standard.vtt"></video></div>
+<video id="empty" hidden></video>
+<button id="full">Fullscreen player</button><button id="full-video">Fullscreen video</button>
+<script>
+const video=document.querySelector('#standard');
+video.addEventListener('loadedmetadata',()=>{video.currentTime=17.3},{once:true});
+video.textTracks[0].mode='showing';
+window.fixtureSeek=value=>{video.currentTime=value;video.dispatchEvent(new Event('seeking'));video.dispatchEvent(new Event('timeupdate'));};
+document.querySelector('#full').onclick=()=>document.querySelector('#standard-player').requestFullscreen();
+document.querySelector('#full-video').onclick=()=>video.requestFullscreen();
+window.fixtureBefore=document.querySelector('#standard-player').outerHTML;
+</script></body></html>
