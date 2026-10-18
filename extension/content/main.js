@@ -15,7 +15,7 @@ import { InputBox } from './inputbox.js';
 import { HoverTranslate } from './hover.js';
 import { FloatBall } from './floatball.js';
 import { ComicTranslator } from './comics/controller.js';
-import { YouTubeSubtitles } from './subtitles/controller.js';
+import { VideoSubtitles } from './subtitles/controller.js';
 import { subtitleOptions } from './subtitles/track.js';
 import { clearToast } from './overlay.js';
 
@@ -34,7 +34,7 @@ class App {
       return this.effectiveSettings;
     };
     this.comics = new ComicTranslator({ platform, getSettings: this.getSettings });
-    this.subtitles = new YouTubeSubtitles({ platform, getSettings: this.getSettings });
+    this.subtitles = new VideoSubtitles({ platform, getSettings: this.getSettings });
 
     this.translator = new PageTranslator({
       platform,
@@ -86,7 +86,7 @@ class App {
     this.platform.registerCommand('translate-comics', '翻译此页漫画', () => this.#command('translate-comics'));
     this.platform.registerCommand('restore-comics', '恢复漫画原文', () => this.#command('restore-comics'));
     this.platform.registerCommand('open-sidepanel', 'DualLens 文本翻译', () => this.platform.openTextTranslation());
-    this.platform.registerCommand('toggle-subtitles', '启用 / 恢复 YouTube 双语字幕', () => this.#command('toggle-subtitles'));
+    this.platform.registerCommand('toggle-subtitles', '启用 / 恢复视频双语字幕', () => this.#command('toggle-subtitles'));
     this.#wake(true);
     this.#pushFrames();
   }

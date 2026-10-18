@@ -1,7 +1,7 @@
 # DualLens 规格与接口契约
 
 公共接口契约。实现以本文件与设置模块为准；变更接口时同步更新规格。
-状态：v0.5.0（2026-10-18）；发布版本以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
+状态：v0.6.0（2026-10-18）；发布版本以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
 
 ## 0. 范围
 
@@ -124,6 +124,22 @@ siteRules: {
   隐藏暂停、重新可见立即检查。异步语言检测不能把上一条路由的自动决定带入下一页。
 - 弹出页“仅当前路径”生成 `host[:port]/first-segment/*`（根路径为 `host[:port]/*`）。
   回到默认写入显式 default，而非删除继承关系。非机密明文/加密备份均保留新增字段；密钥规则不变。
+
+### 3.2 输入、划词与悬停（v0.5 增量）
+
+非机密字段 `input.mode='replace'`、`input.order='source-first'` 控制替换/双语与原译顺序；
+`hover.profileId/model`、`input.profileId/model` 默认空字符串，分别继承网页服务/模式。
+指定服务使用既有 `translate-text` 单次覆盖与 `mode:'llm'`；空 model 使用服务默认值，不改持久网页链。
+划词卡片的服务/模型选择仅作用于当前卡片，可手动重新翻译；新卡片恢复继承。
+设置保存与配置导入验证枚举、profile 引用与模型字符串（≤256 字符、无控制字符），旧配置自动补默认字段。
+共享表单位于已有设置资源，扩展与用户脚本使用相同字段；不增加机密字段、权限或运行时依赖。
+
+双语 textarea/contenteditable 换行、单行 input 空格分隔，局部选区不改外部文字。
+写回每种策略后等待 32ms 再读回确认，拒绝/回滚时在内容未变条件下尝试下一种；全部失败显示中文复制兜底。
+组合输入、续写、富文本 DOM 修改与停用使待处理结果失效；不向可执行标记写模型输出。
+完整策略顺序、悬停纯文本适配、备选链语义和可观察性限制见 [PLATFORMS.md](PLATFORMS.md) 的“输入、划词与悬停”。
+专项离线测试：`node --test tests/unit/input-interactions.test.mjs`、`python -B tests/e2e/run_input_e2e.py`，
+后者在隔离 MV3 与手机尺寸 GM 等价环境中使用相同夹具，不能替代真实设备/编辑器验收。
 
 ## 4. 消息协议（`extension/shared/protocol.js`）
 

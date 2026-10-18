@@ -190,6 +190,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 const MENU = {
   TEXT: 'dl-open-text',
   SUBTITLES: 'dl-toggle-subtitles',
+  VIDEO_SUBTITLES: 'dl-toggle-video-subtitles',
   COMICS: 'dl-translate-comics',
   TOGGLE: 'dl-toggle-page',
   SELECTION: 'dl-translate-selection',
@@ -204,7 +205,9 @@ function setupMenus() {
     add({ id: MENU.TOGGLE, title: '翻译此页 / 恢复原文', contexts: ['page', 'link', 'image'] });
     add(pdfEntries.menu);
     add({ id: MENU.TEXT, title: 'DualLens 文本翻译', contexts: ['page', 'selection'] });
-    add({ id: MENU.SUBTITLES, title: '启用 / 恢复 YouTube 双语字幕', contexts: ['video', 'page'], documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*'] });
+    // YouTube's player swallows the video context menu, so it keeps a page-level entry; other sites expose <video>.
+    add({ id: MENU.SUBTITLES, title: '启用 / 恢复视频双语字幕', contexts: ['page'], documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*'] });
+    add({ id: MENU.VIDEO_SUBTITLES, title: '启用 / 恢复视频双语字幕', contexts: ['video'] });
     add({ id: MENU.COMICS, title: '翻译此页漫画', contexts: ['page', 'image'] });
     add({ id: MENU.SELECTION, title: '翻译选中文字', contexts: ['selection'] });
     add({ id: MENU.ALWAYS, title: '总是翻译此网站', contexts: ['page'] });
@@ -242,6 +245,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await chrome.sidePanel.open({ tabId }).catch(() => {});
       break;
     case MENU.SUBTITLES:
+    case MENU.VIDEO_SUBTITLES:
       await sendToTab(tabId, { type: MSG_COMMAND, name: 'toggle-subtitles' });
       break;
     case MENU.COMICS:

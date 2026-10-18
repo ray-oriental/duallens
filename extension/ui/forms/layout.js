@@ -104,6 +104,13 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(i.grid, 'hoverModifier', '悬停修饰键', 'select', pairs([['Shift', 'Shift'], ['Alt', 'Alt'], ['Control', 'Ctrl'], ['none', '停留 500ms']]));
   field(i.grid, 'inputLang', '输入框目标语言', 'select', LANGS);
   field(i.grid, 'inputTrigger', '输入触发', 'select', pairs([['triple-space', '三次空格或快捷键'], ['shortcut', '仅快捷键']]));
+  field(i.grid, 'inputMode', '输入框写回', 'select', pairs([['replace', '替换原文'], ['bilingual', '双语（保留原文）']]));
+  field(i.grid, 'inputOrder', '双语顺序', 'select', pairs([['source-first', '原文在前'], ['translation-first', '译文在前']]));
+  for (const [name, title] of [['hover', '悬停 / 长按'], ['input', '输入框']]) {
+    field(i.grid, name + 'Profile', title + '服务', 'select');
+    field(i.grid, name + 'Model', title + '模型（留空使用服务默认模型）', 'text', [], { maxlength: '256' });
+  }
+  i.box.append(el('p', '继承网页翻译时沿用网页翻译方式与备选链；指定服务时使用其大模型，仅影响该交互。双语输入以换行分隔，单行输入框以空格分隔。', { class: 'hint' }));
   field(i.grid, 'floatSide', '悬浮球侧边', 'select', pairs([['right', '右侧'], ['left', '左侧']]));
   const comics = section('漫画');
   field(comics.grid,'comicsEnabled','启用漫画本地 OCR','checkbox');

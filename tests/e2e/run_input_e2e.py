@@ -1,0 +1,261 @@
+"""Mock-only input/selection/hover acceptance on MV3 and the unchanged userscript bundle.
+Uses isolated staged profiles and test-only closed-shadow instrumentation; never real services.
+"""
+import json
+import uuid
+from playwright.sync_api import sync_playwright
+import run_e2e as e2e
+from run_userscript_e2e import STUB
+
+ROOTS = """(() => {
+  const roots=[]; const attach=Element.prototype.attachShadow;
+  Element.prototype.attachShadow=function(init){const root=attach.call(this,init);if(this.localName==='dl-ui')roots.push({host:this,root});return root;};
+  globalThis.__inputFixture={elements:s=>roots.filter(r=>r.host.isConnected).flatMap(r=>[...r.root.querySelectorAll(s)])};
+})();"""
+PASSED = []
+
+FIELDS = """() => {
+  const area=document.createElement('section');area.id='input-fixtures';
+  for(const [tag,id] of [['textarea','controlled'],['input','single'],['div','rich'],['div','editor'],['div','reject']]) {
+    const n=document.createElement(tag);n.id=id;if(tag==='div')n.contentEditable='true';
+    n.style.cssText='display:block;min-height:44px;white-space:pre-wrap';area.append(n);
+  }
+  document.body.prepend(area);
+  const field=document.querySelector('#controlled'), proto=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value');
+  // A React-style own setter is deliberately bypassed; input must update the owner's state.
+  Object.defineProperty(field,'value',{get(){return proto.get.call(this);},set(){throw Error('use native setter');},configurable:true});
+  field.addEventListener('input',()=>{field.dataset.accepted=field.value;});
+  for(const id of ['editor','reject']) {
+    const el=document.getElementById(id);el.textContent='LEFT hello RIGHT';let accepted=el.textContent;
+    el.addEventListener('input',()=>queueMicrotask(()=>{if(el.textContent!==accepted)el.textContent=accepted;}));
+    el.addEventListener('beforeinput',e=>{
+      e.preventDefault();
+      if(id==='reject')return;
+      const sel=getSelection();const range=sel.getRangeAt(0);range.deleteContents();range.insertNode(document.createTextNode(e.data));
+      accepted=el.textContent;el.dataset.accepted=accepted;
+    });
+  }
+}"""
+
+
+class Harness:
+    def __init__(self, page, mode, session=None):
+        self.page, self.mode, self.session = page, mode, session
+        if session:
+            self.cdp = session.ctx.new_cdp_session(page)
+            contexts = []
+            self.cdp.on('Runtime.executionContextCreated', lambda e: contexts.append(e['context']))
+            self.cdp.send('Runtime.enable')
+            self.context_id = next(c['id'] for c in contexts if self.cdp.send('Runtime.evaluate', {'contextId': c['id'], 'expression': 'typeof __inputFixture'})['result'].get('value') == 'object')
+
+    def ui(self, code):
+        if self.mode == 'extension':
+            result = self.cdp.send('Runtime.evaluate', {'contextId': self.context_id, 'expression': '(' + code + ')(__inputFixture)', 'returnByValue': True, 'awaitPromise': True})
+            assert 'exceptionDetails' not in result, result.get('exceptionDetails')
+            return result['result'].get('value')
+        return self.page.evaluate("code=>Function('f','return ('+code+')(f)')(__platformFixture)", code)
+
+    def settings(self, patch):
+        if self.session:
+            self.session.settings(patch)
+        else:
+            self.page.evaluate('p=>__platformFixture.settings(p)', patch)
+        self.page.wait_for_timeout(220)
+
+    def command(self):
+        if self.session:
+            self.session.command('translate-input')
+        else:
+            self.page.evaluate("()=>__platformFixture.command('翻译当前输入框')")
+
+    def field(self, selector, text, selection=None):
+        self.page.eval_on_selector(selector, """(el,{text,selection})=>{
+          if(el.tagName==='DIV')el.textContent=text;
+          else Object.getOwnPropertyDescriptor(el.tagName==='INPUT'?HTMLInputElement.prototype:HTMLTextAreaElement.prototype,'value').set.call(el,text);
+          el.focus();if(selection){if(el.tagName==='DIV'){const r=document.createRange();r.setStart(el.firstChild,selection[0]);r.setEnd(el.firstChild,selection[1]);const s=getSelection();s.removeAllRanges();s.addRange(r);}else el.setSelectionRange(...selection);}
+          else if(el.tagName!=='DIV')el.setSelectionRange(text.length,text.length);
+        }""", {'text': text, 'selection': selection})
+
+    def wait_value(self, selector, expected):
+        self.page.wait_for_function("({selector,expected})=>{const el=document.querySelector(selector);return (el.value??el.innerText)===expected;}", arg={'selector': selector, 'expected': expected}, timeout=6000)
+
+
+def cases(h, calls):
+    p = h.page
+    count = 0
+
+    def passed(name):
+        nonlocal count
+        count += 1
+        PASSED.append((h.mode, name))
+        print(f'PASS input {h.mode} {name}', flush=True)
+
+    h.settings({'input': {'mode': 'bilingual', 'order': 'source-first', 'profileId': '', 'model': ''}})
+    h.field('#controlled', 'hello'); h.command()
+    h.wait_value('#controlled', 'hello\n【译】hello')
+    assert p.locator('#controlled').get_attribute('data-accepted') == 'hello\n【译】hello'
+    passed('bilingual_newline_controlled_setter')
+    h.settings({'input': {'order': 'translation-first'}})
+    h.field('#single', 'hello'); h.command(); h.wait_value('#single', '【译】hello hello')
+    passed('bilingual_single_space_reverse')
+    h.field('#controlled', 'LEFT hello RIGHT', [5, 10]); h.command()
+    h.wait_value('#controlled', 'LEFT 【译】hello\nhello RIGHT')
+    passed('partial_outside_unchanged')
+
+    # Plain contenteditable keeps the exact unselected sibling nodes and attributes.
+    h.settings({'input': {'order': 'source-first'}})
+    p.eval_on_selector('#rich', """el=>{el.replaceChildren();for(const t of ['LEFT ','hello',' RIGHT']){const s=document.createElement('span');s.textContent=t;el.append(s);}el.firstChild.dataset.keep='yes';window.__outside=[el.firstChild,el.lastChild];el.focus();const r=document.createRange();r.selectNodeContents(el.children[1]);getSelection().removeAllRanges();getSelection().addRange(r);}""")
+    h.command(); h.wait_value('#rich', 'LEFT hello\n【译】hello RIGHT')
+    assert p.eval_on_selector('#rich', "el=>el.firstChild===__outside[0]&&el.lastChild===__outside[1]&&el.firstChild.dataset.keep==='yes'")
+    passed('contenteditable_bilingual_preserves_outside_nodes')
+
+    h.settings({'input': {'mode': 'replace'}})
+    h.field('#editor', 'LEFT hello RIGHT', [5, 10]); h.command()
+    h.wait_value('#editor', 'LEFT 【译】hello RIGHT')
+    assert p.locator('#editor').get_attribute('data-accepted') == 'LEFT 【译】hello RIGHT'
+    passed('beforeinput_editor_readback')
+
+    h.field('#reject', 'LEFT hello RIGHT', [5, 10]); h.command()
+    p.wait_for_timeout(350)
+    assert p.locator('#reject').inner_text() == 'LEFT hello RIGHT'
+    assert h.ui("f=>f.elements('.failure textarea').some(e=>e.value==='【译】hello')")
+    assert h.ui("f=>f.elements('.failure').some(e=>e.textContent.includes('编辑器未确认写回'))")
+    passed('all_strategies_rejected_explicit_copy_fallback')
+    h.ui("f=>f.elements('.failure button').find(b=>b.textContent==='关闭').click()")
+
+    # A fake OpenAI transport is delayed, and records only model/endpoint identity.
+    profile = {'id': 'interaction-test', 'name': 'Interaction fixture', 'kind': 'openai', 'baseUrl': 'https://input.duallens.invalid/v1', 'model': 'base-model', 'fallbackModels': [], 'jsonMode': True, 'maxItems': 20, 'maxChars': 4000, 'concurrency': 2, 'timeoutMs': 5000}
+    if h.session:
+        profiles = h.session.sw_eval("async()=>(await chrome.storage.local.get('settings.core'))['settings.core'].provider.profiles")
+    else:
+        profiles = p.evaluate("()=>__platformFixture.data('duallens:local')['settings.core'].provider.profiles")
+    h.settings({'provider': {'profiles': [*profiles, profile], 'active': 'mock', 'chain': [{'profileId': 'mock', 'model': 'mock'}]},
+                'translation': {'mode': 'mt+llm', 'mt': {'engine': 'mock'}},
+                'input': {'profileId': 'interaction-test', 'model': 'input-model'}})
+    h.field('#single', 'identity input'); h.command(); h.wait_value('#single', '【译】identity input')
+    assert any(c['model'] == 'input-model' and c['url'] == 'https://input.duallens.invalid/v1/chat/completions' for c in calls())
+    passed('input_service_identity_overrides_mixed_mt')
+
+    h.field('#single', 'waiting'); h.command(); p.locator('#single').press('End'); p.locator('#single').press('x'); p.wait_for_timeout(450)
+    assert p.locator('#single').input_value() == 'waitingx'
+    passed('continued_typing_no_overwrite')
+    h.field('#single', 'edit then undo'); h.command()
+    p.eval_on_selector('#single', "el=>{el.value+='x';el.dispatchEvent(new InputEvent('input',{bubbles:true}));el.value=el.value.slice(0,-1);el.dispatchEvent(new InputEvent('input',{bubbles:true}));}")
+    p.wait_for_timeout(450); assert p.locator('#single').input_value() == 'edit then undo'
+    passed('input_revision_survives_undo')
+    before = len(calls()); h.field('#single', 'IME text')
+    p.eval_on_selector('#single', "el=>el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))")
+    h.command()
+    for _ in range(3):
+        p.eval_on_selector('#single', "el=>el.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:' '}))")
+    p.wait_for_timeout(200); assert len(calls()) == before
+    p.eval_on_selector('#single', "el=>el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}))")
+    h.command(); h.wait_value('#single', '【译】IME text')
+    passed('IME_blocks_command_and_triple_space_then_recovers')
+
+    h.field('#single', 'composition during wait'); h.command()
+    p.eval_on_selector('#single', "el=>{el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));}")
+    p.wait_for_timeout(450); assert p.locator('#single').input_value() == 'composition during wait'
+    passed('composition_during_request_discards_late_result')
+    h.field('#single', 'deliberate failure'); h.command(); p.wait_for_timeout(450)
+    assert p.locator('#single').input_value() == 'deliberate failure'
+    passed('failed_translation_no_writeback')
+
+    h.settings({'hover': {'modifier': 'none', 'profileId': 'interaction-test', 'model': 'hover-model'}})
+    p.evaluate('()=>{document.activeElement.blur();getSelection().removeAllRanges();}')
+    p.locator('#p-plain').hover()
+    if h.mode == 'userscript':
+        p.dispatch_event('#p-plain', 'pointerdown', {'pointerType': 'touch', 'isPrimary': True, 'pointerId': 91, 'clientX': 100, 'clientY': 300})
+    p.wait_for_function("()=>document.querySelector('#p-plain dl-t[data-dl-state=done]')")
+    assert any(c['model'] == 'hover-model' for c in calls())
+    passed('hover_service_identity')
+
+    if h.session:
+        h.session.msg({'type': 'translate-selection', 'text': 'selection service'})
+    else:
+        p.eval_on_selector('#p-bold', "el=>{const r=document.createRange();r.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(r);el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));}")
+        p.wait_for_timeout(80)
+        h.ui("f=>f.elements('.icon').find(e=>e.classList.contains('show')).click()")
+    p.wait_for_timeout(150)
+    h.ui("f=>{const a=f.elements('[aria-label=划词服务]')[0],b=f.elements('[aria-label=划词模型]')[0];a.value='interaction-test';a.dispatchEvent(new Event('change'));b.value='selection-model';f.elements('.services button')[0].click();}")
+    p.wait_for_timeout(450)
+    assert any(c['model'] == 'selection-model' for c in calls())
+    assert h.ui("f=>f.elements('.dst').some(e=>e.textContent.startsWith('【译】'))")
+    passed('selection_temporary_service_model_identity')
+    if h.session:
+        stored = h.session.sw_eval("async()=>(await chrome.storage.local.get('settings.core'))['settings.core'].provider")
+    else:
+        stored = p.evaluate("()=>__platformFixture.data('duallens:local')['settings.core'].provider")
+    assert stored['active'] == 'mock' and stored['chain'] == [{'profileId': 'mock', 'model': 'mock'}]
+    assert p.locator('#single').input_value() == 'deliberate failure', 'Failed request wrote a late result'
+    assert 'sk-test-not-real' not in p.content()
+    passed('page_chain_unchanged_no_key_in_page')
+    if h.mode == 'userscript':
+        p.evaluate("()=>__platformFixture.command('DualLens 设置')")
+        p.wait_for_function("()=>__platformFixture.elements('#inputMode').length")
+        h.ui("""f=>{for(const [id,value] of Object.entries({inputMode:'bilingual',inputOrder:'translation-first',inputProfile:'interaction-test',inputModel:'saved-input',hoverProfile:'interaction-test',hoverModel:'saved-hover'})){const el=f.elements('#'+id)[0];el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));}f.elements('#save')[0].click();}""")
+        p.wait_for_function("()=>__platformFixture.data('duallens:local')['settings.core'].input.model==='saved-input'")
+        stored = p.evaluate("()=>__platformFixture.data('duallens:local')['settings.core']")
+        assert stored['input']['mode'] == 'bilingual' and stored['input']['order'] == 'translation-first'
+        assert stored['hover']['profileId'] == 'interaction-test' and stored['hover']['model'] == 'saved-hover'
+        assert p.evaluate('()=>document.documentElement.scrollWidth<=innerWidth')
+        p.keyboard.press('Escape')
+        passed('mobile_settings_resource_saves_all_new_fields')
+    return count
+
+
+def main():
+    server, base = e2e.start_fixtures()
+    run = e2e.E2E_ROOT / ('run-input-' + uuid.uuid4().hex[:8]); run.mkdir(parents=True)
+    ext, missing = e2e.stage_extension(run, e2e.EXT_SRC); assert not missing
+    manifest = json.loads((ext / 'manifest.json').read_text(encoding='utf-8'))
+    (ext / 'input-test-instrument.js').write_text(ROOTS, encoding='utf-8')
+    manifest['content_scripts'].insert(0, {'matches': ['http://127.0.0.1/*'], 'js': ['input-test-instrument.js'], 'run_at': 'document_start'})
+    (ext / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+    total = failures = 0
+    try:
+        with sync_playwright() as pw:
+            session = e2e.Session(pw, ext, base, 'input-acceptance')
+            try:
+                session.start()
+                session.sw_eval("""()=>{globalThis.__inputCalls=[];globalThis.fetch=async(url,init)=>{
+                  if(url!=='https://input.duallens.invalid/v1/chat/completions')throw Error('unexpected fixture endpoint');
+                  const payload=JSON.parse(init.body);__inputCalls.push({url,model:payload.model});
+                  const user=payload.messages.find(m=>m.role==='user').content;const input=JSON.parse(user.slice(user.indexOf('{'),user.lastIndexOf('}')+1)).t;
+                  await new Promise(r=>setTimeout(r,160));
+                  if(input.some(t=>t.includes('deliberate failure')))return new Response('{"error":{"message":"fixture failure"}}',{status:400});
+                  return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({t:input.map(t=>'【译】'+t)})}}]}),{status:200,headers:{'Content-Type':'application/json'}});
+                };}""")
+                session.open('article.html'); session.wait_ready(); session.page.evaluate(FIELDS)
+                total += cases(Harness(session.page, 'extension', session), lambda: session.sw_eval('()=>__inputCalls'))
+            except Exception:
+                failures += 1; session.screenshot('input-extension-failure'); raise
+            finally:
+                session.close()
+
+            profile = e2e.E2E_ROOT / ('profile-input-userscript-' + uuid.uuid4().hex[:8])
+            ctx = pw.chromium.launch_persistent_context(str(profile), headless=True, viewport={'width': 375, 'height': 812}, is_mobile=True, has_touch=True)
+            # Reuse canonical GM mock and add only request identities/delay/failure control.
+            stub = STUB.replace("authCorrect:req.headers.Authorization==='Bearer sk-test-not-real'", "authCorrect:req.headers.Authorization==='Bearer sk-test-not-real',model:req.data?JSON.parse(req.data).model:null")
+            stub = stub.replace('},30);', '},160);')
+            stub = stub.replace('const payload=JSON.parse(req.data);', "const payload=JSON.parse(req.data);if(req.data.includes('deliberate failure')){req.onload({status:400,responseText:'fixture failure',responseHeaders:''});return;}")
+            ctx.add_init_script(stub)
+            ctx.add_init_script((e2e.REPO / 'dist/duallens.user.js').read_text(encoding='utf-8'))
+            p = ctx.new_page()
+            try:
+                p.goto(base + '/article.html'); p.wait_for_function("()=>__platformFixture.hasCommand('翻译当前输入框')"); p.evaluate(FIELDS)
+                total += cases(Harness(p, 'userscript'), lambda: p.evaluate('()=>__platformFixture.calls'))
+            except Exception:
+                failures += 1; p.screenshot(path=str(e2e.E2E_ROOT / 'input-userscript-failure.png')); raise
+            finally:
+                ctx.close(); e2e.remove_runtime_dir(profile)
+    except Exception:
+        failures = max(failures, 1)
+        raise
+    finally:
+        server.shutdown(); e2e.remove_runtime_dir(run)
+        print(f'SUMMARY input total={len(PASSED)+failures} PASS={len(PASSED)} FAIL={failures} SKIP=0', flush=True)
+
+
+if __name__ == '__main__':
+    main()
