@@ -72,9 +72,9 @@ def html5_case(pw, extension=None, width=1280, height=800):
             state = session.wait_state(lambda s: s['subtitles']['visible'], 10, 'standard subtitles')['subtitles']
             check(state['order'][0] == 3, 'standard track did not start near playhead')
         else:
-            page.wait_for_function("__platformFixture.hasCommand('启用 / 恢复 YouTube 双语字幕')")
+            page.wait_for_function("__platformFixture.hasCommand('启用 / 恢复视频双语字幕')")
             check(page.locator('dl-ui[data-dl-subtitles]').count() == 0, 'default-off track translated')
-            gm_command(page, '启用 / 恢复 YouTube 双语字幕')
+            gm_command(page, '启用 / 恢复视频双语字幕')
         page.wait_for_selector('dl-ui[data-dl-subtitles][data-ready]')
         check(page.locator('dl-ui[data-dl-subtitles]').count() == 1, 'trackless video got an overlay')
         page.wait_for_function('document.querySelector("#standard").textTracks[0].mode==="hidden"')
@@ -98,7 +98,7 @@ def html5_case(pw, extension=None, width=1280, height=800):
         if session:
             session.command('restore-subtitles'); session.wait_state(lambda s: not s['subtitles']['overlay'], 5, 'standard restore')
         else:
-            gm_command(page, '启用 / 恢复 YouTube 双语字幕'); page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
+            gm_command(page, '启用 / 恢复视频双语字幕'); page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
         check(page.evaluate('document.querySelector("#standard").textTracks[0].mode') == 'showing', 'native track mode not restored')
         check(page.evaluate('document.querySelector("#standard-player").outerHTML===fixtureBefore'), 'standard restore changed DOM')
         # In-band tracks created by standard APIs need no <track> element.
@@ -108,9 +108,9 @@ def html5_case(pw, extension=None, width=1280, height=800):
             session.wait_state(lambda s: s['subtitles']['visible'] and 'In-band' in s['subtitles']['current']['source'], 10, 'in-band caption')
             session.command('restore-subtitles'); session.wait_state(lambda s: not s['subtitles']['overlay'], 5, 'in-band restore')
         else:
-            gm_command(page, '启用 / 恢复 YouTube 双语字幕')
+            gm_command(page, '启用 / 恢复视频双语字幕')
             page.wait_for_function("__platformFixture.elements('.target').some(e=>e.textContent.includes('In-band'))")
-            gm_command(page, '启用 / 恢复 YouTube 双语字幕'); page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
+            gm_command(page, '启用 / 恢复视频双语字幕'); page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
         check(page.evaluate('[...document.querySelector("#standard").textTracks].map(t=>t.mode)') == ['disabled','showing'], 'in-band restore changed track selection')
         return 'native same-origin VTT + in-band TextTrack, default-off, current-group-first, multiline, seek, container/video fullscreen, mode and exact DOM restore'
     finally:
@@ -350,7 +350,7 @@ def userscript_case(pw, host, width, height, touch):
         check(page.evaluate("__platformFixture.elements('.target').some(e=>e.textContent.includes('Sentence 17.'))"), 'GM current cue incorrect')
         page.evaluate('fixtureSeek(2.3)')
         page.wait_for_function("__platformFixture.elements('.target').some(e=>e.textContent.includes('Sentence 2.'))")
-        gm_command(page, '启用 / 恢复 YouTube 双语字幕')
+        gm_command(page, '启用 / 恢复视频双语字幕')
         page.wait_for_function("!document.querySelector('dl-ui[data-dl-subtitles]')")
         check(page.evaluate('document.querySelector("#movie_player").outerHTML===fixtureBefore'), 'GM restore changed DOM')
         check(page.evaluate('localStorage.length') == 0, 'GM used host storage')

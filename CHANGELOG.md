@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-18
+
+- Bilingual subtitles for standard HTML5 tracks on any site (scheduled around playback, re-queued on seek, fullscreen overlay, native track modes restored); local .srt/.vtt import, translation and bilingual export in the side panel; subtitle entry points renamed to video subtitles, with a video context menu on all sites.
+- Input translation can keep the original (bilingual, ordered, separator by field type); write-back tries several strategies and reads back, skips IME composition and never overwrites continued typing or late results.
+- Selection cards, hover and input may use their own profile/model without changing the page chain.
+- Userscript soft size target 340 KB (startup ~333 KB; hard budget 360 KB).
+
 ## [0.5.0] - 2026-10-18
 
 - Translate text inside iframes: same-origin frames (no src, about:blank, srcdoc) become scan roots of the top page in extension and userscript, with style injection, document-replacement rescans and exact restore; cross-origin frames run a UI-less, push-driven agent in the extension. Tiny or invisible frames are skipped. No new permissions.
