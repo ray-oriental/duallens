@@ -430,7 +430,7 @@ class HealthTests(unittest.TestCase):
 
     def test_health_reports_state_success_rate_and_p50_without_touching_the_network(self):
         rig = Rig(self)
-        rig.script["ollama"] = [rig.answer("a", 0.02)]
+        rig.script["ollama"] = [rig.answer("a", 0.05)]  # Windows sleeps can be ~16 ms short of 20 ms
         for _ in range(3):
             rig.chat(OLLAMA)
         rig.script["sjtu"] = [rig.error(503)]
