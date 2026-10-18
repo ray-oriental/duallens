@@ -1,4 +1,4 @@
-# 多平台与通用配置契约（v0.4.0）
+# 多平台与通用配置契约（v0.5.0）
 
 状态：2026-10-13 起草，主控维护。本文件与 [SPEC.md](SPEC.md) 同级，接口变更先改这里。
 
@@ -104,6 +104,30 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 
 漫画名单 `comics.canvasSites` 兼容域名字符串与 `{host,imageHosts?,referer?}`；CDN 最多八个具体域名，Referer 限该站点 HTTP(S) 根地址。旧 Pixiv 字符串项使用 `i.pximg.net` / `https://www.pixiv.net/` 兼容元数据。扩展会话 DNR 规则必须含 `initiatorDomains:[chrome.runtime.id]` 与 `resourceTypes:['xmlhttprequest','other']`，关闭漫画或移出名单即删除，不新增 host 权限。用户脚本匿名 GM 取图按匹配站点设置 Referer，不支持请求头或本地 OCR 时保留原图并明确降级。
 
+### iframe 增量（v0.5 开发中）
+
+扩展与用户脚本由顶层控制器递归发现同源 iframe（含无 src、about:blank、srcdoc），
+复用扫描、变更观察、Range 懒加载与恢复；frame 内临时注入内容 CSS，停止时移除。
+监听 load、DOM 变更和 frame 尺寸事件发现 Document/body 替换，以覆盖 document.open/write/close 的邮箱正文；扫描根不使用周期定时器。
+Range 按祖先 frame 的视口裁切并映射至控制器视口；隐藏或小于 200×100 的 frame 不参与。
+
+扩展内容脚本 all_frames:true、match_about_blank:true；同源父文档可访问时子脚本退出，避免重复翻译。
+跨域子文档只启动无 UI 代理，通过后台按浏览器提供的 tabId/frameId 向 frameId:0 查询顶层状态，
+启动请求一次快照，之后只接收翻译/恢复、显示模式和设置变化的推送；站点规则与请求上下文取顶层页面。
+代理用 IntersectionObserver 的实际相交区域跳过隐藏、离屏或完全被裁切的 frame，并跳过视口小于 200×100 的 frame。
+可见性由 IntersectionObserver、ResizeObserver 和 visibilitychange 本地驱动，不查询后台、不使用过期计时器。
+跨域 frame 隐藏（含 display:none）时保留已有译文，不再发起新请求；顶层恢复和显示模式推送不受可见性影响，立即应用。
+重新可见且顶层仍在翻译时，依靠 IntersectionObserver/ResizeObserver 事件在 1 秒内继续新可见内容；不增加父子可见性提示通道或定时补查。
+顶层通过 frame-publish 广播 frame-state；后台只接受 frameId:0 发布者，顶层忽略广播、子 frame 消费推送。
+空闲且未翻译时没有周期定时器或周期消息；顶层进度统计包含同源文档，不汇总独立跨域代理计数。
+不新增 permissions/host_permissions，不通过网页 postMessage 传递状态或配置。
+用户脚本仍保留 @noframes，仅由顶层访问同源文档，**不支持跨域 iframe**。
+浏览器禁止注入的特殊页面、非 HTML 文档仍不处理；这不代表 Zimbra 登录页面或物理设备已验收。
+
+开放 ShadowRoot 与同源 iframe 文档共用 FrameRoots 的额外扫描根生命周期，递归发现、注入/移除样式并观察变化。
+slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫描 slot fallback。动态新增的开放组件也会被发现。
+关闭的 shadow root 不可访问，跳过；DualLens 自身 closed-shadow UI 保持原样。
+
 ## 2. 打包
 
 - 扩展保持零构建：`extension/` 目录可直接加载。
@@ -114,6 +138,13 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 - 产物 `dist/duallens.user.js`、`dist/duallens.bookmarklet.js` 由 `scripts/build_release.py` 一起生成，并进入
   Release 资产与 SHA-256 校验文件。Edge 商店包由 `build_release.py --target edge-store` 生成：去掉 manifest 里的
   `key` 字段，其余与 zip 相同。
+- v0.5 用户脚本将共享设置表单（`ui/forms/**`、`ui/validation.js` 及面板专用依赖）拆为
+  `dist/duallens-settings.js`，随 Release 发布并进入 `SHA256SUMS`。启动脚本以 `@resource duallens-settings`
+  引用当前 manifest 版本的 `releases/download/v{version}/duallens-settings.js#sha256=…`；
+  首次打开设置页签才读取 `GM_getResourceText`，按启动脚本内嵌的字节数和 SHA-256 校验后在隔离沙箱执行。
+  打开面板不联网；缺失、校验或执行失败时显示中文错误与重新安装说明。HTTP 页同样在本地校验。
+  已加载表单在当前文档内复用，关闭时仍销毁实例；扩展 options 继续直接导入原生模块。
+  启动包目标 ≤330000 字节，构建硬预算保持 360000 字节。
 
 ## 3. 设置 v2：可同步设置与机密分离
 
@@ -147,6 +178,21 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
   `mode` 为 `bilingual` / `translation-only`，字号为 16–48 的整数，位置为 `top` / `bottom`；旧备份缺少该字段时恢复默认值。
 
 ## 4. 移动端体验
+
+### 站点规则（v0.5 增量）
+
+扩展设置与手机用户脚本面板复用同一个路径/功能编辑器：`settings.sites.siteRules.custom` 中的规则可写
+`{match:'example.com/mail/*',page:'never',selection:'off',hover:'off',input:'default'}`。
+page 使用 `always/never/default`，其余使用 `on/off/default`，缺省继承全局；旧域名列表与选择器规则无需迁移。
+match 可含 HTTP(S) 协议、端口和任意 `*` 路径通配，忽略网页查询串/片段；域名不分大小写，路径区分大小写和末尾斜杠。
+最长非通配路径、最少通配符的规则优先，完整排序、旧格式继承和校验约束见 [SPEC §3.1](SPEC.md#31-站点与路径规则v05-增量)。
+never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页、快捷键或用户脚本菜单手动翻译；
+这修正了 v0.4 实际代码连手动入口一起禁用的行为。selection/hover/input 关闭时对应 UI、事件与手动功能入口均禁用，
+触屏长按受 hover 控制。SPA 路由变化重新判定，独立监听在未翻译状态仍有效。
+规则与翻译共用同一窗口/隔离世界的路由检测器：支持 Navigation API 时监听 `navigatesuccess` / `currententrychange`，
+并保留 `popstate` / `hashchange`，不轮询；仅不支持时以 1 秒轮询兜底，页面隐藏时暂停，重新可见时立即检查。
+弹出页可选整个站点或当前第一段路径；手机面板可直接编辑同样的路径规则和四项开关。
+新增字段继续进入非机密同步/明文及加密备份，不改变 GM 私有存储与真机验收边界。
 
 - 触屏没有 Shift 悬停：「悬停翻译」在触屏上换成**长按段落 500ms**，可在设置里关闭。
 - 划词图标放在选区**下方**，避开系统选择菜单；所有触控目标 ≥ 44px；悬浮球用 pointer 事件拖动，并避开安全区。

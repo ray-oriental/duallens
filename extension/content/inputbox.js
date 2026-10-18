@@ -10,17 +10,7 @@ const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel']);
 const PREFIX = /^\s*\/([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)[ \t ]+/;
 const WINDOW_MS = 500;
 
-const CHIP_CSS = `
-.chip {
-  position: fixed; display: none; align-items: center; gap: 6px; padding: 3px 10px;
-  border-radius: 999px; background: var(--bg); color: var(--fg2); border: 1px solid var(--line);
-  box-shadow: var(--shadow); font-size: 12px; pointer-events: none;
-}
-.chip.show { display: inline-flex; }
-.spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: s .8s linear infinite; }
-@keyframes s { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
-`;
+const CHIP_CSS = `.chip{position:fixed;display:none;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--bg);color:var(--fg2);border:1px solid var(--line);box-shadow:var(--shadow);font-size:12px;pointer-events:none}.chip.show{display:inline-flex}.spin{width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.spin{animation:none}}`;
 
 // The editable element a key event or focus belongs to, or null. Password fields never qualify.
 export function editableOf(node) {
@@ -214,13 +204,13 @@ export class InputBox {
 
   async run(el, useSelection) {
     if (this.busy.has(el)) return;
-    const settings = this.getSettings();
-    if (!settings.input.enabled) return;
+    const cfg = this.getSettings();
+    if (!cfg.input.enabled) return;
     const acc = accessor(el, useSelection);
     // the first two spaces of a triple-space trigger are already in the field
     let text = acc.text.replace(/[  ]+$/, '');
-    let target = settings.input.targetLang;
-    if (settings.input.prefixOverride) {
+    let target = cfg.input.targetLang;
+    if (cfg.input.prefixOverride) {
       const m = PREFIX.exec(text);
       const lang = m && resolveLang(m[1]);
       if (lang) {
@@ -243,6 +233,7 @@ export class InputBox {
     });
     this.busy.delete(el);
     this.#hideChip();
+    if (!this.on || !this.getSettings().input.enabled) return;
     if (!res.ok) {
       toast(`输入框翻译失败：${(res.error && res.error.message) || '未知错误'}`, 'error', 4000);
       return;

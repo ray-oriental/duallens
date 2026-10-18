@@ -1,5 +1,27 @@
 # Validation
 
+## v0.5 userscript slimming and route detection (2026-10-18, working tree)
+
+The startup artifact is 312039 bytes; the separately pinned settings resource is 117302 bytes.
+The 360000-byte build limit is unchanged and a real-build regression enforces the 330000-byte target.
+Offline checks passed 411 Node tests, 86 gateway tests, and 25 release tests (one Windows symlink skip).
+Project validation, release generation and dist rebuild/checksum comparison passed.
+Browser summaries: canonical 33 PASS / 0 FAIL / 1 INFO; userscript 11 PASS; settings 7 PASS;
+frames/open-shadow 4 PASS; layout 12 PASS. All browser runs use mock providers and isolated Chromium
+with Playwright 1.48, not physical Android or actual Tampermonkey installs.
+
+Resource cases check lazy loading, cached reuse, save/reopen, native secret dialogs, and Chinese reinstall
+guidance on missing/tampered/unavailable resources without a network fallback. SHA-256 fallback tests
+cover UTF-8 and padding boundaries without Web Crypto. Route tests cover both Navigation API events,
+deduplication, shared subscribers, legacy events, visible-only polling and lifecycle cleanup.
+The settings runner now returns its options tab to the foreground after the popup case; this avoids
+a repeatable background screenshot timeout without changing functional assertions.
+
+An extra non-secure HTTP fixture exposed an existing startup error: shared/hash.js requires
+crypto.subtle.digest, which is unavailable in that page world. That shared hash path is unchanged;
+full HTTP-page support is not certified by the new resource hash fallback. Actual Tampermonkey
+resource caching, isolated-world execution and the physical device matrix remain manual acceptance.
+
 ## v0.4 fourth layout pass (2026-10-16, working tree)
 
 Based on leader commit `fca8ae9`; no commit, version, gateway configuration or QA-owned tooling change.

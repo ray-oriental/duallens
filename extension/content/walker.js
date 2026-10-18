@@ -70,6 +70,7 @@ function isExcludedEl(el,tag,exclude) {
 // 'atom': an excluded or invisible-to-translation inline element kept as a placeholder.
 export function classify(el,exclude) {
   const tag=el.localName;
+  if(tag==='slot' && el.assignedNodes().length)return 'hidden';
   if(SILENT_TAGS.has(tag) || isOurs(el)) return 'hidden';
   const cs=getComputedStyle(el);
   const display=cs.display;
@@ -77,7 +78,7 @@ export function classify(el,exclude) {
   if(cs.opacity==='0'||((cs.clip!=='auto'||cs.clipPath!=='none')&&el.getBoundingClientRect().width<=2&&el.getBoundingClientRect().height<=2)) return 'hidden';
   const inlineLevel=isInlineLevel(display);
   if(isExcludedEl(el,tag,exclude)) return inlineLevel ? 'atom':'excluded-block';
-  if(novelBody(el)) return 'container';
+  if(el.shadowRoot || novelBody(el)) return 'container';
   // Interactive inline siblings must have independent translations and layout policies.
   if(el.matches('.subtext,.comhead,button,label,summary,[role="button"],[role="tab"],[role="menuitem"]') ||
       (tag==='a' &&(!proseLink(el) ||
@@ -89,18 +90,21 @@ export function classify(el,exclude) {
 // True when `el` sits inside something that must never be translated.
 export function inExcludedContext(el,exclude) {
   if(el.closest(EXCLUDED_CLOSEST)) return true;
-  for(let p=el;p&&p!==document.body;p=p.parentElement) if(protectedElement(p)) return true;
+  for(let p=el;p&&p!==el.ownerDocument.body;p=p.parentElement) if(protectedElement(p)) return true;
   return !!exclude && !!el.closest(exclude);
 }
 
 // Nearest ancestor-or-self that lays out as a block (the container whose runs a node belongs to).
 export function blockContainerOf(node) {
+  if(node.nodeType===11)return node;
   let el=node.nodeType===1 ? node:node.parentElement;
   const reader=el?.closest('[data-novel-content]')||
     (el&&pixivNovelDocument(el.ownerDocument)&&el.closest(':has(> span.text-count)'));
   if(reader) return reader;
-  const root=document.body || document.documentElement;
-  while(el && el !==document.documentElement) {
+  const doc=node.ownerDocument;
+  const scope=node.getRootNode();
+  const root=scope.host ? scope:doc.body || doc.documentElement;
+  while(el && el !==doc.documentElement) {
     if(novelBody(el)) return el;
     const display=getComputedStyle(el).display;
     if(!isInlineLevel(display) || display==='inline-flex' || display==='inline-grid' || display==='inline-table') {
@@ -248,6 +252,15 @@ function* iterateTextRuns(root,opts={}) {
 }
 
 export function* iterateRuns(root,opts={}) {
+  if(root.nodeType===11) {
+    if(inExcludedContext(root.host,opts.exclude))return;
+    for(let h=root.host;h;h=h.parentElement || h.getRootNode().host)if(['hidden','atom','excluded-block'].includes(classify(h,opts.exclude)))return;
+    for(const n of root.childNodes) {
+      if(n.nodeType===1)yield* iterateRuns(n,opts);
+      else if(n.nodeType===3 && n.data.trim().length>=(opts.minChars ?? 1) && LETTER_RE.test(n.data) && !opts.known?.(root.host,n))yield {host:root.host,first:n,last:n,whole:false};
+    }
+    return;
+  }
   if(root.nodeType !==1) return;
   for(const run of iterateTextRuns(root,opts)) {
     if(!run||run.metadata) {yield run;continue;}

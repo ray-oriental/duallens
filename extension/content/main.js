@@ -3,7 +3,9 @@
 
 import {
   siteRuleFor,
+  settingsForSite, setSitePageRule,
 } from '../shared/settings.js';
+import { RouteWatcher } from './observer.js';
 import * as P from '../shared/protocol.js';
 import { normalizeLang } from '../shared/lang.js';
 import { performanceSettings, settingsEqual } from '../platform/settings-store.js';
@@ -15,10 +17,7 @@ import { FloatBall } from './floatball.js';
 import { ComicTranslator } from './comics/controller.js';
 import { YouTubeSubtitles } from './subtitles/controller.js';
 import { subtitleOptions } from './subtitles/track.js';
-import { toast, clearToast } from './overlay.js';
-
-
-const HOST = location.hostname;
+import { clearToast } from './overlay.js';
 
 
 class App {
@@ -27,7 +26,13 @@ class App {
     this.store = platform.settingsStore;
     this.settings = settings;
     this.dormant = false;
-    this.getSettings = () => this.settings;
+    this.getSettings = () => {
+      if (this.ruleSettings !== this.settings || this.ruleUrl !== location.href) {
+        this.ruleSettings = this.settings; this.ruleUrl = location.href;
+        this.effectiveSettings = settingsForSite(this.settings, location.href);
+      }
+      return this.effectiveSettings;
+    };
     this.comics = new ComicTranslator({ platform, getSettings: this.getSettings });
     this.subtitles = new YouTubeSubtitles({ platform, getSettings: this.getSettings });
 
@@ -35,6 +40,7 @@ class App {
       platform,
       getSettings: this.getSettings,
       onChange: () => this.ball?.update(),
+      onActiveChange: () => this.#pushFrames(),
     });
     this.selection = new SelectionUI({ platform, getSettings: this.getSettings });
     this.input = new InputBox({ platform, getSettings: this.getSettings });
@@ -45,7 +51,7 @@ class App {
       ctx: {
         toggle: () => this.#command(P.COMMANDS.TOGGLE_PAGE),
         getState: () => ({...this.translator.getState(),translated:this.translator.isActive() || this.comics.panels.size>0 || this.subtitles.enabled}),
-        siteMode: () => siteRuleFor(this.settings, HOST).mode,
+        siteMode: () => siteRuleFor(this.settings, location.href).mode,
         setSiteMode: (mode) => this.#setSiteMode(mode),
         saveSettings: (patch) => this.store.save(patch),
         translateInput: () => this.input.translateFocused(true),
@@ -59,14 +65,18 @@ class App {
   // ---- lifecycle ---------------------------------------------------------------------------
 
   start() {
-    this.dormant = siteRuleFor(this.settings, HOST).mode === 'never';
+    this.rulesRoute = new RouteWatcher(() => {
+      if (siteRuleFor(this.settings, location.href).mode === 'never') this.#sleep();
+      this.#wake(true);
+    });
+    this.rulesRoute.start();
     this.removeMessage = this.platform.onMessage?.((msg, reply) => this.#onMessage(msg, reply));
     let revision = 0;
     this.removeSettings = this.store.onChange(() => {
       // v2 onChange is an invalidation signal, not a settings snapshot. Ignore stale loads.
       const token = ++revision;
       this.store.load().then((next) => {
-        if (token === revision) this.#applySettings(performanceSettings(next, this.platform.coarse));
+        if (token === revision) {this.#applySettings(performanceSettings(next, this.platform.coarse));this.#pushFrames();}
       }).catch(() => {});
     });
     for (const name of Object.values(P.COMMANDS)) this.platform.registerCommand(name, {
@@ -77,42 +87,51 @@ class App {
     this.platform.registerCommand('restore-comics', '恢复漫画原文', () => this.#command('restore-comics'));
     this.platform.registerCommand('open-sidepanel', 'DualLens 文本翻译', () => this.platform.openTextTranslation());
     this.platform.registerCommand('toggle-subtitles', '启用 / 恢复 YouTube 双语字幕', () => this.#command('toggle-subtitles'));
-    if (!this.dormant) this.#wake(true);
+    this.#wake(true);
+    this.#pushFrames();
+  }
+
+  #frameState() {
+    return {active:this.translator.isActive(),settings:this.settings,
+      context:{host:location.hostname,url:location.href,title:document.title}};
+  }
+
+  #pushFrames() {
+    if(!this.platform.pushFrameState || this.pushing)return;
+    this.pushing=true;
+    queueMicrotask(()=>{this.pushing=false;void this.platform.pushFrameState(this.#frameState());});
   }
 
   // Attach every interaction module. `initial` runs the auto-translate decision as well.
   #wake(initial) {
-    this.dormant = false;
-    this.selection.enable();
-    this.input.enable();
-    this.hover.enable();
-    if (this.settings.floatBall.enabled) this.ball.enable();
+    this.dormant = siteRuleFor(this.settings, location.href).mode === 'never';
+    const effective = this.getSettings();
+    for (const key of ['selection', 'input', 'hover']) this[key][effective[key].enabled ? 'enable' : 'disable']();
+    if (effective.floatBall.enabled) { this.ball.enable(); this.ball.refresh(); }
+    else this.ball.disable();
     if (subtitleOptions(this.settings).enabled) this.subtitles.enable();
     if (initial) this.#autoStart();
   }
 
-  // "Never translate here": restore the page and remove every trace of the UI.
+  // "Never" blocks automatic page work; explicit translation remains available.
   #sleep() {
     this.dormant = true;
     this.translator.stop();
-    this.comics.restore();
-    this.subtitles.disable();
-    this.selection.disable();
-    this.input.disable();
-    this.hover.disable();
     this.ball.disable();
     clearToast();
   }
 
   async #autoStart() {
     const s = this.settings;
-    if (siteRuleFor(s, HOST).mode === 'always') {
-      this.translator.start();
+    const url = location.href, mode = siteRuleFor(s, url).mode;
+    if (mode === 'never') return;
+    if (mode === 'always') {
+      if (!this.translator.isActive()) this.translator.start();
       return;
     }
     if (!s.autoTranslateLangs.length) return;
     const lang = await this.#pageLanguage();
-    if (!lang || this.dormant || this.translator.isActive()) return;
+    if (!lang || location.href !== url || this.settings !== s || this.dormant || this.translator.isActive()) return;
     const hit = this.settings.autoTranslateLangs.some((l) => normalizeLang(l) === lang);
     const isTarget = lang === normalizeLang(this.settings.targetLang);
     if (hit && !isTarget) this.translator.start();
@@ -133,17 +152,11 @@ class App {
     if(next.comics?.enabled===false) this.comics.restore();
     const prev = this.settings;
     this.settings = next;
-    const mode = siteRuleFor(next, HOST).mode;
-    if (mode === 'never') {
-      if (!this.dormant) this.#sleep();
-      return;
-    }
-    if (this.dormant) {
-      this.#wake(true);
-      return;
-    }
+    const mode = siteRuleFor(next, location.href).mode;
+    if (mode === 'never' && !this.dormant) this.#sleep();
+    this.#wake(false);
     this.subtitles.update(prev, next);
-    if (mode === 'always' && siteRuleFor(prev, HOST).mode !== 'always') this.translator.start();
+    if (mode !== siteRuleFor(prev, location.href).mode) this.#autoStart();
     const t = this.translator;
     if (prev.displayMode !== next.displayMode) t.setDisplayMode(next.displayMode);
     const customChanged = !settingsEqual(prev.siteRules.custom, next.siteRules.custom);
@@ -162,25 +175,10 @@ class App {
       t.retranslate();
     }
     if (prev.lazy.rootMarginPx !== next.lazy.rootMarginPx) t.setMargin(next.lazy.rootMarginPx);
-    if (next.floatBall.enabled) {
-      if (!this.ball.on) this.ball.enable();
-      else this.ball.refresh();
-    } else {
-      this.ball.disable();
-    }
   }
 
   async #setSiteMode(mode) {
-    const host = HOST.toLowerCase();
-    const cur = await this.store.load();
-    const strip = (list) => list.filter((p) => String(p).trim().toLowerCase() !== host);
-    const always = strip(cur.siteRules.always);
-    const never = strip(cur.siteRules.never);
-    if (mode === 'always') always.push(host);
-    if (mode === 'never') never.push(host);
-    await this.store.save({ siteRules: { always, never } });
-    const left = siteRuleFor({ siteRules: { always, never, custom: [] } }, host).mode;
-    if (mode === null && left) toast(`本站仍被通配规则命中（${left === 'never' ? '从不' : '总是'}翻译），请到设置页修改`, 'error', 4500);
+    await this.store.save({ siteRules: setSitePageRule(await this.store.load(), location.hostname, mode) });
   }
 
   // ---- messages ----------------------------------------------------------------------------
@@ -196,7 +194,7 @@ class App {
         selectionIcon: sel.selectionIcon,
         selectionCard: sel.selectionCard,
         floatBall: this.ball.visible(),
-        hoverActive: !this.dormant && this.hover.isActive(),
+        hoverActive: this.hover.isActive(),
       },
     };
   }
@@ -204,16 +202,19 @@ class App {
   #onMessage(msg, sendResponse) {
     if (!msg || typeof msg.type !== 'string') return false;
     switch (msg.type) {
+      case 'frame-top-state':
+        sendResponse(this.#frameState());
+        return false;
       case P.MSG_GET_STATE:
         sendResponse(this.state());
         return false;
       case P.MSG_COMMAND:
         this.#command(msg.name);
-        sendResponse({ ok: !this.dormant, dormant: this.dormant });
+        sendResponse({ ok: true, dormant: this.dormant });
         return false;
       case P.MSG_TRANSLATE_SELECTION:
-        if (!this.dormant) this.selection.openCard(msg.text, this.#selectionRect());
-        sendResponse({ ok: !this.dormant });
+        if (this.getSettings().selection.enabled) this.selection.openCard(msg.text, this.#selectionRect());
+        sendResponse({ ok: this.getSettings().selection.enabled });
         return false;
       default:
         return false;
@@ -229,8 +230,7 @@ class App {
   }
 
   #command(name) {
-    if (this.dormant) return;
-    const s = this.settings;
+    const s = this.getSettings();
     switch (name) {
       case 'toggle-subtitles':
         this.store.save({ subtitles: { enabled: !subtitleOptions(s).enabled } });

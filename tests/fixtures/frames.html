@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Frame mail fixture</title>
+<style>body{margin:8px;font:16px sans-serif}.frames{display:grid;grid-template-columns:repeat(3,360px);gap:12px}iframe{width:350px;height:200px}#small,#small-cross{width:120px;height:60px}#hidden-cross{display:none}</style></head>
+<body><p>Read the current message and translate its body.</p><div class="frames">
+<iframe id="mail" title="Mail body"></iframe>
+<iframe id="srcdoc" title="Inline document" srcdoc="<!doctype html><p>Inline documents contain a separate readable message.</p>"></iframe>
+<iframe id="cross" title="Other origin"></iframe>
+<iframe id="blank" src="about:blank" title="Blank document"></iframe>
+<iframe id="small" title="Small frame" srcdoc="<p>This tiny advertisement should remain original.</p>"></iframe>
+<iframe id="small-cross" title="Small other origin"></iframe>
+<iframe id="hidden-cross" name="visibility-fixture" title="Hidden other origin"></iframe>
+</div><script>
+const writeMail=n=>{const d=document.querySelector('#mail').contentDocument;d.open();d.write('<!doctype html><html><head><title>Message '+n+'</title></head><body><p id="message">'+(n===1?'The first message contains an important announcement for every student.':'The second message replaces the entire previous document with new instructions.')+'</p></body></html>');d.close();window.mailOriginal=d.body.outerHTML;};
+writeMail(1);
+const b=document.querySelector('#blank').contentDocument;b.body.textContent='An explicit blank frame contains another readable letter.';
+const remote=new URLSearchParams(location.search).get('remote')||location.origin;
+for(const id of ['cross','small-cross','hidden-cross'])document.getElementById(id).src=remote+'/frame-child.html';
+window.replaceMailLater=()=>setTimeout(()=>writeMail(2),1000);
+</script></body></html>

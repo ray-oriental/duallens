@@ -24,6 +24,15 @@ STUB = r"""(() => {
   const roots = [];
   const calls = [];
   const tasks = [];
+  const resourceReads = [];
+  let resourceMode = 'valid';
+  const settingsSource = '__DUALLENS_RESOURCE_TEXT__';
+  window.GM_getResourceText = name => {
+    resourceReads.push(name);
+    if (resourceMode === 'throw') throw Error('fixture resource unavailable');
+    if (resourceMode === 'missing' || name !== 'duallens-settings') return '';
+    return resourceMode === 'tampered' ? settingsSource.replace('const ', 'let   ') : settingsSource;
+  };
   const original = Element.prototype.attachShadow;
   Element.prototype.attachShadow = function(init) {
     const root = original.call(this, init);
@@ -86,9 +95,15 @@ STUB = r"""(() => {
     elements(selector) { return roots.filter(r=>r.host.isConnected).flatMap(r=>[...r.root.querySelectorAll(selector)]); },
     rect(selector) { const el=this.elements(selector).find(e=>getComputedStyle(e).display!=='none'); if(!el)return null;const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}; },
     data(key) { return structuredClone(data.get(key)); },
-    calls, tasks,
+    calls, tasks, resourceReads,
+    resourceMode(mode) { resourceMode = mode; },
   };
 })();"""
+
+# Emulate the manager's install-time resource cache. No runtime request is made.
+_settings_asset = REPO / 'dist' / 'duallens-settings.js'
+STUB = STUB.replace("'__DUALLENS_RESOURCE_TEXT__'", json.dumps(
+    _settings_asset.read_text(encoding='utf-8') if _settings_asset.is_file() else '', ensure_ascii=True))
 
 
 def command(page, label):
@@ -172,6 +187,10 @@ def desktop_cases(page, base):
     check(all(page.evaluate("[...document.querySelectorAll('dl-ui')].map(e=>e.shadowRoot===null)")), 'overlay must stay closed')
     page.keyboard.press('Escape')
     page.wait_for_function("__platformFixture.elements('form').length===0")
+    command(page, 'DualLens 设置')
+    page.wait_for_function("__platformFixture.elements('#targetLang')[0]?.value==='ja'")
+    check(page.evaluate('__platformFixture.resourceReads') == ['duallens-settings'], 'settings resource was not cached across opens')
+    page.keyboard.press('Escape')
     # Dynamic fixture exercises timed appends and SPA updates using the same controller.
     ready(page, base, 'dynamic.html')
     command(page, '翻译 / 恢复当前页面')
@@ -180,6 +199,32 @@ def desktop_cases(page, base):
     command(page, '翻译 / 恢复当前页面')
     page.wait_for_function("!document.querySelector('dl-t')")
     return 'translation, exact restore, only mode, selection, settings, dynamic append/SPA'
+
+
+def settings_resource_case(page, base):
+    ready(page, base)
+    check(page.evaluate('__platformFixture.resourceReads.length') == 0, 'settings resource read at startup')
+    command(page, 'DualLens 设置')
+    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    check(page.evaluate('__platformFixture.calls.length') == 0, 'opening settings made a network/model request')
+    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, '#save')
+    page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
+    page.keyboard.press('Escape'); command(page, 'DualLens 设置')
+    page.wait_for_function("__platformFixture.elements('#targetLang')[0]?.value==='ja'")
+    check(page.evaluate('__platformFixture.resourceReads') == ['duallens-settings'], 'resource cache not reused')
+    for mode in ['missing', 'tampered', 'throw']:
+        ready(page, base)
+        page.evaluate('mode=>__platformFixture.resourceMode(mode)', mode)
+        command(page, 'DualLens 设置')
+        page.wait_for_function("__platformFixture.elements('.dl-media-page').some(e=>e.textContent.includes('重新安装用户脚本'))")
+        check(page.evaluate('__platformFixture.elements("form").length') == 0, 'unverified form mounted')
+        check(page.evaluate('__platformFixture.calls.length') == 0, 'resource failure made a network request')
+        page.keyboard.press('Escape')
+        page.evaluate("__platformFixture.resourceMode('valid')")
+        command(page, 'DualLens 设置')
+        page.wait_for_function("__platformFixture.elements('form').length===1")
+        page.keyboard.press('Escape')
+    return 'offline cache: lazy verified load, save/reopen, no network; missing/tampered/GM error show reinstall guidance and recover'
 
 
 def machine_first_case(page, base):
@@ -460,16 +505,18 @@ def mobile_cases(page, base):
 
 
 def main():
+    from site_rules_cases import userscript_case
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--only', action='append', default=[])
     args = ap.parse_args()
     bundle = REPO / 'dist' / 'duallens.user.js'
     check(bundle.is_file(), 'build dist/duallens.user.js first')
-    cases = [('desktop', 1280, 800, False, desktop_cases), ('secret_transport', 1280, 800, False, secret_transport_case),
+    cases = [('desktop', 1280, 800, False, desktop_cases), ('settings_resource', 1280, 800, False, settings_resource_case), ('secret_transport', 1280, 800, False, secret_transport_case),
              ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
              ('isolated_prompt', 1280, 800, False, isolated_prompt_case),
              ('mobile_375', 375, 812, True, mobile_cases), ('tablet_800', 800, 1280, True, mobile_cases),
-             ('machine_first', 1280, 800, False, machine_first_case), ('machine_first_375', 375, 812, True, machine_first_case)]
+             ('machine_first', 1280, 800, False, machine_first_case), ('machine_first_375', 375, 812, True, machine_first_case),
+             ('site_rules', 1280, 800, False, userscript_case), ('site_rules_375', 375, 812, True, userscript_case)]
     if args.only: cases = [c for c in cases if any(o in c[0] for o in args.only)]
     if not cases: print('no matching cases'); return 2
     E2E_ROOT.mkdir(parents=True, exist_ok=True); ARTIFACTS.mkdir(parents=True, exist_ok=True)

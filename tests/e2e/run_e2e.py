@@ -778,6 +778,12 @@ def never_wake(h: Session) -> None:
     check(h.js("() => document.querySelectorAll('dl-t,dl-o,dl-ui').length") == 0, 'sleep left translated DOM or overlay')
 
 
+@case("site_path_rules", "路径自动/从不、SPA往返、功能关闭与手动恢复")
+def site_path_rules(h: Session) -> None:
+    from site_rules_cases import extension_case
+    extension_case(h)
+
+
 @case("input_edit_race", "输入框翻译不能覆盖请求期间新输入的文字")
 def input_edit_race(h: Session) -> None:
     h.open('article.html')

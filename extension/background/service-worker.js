@@ -27,6 +27,7 @@ import { createCanvasRegistry, createImageRegistry } from './comic-sites.js';
 import { createPDFEntries } from './pdf.js';
 import { registerSidePanelCommand } from './media.js';
 import { createSubtitleHandlers } from './subtitles.js';
+import { createFrameHandlers } from './frames.js';
 
 const queue = createQueue();
 const cache = createCache();
@@ -40,6 +41,7 @@ const handlers = createHandlers({
   getSettings: loadSettings,
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
+Object.assign(handlers,createFrameHandlers(chrome));
 const imageRegistry=createImageRegistry(chrome,loadSettings);
 const comicHandlers=createComicHandlers(chrome);
 Object.assign(handlers,comicHandlers);

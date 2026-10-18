@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Open shadow notices</title></head><body>
+<notice-card id="card"><p id="projected" slot="message">Projected light text should be translated exactly once for this reader.</p></notice-card>
+<closed-notice id="closed"></closed-notice>
+<script>
+customElements.define('inner-notice',class extends HTMLElement {
+  constructor(){super();this.attachShadow({mode:'open'}).innerHTML='<style>:host{display:block}</style><p id="nested">A nested shadow notice explains the next stage of this message.</p>';}
+});
+customElements.define('notice-card',class extends HTMLElement {
+  constructor(){super();this.attachShadow({mode:'open'}).innerHTML='<style>:host{display:block;background:#111;color:#fff}</style>A direct shadow text node describes the current notice.<p id="outer">The open shadow notice contains a complete message for every student.</p><inner-notice></inner-notice><slot name="message"><p id="fallback">This fallback must stay original while a message is projected.</p></slot>';}
+});
+const root=document.querySelector('#card').shadowRoot;
+window.closedNotice=document.querySelector('#closed').attachShadow({mode:'closed'});
+closedNotice.innerHTML='<p>This closed notice must remain completely original.</p>';
+window.closedExpected=closedNotice.innerHTML;
+window.shadowRoots=[root,root.querySelector('inner-notice').shadowRoot];
+window.shadowExpected=shadowRoots.map(r=>r.innerHTML);
+window.addShadowLater=()=>setTimeout(()=>{
+  const p=document.createElement('p');p.id='dynamic';p.textContent='A new paragraph arrives inside the shadow document after one second.';
+  const late=document.createElement('inner-notice');late.id='late-component';
+  shadowExpected[0]+=p.outerHTML+late.outerHTML;
+  shadowRoots.push(late.shadowRoot);shadowExpected.push(late.shadowRoot.innerHTML);
+  root.append(p,late);
+},1000);
+</script></body></html>

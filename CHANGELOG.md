@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-18
+
+- Translate text inside iframes: same-origin frames (no src, about:blank, srcdoc) become scan roots of the top page in extension and userscript, with style injection, document-replacement rescans and exact restore; cross-origin frames run a UI-less, push-driven agent in the extension. Tiny or invisible frames are skipped. No new permissions.
+- Translate open Shadow DOM (nested and dynamic roots, slot content once); closed roots are skipped.
+- Site rules match host/path globs (optional scheme/port), most specific wins; per-rule page/selection/hover/input switches; popup "this path only"; SPA route changes re-evaluate rules via the Navigation API.
+- Userscript settings panel ships as a pinned, SHA-256-checked @resource loaded on first open (startup bundle 312 KB).
+- Fix: userscript hashing on plain-HTTP pages without crypto.subtle (pure-JS SHA-256 fallback).
+
 ## [0.4.0] - 2026-10-16
 
 - Dual engine: free machine translation (Microsoft Edge endpoint, Google fallback) shows drafts instantly; the LLM refines prose units in place (`translation.mode` mt / llm / mt+llm default / auto). Works with no model configured.

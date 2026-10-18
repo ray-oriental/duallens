@@ -9,54 +9,7 @@ const POS_KEY = 'dl-ball-pos'; // { [host]: { side, topRatio } } in platform.loc
 const SIZE = 44;
 const GAP = 6;
 
-const CSS = `
-.ball {
-  position: fixed; width: ${SIZE}px; height: ${SIZE}px; border-radius: 50%; padding: 0; border: 0;
-  background: linear-gradient(135deg, #4263eb, #20c997); box-shadow: 0 2px 10px rgba(0,0,0,.28);
-  display: flex; align-items: center; justify-content: center; pointer-events: auto; cursor: pointer;
-  opacity: .72; transition: opacity .15s, transform .15s; touch-action: none; user-select: none;
-}
-.ball:hover, .ball.drag, .ball.open { opacity: 1; }
-.ball.drag { cursor: grabbing; transform: scale(1.06); }
-.ball svg { width: 22px; height: 22px; pointer-events: none; }
-.ball::after {
-  content: ""; position: absolute; inset: -4px; border-radius: 50%;
-  border: 2px solid transparent; pointer-events: none;
-}
-.ball.on::after { border-color: #20c997; }
-.ball.busy::after { border-color: #4263eb; border-top-color: transparent; animation: spin .9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .ball.busy::after { animation: none; } }
-.more {
-  position: fixed; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--line);
-  background: var(--bg); color: var(--fg2); font-size: 11px; line-height: 16px; display: none;
-  pointer-events: auto; cursor: pointer;
-}
-.more.show { display: block; }
-.menu {
-  position: fixed; display: none; min-width: 190px; padding: 6px; border-radius: 10px;
-  background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); pointer-events: auto;
-  max-height: calc(100dvh - 16px); overflow: auto;
-}
-.menu.show { display: block; }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px; border-radius: 6px; }
-.row:hover { background: var(--bg2); }
-.row.btn { cursor: pointer; width: 100%; color: var(--fg); background: transparent; border: 0; text-align: left; }
-select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; max-width: 120px; }
-.sw { position: relative; width: 30px; height: 18px; flex: none; }
-.sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.sw i { position: absolute; inset: 0; border-radius: 9px; background: var(--line); transition: background .15s; pointer-events: none; }
-.sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
-.sw input:checked + i { background: var(--accent); }
-.sw input:checked + i::after { transform: translateX(12px); }
-.sep { height: 1px; background: var(--line); margin: 4px 0; }
-@media (pointer: coarse) {
-  .more { width: 44px; height: 44px; font-size: 22px; }
-  .row, select { min-height: 44px; }
-  .sw { height: 44px; }
-  .sw i { top: 13px; bottom: 13px; }
-}
-`;
+const CSS = `.ball{position:fixed;width:${SIZE}px;height:${SIZE}px;border-radius:50%;padding:0;border:0;background:linear-gradient(135deg,#4263eb,#20c997);box-shadow:0 2px 10px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;opacity:.72;transition:opacity .15s,transform .15s;touch-action:none;user-select:none}.ball:hover,.ball.drag,.ball.open{opacity:1}.ball.drag{cursor:grabbing;transform:scale(1.06)}.ball svg{width:22px;height:22px;pointer-events:none}.ball::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid transparent;pointer-events:none}.ball.on::after{border-color:#20c997}.ball.busy::after{border-color:#4263eb;border-top-color:transparent;animation:spin .9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.ball.busy::after{animation:none}}.more{position:fixed;width:18px;height:18px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--fg2);font-size:11px;line-height:16px;display:none;pointer-events:auto;cursor:pointer}.more.show{display:block}.menu{position:fixed;display:none;min-width:190px;padding:6px;border-radius:10px;background:var(--bg);border:1px solid var(--line);box-shadow:var(--shadow);pointer-events:auto;max-height:calc(100dvh - 16px);overflow:auto}.menu.show{display:block}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 8px;border-radius:6px}.row:hover{background:var(--bg2)}.row.btn{cursor:pointer;width:100%;color:var(--fg);background:transparent;border:0;text-align:left}select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 4px;max-width:120px}.sw{position:relative;width:30px;height:18px;flex:none}.sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}.sw i{position:absolute;inset:0;border-radius:9px;background:var(--line);transition:background .15s;pointer-events:none}.sw i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}.sw input:checked + i{background:var(--accent)}.sw input:checked + i::after{transform:translateX(12px)}.sep{height:1px;background:var(--line);margin:4px 0}@media (pointer:coarse){.more{width:44px;height:44px;font-size:22px}.row,select{min-height:44px}.sw{height:44px}.sw i{top:13px;bottom:13px}}`;
 
 function node(tag, cls, text) {
   const e = document.createElement(tag);
@@ -361,6 +314,7 @@ export class FloatBall {
     const restoreComics = node('button', 'row btn', '恢复漫画原文');
     restoreComics.type = 'button';
     restoreComics.addEventListener('click', () => { this.#closeMenu(); this.ctx.restoreComics(); });
-    menu.append(input, comics, restoreComics, opts);
+    if (s.input.enabled) menu.append(input);
+    menu.append(comics, restoreComics, opts);
   }
 }

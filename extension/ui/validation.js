@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION } from '../shared/settings.js';
+import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION, validateSiteRules } from '../shared/settings.js';
 import { isMtEngine } from '../background/mt.js';
 import { comicSites } from '../content/comics/sites.js';
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
@@ -38,12 +38,10 @@ export function validateSettings(s) {
   requireThat(lang(s.input.targetLang) && ['triple-space','shortcut'].includes(s.input.trigger), '输入框设置无效');
   requireThat(['left','right'].includes(s.floatBall.side) && Number.isFinite(s.floatBall.topRatio) && s.floatBall.topRatio>=0 && s.floatBall.topRatio<=1, '悬浮球位置无效');
   for (const field of [s.hover.enabled,s.selection.enabled,s.selection.showIcon,s.input.enabled,s.input.prefixOverride,s.floatBall.enabled,s.cache.enabled]) requireThat(typeof field==='boolean', '开关设置无效');
-  const hostOK = h => typeof h==='string' && /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?|localhost|\[[a-f0-9:]+\])$/i.test(h);
-  requireThat(Array.isArray(s.siteRules.always) && s.siteRules.always.every(hostOK) && Array.isArray(s.siteRules.never) && s.siteRules.never.every(hostOK), '站点规则请填写域名或 *.example.com，不含协议和路径');
+  validateSiteRules(s.siteRules);
   requireThat(Array.isArray(s.autoTranslateLangs) && s.autoTranslateLangs.every(lang), '自动翻译语言无效');
   requireThat(Array.isArray(s.siteRules.custom), '自定义规则须是JSON数组');
   for (const r of s.siteRules.custom) {
-    requireThat(r && hostOK(r.match), '自定义规则须包含有效的 match 域名');
     for (const k of ['include','exclude']) if (r[k] != null) requireThat(typeof r[k]==='string' || (Array.isArray(r[k]) && r[k].every(x=>typeof x==='string')), 'include/exclude 须是选择器字符串或字符串数组');
     if (r.style != null) requireThat(STYLES.some(x=>x.id===r.style), '自定义规则样式无效');
   }

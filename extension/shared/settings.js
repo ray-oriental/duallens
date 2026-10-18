@@ -2,6 +2,7 @@
 // v2 contract: docs/PLATFORMS.md §3. Credentials stay in localArea only.
 import { chromeStorageArea } from './storage-areas.js';
 import { sha256Hex } from './hash.js';
+import { parsePattern, patternMatches, comparePatterns } from './site-pattern.js';
 
 export const SETTINGS_KEY = 'settings';
 export const SETTINGS_VERSION = 2;
@@ -127,8 +128,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
   siteRules: {
     always: [], // host patterns to auto-translate on load
-    never: [], // host patterns where DualLens stays dormant
-    custom: [], // [{ match, include, exclude, style }] — CSS selectors, user-authored
+    never: [], // patterns blocking automatic page translation and the floating ball
+    custom: [], // [{ match, page?, selection?, hover?, input?, include?, exclude?, style? }]
   },
   autoTranslateLangs: [], // page languages that trigger auto-translate everywhere
 
@@ -162,10 +163,10 @@ export function publicSettings(value) {
   return out;
 }
 
-export function providerChain(settings) {
-  const { profiles = [], chain = [] } = settings.provider || {};
+export function providerChain(s) {
+  const { profiles = [], chain = [] } = s.provider || {};
   const selected = chain.length ? chain : (() => {
-    const p = activeProfile(settings);
+    const p = activeProfile(s);
     return p ? [p.model, ...(p.fallbackModels || [])].map(model => ({ profileId: p.id, model })) : [];
   })();
   const seen = new Set();
@@ -182,8 +183,8 @@ export function providerChain(settings) {
   });
 }
 
-function splitSettings(settings) {
-  const { glossary, siteRules, autoTranslateLangs, ...core } = settings;
+function splitSettings(s) {
+  const { glossary, siteRules, autoTranslateLangs, ...core } = s;
   return { 'settings.core': core, 'settings.glossary': glossary,
     'settings.sites': { siteRules, autoTranslateLangs } };
 }
@@ -216,20 +217,21 @@ export function createSettingsStore({ syncArea, localArea }) {
     return next;
   };
   async function persist(input, legacySecrets = {}) {
-    const settings = publicSettings(mergeSettings(DEFAULT_SETTINGS, input));
-    settings.version = SETTINGS_VERSION;
-    for (const p of settings.provider.profiles) {
+    const s = publicSettings(mergeSettings(DEFAULT_SETTINGS, input));
+    s.version = SETTINGS_VERSION;
+    validateSiteRules(s.siteRules);
+    for (const p of s.provider.profiles) {
       safeId(p.id);
       if (p.baseUrl) {
         const u = new URL(p.baseUrl);
         if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error('接口地址不能包含凭据或查询参数');
       }
     }
-    if (settings.provider.chain.length) {
-      const head = settings.provider.chain[0];
-      const primary = settings.provider.profiles.find(p => p.id === head.profileId);
+    if (s.provider.chain.length) {
+      const head = s.provider.chain[0];
+      const primary = s.provider.profiles.find(p => p.id === head.profileId);
       if (!primary || typeof head.model !== 'string' || !head.model.trim()) throw new Error('备选链的首个接口或模型无效');
-      settings.provider.active = primary.id;
+      s.provider.active = primary.id;
       primary.model = head.model;
     }
     if (Object.keys(legacySecrets).length) {
@@ -237,16 +239,16 @@ export function createSettingsStore({ syncArea, localArea }) {
       // Existing v2 keys win on re-migration; an old mirror cannot overwrite a newer secret.
       await localArea.set({ [SECRETS_KEY]: { ...legacySecrets, ...(got[SECRETS_KEY] || {}) } });
     }
-    const split = splitSettings(settings);
+    const split = splitSettings(s);
     status = { synced: false, reason: fitsSync(split) ? 'unavailable' : 'quota' };
     if (syncArea && syncArea !== localArea && fitsSync(split)) {
       try { await syncArea.set(split); status = { synced: true, reason: null }; }
       catch { status.reason = 'quota-or-unavailable'; }
     }
     // The mode marker is device-local. Keep the last valid sync config for other devices.
-    const meta = { ...status, mirrorHash: await mirrorDigest(settings) };
-    await localArea.set({ ...split, [SETTINGS_KEY]: settings, [STORAGE_KEY]: meta });
-    return settings;
+    const meta = { ...status, mirrorHash: await mirrorDigest(s) };
+    await localArea.set({ ...split, [SETTINGS_KEY]: s, [STORAGE_KEY]: meta });
+    return s;
   }
   async function read() {
     const got = await localArea.get([...SETTINGS_KEYS, SETTINGS_KEY, STORAGE_KEY]);
@@ -326,32 +328,62 @@ export function getDefaultSettingsStore() {
 export async function loadSettings() { return getDefaultSettingsStore().load(); }
 export async function saveSettings(patch) { return getDefaultSettingsStore().save(patch); }
 
-export function activeProfile(settings) {
-  const { active, profiles } = settings.provider;
+export function activeProfile(s) {
+  const { active, profiles } = s.provider;
   if (!active) return undefined;
   return profiles.find((p) => p.id === active) || profiles[0];
 }
 
-// Host pattern: exact host, or "*.example.com" for the domain and its subdomains.
+// Legacy name retained; accepts URL patterns as well as plain hostnames.
 export function hostMatches(pattern, host) {
-  const p = String(pattern).trim().toLowerCase();
-  const h = String(host).toLowerCase();
-  if (!p) return false;
-  if (p.startsWith('*.')) {
-    const base = p.slice(2);
-    return h === base || h.endsWith('.' + base);
-  }
-  return h === p;
+  return patternMatches(pattern, host);
 }
 
-// Returns { mode: 'always' | 'never' | null, custom: rule | null } for a host.
-export function siteRuleFor(settings, host) {
-  const { always, never, custom } = settings.siteRules;
-  const mode = never.some((p) => hostMatches(p, host))
-    ? 'never'
-    : always.some((p) => hostMatches(p, host))
-      ? 'always'
-      : null;
-  const rule = custom.find((r) => hostMatches(r.match, host)) || null;
-  return { mode, custom: rule };
+// Returns { mode: 'always' | 'never' | null, custom: rule | null } for a URL or host.
+export function siteRuleFor(s, url) {
+  const { always = [], never = [], custom = [] } = s.siteRules || {};
+  const best = entries => entries.filter(r => patternMatches(r.match, url))
+    .sort((a, b) => comparePatterns(b.match, a.match))[0] || null;
+  const rule = best(custom);
+  const modeRule = best([
+    ...custom.filter(r => r.page != null),
+    ...never.map(match => ({ match, page: 'never' })),
+    ...always.map(match => ({ match, page: 'always' })),
+  ]);
+  return { mode: modeRule?.page === 'default' ? null : modeRule?.page || null, custom: rule };
+}
+
+// Runtime view only: global preferences and stored rules stay untouched. The selected CSS rule
+// is bound to the current host for legacy controller callers that still pass just a hostname.
+export function settingsForSite(s, url) {
+  const { mode, custom } = siteRuleFor(s, url);
+  const out = { ...s, floatBall: { ...s.floatBall, enabled: mode !== 'never' && s.floatBall.enabled },
+    siteRules: { ...s.siteRules, custom: custom ? [{ ...custom, match: new URL(url).hostname }] : [] } };
+  for (const feature of ['selection', 'hover', 'input']) {
+    const value = custom?.[feature];
+    out[feature] = { ...s[feature], enabled: value === 'on' ? true : value === 'off' ? false : s[feature].enabled };
+  }
+  return out;
+}
+
+export function setSitePageRule(s, match, mode) {
+  const rules = structuredClone(s.siteRules);
+  const same = p => JSON.stringify(parsePattern(p)) === JSON.stringify(parsePattern(match));
+  for (const key of ['always', 'never']) rules[key] = rules[key].filter(p => !same(p));
+  const found = rules.custom.find(r => same(r.match));
+  if (found) found.page = mode || 'default';
+  else rules.custom.push({ match, page: mode || 'default' });
+  return rules;
+}
+
+export function validateSiteRules(rules) {
+  if (!rules || !['always', 'never', 'custom'].every(k => Array.isArray(rules[k]))) throw new Error('站点规则须使用列表');
+  const valid = p => { if (!parsePattern(p)) throw new Error('站点模式无效：如 example.com/docs/*，可加 HTTP(S) 和端口；不能含空白、查询串、片段或凭据'); };
+  rules.always.forEach(valid); rules.never.forEach(valid);
+  for (const r of rules.custom) {
+    if (!r || typeof r !== 'object') throw new Error('站点规则须包含 match');
+    valid(r.match);
+    if (r.page != null && !['always', 'never', 'default'].includes(r.page)) throw new Error('网页规则须为自动、从不或默认');
+    for (const f of ['selection', 'hover', 'input']) if (r[f] != null && !['on', 'off', 'default'].includes(r[f])) throw new Error('划词、悬停和输入框规则须为开、关或默认');
+  }
 }

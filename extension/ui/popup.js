@@ -1,4 +1,5 @@
-import { loadSettings, saveSettings, LANGS, STYLES, TRANSLATION_MODES, siteRuleFor, activeProfile } from '../shared/settings.js';
+import { loadSettings, saveSettings, LANGS, STYLES, TRANSLATION_MODES, siteRuleFor, activeProfile, setSitePageRule } from '../shared/settings.js';
+import { pathPattern } from '../shared/site-pattern.js';
 import { MT_ENGINES } from '../background/mt.js';
 import * as P from '../shared/protocol.js';
 import { $, options, notice, request, errorText, busy } from './common.js';
@@ -10,16 +11,16 @@ function draw() {
   const profile=activeProfile(settings);
   $('mode').value=settings.displayMode; $('model').value=profile?.model || '';
   for(const id of ['model','load-models','test']) $(id).disabled=!profile;
-  $('site').value=host ? siteRuleFor(settings,host).mode || '' : ''; $('site').disabled=!host;
+  $('site').value=host ? siteRuleFor(settings,tab.url).mode || '' : ''; $('site').disabled=!host; $('site-scope').disabled=!host;
   $('subscription').hidden=!/^(claude|codex)\//.test(profile?.model || '');
 }
 async function pageMessage(msg) { if (!tab?.id) throw new Error('没有可翻译的标签页'); return chrome.tabs.sendMessage(tab.id,msg); }
 async function refresh() {
   try {
     state=await pageMessage({type:P.MSG_GET_STATE});
-    $('page-status').textContent=state.dormant ? '本站已设为从不翻译，可在下方修改。' : state.translated ? `已翻译 ${state.done ?? (state.units-state.pending-state.failed)} 段${state.refining ? ` · 精修中 ${state.refining}` : ''} · 待处理 ${state.pending} · 失败 ${state.failed}` : '已准备好，翻译靠近视口的段落。';
-    $('toggle').textContent=state.translated ? '恢复原文' : '翻译当前页面'; $('toggle').disabled=state.dormant;
-    $('comics').disabled=state.dormant || !settings.comics.enabled;
+    $('page-status').textContent=state.translated ? `已翻译 ${state.done ?? (state.units-state.pending-state.failed)} 段${state.refining ? ` · 精修中 ${state.refining}` : ''} · 待处理 ${state.pending} · 失败 ${state.failed}` : state.dormant ? '本页不自动翻译；仍可点击翻译当前页面。' : '已准备好，翻译靠近视口的段落。';
+    $('toggle').textContent=state.translated ? '恢复原文' : '翻译当前页面'; $('toggle').disabled=false;
+    $('comics').disabled=!settings.comics.enabled;
   } catch { $('page-status').textContent='此页面不能运行扩展，或扩展刚更新；请打开普通网页并刷新。'; $('toggle').disabled=true;$('comics').disabled=true; }
 }
 async function persist(patch) { settings=await saveSettings(patch); draw(); await refresh(); }
@@ -43,10 +44,9 @@ $('toggle').addEventListener('click',()=>busy($('toggle'),async()=>{ await pageM
 $('comics').addEventListener('click',()=>busy($('comics'),async()=>{await pageMessage({type:P.MSG_COMMAND,name:'translate-comics'});await refresh();}));
 $('site').addEventListener('change',()=>busy($('site'),async()=>{
   const mode=$('site').value;
-  const always=settings.siteRules.always.filter(x=>x!==host), never=settings.siteRules.never.filter(x=>x!==host);
-  if (mode==='always') always.push(host); if (mode==='never') never.push(host);
-  await persist({siteRules:{always,never}});
-  const applied=siteRuleFor(settings,host).mode;
+  const match=$('site-scope').value==='path' ? pathPattern(tab.url) : host;
+  await persist({siteRules:setSitePageRule(settings,match,mode)});
+  const applied=siteRuleFor(settings,tab.url).mode;
   notice((applied||'')!==mode?'本站仍被通配规则命中，请到全部设置修改。':'站点规则已保存');
 }));
 $('load-models').addEventListener('click',()=>busy($('load-models'),async()=>{

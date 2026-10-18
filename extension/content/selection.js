@@ -7,44 +7,7 @@ import { deepActiveElement } from './util.js';
 
 const MAX_CHARS = 4000;
 
-const CSS = `
-.icon {
-  position: fixed; width: 28px; height: 28px; padding: 0; border-radius: 50%;
-  border: 1px solid var(--line); background: var(--bg); box-shadow: var(--shadow);
-  display: none; align-items: center; justify-content: center; pointer-events: auto; cursor: pointer;
-}
-.icon.show { display: flex; }
-.icon:hover { border-color: var(--accent); }
-.icon svg { width: 16px; height: 16px; }
-.card {
-  position: fixed; display: none; flex-direction: column; overflow: hidden; resize: both;
-  width: 340px; height: auto; min-width: 240px; min-height: 110px; max-width: calc(100vw - 16px);
-  max-height: min(70vh, 520px); background: var(--bg); border: 1px solid var(--line);
-  border-radius: 10px; box-shadow: var(--shadow); pointer-events: auto;
-}
-.card.show { display: flex; }
-.head {
-  display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 10px; cursor: move;
-  background: var(--bg2); border-bottom: 1px solid var(--line); user-select: none; flex: none;
-}
-.title { font-weight: 600; font-size: 12px; color: var(--fg2); flex: 1; }
-.tool {
-  border: 0; background: transparent; border-radius: 6px; min-width: 26px; height: 24px;
-  padding: 0 6px; font-size: 12px; color: var(--fg2); cursor: pointer;
-}
-.tool:hover { background: var(--line); color: var(--fg); }
-.tool[hidden] { display: none; }
-.body { flex: 1; overflow: auto; padding: 10px 12px 12px; cursor: auto; user-select: text; }
-.src { color: var(--fg2); font-size: 12px; margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); white-space: pre-wrap; word-break: break-word; }
-.card.only .src { display: none; }
-.dst { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
-.dst.err { color: var(--danger); }
-.dots::after { content: ""; animation: dots 1.1s steps(4, end) infinite; }
-@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
-@media (pointer: coarse) { .icon { width: 44px; height: 44px; } .tool, .retry { min-width: 44px; min-height: 44px; } .head { touch-action: none; } }
-@media (prefers-reduced-motion: reduce) { .dots::after { animation: none; content: "..."; } }
-.retry { margin-top: 8px; border: 1px solid var(--line); background: var(--bg2); border-radius: 6px; padding: 2px 10px; }
-`;
+const CSS = `.icon{position:fixed;width:28px;height:28px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);display:none;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer}.icon.show{display:flex}.icon:hover{border-color:var(--accent)}.icon svg{width:16px;height:16px}.card{position:fixed;display:none;flex-direction:column;overflow:hidden;resize:both;width:340px;height:auto;min-width:240px;min-height:110px;max-width:calc(100vw - 16px);max-height:min(70vh,520px);background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);pointer-events:auto}.card.show{display:flex}.head{display:flex;align-items:center;gap:2px;padding:4px 6px 4px 10px;cursor:move;background:var(--bg2);border-bottom:1px solid var(--line);user-select:none;flex:none}.title{font-weight:600;font-size:12px;color:var(--fg2);flex:1}.tool{border:0;background:transparent;border-radius:6px;min-width:26px;height:24px;padding:0 6px;font-size:12px;color:var(--fg2);cursor:pointer}.tool:hover{background:var(--line);color:var(--fg)}.tool[hidden]{display:none}.body{flex:1;overflow:auto;padding:10px 12px 12px;cursor:auto;user-select:text}.src{color:var(--fg2);font-size:12px;margin:0 0 8px;padding-bottom:8px;border-bottom:1px dashed var(--line);white-space:pre-wrap;word-break:break-word}.card.only .src{display:none}.dst{margin:0;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}.dst.err{color:var(--danger)}.dots::after{content:"";animation:dots 1.1s steps(4,end) infinite}@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}@media (pointer:coarse){.icon{width:44px;height:44px}.tool,.retry{min-width:44px;min-height:44px}.head{touch-action:none}}@media (prefers-reduced-motion:reduce){.dots::after{animation:none;content:"..."}}.retry{margin-top:8px;border:1px solid var(--line);background:var(--bg2);border-radius:6px;padding:2px 10px}`;
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -232,8 +195,8 @@ export class SelectionUI {
   // ---- icon --------------------------------------------------------------------------------
 
   #check() {
-    const settings = this.getSettings();
-    if (!settings.selection.enabled) return;
+    const s = this.getSettings();
+    if (!s.selection.enabled) return;
     const ae = deepActiveElement();
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
     const sel = getSelection();
@@ -245,7 +208,7 @@ export class SelectionUI {
     const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
     if (!rect || (!rect.width && !rect.height)) return;
     this.pending = { text: text.slice(0, MAX_CHARS), rect: rectOf(rect) };
-    if (settings.selection.showIcon) {
+    if (s.selection.showIcon) {
       this.#build();
       this.ui.attach();
       const icon = this.iconEl;
@@ -268,12 +231,12 @@ export class SelectionUI {
 
   // rect may be null (context-menu path without a usable selection rectangle)
   async openCard(text, rect) {
-    const settings = this.getSettings();
+    const s = this.getSettings();
     const value = String(text || '').trim().slice(0, MAX_CHARS);
     if (!value) return;
     this.#build();
     this.ui.attach();
-    this.cardMode = this.cardMode || settings.displayMode;
+    this.cardMode = this.cardMode || s.displayMode;
     this.src.textContent = value;
     this.dst.textContent = '';
     this.dst.className = 'dst dots';
@@ -285,13 +248,13 @@ export class SelectionUI {
     this.#applyCardMode();
     this.card.classList.add('show');
     this.#place(rect);
-    this.#checkSpeech(settings.targetLang);
+    this.#checkSpeech(s.targetLang);
     const token = (this.token = (this.token || 0) + 1);
 
     const res = await this.platform.translator().translateText({
       text: value,
-      to: settings.targetLang,
-      from: settings.sourceLang || 'auto',
+      to: s.targetLang,
+      from: s.sourceLang || 'auto',
       purpose: 'selection',
     });
     if (token !== this.token || !this.#cardVisible()) return;
@@ -301,8 +264,8 @@ export class SelectionUI {
       this.dst.textContent = res.text;
       this.cardState = { visible: true, text: res.text, source: value };
       // Machine translation answered at once; offer the LLM as an explicit second opinion.
-      this.refineOf = res.by === 'mt' && ['mt+llm', 'auto'].includes(settings.translation?.mode)
-        ? { value, to: settings.targetLang, from: settings.sourceLang || 'auto' } : null;
+      this.refineOf = res.by === 'mt' && ['mt+llm', 'auto'].includes(s.translation?.mode)
+        ? { value, to: s.targetLang, from: s.sourceLang || 'auto' } : null;
       this.bRefine.hidden = !this.refineOf;
       this.bRefine.disabled = false;
     } else {
