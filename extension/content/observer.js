@@ -2,6 +2,7 @@
 // (SPEC §5.4-5.5).
 
 import { isOurs } from './util.js';
+import { frameRect } from './frames.js';
 
 // Observe hosts, but schedule by each unit's range, including ranges inside a tall reader block.
 export class LazyObserver {
@@ -11,6 +12,7 @@ export class LazyObserver {
     this.targets = new Map(); // host -> Set<unit>
     this.io = null;
     this.frame=0;
+    this.documents=new Set();
     this.scroll=()=>{if(!this.frame)this.frame=requestAnimationFrame(()=>{this.frame=0;for(const host of this.targets.keys())this.#release(host);});};
   }
 
@@ -23,6 +25,17 @@ export class LazyObserver {
     for (const host of this.targets.keys()) this.io.observe(host);
   }
 
+  addDocument(doc) {
+    if(this.documents.has(doc))return;
+    this.documents.add(doc);
+    doc.defaultView?.addEventListener('scroll',this.scroll,{passive:true,capture:true});
+  }
+
+  removeDocument(doc) {
+    this.documents.delete(doc);
+    doc.defaultView?.removeEventListener('scroll',this.scroll,true);
+  }
+
   setMargin(px) {
     const v = Number.isFinite(px) && px >= 0 ? px : 600;
     if (this.io && v === this.margin) return;
@@ -33,7 +46,7 @@ export class LazyObserver {
 
   watch(unit) {
     const r = this.#rect(unit);
-    if (r.bottom > 0 && r.top < (window.innerHeight || 800)&&!(r.right<=0||r.left>=innerWidth)) {
+    if (r.bottom > r.top && r.right > r.left && r.bottom > 0 && r.top < (window.innerHeight || 800)&&!(r.right<=0||r.left>=innerWidth)) {
       this.onVisible(unit, 0, r.top); return;
     }
     if (!this.io) this.#make();
@@ -61,20 +74,22 @@ export class LazyObserver {
   }
 
   #rect(unit) {
-    if (unit.attribute) return (unit.host.closest('select') || unit.host).getBoundingClientRect();
+    const doc=unit.host.ownerDocument;
+    const mapped=r=>frameRect(r,doc);
+    if (unit.attribute) return mapped((unit.host.closest('select') || unit.host).getBoundingClientRect());
     if(unit.first?.isConnected && unit.last?.isConnected) {
-      const range=document.createRange();range.setStartBefore(unit.first);range.setEndAfter(unit.last);
-      const rect=range.getBoundingClientRect();if(rect.height || rect.width)return rect;
+      const range=doc.createRange();range.setStartBefore(unit.first);range.setEndAfter(unit.last);
+      const rect=range.getBoundingClientRect();if(rect.height || rect.width)return mapped(rect);
     }
-    return unit.host.getBoundingClientRect();
+    return mapped(unit.host.getBoundingClientRect());
   }
 
   #release(host) {
     const set=this.targets.get(host);if(!set)return;
     const vh = window.innerHeight || 800;
-    const bounds=host.getBoundingClientRect();if(bounds.bottom<=-this.margin || bounds.top>=vh+this.margin)return;
+    const bounds=frameRect(host.getBoundingClientRect(),host.ownerDocument);if(bounds.bottom<=-this.margin || bounds.top>=vh+this.margin)return;
     for(const u of [...set]) {
-      const r=this.#rect(u);if(r.bottom<=-this.margin || r.top>=vh+this.margin||r.right<=0||r.left>=innerWidth)continue;
+      const r=this.#rect(u);if(r.bottom<=r.top||r.right<=r.left||r.bottom<=-this.margin || r.top>=vh+this.margin||r.right<=0||r.left>=innerWidth)continue;
       // 0 = on screen, 1 = within a screen's distance, 2 = further prefetch
       const priority = r.bottom > 0 && r.top < vh ? 0 : r.bottom > -vh && r.top < 2 * vh ? 1 : 2;
       this.unwatch(u);this.onVisible(u, priority, r.top);
@@ -82,6 +97,7 @@ export class LazyObserver {
   }
 
   disconnect() {
+    for(const doc of this.documents)this.removeDocument(doc);
     window.removeEventListener('scroll',this.scroll,true);window.removeEventListener('resize',this.scroll);
     cancelAnimationFrame(this.frame);this.frame=0;
     this.io?.disconnect();
@@ -101,18 +117,28 @@ export class MutationWatcher {
     this.added = new Set();
     this.dirty = new Set();
     this.layout = new Set();
+    this.roots = new Set();
   }
 
-  start() {
-    if (this.mo) return;
-    this.mo = new MutationObserver((records) => this.#collect(records));
-    this.mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true,
+  start(doc = document) {
+    if(this.roots.has(doc))return;
+    this.roots.add(doc);
+    if (!this.mo) this.mo = new MutationObserver((records) => this.#collect(records));
+    this.mo.observe(doc, { childList: true, subtree: true, characterData: true,
       attributes: true, attributeFilter: ['placeholder','title','label','value','hidden','open','class','style','aria-hidden'] });
+  }
+
+  removeDocument(doc) {
+    const roots=[...this.roots].filter(d=>d!==doc);
+    this.#collect(this.mo?.takeRecords() || []);
+    this.mo?.disconnect();this.mo=null;this.roots.clear();
+    for(const root of roots)this.start(root);
   }
 
   stop() {
     this.mo?.disconnect();
     this.mo = null;
+    this.roots.clear();
     clearTimeout(this.timer);
     this.timer = 0;
     this.added.clear();

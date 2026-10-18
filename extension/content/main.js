@@ -189,6 +189,10 @@ class App {
   #onMessage(msg, sendResponse) {
     if (!msg || typeof msg.type !== 'string') return false;
     switch (msg.type) {
+      case 'frame-top-state':
+        sendResponse({active:this.translator.isActive() && !this.dormant,settings:this.settings,
+          context:{host:HOST,url:location.href,title:document.title}});
+        return false;
       case P.MSG_GET_STATE:
         sendResponse(this.state());
         return false;

@@ -43,7 +43,8 @@
         "styles/content.css"
       ],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": true,
+      "match_about_blank": true
     }
   ],
   "web_accessible_resources": [
@@ -53,7 +54,8 @@
         "content/comics/*.js",
         "content/subtitles/*.js",
         "platform/*.js",
-        "shared/*.js"
+        "shared/*.js",
+        "styles/content.css"
       ],
       "matches": [
         "http://*/*",

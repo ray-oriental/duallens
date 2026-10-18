@@ -10,7 +10,7 @@
 | **P0（本轮）** | 网页段落级双语对照；仅译文 / 恢复原文；视口懒翻译；动态内容（MutationObserver、SPA 路由）；译文样式；悬停翻译；划词翻译；输入框翻译；悬浮球；弹出页；设置页；站点规则（总是/从不/自定义选择器）；快捷键与右键菜单；翻译缓存；术语表；提示词预设与自定义；本机网关（交大 / Ollama / Claude CLI / Codex CLI / Hermes）；直连任意 OpenAI 兼容端点；测试用 mock 后端 |
 | P1 已实现 | YouTube 已有轨道双语字幕；桌面 PDF 文本层双语阅读（pdf.js）；桌面侧边栏 / 用户脚本页签文本翻译 |
 | P1 计划 | EPUB；Android Chrome 书签脚本 |
-| P2 | 已实现第一阶段本地漫画 OCR 旁列翻译；视觉模型、文档翻译、iframe 内翻译仍计划中 |
+| P2 | 已实现第一阶段本地漫画 OCR 旁列翻译；视觉模型、文档翻译仍计划中；iframe 增量边界见 PLATFORMS.md |
 
 不做：账号体系、付费墙、遥测、远程配置下发。
 
@@ -158,6 +158,11 @@ siteRules: {
 | `translate-selection` | 右键菜单「翻译选中文字」，`{ text }` |
 
 ### 4.4 v0.3 功能接入
+
+- iframe 增量：子 frame 经平台 `frameSnapshot()` 发送 `frame-snapshot`，后台只接受浏览器提供的非零 frameId 与 tabId，
+  定向向同一 tab 的 frameId:0 发送 `frame-top-state`。顶层返回 `{active,settings,context:{host,url,title}}`，
+  仅含公共设置；失败或无顶层响应时代理停止。子 frame 不注册命令、不显示 UI、不按自身站点自动启用。
+  同源扫描与跨域代理的所有权、可见性、轮询与用户脚本限制见 PLATFORMS.md 的 iframe 增量。
 
 - PDF 的 `pdf-status` / `pdf-open` 使用实际标签页 URL，仅在显式入口探测；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
 - PDF 阅读页默认宽屏同尺寸双栏对照：原页画布复制为译文底图，原坐标抹底覆盖译文并拟合字号；另有仅译文页、原文页、重排阅读。公式/图像/边距标识保留原像素，行内公式用本地裁图替换 `<xN/>`。文本分块在本地 Worker 中完成，翻译限视口与相邻页，经 `TranslatorService.translateBatch` 发送文本与公式占位符，不发送文件、图片、URL 或元数据。PDF 消费端支持可选的 `draft:true,purpose:'pdf'` 和同 id 的 `stage:'draft'/'final'` 回调；无 stage 当终稿，恢复取消并屏蔽旧请求结果。共享引擎/端口阶段传输需另外集成验收。

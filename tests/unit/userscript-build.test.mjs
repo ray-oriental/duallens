@@ -35,6 +35,14 @@ test('shared export helper preserves live function bindings',async()=>{
   });
 });
 
+test('unused export getters are omitted while side effects and imported getters remain',async()=>{
+  await fixture({'dep.js':'globalThis.effect=7; export const unusedGetterName=1; export const used=2;',
+    'entry.js':'import {used} from "./dep.js";globalThis.result=used;'},async root=>{
+    const bundle=await buildBundle(path.join(root,'entry.js'),{root});const c={};vm.runInNewContext(bundle,c);
+    assert.equal(c.effect,7);assert.equal(c.result,2);assert.ok(!bundle.includes('"unusedGetterName":()=>'));
+  });
+});
+
 test('bundler handles named, default, namespace, async and generator exports with isolated scope', async () => {
   await fixture({
     'dep.js': 'export const value = 3; export default function twice(x) { return x * 2; } export function* values() { yield value; } export async function answer() { return value; }',

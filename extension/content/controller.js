@@ -15,13 +15,15 @@ import {escapeText} from '../shared/markup.js';
 import {measurePresentation,measureColor} from './presentation.js';
 import {uiTranslation} from '../shared/ui-glossary.js';
 import {metadataTranslation} from '../shared/metadata.js';
+import {FrameRoots} from './frames.js';
 
 const MAX_REQUEST_ITEMS=50;
 const CHURN_LIMIT=12; // re-translations of one host within a minute before we leave it alone
 
 export class PageTranslator {
-  constructor({getSettings,onChange,platform}) {
+  constructor({getSettings,onChange,platform,getContext}) {
     this.platform=platform;
+    this.getContext=getContext || (()=>({title:document.title,host:location.hostname,url:location.href}));
     this.slices=new IdleSlices();
     this.getSettings=getSettings;
     this.onChange=onChange ||(()=> {});
@@ -54,6 +56,18 @@ export class PageTranslator {
     };
     document.addEventListener('click',this.retryHandler,true);
     document.addEventListener('keydown',this.retryHandler,true);
+    this.frames=new FrameRoots({css:platform.contentCSS || '',
+      added:doc=>{
+        this.watch.start(doc);this.lazy.addDocument(doc);
+        doc.addEventListener('click',this.retryHandler,true);doc.addEventListener('keydown',this.retryHandler,true);
+        this.#prime(doc);
+        for(const root of this.#roots(doc))this.#scan(root);
+      },
+      removed:doc=>{
+        this.watch.removeDocument(doc);this.lazy.removeDocument(doc);
+        doc.removeEventListener('click',this.retryHandler,true);doc.removeEventListener('keydown',this.retryHandler,true);
+        inj.write(()=>{for(const u of [...this.units.values()])if(u.host.ownerDocument===doc)this.#drop(u);});
+      },changed:()=>this.lazy.scroll()});
   }
 
 
@@ -62,7 +76,7 @@ export class PageTranslator {
   }
 
   get siteCustom() {
-    return siteRuleFor(this.s,location.hostname).custom;
+    return siteRuleFor(this.s,this.#context().host).custom;
   }
 
   get style() {
@@ -73,17 +87,17 @@ export class PageTranslator {
     return joinSelectors(this.siteCustom?.exclude);
   }
 
-  #roots() {
+  #roots(doc=document) {
     const include=joinSelectors(this.siteCustom?.include);
     if(include) {
-      const all=[...document.querySelectorAll(include)];
+      const all=[...doc.querySelectorAll(include)];
       return all.filter((el)=> !all.some((o)=> o !==el && o.contains(el)));
     }
-    return document.body ? [document.body]:[];
+    return doc.body ? [doc.body]:[];
   }
 
   #context() {
-    return {title:document.title,host:location.hostname,url:location.href};
+    return this.getContext();
   }
 
 
@@ -96,6 +110,7 @@ export class PageTranslator {
     this.active=true;
     this.lazy.setMargin(this.s.lazy.rootMarginPx);
     this.watch.start();
+    this.frames.start();
     this.route.start();
     document.addEventListener('yt-navigate-finish',this.refresh);
     this.#prime();
@@ -103,18 +118,18 @@ export class PageTranslator {
     this.emit();
   }
 
-  #prime() {
-    const roots=this.#roots();
+  #prime(doc=document) {
+    const roots=this.#roots(doc),view=doc.defaultView;
     // Prime visible blocks before the document-order scan. A novel can have thousands of
     // offscreen nodes ahead of its scrolled reader; translated chrome must not move the reader
     // out of the lazy window before it has even been discovered. Hit testing is bounded to 12
     // points and uses the same range-aware scanner/dedupe, rather than scanning the whole DOM twice.
     const visible=new Set();
     for(const y of [.12,.35,.6,.85]) for(const x of [.2,.5,.8]) {
-      for(const el of document.elementsFromPoint(innerWidth*x,innerHeight*y)) {
+      for(const el of doc.elementsFromPoint(view.innerWidth*x,view.innerHeight*y)) {
         if(el.closest('dl-ui,dl-t,dl-o,dl-w')) continue;
         const block=blockContainerOf(el);
-        if(block===document.body || block===document.documentElement || !roots.some(r=> r.contains(block))) continue;
+        if(block===doc.body || block===doc.documentElement || !roots.some(r=> r.contains(block))) continue;
         visible.add(block); break;
       }
     }
@@ -129,6 +144,7 @@ export class PageTranslator {
     this.queue.length=0;
     this.client.cancelAll();
     this.onRouteDebounced.cancel();
+    this.frames.stop();
     this.watch.stop();
     this.route.stop();
     document.removeEventListener('yt-navigate-finish',this.refresh);
@@ -202,6 +218,7 @@ export class PageTranslator {
   #known=(host,first)=> this.registry.has(first);
 
   #scan(root,shallow=false) {
+    if(root.ownerDocument!==document && !this.frames.entries.has(root.ownerDocument))return;
     const include=joinSelectors(this.siteCustom?.include);
     // inside an include-limited site, an arbitrary added node only counts when it lies in scope
     if(include && !shallow && !root.closest(include)) {
@@ -215,7 +232,7 @@ export class PageTranslator {
     const opts={minChars:this.s.translateShortText===false ? this.s.minChars:1,exclude:this.#exclude(),known:this.#known,
       attributeKnown:(el,key)=> this.attributes.get(el)?.has(key),shallow};
     this.slices.run(iterateRuns(root,opts),(run)=> {
-      if(run && this.active && run.host.isConnected &&(run.attribute ? !this.attributes.get(run.host)?.has(run.attribute):!this.#known(run.host,run.first))) this.#addUnit(run);
+      if(run && this.active && run.host.isConnected && (run.host.ownerDocument===document || this.frames.entries.has(run.host.ownerDocument)) &&(run.attribute ? !this.attributes.get(run.host)?.has(run.attribute):!this.#known(run.host,run.first))) this.#addUnit(run);
     });
   }
 

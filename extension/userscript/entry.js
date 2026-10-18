@@ -19,6 +19,7 @@ if (window.top === window.self && /html/i.test(document.contentType || 'text/htm
     });
     panel = createSettingsPanel({ store: platform.settingsStore, platform });
     platform.injectStyle(contentCSS);
+    platform.contentCSS=contentCSS;
     platform.registerCommand('settings', 'DualLens 设置', platform.openSettings);
     await start(platform);
   };

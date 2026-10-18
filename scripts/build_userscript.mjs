@@ -244,6 +244,13 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
     active.delete(file); return file;
   }
   const entryFile = await visit(entry);
+  // Emit only getters consumed by this static graph; namespace imports keep every getter.
+  // Module bodies still run unchanged, including side effects and live bindings.
+  const used=new Map([...graph.keys()].map(file=>[file,new Set()]));
+  for(const mod of graph.values())for(const item of mod.imports) {
+    const names=item.namespace ? graph.get(item.file).exports.map(e=>e.local) : item.bindings.map(b=>b.imported);
+    for(const name of names)used.get(item.file).add(name);
+  }
   const ids=new Map([...graph.keys()].map((file,i)=>[file,i]));
   const id=file=>ids.get(file);
   const factories = [];
@@ -260,7 +267,7 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
       code = code.slice(0, edit.start) + replacement + code.slice(edit.end);
     }
     code = compactSource(code, path.relative(root,file));
-    code += '\n__x(__e,{' + mod.exports.map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
+    code += '\n__x(__e,{' + mod.exports.filter(e=>used.get(file).has(e.local)).map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
     factories.push(`${JSON.stringify(id(file))}:function(__e,__r){\n${code}\n}`);
   }
   const bundle = `// Modules: ${JSON.stringify([...graph.keys()].map(f=>path.relative(root,f).replaceAll('\\','/')))}\n(function() {\n'use strict';\nfunction __x(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __r(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __r);\n return out;\n}\n__r(${JSON.stringify(id(entryFile))});\n})();\n`;

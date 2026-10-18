@@ -89,7 +89,7 @@ export function classify(el,exclude) {
 // True when `el` sits inside something that must never be translated.
 export function inExcludedContext(el,exclude) {
   if(el.closest(EXCLUDED_CLOSEST)) return true;
-  for(let p=el;p&&p!==document.body;p=p.parentElement) if(protectedElement(p)) return true;
+  for(let p=el;p&&p!==el.ownerDocument.body;p=p.parentElement) if(protectedElement(p)) return true;
   return !!exclude && !!el.closest(exclude);
 }
 
@@ -99,8 +99,9 @@ export function blockContainerOf(node) {
   const reader=el?.closest('[data-novel-content]')||
     (el&&pixivNovelDocument(el.ownerDocument)&&el.closest(':has(> span.text-count)'));
   if(reader) return reader;
-  const root=document.body || document.documentElement;
-  while(el && el !==document.documentElement) {
+  const doc=node.ownerDocument;
+  const root=doc.body || doc.documentElement;
+  while(el && el !==doc.documentElement) {
     if(novelBody(el)) return el;
     const display=getComputedStyle(el).display;
     if(!isInlineLevel(display) || display==='inline-flex' || display==='inline-grid' || display==='inline-table') {

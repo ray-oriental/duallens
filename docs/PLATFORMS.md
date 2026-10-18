@@ -104,6 +104,23 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 
 漫画名单 `comics.canvasSites` 兼容域名字符串与 `{host,imageHosts?,referer?}`；CDN 最多八个具体域名，Referer 限该站点 HTTP(S) 根地址。旧 Pixiv 字符串项使用 `i.pximg.net` / `https://www.pixiv.net/` 兼容元数据。扩展会话 DNR 规则必须含 `initiatorDomains:[chrome.runtime.id]` 与 `resourceTypes:['xmlhttprequest','other']`，关闭漫画或移出名单即删除，不新增 host 权限。用户脚本匿名 GM 取图按匹配站点设置 Referer，不支持请求头或本地 OCR 时保留原图并明确降级。
 
+### iframe 增量（v0.5 开发中）
+
+扩展与用户脚本由顶层控制器递归发现同源 iframe（含无 src、about:blank、srcdoc），
+复用扫描、变更观察、Range 懒加载与恢复；frame 内临时注入内容 CSS，停止时移除。
+监听 load 并每 400 ms 检查 Document/body 替换，以覆盖 document.open/write/close 的邮箱正文。
+Range 按祖先 frame 的视口裁切并映射至控制器视口；隐藏或小于 200×100 的 frame 不参与。
+
+扩展内容脚本 all_frames:true、match_about_blank:true；同源父文档可访问时子脚本退出，避免重复翻译。
+跨域子文档只启动无 UI 代理，通过后台按浏览器提供的 tabId/frameId 向 frameId:0 查询顶层状态，
+每 400 ms 跟随翻译/恢复、显示模式和设置；站点规则与请求上下文取顶层页面。
+代理用 IntersectionObserver 的实际相交区域跳过隐藏、离屏或完全被裁切的 frame，并跳过视口小于 200×100 的 frame。
+每次轮询续订可见性观察；最后一次回调超过 1 秒即保守停止，覆盖 Chromium 隐藏子文档暂停绘制的情况。
+浏览器后台节流可能延迟状态跟随；顶层进度统计包含同源文档，不汇总独立跨域代理的段落计数。
+不新增 permissions/host_permissions，不通过网页 postMessage 传递状态或配置。
+用户脚本仍保留 @noframes，仅由顶层访问同源文档，**不支持跨域 iframe**。
+浏览器禁止注入的特殊页面、非 HTML 文档仍不处理；这不代表 Zimbra 登录页面或物理设备已验收。
+
 ## 2. 打包
 
 - 扩展保持零构建：`extension/` 目录可直接加载。
