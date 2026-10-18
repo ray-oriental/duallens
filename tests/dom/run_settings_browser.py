@@ -47,6 +47,12 @@ def main():
                     assert req.headers.get("authorization") == "Bearer sk-test-not-real"
                     assert req.headers.get("x-title") == "DualLens"
                     route.fulfill(status=200, content_type="application/json", body=json.dumps({"choices": [{"message": {"content": '{"t":["你好，世界。"]}'}}]}))
+                elif req.url.startswith("https://edge.microsoft.com/translate/translatetext"):
+                    assert req.headers.get("authorization") is None, "Free machine translation sent credentials"
+                    route.fulfill(status=200, content_type="application/json", body=json.dumps([{"translations": [{"text": "你好，世界。"}]}]))
+                elif req.url == "https://api-free.deepl.com/v2/translate":
+                    assert req.headers.get("authorization") == "DeepL-Auth-Key deepl-test-key-not-real:fx"
+                    route.fulfill(status=200, content_type="application/json", body=json.dumps({"translations": [{"text": "你好，世界。"}]}))
                 else:
                     route.abort()
 
@@ -94,13 +100,37 @@ def main():
             page.emulate_media(color_scheme="light")
             print("PASS wizard_models_test_save: mocked discovery, diverse chain, local-only key, 375px controls >=44px")
 
+            # Translation mode and machine-translation engine (SPEC 8.1): defaults, keyless free engines, keyed official engine.
+            assert page.locator("#translationMode").input_value() == "mt+llm"
+            assert page.locator("#mtEngine").input_value() == "microsoft"
+            assert page.locator("#mt-key-row").is_hidden(), "A free engine must not ask for a key"
+            page.locator("#mt-test").scroll_into_view_if_needed()
+            page.screenshot(path=str(artifact / "translation-mode-375.png"))
+            page.click("#mt-test")
+            page.locator("#status").filter(has_text="机器翻译正常 · microsoft").wait_for()
+            page.select_option("#mtEngine", "deepl")
+            assert page.locator("#mt-key-row").is_visible()
+            page.locator("#mtKey").fill("deepl-test-key-not-real:fx")
+            assert not h.sw_eval("async () => (await chrome.storage.local.get('secrets')).secrets?.['mt-deepl']"), "MT key persisted before Save"
+            page.click("#mt-test")
+            page.locator("#status").filter(has_text="机器翻译正常 · deepl").wait_for()
+            page.select_option("#translationMode", "mt+llm")
+            page.click("#save")
+            page.locator("#status").filter(has_text="已保存").wait_for()
+            saved = h.sw_eval("async () => ({ local: await chrome.storage.local.get(null), sync: await chrome.storage.sync.get(null) })")
+            assert saved["local"]["secrets"]["mt-deepl"]["apiKey"] == "deepl-test-key-not-real:fx"
+            assert "deepl-test-key" not in json.dumps(saved["sync"]) and "deepl-test-key" not in json.dumps(saved["local"]["settings"])
+            core = saved["sync"]["settings.core"]["translation"]
+            assert core["mode"] == "mt+llm" and core["mt"]["engine"] == "deepl", core
+            print("PASS translation_mode_settings: defaults, keyless free engines, DeepL key local-only, engine test, 375px")
+
             page.locator("#backupPassword").fill("browser test passphrase")
             with page.expect_download() as download:
                 page.click("#export")
             download.value.save_as(artifact / "config.encrypted.txt")
             page.locator("#status").filter(has_text="已导出").wait_for()
             encrypted = page.locator("#backupText").input_value()
-            assert encrypted.startswith("duallens-config:v1:") and "sk-test-not-real" not in encrypted
+            assert encrypted.startswith("duallens-config:v1:") and "sk-test-not-real" not in encrypted and "deepl-test-key" not in encrypted
             page.locator("#targetLang").select_option("ja")
             page.click("#save")
             page.locator("#status").filter(has_text="已保存").wait_for()
@@ -113,18 +143,26 @@ def main():
             page.locator("#status").filter(has_text="已导入").wait_for()
             assert page.locator("#targetLang").input_value() == "zh-CN"
             assert h.sw_eval("async () => (await chrome.storage.local.get('secrets')).secrets.openrouter.apiKey") == "sk-test-not-real"
+            assert h.sw_eval("async () => (await chrome.storage.local.get('secrets')).secrets['mt-deepl'].apiKey") == "deepl-test-key-not-real:fx", "encrypted backup lost the machine-translation key"
             with page.expect_download() as download:
                 page.click("#export")
             download.value.save_as(artifact / "config.public.json")
             page.locator("#status").filter(has_text="已导出").wait_for()
             assert "sk-test-not-real" not in page.locator("#backupText").input_value()
+            assert "deepl-test-key" not in page.locator("#backupText").input_value()
             print("PASS backup_roundtrip: encrypted transfer, wrong-password rejection and key-free plaintext")
 
             popup = h.ctx.new_page()
             popup.set_viewport_size({"width": 375, "height": 812})
             popup.goto(f"chrome-extension://{h.ext_id}/ui/popup.html")
+            assert popup.locator("#tmode").input_value() == "mt+llm"
+            assert popup.locator("#engine").input_value() == "deepl"
+            popup.locator("#tmode").select_option("auto")
+            popup.wait_for_function("async () => (await chrome.storage.local.get('settings')).settings?.translation.mode === 'auto'")
+            popup.locator("#tmode").select_option("mt+llm")
+            popup.wait_for_function("async () => (await chrome.storage.local.get('settings')).settings?.translation.mode === 'mt+llm'")
             popup.locator("#profile").select_option("mock")
-            popup.wait_for_function("document.querySelector('#model').value === 'mock'")
+            popup.wait_for_function("async () => document.querySelector('#model').value === 'mock'")
             popup.wait_for_function("async () => (await chrome.storage.local.get('settings')).settings?.provider.active === 'mock'")
             assert popup.evaluate("document.documentElement.scrollWidth <= innerWidth")
             popup.screenshot(path=str(artifact / "popup-375.png"))
@@ -194,7 +232,7 @@ def main():
         finally:
             h.close()
             e2e.remove_runtime_dir(run)
-    print("SUMMARY settings-browser total=5 PASS=5 FAIL=0 mock-only viewport=375x812")
+    print("SUMMARY settings-browser total=6 PASS=6 FAIL=0 mock-only viewport=375x812")
     print("ARTIFACTS " + str(artifact))
     return 0
 

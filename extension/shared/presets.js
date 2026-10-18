@@ -26,7 +26,7 @@ export const PROVIDER_PRESETS = Object.freeze([
   preset('ollama', 'Ollama', 'http://127.0.0.1:11434/v1', false,
     'https://docs.ollama.com/api/openai-compatibility', '需要你自己运行 Ollama。手机请填可访问的局域网地址；127.0.0.1 指向当前设备。JSON 模式按模型能力启用。'),
   preset('gateway', 'DualLens 本机网关', 'http://127.0.0.1:18790/v1', false,
-    'https://github.com/ray-oriental/duallens#readme', '桌面可选增强，需手动启动本机网关。不会自动启用订阅或其他账号。', { kind: 'gateway', jsonMode: true, timeoutMs: 130000 }),
+    'https://github.com/ray-oriental/duallens#readme', '桌面可选增强，需手动启动本机网关。不会自动启用订阅或其他账号。', { kind: 'gateway', model: 'auto', jsonMode: true, timeoutMs: 130000 }),
   preset('custom', '自定义 OpenAI 兼容接口', '', false,
     '', '填写完整兼容 API 基础地址。可选 API key 仅存本机；JSON 模式默认关闭。'),
   preset('mock', 'Mock 测试（不联网）', '', false, '', '离线返回【译】前缀，不使用账号或模型服务。', { kind: 'mock', model: 'mock' }),

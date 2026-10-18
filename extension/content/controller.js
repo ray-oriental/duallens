@@ -1,53 +1,59 @@
 // One translation controller per page.
 
-import { siteRuleFor } from '../shared/settings.js';
-import { PRIORITY, ERR } from '../shared/protocol.js';
-import { parseMarkup } from '../shared/markup.js';
-import { looksLikeTarget, normalizeLang, sameLanguage } from '../shared/lang.js';
-import { collectRuns, iterateRuns, runsOf, blockContainerOf } from './walker.js';
-import { serializeRun, isTranslatable, buildFragment, textFragment } from './serialize.js';
+import {siteRuleFor} from '../shared/settings.js';
+import {PRIORITY,ERR} from '../shared/protocol.js';
+import {parseMarkup} from '../shared/markup.js';
+import {looksLikeTarget,normalizeLang,sameLanguage} from '../shared/lang.js';
+import {iterateRuns,runsOf,blockContainerOf} from './walker.js';
+import {serializeRun,isTranslatable,isShortText,buildFragment,textFragment} from './serialize.js';
 import * as inj from './injector.js';
-import { TranslateClient } from './client.js';
-import { IdleSlices } from './idle.js';
-import { LazyObserver, MutationWatcher, RouteWatcher } from './observer.js';
-import { joinSelectors, debounce } from './util.js';
+import {TranslateClient} from './client.js';
+import {IdleSlices} from './idle.js';
+import {LazyObserver,MutationWatcher,RouteWatcher} from './observer.js';
+import {joinSelectors,debounce} from './util.js';
+import {escapeText} from '../shared/markup.js';
+import {measurePresentation,measureColor} from './presentation.js';
+import {uiTranslation} from '../shared/ui-glossary.js';
+import {metadataTranslation} from '../shared/metadata.js';
 
-const MAX_REQUEST_ITEMS = 50;
-const CHURN_LIMIT = 12; // re-translations of one host within a minute before we leave it alone
+const MAX_REQUEST_ITEMS=50;
+const CHURN_LIMIT=12; // re-translations of one host within a minute before we leave it alone
 
 export class PageTranslator {
-  constructor({ getSettings, onChange, platform }) {
-    this.platform = platform;
-    this.slices = new IdleSlices();
-    this.getSettings = getSettings;
-    this.onChange = onChange || (() => {});
-    this.units = new Map(); // id -> unit
-    this.registry = new WeakMap(); // first node -> unit (dedupe across rescans)
-    this.byHost = new Map(); // host -> Set<unit>
-    this.churn = new WeakMap(); // host -> { n, t0 }
-    this.client = new TranslateClient(platform);
-    this.lazy = new LazyObserver((u, pr, top) => this.#enqueue(u, pr, top));
-    this.watch = new MutationWatcher((batch) => this.#onMutations(batch));
-    this.route = new RouteWatcher(() => this.#onRoute());
-    this.active = false;
-    this.queue = [];
-    this.flushTimer = 0;
-    this.seq = 0;
-    this.emit = debounce(() => this.onChange(), 60);
-    this.onRouteDebounced = debounce(() => { if (this.active) this.retranslate(); }, 400);
+  constructor({getSettings,onChange,platform}) {
+    this.platform=platform;
+    this.slices=new IdleSlices();
+    this.getSettings=getSettings;
+    this.onChange=onChange ||(()=> {});
+    this.units=new Map(); // id -> unit
+    this.registry=new WeakMap(); // first node -> unit (dedupe across rescans)
+    this.attributes=new WeakMap();
+    this.byHost=new Map(); // host -> Set<unit>
+    this.churn=new WeakMap(); // host -> { n, t0 }
+    this.client=new TranslateClient(platform);
+    this.lazy=new LazyObserver((u,pr,top)=> this.#enqueue(u,pr,top));
+    this.watch=new MutationWatcher((batch)=> this.#onMutations(batch));
+    this.route=new RouteWatcher(()=> this.#onRoute());
+    this.active=false;
+    this.refresh=()=>{if(this.active){this.#prime();this.lazy.scroll();}};
+    this.queue=[];
+    this.flushTimer=0;
+    this.seq=0;
+    this.emit=debounce(()=> this.onChange(),60);
+    this.onRouteDebounced=debounce(()=> {if(this.active) this.retranslate();},400);
 
-    inj.setWriteGuard((fn) => this.watch.guard(fn));
-    this.retryHandler = (e) => {
-      const r = e.target && e.target.closest ? e.target.closest('dl-r') : null;
-      if (!r) return;
-      if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    inj.setWriteGuard((fn)=> this.watch.guard(fn));
+    this.retryHandler=(e)=> {
+      const r=e.target && e.target.closest ? e.target.closest('dl-r'):null;
+      if(!r) return;
+      if(e.type==='keydown' && e.key !=='Enter' && e.key !==' ') return;
       e.preventDefault();
       e.stopPropagation();
-      const t = r.closest('dl-t');
-      if (t) this.retry(t.getAttribute('data-dl-id'));
+      const t=r.closest('dl-t');
+      if(t) this.retry(t.getAttribute('data-dl-id'));
     };
-    document.addEventListener('click', this.retryHandler, true);
-    document.addEventListener('keydown', this.retryHandler, true);
+    document.addEventListener('click',this.retryHandler,true);
+    document.addEventListener('keydown',this.retryHandler,true);
   }
 
 
@@ -56,7 +62,7 @@ export class PageTranslator {
   }
 
   get siteCustom() {
-    return siteRuleFor(this.s, location.hostname).custom;
+    return siteRuleFor(this.s,location.hostname).custom;
   }
 
   get style() {
@@ -68,16 +74,16 @@ export class PageTranslator {
   }
 
   #roots() {
-    const include = joinSelectors(this.siteCustom?.include);
-    if (include) {
-      const all = [...document.querySelectorAll(include)];
-      return all.filter((el) => !all.some((o) => o !== el && o.contains(el)));
+    const include=joinSelectors(this.siteCustom?.include);
+    if(include) {
+      const all=[...document.querySelectorAll(include)];
+      return all.filter((el)=> !all.some((o)=> o !==el && o.contains(el)));
     }
-    return document.body ? [document.body] : [];
+    return document.body ? [document.body]:[];
   }
 
   #context() {
-    return { title: document.title, host: location.hostname, url: location.href };
+    return {title:document.title,host:location.hostname,url:location.href};
   }
 
 
@@ -86,209 +92,252 @@ export class PageTranslator {
   }
 
   start() {
-    if (this.active) return;
-    this.active = true;
+    if(this.active) return;
+    this.active=true;
     this.lazy.setMargin(this.s.lazy.rootMarginPx);
     this.watch.start();
     this.route.start();
-    for (const root of this.#roots()) this.#scan(root);
+    document.addEventListener('yt-navigate-finish',this.refresh);
+    this.#prime();
+    for(const root of this.#roots()) this.#scan(root);
     this.emit();
   }
 
+  #prime() {
+    const roots=this.#roots();
+    // Prime visible blocks before the document-order scan. A novel can have thousands of
+    // offscreen nodes ahead of its scrolled reader; translated chrome must not move the reader
+    // out of the lazy window before it has even been discovered. Hit testing is bounded to 12
+    // points and uses the same range-aware scanner/dedupe, rather than scanning the whole DOM twice.
+    const visible=new Set();
+    for(const y of [.12,.35,.6,.85]) for(const x of [.2,.5,.8]) {
+      for(const el of document.elementsFromPoint(innerWidth*x,innerHeight*y)) {
+        if(el.closest('dl-ui,dl-t,dl-o,dl-w')) continue;
+        const block=blockContainerOf(el);
+        if(block===document.body || block===document.documentElement || !roots.some(r=> r.contains(block))) continue;
+        visible.add(block); break;
+      }
+    }
+    for(const block of visible) if(![...visible].some(other=> other !==block && block.contains(other))) this.#scan(block);
+  }
+
   stop() {
-    this.active = false;
+    this.active=false;
     this.slices.cancel();
     clearTimeout(this.flushTimer);
-    this.flushTimer = 0;
-    this.queue.length = 0;
+    this.flushTimer=0;
+    this.queue.length=0;
     this.client.cancelAll();
     this.onRouteDebounced.cancel();
     this.watch.stop();
     this.route.stop();
+    document.removeEventListener('yt-navigate-finish',this.refresh);
     this.lazy.disconnect();
-    inj.write(() => {
-      for (const u of this.units.values()) { u.dead = true; inj.restore(u); }
+    inj.write(()=> {
+      for(const u of this.units.values()) {u.dead=true; inj.restore(u);}
     });
     this.units.clear();
     this.byHost.clear();
-    this.registry = new WeakMap();
+    this.registry=new WeakMap();
+    this.attributes=new WeakMap();
     this.emit();
   }
 
   toggle() {
-    if (this.active) this.stop();
+    if(this.active) this.stop();
     else this.start();
   }
 
   retranslate() {
-    const was = this.active;
+    const was=this.active;
     this.stop();
-    if (was) this.start();
+    if(was) this.start();
   }
 
   setMargin(px) {
-    if (this.active) this.lazy.setMargin(px);
+    if(this.active) this.lazy.setMargin(px);
   }
 
   destroy() {
     this.stop();
     this.client.dispose();
-    document.removeEventListener('click', this.retryHandler, true);
-    document.removeEventListener('keydown', this.retryHandler, true);
+    document.removeEventListener('click',this.retryHandler,true);
+    document.removeEventListener('keydown',this.retryHandler,true);
   }
 
 
   setDisplayMode(mode) {
-    inj.write(() => {
-      for (const u of this.units.values()) inj.setMode(u, mode);
+    inj.write(()=> {
+      for(const u of this.units.values()) inj.setMode(u,mode);
     });
     this.lazy.scroll();
   }
 
   setStyle(style) {
-    inj.write(() => {
-      for (const u of this.units.values()) inj.setStyle(u, style);
+    inj.write(()=> {
+      for(const u of this.units.values()) inj.setStyle(u,style);
     });
   }
 
   getState() {
-    let pending = 0;
-    let failed = 0;
-    let done = 0;
-    let total = 0;
-    for (const u of this.units.values()) {
-      if (u.state === 'skip') continue;
+    let pending=0;
+    let failed=0;
+    let done=0;
+    let total=0;
+    let refining=0; // showing a machine-translation draft; the LLM result is still on its way
+    for(const u of this.units.values()) {
+      if(u.state==='skip') continue;
       total++;
-      if (u.state === 'queued' || u.state === 'pending') pending++;
-      else if (u.state === 'error') failed++;
-      else if (u.state === 'done') done++;
+      if(u.state==='queued' || u.state==='pending') pending++;
+      else if(u.state==='error') failed++;
+      else if(u.state==='done') {
+        done++;
+        if(u.stage==='draft') refining++;
+      }
     }
-    return { translated: this.active, mode: this.s.displayMode, units: total, pending, failed, done };
+    return {translated:this.active,mode:this.s.displayMode,units:total,pending,failed,done,refining};
   }
 
 
-  #known = (host, first) => this.registry.has(first);
+  #known=(host,first)=> this.registry.has(first);
 
-  #scan(root, shallow = false) {
-    const include = joinSelectors(this.siteCustom?.include);
+  #scan(root,shallow=false) {
+    const include=joinSelectors(this.siteCustom?.include);
     // inside an include-limited site, an arbitrary added node only counts when it lies in scope
-    if (include && !shallow && !root.closest(include) && root !== document.body) {
-      for (const m of root.querySelectorAll(include)) this.#scanOne(m, false);
+    if(include && !shallow && !root.closest(include)) {
+      for(const m of root.querySelectorAll(include)) this.#scanOne(m,false);
       return;
     }
-    this.#scanOne(root, shallow);
+    this.#scanOne(root,shallow);
   }
 
-  #scanOne(root, shallow) {
-    const opts = { minChars: this.s.minChars, exclude: this.#exclude(), known: this.#known, shallow };
-    if (this.platform.coarse) {
-      this.slices.run(iterateRuns(root, opts), (run) => {
-        if (run && this.active && run.host.isConnected && !this.#known(run.host, run.first)) this.#addUnit(run);
-      });
-    } else {
-      for (const run of collectRuns(root, opts)) this.#addUnit(run);
-    }
+  #scanOne(root,shallow) {
+    const opts={minChars:this.s.translateShortText===false ? this.s.minChars:1,exclude:this.#exclude(),known:this.#known,
+      attributeKnown:(el,key)=> this.attributes.get(el)?.has(key),shallow};
+    this.slices.run(iterateRuns(root,opts),(run)=> {
+      if(run && this.active && run.host.isConnected &&(run.attribute ? !this.attributes.get(run.host)?.has(run.attribute):!this.#known(run.host,run.first))) this.#addUnit(run);
+    });
   }
 
-  #addUnit(run, { watch = true } = {}) {
-    const unit = {
-      id: String(++this.seq),
-      host: run.host,
-      first: run.first,
-      last: run.last,
-      whole: run.whole,
-      state: 'idle', // idle | queued | pending | done | error | skip
-      lang: this.s.targetLang,
-      plain: '',
-      src: '',
-      els: null,
-      translated: null,
-      priority: PRIORITY.NEAR,
-      top: 0,
-      tEl: null,
-      oEl: null,
-      wEl: null,
-      hover: false,
-      peek: false,
+  #addUnit(run,{watch=true}={}) {
+    const unit={
+      id:String(++this.seq),
+      host:run.host,
+      first:run.first,
+      last:run.last,
+      tail:run.tail,
+      whole:run.whole,
+      paragraph:run.paragraph,
+      metadata:run.metadata,
+      attribute:run.attribute,
+      source:run.source,
+      originalAttribute:run.attribute ? run.host.getAttribute(run.attribute):null,
+      state:'idle', // idle | queued | pending | done | error | skip
+      lang:this.s.targetLang,
+      plain:'',
+      src:'',
+      els:null,
+      translated:null,
+      stage:null, // 'draft' while a machine-translation draft awaits the LLM result, then 'final'
+      priority:PRIORITY.NEAR,
+      top:0,
+      tEl:null,
+      oEl:null,
+      wEl:null,
+      hover:false,
+      peek:false,
     };
-    this.units.set(unit.id, unit);
-    this.registry.set(unit.first, unit);
-    let set = this.byHost.get(unit.host);
-    if (!set) this.byHost.set(unit.host, (set = new Set()));
+    this.units.set(unit.id,unit);
+    if(unit.attribute) {
+      let attrs=this.attributes.get(unit.host);
+      if(!attrs) this.attributes.set(unit.host,attrs=new Map());
+      attrs.set(unit.attribute,unit);
+    } else this.registry.set(unit.first,unit);
+    let set=this.byHost.get(unit.host);
+    if(!set) this.byHost.set(unit.host,(set=new Set()));
     set.add(unit);
-    if (watch) this.lazy.watch(unit);
+    if(watch) this.lazy.watch(unit);
     return unit;
   }
 
   #drop(unit) {
     this.lazy.unwatch(unit);
     this.units.delete(unit.id);
-    this.registry.delete(unit.first);
-    const set = this.byHost.get(unit.host);
-    if (set) {
+    if(unit.attribute) this.attributes.get(unit.host)?.delete(unit.attribute);
+    else this.registry.delete(unit.first);
+    const set=this.byHost.get(unit.host);
+    if(set) {
       set.delete(unit);
-      if (!set.size) this.byHost.delete(unit.host);
+      if(!set.size) this.byHost.delete(unit.host);
     }
-    unit.dead = true;
+    unit.dead=true;
     inj.restore(unit);
   }
 
 
-  #enqueue(unit, priority, top, immediate = false) {
-    if (unit.state !== 'idle' || unit.dead) return;
-    if (!this.active && !unit.hover) return;
-    unit.state = 'queued';
-    unit.priority = priority;
-    unit.top = top;
+  #enqueue(unit,priority,top,immediate=false) {
+    if(unit.state !=='idle' || unit.dead) return;
+    if(!this.active && !unit.hover) return;
+    unit.state='queued';
+    unit.priority=priority;
+    unit.top=top;
     this.queue.push(unit);
-    if (immediate) {
+    if(immediate) {
       clearTimeout(this.flushTimer);
-      this.flushTimer = 0;
+      this.flushTimer=0;
       this.#flush();
-    } else if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => this.#flush(), this.s.lazy.batchDelayMs);
+    } else if(!this.flushTimer) {
+      this.flushTimer=setTimeout(()=> this.#flush(),this.s.lazy.batchDelayMs);
     }
   }
 
   async #flush() {
-    this.flushTimer = 0;
-    const batch = this.queue.splice(0).filter((u) => u.state === 'queued' && !u.dead);
-    if (!batch.length) return;
-    const s = this.s;
-    const exclude = this.#exclude();
+    this.flushTimer=0;
+    const batch=this.queue.splice(0).filter((u)=> u.state==='queued' && !u.dead);
+    if(!batch.length) return;
+    const s=this.s;
+    const exclude=this.#exclude();
 
     // read phase: no DOM writes until every unit has been measured
-    const ready = [];
-    for (const u of batch) {
-      if (this.platform.coarse) await this.slices.yield();
-      if (u.dead || this.units.get(u.id) !== u) continue;
-      if (!inj.intact(u)) {
+    const ready=[];
+    for(const u of batch) {
+      await this.slices.yield();
+      if(u.dead || this.units.get(u.id) !==u) continue;
+      if(!inj.intact(u)) {
         this.#drop(u);
         continue;
       }
-      const r = serializeRun(u.first, u.last, { exclude });
-      u.plain = r.plain;
-      u.src = r.text;
-      u.els = r.els;
-      if (!isTranslatable(r.plain, s.minChars)) {
+      const r=u.attribute ? {plain:u.source.trim(),text:escapeText(u.source.trim()),els:[]}:serializeRun(u.first,u.last,{exclude});
+      u.plain=r.plain;
+      u.src=r.text;
+      u.els=r.els;
+      if(!isTranslatable(r.plain,s.translateShortText===false ? s.minChars:1) ||
+          (s.translateShortText===false && isShortText(r.plain))) {
         this.#skip(u);
         continue;
       }
-      u.flexHost = /flex|grid/.test(getComputedStyle(u.host).display);
+      u.flexHost=/flex|grid/.test(getComputedStyle(u.host).display);
+      u.presentation=u.attribute ? 'replace':measurePresentation(u,s.inlineMaxChars);
+      u.translationColor=u.attribute ? null:measureColor(u.host);
       ready.push(u);
     }
 
-    const skipFlags = await Promise.all(ready.map((u) => this.#alreadyTarget(u.plain, s, u)));
-    const send = [];
-    ready.forEach((u, i) => {
-      if (u.dead || this.units.get(u.id) !== u || u.state !== 'queued') return;
-      if (skipFlags[i]) this.#skip(u);
-      else send.push(u);
+    const skipFlags=await Promise.all(ready.map((u)=> this.#alreadyTarget(u.plain,s,u)));
+    const send=[];
+    ready.forEach((u,i)=> {
+      if(u.dead || this.units.get(u.id) !==u || u.state !=='queued') return;
+      if(skipFlags[i]) this.#skip(u);
+      else {
+        const local=!s.glossary?.length&&(u.metadata?metadataTranslation(u.src,s.targetLang):uiTranslation(u.plain,s.targetLang));
+        if(u.metadata&&local===u.src)return this.#skip(u);
+        if(local &&(s.sourceLang==='auto'||/^en(?:-|$)/.test(s.sourceLang))) this.#apply(u,u.metadata?local:escapeText(local),'final','dictionary');
+        else send.push(u);
+      }
     });
-    if (send.length) {
-      inj.write(() => {
-        for (const u of send) {
-          u.state = 'pending';
+    if(send.length) {
+      inj.write(()=> {
+        for(const u of send) {
+          u.state='pending';
           inj.markPending(u);
         }
       });
@@ -298,94 +347,120 @@ export class PageTranslator {
   }
 
   #skip(unit) {
-    unit.state = 'skip';
+    unit.state='skip';
     this.lazy.unwatch(unit);
   }
 
-  async #alreadyTarget(plain, s, unit) {
+  async #alreadyTarget(plain,s,unit) {
     if(s.sourceLang==='auto') unit.from=looksLikeTarget(plain,'ja')?'ja':'auto';
-    if (looksLikeTarget(plain, s.targetLang)) return true;
-    if (plain.length < 24) return false;
-    const det = await this.platform.detectLanguage(plain.slice(0, 400));
-    const top = det && det.reliable && det.lang;
-    if (!top) return false;
-    const pct = det.percentage ?? 100;
+    if(looksLikeTarget(plain,s.targetLang)) return true;
+    if(plain.length < 24) return false;
+    let timer;
+    const det=await Promise.race([Promise.resolve().then(()=>this.platform.detectLanguage(plain.slice(0,400))).catch(()=>null),new Promise(r=>timer=setTimeout(()=>r(null),50))]);clearTimeout(timer);
+    const top=det && det.reliable && det.lang;
+    if(!top) return false;
+    const pct=det.percentage ?? 100;
     if(s.sourceLang==='auto' && pct>=80) unit.from=normalizeLang(top);
-    if (pct >= 70 && sameLanguage(normalizeLang(top), s.targetLang)) return true;
-    if (s.sourceLang && s.sourceLang !== 'auto' && pct >= 80 && !sameLanguage(normalizeLang(top), s.sourceLang)) {
+    if(pct >=70 && sameLanguage(normalizeLang(top),s.targetLang)) return true;
+    if(s.sourceLang && s.sourceLang !=='auto' && pct >=80 && !sameLanguage(normalizeLang(top),s.sourceLang)) {
       return true;
     }
     return false;
   }
 
   #dispatch(units) {
-    const s = this.s;
-    const byPriority = new Map();
-    for (const u of units) {
-      const key=JSON.stringify([u.priority,u.from||'auto']);
-      if (!byPriority.has(key)) byPriority.set(key, []);
+    const s=this.s;
+    const byPriority=new Map();
+    for(const u of units) {
+      const key=JSON.stringify([u.priority,u.from||'auto',u.hover?'hover':'page']);
+      if(!byPriority.has(key)) byPriority.set(key,[]);
       byPriority.get(key).push(u);
     }
-    for (const [key, list] of byPriority) {
-      const [priority,from]=JSON.parse(key);
-      list.sort((a, b) => a.top - b.top);
-      for (let i = 0; i < list.length; i += MAX_REQUEST_ITEMS) {
-        const chunk = list.slice(i, i + MAX_REQUEST_ITEMS);
-        const items = chunk.map((u) => ({ id: u.id, text: u.src }));
-        const reqId = this.client.request(
-          { items, priority, to: s.targetLang, from: s.sourceLang==='auto'?from:s.sourceLang||'auto', context: this.#context() },
-          { onResults: (results) => this.#onResults(results), onDone: () => this.emit() },
+    for(const [key,list] of byPriority) {
+      const [priority,from,purpose]=JSON.parse(key);
+      list.sort((a,b)=> a.top - b.top);
+      for(let i=0; i < list.length; i +=MAX_REQUEST_ITEMS) {
+        const chunk=list.slice(i,i + MAX_REQUEST_ITEMS);
+        const items=chunk.map(u=>({id:u.id,text:u.src,refine:!u.attribute&&!u.layoutFacts?.interactive&&!u.layoutFacts?.metadata&&!u.host.closest('nav,label,summary,[role="navigation"]')&&(!u.host.closest('header')||!!u.layoutFacts?.title)}));
+        // draft: machine translation may answer first (stage 'draft'); the LLM result then replaces it in place.
+        const reqId=this.client.request(
+          {items,priority,to:s.targetLang,from:s.sourceLang==='auto'?from:s.sourceLang||'auto',context:this.#context(),draft:true,purpose},
+          {onResults:(results)=> this.#onResults(results),onDone:()=> this.emit()},
         );
-        for (const u of chunk) u.reqId = reqId;
+        for(const u of chunk) u.reqId=reqId;
       }
     }
   }
 
   #onResults(results) {
-    const apply = (r) => inj.write(() => {
-      const u = this.units.get(r.id);
-      if (!u || u.dead || u.state !== 'pending') return;
-      if (!inj.intact(u)) { this.#drop(u); return; }
-      if (r.error) this.#fail(u, r.error);
-      else this.#apply(u, r.text);
+    const apply=(r)=> inj.write(()=> {
+      const u=this.units.get(r.id);
+      // A unit showing a draft still accepts its final result (or the news that none will come).
+      if(!u || u.dead ||(u.state !=='pending' && !(u.state==='done' && u.stage==='draft'))) return;
+      if(!inj.intact(u)) {this.#drop(u); return;}
+      if(r.error) {
+        if(u.stage==='draft') this.#settleDraft(u); // refinement failed: the draft stays, quietly
+        else this.#fail(u,r.error);
+      } else this.#apply(u,r.text,r.stage==='draft' ? 'draft':'final',r.engine || 'llm');
     });
-    if (this.platform.coarse) this.slices.run(results[Symbol.iterator](), (r) => { apply(r); this.emit(); });
-    else { for (const r of results) apply(r); this.emit(); }
+    this.slices.run(results[Symbol.iterator](),(r)=> {apply(r); this.emit();});
   }
 
-  #fail(unit, error) {
-    unit.state = 'error';
-    unit.error = error;
-    inj.markError(unit, error && error.message);
+  #fail(unit,error) {
+    unit.state='error';
+    unit.error=error;
+    inj.markError(unit,error && error.message);
+    if((unit.retryCount||0)<2){unit.retryCount=(unit.retryCount||0)+1;setTimeout(()=>{if(!unit.dead&&this.active&&unit.state==='error'){unit.state='idle';this.lazy.watch(unit);}},error?.code===ERR.RATE_LIMITED?60000:16000);}
   }
 
-  #apply(unit, text) {
-    const parsed = parseMarkup(text, { maxG: unit.els.length, maxX: unit.els.length });
-    const fragment = parsed.ok ? buildFragment(parsed.nodes, unit.els) : textFragment(parsed.plain);
-    const outPlain = (fragment.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!outPlain) {
-      this.#fail(unit, { code: ERR.PARSE, message: '译文为空' });
+  // The LLM stage gave up on a unit that already shows its machine-translation draft: the draft stays.
+  #settleDraft(unit) {
+    unit.stage='final';
+    unit.refined=false;
+    inj.setStage(unit,'final');
+  }
+
+  #apply(unit,text,stage='final',engine='llm') {
+    const parsed=parseMarkup(text,{maxG:unit.els.length,maxX:unit.els.length});
+    const fragment=parsed.ok ? buildFragment(parsed.nodes,unit.els):textFragment(parsed.plain);
+    const outPlain=(fragment.textContent || '').replace(/\s+/g,' ').trim();
+    if(!outPlain) {
+      // An empty draft is ignored; an empty final result keeps an existing draft instead of failing the unit.
+      if(stage==='draft') return;
+      if(unit.stage==='draft') this.#settleDraft(unit);
+      else this.#fail(unit,{code:ERR.PARSE,message:'译文为空'});
       return;
     }
-    unit.translated = text;
-    unit.state = 'done';
-    if (outPlain.toLowerCase() === unit.plain.replace(/\s+/g, ' ').toLowerCase()) {
+    if(unit.translated===text && unit.tEl) {
+      unit.stage=stage;
+      unit.engine=engine;
+      unit.state='done';
+      inj.setStage(unit,stage,engine);
+      return;
+    }
+    unit.translated=text;
+    unit.state='done';
+    unit.stage=stage;
+    unit.engine=engine;
+    if(outPlain.normalize('NFKC').replace(/\s+/g,'').toLowerCase()===unit.plain.normalize('NFKC').replace(/\s+/g,'').toLowerCase()) {
       inj.showNothing(unit); // the model returned the source unchanged
       return;
     }
-    inj.showTranslation(unit, fragment, {
-      mode: this.s.displayMode,
-      style: this.style,
-      inlineMaxChars: this.s.inlineMaxChars,
+    inj.showTranslation(unit,fragment,{
+      mode:this.s.displayMode,
+      style:this.style,
+      inlineMaxChars:this.s.inlineMaxChars,
+      stage,
+      engine,
     });
     this.lazy.scroll();
   }
 
   retry(id) {
-    const u = this.units.get(id);
-    if (!u || u.state !== 'error') return;
-    u.state = 'pending';
-    u.priority = PRIORITY.VISIBLE;
+    const u=this.units.get(id);
+    if(!u || u.state !=='error') return;
+    u.state='pending';
+    u.priority=PRIORITY.VISIBLE;
     inj.markPending(u);
     this.#dispatch([u]);
     this.emit();
@@ -393,139 +468,135 @@ export class PageTranslator {
 
 
   #allowChurn(host) {
-    const now = Date.now();
-    let c = this.churn.get(host);
-    if (!c || now - c.t0 > 60000) c = { n: 0, t0: now };
+    const now=Date.now();
+    let c=this.churn.get(host);
+    if(!c || now - c.t0 > 60000) c={n:0,t0:now};
     c.n++;
-    this.churn.set(host, c);
-    return c.n <= CHURN_LIMIT;
+    this.churn.set(host,c);
+    return c.n <=CHURN_LIMIT;
   }
 
   #sweepStale() {
-    for (const u of [...this.units.values()]) {
-      if (!inj.intact(u)) this.#drop(u);
+    for(const u of [...this.units.values()]) {
+      if(!inj.intact(u)) this.#drop(u);
     }
   }
 
-  #onMutations({ added, dirty }) {
-    if (!this.active) return;
-    const rescan = new Set();
-    const handled = new Set();
+  #onMutations({added,dirty,layout=[]}) {
+    if(!this.active) return;
+    const rescan=new Set();
+    const handled=new Set();
+    inj.write(()=>{for(const el of layout)if(el.isConnected){for(const u of this.units.values())if(el.contains(u.host))inj.refit(u,this.s.displayMode);rescan.add(el);}});
 
-    for (const el of dirty) {
-      if (!el.isConnected) continue;
-      const container = blockContainerOf(el);
-      if (handled.has(container)) continue;
+    for(const el of dirty) {
+      if(!el.isConnected) continue;
+      // Inline form controls belong to an ancestor block for text runs, but their visible
+      // attributes have independent identity. Invalidate those before the block-level rescan.
+      const attrs=this.attributes.get(el);
+      if(attrs?.size) {
+        for(const u of [...attrs.values()]) this.#drop(u);
+        rescan.add(el);
+      }
+      const container=blockContainerOf(el);
+      if(handled.has(container)) continue;
       handled.add(container);
-      const set = this.byHost.get(container);
-      if (!set) {
+      const set=this.byHost.get(container);
+      if(!set) {
         rescan.add(container);
         continue;
       }
       // These records came from the page (our writes were drained by guard()). Rescan the
       // full container, including siblings inserted beyond the old first..last source range.
-      if (this.#allowChurn(container)) {
-        for (const u of [...set]) this.#drop(u);
+      if(this.#allowChurn(container)) {
+        for(const u of [...set]) this.#drop(u);
         rescan.add(container);
       }
     }
 
     this.#sweepStale();
-    for (const a of added) {
-      if (!a.isConnected) continue;
-      const container = blockContainerOf(a);
-      if (!handled.has(container)) rescan.add(container);
+    for(const a of added) {
+      if(!a.isConnected) continue;
+      const container=blockContainerOf(a);
+      if(!handled.has(container)) rescan.add(container);
     }
-    for (const root of rescan) {
-      if (root.isConnected) this.#scan(root);
+    for(const root of rescan) {
+      if(root.isConnected) this.#scan(root);
     }
     this.emit();
-  }
-
-  #reshow(unit) {
-    if (unit.translated == null) return;
-    unit.state = 'pending';
-    inj.write(() => this.#apply(unit, unit.translated));
   }
 
   #onRoute() {
-    if (this.active) this.onRouteDebounced();
+    if(this.active) this.onRouteDebounced();
   }
-
-  #resweep() {
-    if (!this.active) return;
-    this.#sweepStale();
-    for (const root of this.#roots()) this.#scan(root);
-    this.emit();
-  }
-
 
   #locate(el) {
-    let child = null;
-    for (let a = el; a && a !== document.documentElement; child = a, a = a.parentElement) {
-      const set = this.byHost.get(a);
-      if (!set) continue;
-      for (const u of set) {
-        if (u.whole || !child || this.#covers(u, child)) return u;
+    let child=null;
+    for(let a=el; a && a !==document.documentElement; child=a,a=a.parentElement) {
+      const set=this.byHost.get(a);
+      if(!set) continue;
+      for(const u of set) {
+        if(u.whole || !child || this.#covers(u,child)) return u;
       }
     }
     return null;
   }
 
-  #covers(unit, child) {
-    if (child === unit.tEl || child === unit.oEl || child === unit.wEl) return true;
-    for (const n of inj.nodesOf(unit)) {
-      if (n === child) return true;
+  #covers(unit,child) {
+    if(child===unit.tEl || child===unit.oEl || child===unit.wEl) return true;
+    for(const n of inj.nodesOf(unit)) {
+      if(n===child) return true;
     }
     return false;
   }
 
   #create(el) {
-    const container = blockContainerOf(el);
-    const runs = runsOf(container, { minChars: this.s.minChars, exclude: this.#exclude() });
-    if (!runs.length) return null;
-    let child = null;
-    for (let a = el; a && a !== container; child = a, a = a.parentElement);
-    let pick = null;
-    for (const run of runs) {
-      if (run.whole || !child) {
-        pick = run;
+    const container=blockContainerOf(el);
+    const runs=runsOf(container,{minChars:this.s.translateShortText===false ? this.s.minChars:1,exclude:this.#exclude(),
+      attributeKnown:(el,key)=> this.attributes.get(el)?.has(key)});
+    if(!runs.length) return null;
+    let child=null;
+    for(let a=el; a && a !==container; child=a,a=a.parentElement);
+    let pick=null;
+    for(const run of runs) {
+      if(run.whole || !child) {
+        pick=run;
         break;
       }
-      for (let n = run.first; n; n = n.nextSibling) {
-        if (n === child) {
-          pick = run;
+      for(let n=run.first; n; n=n.nextSibling) {
+        if(n===child) {
+          pick=run;
           break;
         }
-        if (n === run.last) break;
+        if(n===run.last) break;
       }
-      if (pick) break;
+      if(pick) break;
     }
-    if (!pick) return null;
-    return this.#addUnit(pick, { watch: false });
+    if(!pick) return null;
+    return this.#addUnit(pick,{watch:false});
   }
 
-  hoverToggle(el, mode = 'toggle') {
-    if (!el || !el.closest || el.closest('dl-ui')) return null;
-    const t = el.closest('dl-t');
-    let u = t ? this.units.get(t.getAttribute('data-dl-id')) : this.#locate(el);
-    if (!u && mode !== 'collapse') u = this.#create(el);
-    if (!u) return null;
-    if (u.state === 'done' || u.state === 'pending' || u.state === 'error') {
-      if (mode === 'translate') return null;
-      if (u.hover) {
+  hoverToggle(el,mode='toggle') {
+    if(!el || !el.closest || el.closest('dl-ui')) return null;
+    const t=el.closest('dl-t');
+    let u=t ? this.units.get(t.getAttribute('data-dl-id')):this.#locate(el);
+    if(!u && mode !=='collapse') u=this.#create(el);
+    if(!u) return null;
+    if(u.state==='error' && mode !=='collapse') {this.retry(u.id); return 'translating';}
+    if(u.state==='done' || u.state==='pending' || u.state==='error') {
+      if(mode==='translate') return null;
+      if(u.hover) {
         this.#drop(u);
         this.emit();
         return 'collapsed';
       }
-      if (mode === 'collapse') return null;
-      inj.setPeek(u, !u.peek);
-      return u.peek ? 'peek-on' : 'peek-off';
+      if(mode==='collapse') return null;
+      inj.setPeek(u,!u.peek);
+      return u.peek ? 'peek-on':'peek-off';
     }
-    if (mode !== 'collapse' && (u.state === 'idle' || u.state === 'skip')) {
-      u.state = 'idle';
-      u.hover = true;
-      this.#enqueue(u, PRIORITY.VISIBLE, 0, true);
+    if(mode !=='collapse' &&(u.state==='idle' || u.state==='skip')) {
+      u.state='idle';
+      u.hover=true;
+      this.#enqueue(u,PRIORITY.VISIBLE,0,true);
       return 'translating';
     }
     return null;

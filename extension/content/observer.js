@@ -33,7 +33,7 @@ export class LazyObserver {
 
   watch(unit) {
     const r = this.#rect(unit);
-    if (r.bottom > 0 && r.top < (window.innerHeight || 800)) {
+    if (r.bottom > 0 && r.top < (window.innerHeight || 800)&&!(r.right<=0||r.left>=innerWidth)) {
       this.onVisible(unit, 0, r.top); return;
     }
     if (!this.io) this.#make();
@@ -61,6 +61,7 @@ export class LazyObserver {
   }
 
   #rect(unit) {
+    if (unit.attribute) return (unit.host.closest('select') || unit.host).getBoundingClientRect();
     if(unit.first?.isConnected && unit.last?.isConnected) {
       const range=document.createRange();range.setStartBefore(unit.first);range.setEndAfter(unit.last);
       const rect=range.getBoundingClientRect();if(rect.height || rect.width)return rect;
@@ -73,7 +74,7 @@ export class LazyObserver {
     const vh = window.innerHeight || 800;
     const bounds=host.getBoundingClientRect();if(bounds.bottom<=-this.margin || bounds.top>=vh+this.margin)return;
     for(const u of [...set]) {
-      const r=this.#rect(u);if(r.bottom<=-this.margin || r.top>=vh+this.margin)continue;
+      const r=this.#rect(u);if(r.bottom<=-this.margin || r.top>=vh+this.margin||r.right<=0||r.left>=innerWidth)continue;
       // 0 = on screen, 1 = within a screen's distance, 2 = further prefetch
       const priority = r.bottom > 0 && r.top < vh ? 0 : r.bottom > -vh && r.top < 2 * vh ? 1 : 2;
       this.unwatch(u);this.onVisible(u, priority, r.top);
@@ -99,12 +100,14 @@ export class MutationWatcher {
     this.timer = 0;
     this.added = new Set();
     this.dirty = new Set();
+    this.layout = new Set();
   }
 
   start() {
     if (this.mo) return;
     this.mo = new MutationObserver((records) => this.#collect(records));
-    this.mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    this.mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['placeholder','title','label','value','hidden','open','class','style','aria-hidden'] });
   }
 
   stop() {
@@ -114,6 +117,7 @@ export class MutationWatcher {
     this.timer = 0;
     this.added.clear();
     this.dirty.clear();
+    this.layout.clear();
   }
 
   guard(fn) {
@@ -132,8 +136,8 @@ export class MutationWatcher {
       const t = r.target;
       const el = t.nodeType === 1 ? t : t.parentElement;
       if (!el || el.closest('dl-t,dl-ui')) continue;
-      if (r.type === 'characterData') {
-        this.dirty.add(el);
+      if (r.type === 'characterData' || r.type === 'attributes') {
+        (r.type==='attributes'&&/^(class|style)$/.test(r.attributeName)?this.layout:this.dirty).add(el);
         any = true;
         continue;
       }
@@ -163,9 +167,10 @@ export class MutationWatcher {
   }
 
   #emit() {
-    const batch = { added: [...this.added], dirty: [...this.dirty] };
+    const batch = { added: [...this.added], dirty: [...this.dirty],layout:[...this.layout] };
     this.added.clear();
     this.dirty.clear();
+    this.layout.clear();
     this.onBatch(batch);
   }
 }

@@ -116,7 +116,7 @@ chrome.runtime.onConnect.addListener((port) => {
         {
           signal: ctrl.signal,
           onPartial: (results) => {
-            for (const r of results) reported.add(r.id);
+            for (const r of results) if (r.stage !== 'draft') reported.add(r.id);
             post({ type: MSG_PARTIAL, reqId, results });
           },
         },

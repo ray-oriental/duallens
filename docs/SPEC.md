@@ -1,7 +1,7 @@
 # DualLens 规格与接口契约
 
 公共接口契约。实现以本文件与设置模块为准；变更接口时同步更新规格。
-状态：v0.3.1 集成（2026-10-14）；发布版本以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
+状态：v0.4.0（2026-10-16）；发布版本以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
 
 ## 0. 范围
 
@@ -67,7 +67,7 @@ Android Edge + Tampermonkey                         │
 扩展的 popup、options、内容脚本、后台均用同一 v2 工厂与 `shared/storage-areas.js` 的 Chrome 适配。
 用户脚本的两个 area 指向同一个 GM 私有记录 `duallens:local`，不使用网页 localStorage / IndexedDB，也不声称跨设备自动同步。
 
-- 非机密配置拆为 `settings.core`（阅读、交互、provider、prompt、cache）、`settings.glossary`、
+- 非机密配置拆为 `settings.core`（阅读、交互、translation、provider、prompt、cache）、`settings.glossary`、
   `settings.sites`（siteRules、autoTranslateLangs），扩展优先写 `chrome.storage.sync`。
   单键超过 8 KB、总量超过 100 KB 或同步不可用时，整体回退本机区；设置页提示「此设备未同步」。
 - API key 只写本机区 `secrets: { [profileId]: { apiKey } }`。公共配置与兼容镜像 `settings` 均不含 key。
@@ -94,13 +94,13 @@ Android Edge + Tampermonkey                         │
 
 ```js
 // C → B
-{ type: 'translate', reqId, to, from: 'auto',
+{ type: 'translate', reqId, to, from: 'auto', draft: true, purpose: 'page', mode?,
   priority: 0|1|2,            // 0 = 视口内，1 = 视口附近，2 = 预取
   context: { title, host, url },
-  items: [{ id, text }] }      // text 是带占位符的序列化段落（见 §6）
+  items: [{ id, text, refine? }] } // text 是带占位符的序列化段落；refine:false 排除自动精修
 { type: 'cancel', reqId }
-// B → C（按批次陆续返回，每个 id 只回一次）
-{ type: 'partial', reqId, results: [{ id, text } | { id, error: { code, message } }] }
+// B → C（draft:true 可先草稿再终稿；其余调用每个 id 只终结一次）
+{ type: 'partial', reqId, results: [{ id, text, stage?, engine?, plain?, refined? } | { id, error: { code, message } }] }
 { type: 'done', reqId }
 ```
 
@@ -108,7 +108,8 @@ Android Edge + Tampermonkey                         │
 
 | type | 请求 | 响应 |
 | --- | --- | --- |
-| `translate-text` | `{ text, to, from?, purpose: 'selection'|'input'|'hover'|'text', profileId?, model? }`；可选服务/模型只作用于本次请求，不改持久配置 | `{ ok, text }` 或 `{ ok:false, error }` |
+| `translate-text` | `{ text, to, from?, purpose: 'selection'|'input'|'hover'|'text', profileId?, model?, mode? }`；可选服务/模型/模式只作用于本次请求，不改持久配置 | `{ ok, text, by:'mt'|'llm', engine? }` 或 `{ ok:false, error }` |
+| `mt-test` | `{ engine?, region? }`，仅手动测试选定 MT 引擎，不换引擎 | `{ ok, engine, latencyMs, sample }` 或 `{ ok:false, error }` |
 | `list-models` | `{ profileId? , presetId?, freeOnly? }`，presetId 优先，可在保存 profile 前发现模型 | `{ ok, models: [{ id, label, … }] }`；OpenRouter 默认仅返回免费模型 |
 | `provider-test` | `{ profileId }` | `{ ok, latencyMs, sample }` |
 | `cache-stats` / `cache-clear` | `{}` | `{ ok, entries }` |
@@ -119,12 +120,13 @@ Android Edge + Tampermonkey                         │
 | type | 说明 |
 | --- | --- |
 | `command` | `{ name: 'toggle-page'|'toggle-translation-only'|'translate-input'|'toggle-hover' }`，来自快捷键、弹出页、右键菜单 |
-| `get-state` | 响应 `{ translated, mode, units, pending, failed, ui }`，弹出页与 E2E 用。`ui = { selectionIcon: bool, selectionCard: { visible, text } \| null, floatBall: bool, hoverActive: bool }`。shadow root 保持 closed，E2E 经此消息读界面状态，不在页面上暴露任何钩子 |
+| `get-state` | 响应 `{ translated, mode, units, pending, failed, done, refining, ui }`，`refining` 是已有草稿的段数，包含在 done 中；弹出页与 E2E 用。`ui = { selectionIcon: bool, selectionCard: { visible, text } \| null, floatBall: bool, hoverActive: bool }`。shadow root 保持 closed，E2E 经此消息读界面状态，不在页面上暴露任何钩子 |
 | `translate-selection` | 右键菜单「翻译选中文字」，`{ text }` |
 
 ### 4.4 v0.3 功能接入
 
 - PDF 的 `pdf-status` / `pdf-open` 使用实际标签页 URL，仅在显式入口探测；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
+- PDF 阅读页默认宽屏同尺寸双栏对照：原页画布复制为译文底图，原坐标抹底覆盖译文并拟合字号；另有仅译文页、原文页、重排阅读。公式/图像/边距标识保留原像素，行内公式用本地裁图替换 `<xN/>`。文本分块在本地 Worker 中完成，翻译限视口与相邻页，经 `TranslatorService.translateBatch` 发送文本与公式占位符，不发送文件、图片、URL 或元数据。PDF 消费端支持可选的 `draft:true,purpose:'pdf'` 和同 id 的 `stage:'draft'/'final'` 回调；无 stage 当终稿，恢复取消并屏蔽旧请求结果。共享引擎/端口阶段传输需另外集成验收。
 - `open-sidepanel` / Alt+S 打开桌面文本侧栏；用户脚本用 `platform.openTextTranslation()` 打开原面板页签。
 - `platform.subtitles = { observe(callback), fetchTrack(url,{signal}) }` 注入受限 YouTube 取轨能力。`subtitle-track` / `subtitle-track-cancel` 只处理当前顶层 YouTube 视频的轨道；见 [SUBTITLES.md](SUBTITLES.md)。
 - 内容命令包含 `toggle-subtitles` / `restore-subtitles`、`translate-comics` / `restore-comics`；`get-state` 可包含字幕与漫画状态，不含签名轨道 URL 或机密。
@@ -133,12 +135,21 @@ Android Edge + Tampermonkey                         │
 
 ## 5. 内容脚本流水线
 
+v0.4 覆盖修订：不再将 Pixiv 整页限制为正文根；导航、标签、表头、侧栏等可见文字同样扫描。
+`translateShortText:true` 将有效最短长度设为 1；关闭时按 `minChars` 且排除 1–3 词单元。
+select/option/input/textarea 仍不插入子节点；通过独立属性单元处理可见 placeholder、图标 title、option label、按钮型 input value，恢复原值并保留站点主动改写。
+正文中的普通链接继续并入原段落，导航及独立交互控件单独成段。
+`content/presentation.js:choosePresentation` 是纯呈现决策函数；标题与长文本始终保留双语，短控件先行内追加，只有符合 PLATFORMS 的短交互控件在实际测量失败后才替换并保留原文 title。
+`adaptive-layout.js` 保存并恢复临时放开的截断样式，合并相同结构呈现决策；`shared/identifiers.js`、站点提示与 `shared/ui-glossary.js` 在本地保护标识符及翻译常用 UI。
+扫描、测量与结果插入在桌面和触屏均分片；短单元沿用共享队列的批量上限，不逐项调用 MT。
+模式/引擎配置改动会重翻已启用页面。以下 P0 描述中的短文本阈值及仅按块级排版由这组规则补充。
+
 1. **切段（walker）**：从根节点深度优先，找「直接含有可见文本的块级容器」作为翻译单元。行内子元素并入
    所属单元，不单独成段。块级判定用计算样式 `display`（block、list-item、table-cell、flex/grid 的子项按块处理），
    不只看标签名。
 2. **排除**：`script style noscript template textarea input select option svg math canvas iframe video audio
-   code pre kbd samp var`、`[contenteditable]`、`[translate=no]`、`.notranslate`、`[aria-hidden=true]`、
-   我们自己插入的元素、不可见元素；文本去空白后少于 `minChars` 或没有字母/汉字；纯数字、纯 URL、纯符号。
+   code pre kbd samp var`、`[contenteditable]`、`[translate=no]`、`.notranslate`、
+   我们自己插入的元素、不可见元素；文本去空白后少于 `minChars` 或没有字母/汉字；纯数字、纯 URL、纯符号。`aria-hidden` 但实际可见的文本仍翻译。
    站点规则的 `exclude` 选择器追加到这里，`include` 选择器限定根节点。
 3. **语言判定**：段落级用 `platform.detectLanguage`（扩展适配 chrome.i18n，用户脚本用 shared/lang 启发式），与目标语言同语种（`zh`、`zh-CN`、`zh-TW`
    按配置归一）且可信的段落跳过。中文目标额外用汉字占比做快速判断。
@@ -217,6 +228,27 @@ Android Edge + Tampermonkey                         │
   超过 `cache.maxEntries` 时按 `ts` 淘汰最旧的。命中缓存不计入并发。用户脚本使用内存缓存与 GM localArea 持久化，
   序列化数据上限 2 MB，按时间淘汰；不写网页存储。没有显式 v2 链的旧设置仍兼容同 profile 的 fallbackModels。
 
+### 8.1 双引擎翻译（v0.4 未发布）
+
+完整多平台约定见 [PLATFORMS.md](PLATFORMS.md) 的「v0.4 双引擎增量契约」。
+`translation.mode` 为 `mt` / `llm` / `mt+llm`（默认）/ `auto`。混合模式无可用 LLM 配置时自动退为 MT，
+划词/悬停/输入默认优先 MT。模式只在用户触发翻译或已有的站点自动翻译规则触发时发送文本；打开设置不请求翻译。
+默认 MT 是 Microsoft 免费非官方接口，Google 作为非官方备选，用户可关闭备选、选择官方带 key 引擎或只用 LLM。
+
+网页请求显式 `draft:true`，同一 id 可先收到 `stage:'draft'` 再收到 `stage:'final'`，只有终稿/错误才关闭请求。
+自动网页/PDF 精修仅处理至少 6 个词或 12 个 CJK 字符的正文单元；导航、控件、属性、元信息通过 `refine:false` 排除，短项直接以 MT 终稿结束，且失败不回退 LLM。显式 `llm` 模式仍可翻译短文本。
+非结构化模型正文令当前模型失败并尝试链下一项；有效 JSON 缺项保留有限缩批恢复。设置连接测试发送两项真实翻译并验证完整结果，不以接口可达冒充翻译成功。
+网页/PDF 的自动精修等待完整响应验证后才发布 LLM 终稿，避免思考文本中的未验证 JSON 片段抢先覆盖 MT 草稿。
+未启用 draft 的既有消费者保留单次终结结果；LLM 失败时 MT 兜底。精修超时默认 90 秒，取消 LLM 并将草稿作为
+`refined:false` 终稿；已有草稿时不显示精修错误。`auto` 等待 LLM 2.5 秒后才请求草稿。
+内容侧复用同一 `dl-t`，`data-dl-stage` 标记阶段、`data-dl-engine` 标记 MT 引擎或 `llm`；不同长度仍可能改变高度。
+
+MT 请求仅包含序列化文本与占位符、语言，不携带标题/URL/HTML 属性或 cookie。带标记项目使用 HTML/XML 模式，
+占位符数量/嵌套校验不通过时安全降为纯文本；超长标记组也降为有界纯文本分片。默认请求 10 段/3000 字符起步，
+后续不超过 30 段/8000 字符；MT 实例并发至多 3，触屏用户脚本至多 12 段/并发 2。部分漏译只将缺失项交给备选。
+两层缓存分离：MT 键为 `sha256('mt' | engine | from | to | text)`，LLM 沿用 §8 的完整提示词维度，
+LLM 缓存命中直接返回终稿，不为这些项目请求 MT。官方 MT key 存在本机 secrets，标识为 `mt-microsoft-api` / `mt-deepl`。
+
 ## 9. 本机网关（`gateway/`）
 
 - `python gateway/duallens_gateway.py serve [--port 18790]`，用 Python 3 标准库 `ThreadingHTTPServer`。
@@ -249,7 +281,8 @@ Android Edge + Tampermonkey                         │
 | `claude/` | 子进程 `claude.exe -p --model <haiku\|sonnet> --tools "" --restricted --strict-mcp-config --no-session-persistence --disable-slash-commands --system-prompt-file <tmp> --output-format json` | exe 用 `%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe`，不走 `.cmd` 垫片；user 消息经 stdin；工作目录是空沙箱；环境去掉所有 `ANTHROPIC_*`、`CLAUDE_*`（否则会被 settings.json 里指向交大的地址带走，`--restricted` 也是为此）；`CREATE_NO_WINDOW`，超时 `taskkill /T /F`；从 `result` 取文本并去掉围栏。**每日上限按用户选择默认不限（0）**，超出回 429。并发 1 |
 | `codex/` | 子进程 `node <codex.js> exec -s read-only --skip-git-repo-check --ephemeral --ignore-user-config --json -o <tmp> -` | system 和 user 合并成一段经 stdin 传入，开头写明「不要使用任何工具或技能，只输出结果」；从 `-o` 文件取答案。每日上限按用户选择默认不限（0），并发 1 |
 
-全新安装没有选中的服务，设置页显示向导；用户配置后才能翻译。默认推荐 OpenRouter 免费模型，不自动联网。
+全新安装没有选中的 LLM 服务，设置页显示可选模型向导；用户可直接触发免费 MT 翻译，无需本机服务或 key。
+配置精修模型时推荐 OpenRouter 免费模型；安装/打开设置不自动联网。
 gateway profile默认`ollama/qwen3:4b`，无自动fallback，本机网关完全可选。
 `ollama/gpt-oss:20b`、`claude/*`、`codex/*` 只在用户手动选择时使用：订阅后端仅手动选择，且SJTU/Hermes/订阅默认disabled，需机器本地配置显式启用。
 

@@ -118,17 +118,18 @@ class StreamingTests(unittest.TestCase):
         finally:
             release.set(); upstream.shutdown(); upstream.server_close()
 
-    def test_sjtu_idle_timeout_is_45_seconds(self):
+    def test_sjtu_waits_50_seconds_for_first_byte_then_12_seconds_of_silence(self):
         self.g.config['sjtu']['enabled'] = True
         def request(url, *args, **kw): return {'calls': 0}
         self.g.request = request
         timeouts = []
-        def stream(*args, **kw): timeouts.append(kw['timeout']); yield stream_event('test', 'ok')
+        def stream(*args, **kw):
+            timeouts.append((kw['first_byte_timeout'], kw['timeout'])); yield stream_event('test', 'ok')
         self.g.stream_request = stream
         with patch.object(Path, 'read_text', return_value='{"proxy_token":"test-not-real"}'):
             self.g.chat({'model': 'sjtu/deepseek-chat', 'stream': True,
                 'messages': [{'role': 'user', 'content': 'test'}]}, on_chunk=lambda _: None)
-        self.assertEqual(timeouts, [45])
+        self.assertEqual(timeouts, [(50.0, 12.0)])
 
 
 if __name__ == '__main__': unittest.main()

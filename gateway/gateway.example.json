@@ -8,14 +8,16 @@
     "models": [
       "qwen3:4b",
       "gpt-oss:20b"
-    ]
+    ],
+    "reasoning_effort": "low"
   },
   "sjtu": {
     "enabled": false,
     "url": "http://127.0.0.1:18765",
     "models": [
       "deepseek-chat"
-    ]
+    ],
+    "max_per_minute": 4
   },
   "hermes": {
     "enabled": false,
@@ -38,5 +40,12 @@
       "default"
     ],
     "daily_limit": 0
+  },
+  "auto": {
+    "prefer": ["sjtu/deepseek-chat", "hermes/*", "ollama/qwen3:4b"],
+    "queue_s": 20,
+    "budget_s": 85,
+    "switch_factor": 2.5,
+    "switch_extra_ms": 6000
   }
 }

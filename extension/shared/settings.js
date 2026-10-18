@@ -47,6 +47,14 @@ export const STYLES = Object.freeze([
 
 export const PROMPT_PRESETS = Object.freeze(['general', 'tech', 'academic', 'news', 'social', 'custom']);
 
+// translation.mode (SPEC §8.1). The default needs no key: with no usable LLM it behaves as 'mt'.
+export const TRANSLATION_MODES = Object.freeze([
+  { id: 'mt+llm', name: '机翻先出，大模型精修（推荐）' },
+  { id: 'mt', name: '只用机器翻译（最快）' },
+  { id: 'llm', name: '只用大模型' },
+  { id: 'auto', name: '大模型优先，慢或失败时机翻兜底' },
+]);
+
 export const DEFAULT_SETTINGS = Object.freeze({
   version: SETTINGS_VERSION,
   targetLang: 'zh-CN',
@@ -54,10 +62,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   displayMode: 'bilingual', // 'bilingual' | 'translation-only'
   style: 'muted',
   minChars: 2,
+  translateShortText: true,
   inlineMaxChars: 24, // units shorter than this get the inline layout
   lazy: { rootMarginPx: 600, batchDelayMs: 80 },
   comics: { enabled:true, language: 'jpn', canvasSites:['*.pixiv.net'], visionEnabled: false },
   subtitles: { enabled: false, mode: 'bilingual', fontSize: 22, position: 'bottom' },
+  // Double-engine translation: machine translation (MT) shows a draft at once, the LLM refines it.
+  // mt.engine: microsoft | google (free, unofficial) | microsoft-api | deepl (keyed) | mock (tests).
+  // refineTimeoutMs: after this long without an LLM result the machine translation becomes the result.
+  translation: { mode: 'mt+llm', refineTimeoutMs: 90000, mt: { engine: 'microsoft', fallback: true, region: '' } },
 
   provider: {
     active: '',
@@ -68,8 +81,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
         kind: 'gateway', // Optional pairing credential uses the local secrets slot, like API keys.
         name: '本机网关',
         baseUrl: 'http://127.0.0.1:18790/v1',
-        model: 'ollama/qwen3:4b',
-        // claude/* and codex/* draw on paid subscriptions; they are never in the default chain.
+        model: 'auto', // Subscription models remain explicit-only.
         fallbackModels: [],
         jsonMode: true,
         maxItems: 20, // SJTU: keep one batch's output under ~900 tokens so a call stays < 1 min

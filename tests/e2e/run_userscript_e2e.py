@@ -30,7 +30,8 @@ STUB = r"""(() => {
     if (this.localName === 'dl-ui') roots.push({host:this,root});
     return root;
   };
-  data.set('duallens:sync', {settings:{provider:{active:'mock'}}});
+  // Legacy cases exercise the LLM path; the machine-translation cases choose their own mode.
+  data.set('duallens:sync', {settings:{provider:{active:'mock'},translation:{mode:'llm'}}});
   window.GM_getValue = (key, fallback) => structuredClone(data.get(key) ?? fallback);
   window.GM_setValue = (key, value) => {
     const old = data.get(key); data.set(key,structuredClone(value));
@@ -49,6 +50,12 @@ STUB = r"""(() => {
   window.GM_xmlhttpRequest = req => {
     // GM transport mock, never page fetch; exercise the real OpenAI adapter offline.
     calls.push({url:req.url,method:req.method,anonymous:req.anonymous,hasAuth:!!req.headers.Authorization,authCorrect:req.headers.Authorization==='Bearer sk-test-not-real'});
+    if (req.url.startsWith('https://edge.microsoft.com/translate/translatetext')) {
+      // The free Microsoft endpoint: a JSON array of strings in, translations out.
+      const texts=JSON.parse(req.data); let gone=false;
+      const timer=setTimeout(() => { if(!gone) req.onload({status:200,responseHeaders:'Content-Type: application/json',responseText:JSON.stringify(texts.map(t=>({translations:[{text:'【机翻】'+t}]})))}); },20);
+      return {abort(){gone=true;clearTimeout(timer);req.onabort?.();}};
+    }
     let stopped=false;
     const timer=setTimeout(() => {
       if(stopped)return;
@@ -173,6 +180,48 @@ def desktop_cases(page, base):
     command(page, '翻译 / 恢复当前页面')
     page.wait_for_function("!document.querySelector('dl-t')")
     return 'translation, exact restore, only mode, selection, settings, dynamic append/SPA'
+
+
+def machine_first_case(page, base):
+    shots = E2E_ROOT / 'v04' / 'dev-engine'; shots.mkdir(parents=True, exist_ok=True)
+    tag = 'userscript-%dx%d' % (page.viewport_size['width'], page.viewport_size['height'])
+    ready(page, base)
+    # A fresh install: no model, default mode. Machine translation answers through the anonymous GM transport.
+    page.evaluate("() => __platformFixture.settings({provider:{active:'',chain:[]},translation:{mode:'mt+llm'}})")
+    page.wait_for_timeout(300)
+    command(page, '翻译 / 恢复当前页面'); wait_done(page)
+    first = page.evaluate("() => { const t = document.querySelector('#p-plain dl-t'); return { text: t.textContent.trim(), stage: t.getAttribute('data-dl-stage') }; }")
+    check(first['text'].startswith('【机翻】') and first['stage'] == 'final', 'no-LLM page translation is not a final machine translation: %r' % (first,))
+    calls = page.evaluate('__platformFixture.calls')
+    check(calls and all(c['anonymous'] and not c['hasAuth'] and c['url'].startswith('https://edge.microsoft.com/') for c in calls), 'machine translation must use anonymous, keyless GM requests: %r' % (calls[:2],))
+    page.screenshot(path=str(shots / (tag + '-machine.png')))
+    command(page, '翻译 / 恢复当前页面')
+    page.wait_for_function("!document.querySelector('dl-t')")
+    # Now add a model: the LLM text replaces the machine draft in place.
+    page.evaluate("() => __platformFixture.settings({provider:{active:'mock'}})")
+    page.wait_for_timeout(300)
+    command(page, '翻译 / 恢复当前页面')
+    page.wait_for_function("document.querySelector('#p-plain dl-t')?.getAttribute('data-dl-stage')==='final' && document.querySelector('#p-plain dl-t').textContent.startsWith('【译】')")
+    page.wait_for_function("document.querySelectorAll('dl-t[data-dl-stage=draft]').length === 0")
+    page.screenshot(path=str(shots / (tag + '-refined.png')))
+    command(page, '翻译 / 恢复当前页面')
+    page.wait_for_function("!document.querySelector('dl-t')")
+    # Exercise the actual closed-shadow refinement button, not just its backend message.
+    select_text(page)
+    page.wait_for_function("!!__platformFixture.rect('.icon.show')")
+    click_shadow(page, '.icon.show')
+    page.wait_for_function("__platformFixture.elements('.dst').some(e=>e.textContent.startsWith('【机翻】'))")
+    refine = 'button[title="用大模型精修这段译文"]'
+    page.wait_for_function('(s) => !!__platformFixture.rect(s)', arg=refine)
+    click_shadow(page, refine)
+    page.wait_for_function("__platformFixture.elements('.dst').some(e=>e.textContent.startsWith('【译】'))")
+    page.keyboard.press('Escape')
+    # The floating-ball input command also defaults to MT in mixed mode.
+    page.locator('#ta').fill('Translate this message quickly.')
+    page.locator('#ta').focus()
+    command(page, '翻译当前输入框')
+    page.wait_for_function("document.querySelector('#ta').value.startsWith('【机翻】')")
+    return 'keyless GM machine translation, page refinement, selection refine button and MT input; screenshots in ' + str(shots)
 
 
 def secret_transport_case(page, base):
@@ -419,7 +468,8 @@ def main():
     cases = [('desktop', 1280, 800, False, desktop_cases), ('secret_transport', 1280, 800, False, secret_transport_case),
              ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
              ('isolated_prompt', 1280, 800, False, isolated_prompt_case),
-             ('mobile_375', 375, 812, True, mobile_cases), ('tablet_800', 800, 1280, True, mobile_cases)]
+             ('mobile_375', 375, 812, True, mobile_cases), ('tablet_800', 800, 1280, True, mobile_cases),
+             ('machine_first', 1280, 800, False, machine_first_case), ('machine_first_375', 375, 812, True, machine_first_case)]
     if args.only: cases = [c for c in cases if any(o in c[0] for o in args.only)]
     if not cases: print('no matching cases'); return 2
     E2E_ROOT.mkdir(parents=True, exist_ok=True); ARTIFACTS.mkdir(parents=True, exist_ok=True)

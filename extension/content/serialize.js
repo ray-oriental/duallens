@@ -7,6 +7,7 @@
 import { escapeText } from '../shared/markup.js';
 import { classify } from './walker.js';
 import { LETTER_RE } from './util.js';
+import { identifierText } from '../shared/identifiers.js';
 
 // Inline wrappers that get a <gN> tag (SPEC §6).
 const G_TAGS = new Set('a b strong em i u s mark sub sup small abbr cite q span font'.split(' '));
@@ -25,7 +26,7 @@ const WS = /[ \t\n\r\f]+/g;
 // text:  placeholder string sent to the model
 // plain: visible text only, whitespace-normalised (for language checks and "same as source" tests)
 // els:   element table; index N is what <gN>/<xN/> refer to
-export function serializeRun(first, last, { exclude = null } = {}) {
+export function serializeRun(first, last, { exclude = null, terms } = {}) {
   const els = [];
   let s = '';
   let plain = '';
@@ -38,7 +39,12 @@ export function serializeRun(first, last, { exclude = null } = {}) {
   const walk = (node, depth) => {
     if (node.nodeType === 3) {
       const t = node.data.replace(WS, ' ');
-      s += escapeText(t);
+      let end=0;
+      for(const m of t.matchAll(/\b[A-Z][a-z][A-Za-z0-9]*\b/g)) if(terms?.has(m[0])) {
+        s+=escapeText(t.slice(end,m.index));
+        const span=node.ownerDocument.createElement('span');span.textContent=m[0];atom(span);end=m.index+m[0].length;
+      }
+      s += escapeText(t.slice(end));
       plain += t;
       return;
     }
@@ -93,12 +99,29 @@ export function serializeRun(first, last, { exclude = null } = {}) {
 
 // Quick filter for strings that are not worth sending: no letters, bare URLs, e-mail addresses,
 // and lone code-ish tokens (v2.0, api_key, #id).
+let wordSegmenter;
+export function isShortText(plain) {
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(plain)) {
+    if (typeof Intl.Segmenter === 'function') {
+      wordSegmenter ||= new Intl.Segmenter(undefined, { granularity: 'word' });
+      let words = 0;
+      for (const segment of wordSegmenter.segment(plain)) if (segment.isWordLike && ++words > 3) return false;
+      return true;
+    }
+    return (plain.match(/\p{L}/gu) || []).length <= 3;
+  }
+  return (plain.match(/\S+/g) || []).length <= 3;
+}
+
 export function isTranslatable(plain, minChars) {
+  if (identifierText(plain)) return false;
   if (plain.length < minChars) return false;
   if (!LETTER_RE.test(plain)) return false;
   if (/^(?:https?:\/\/|ftp:\/\/|www\.)\S+$/i.test(plain)) return false;
+  if (/^(?:[a-z0-9-]+\.)+(?:com|org|net|edu|gov|io|dev|app|cn|uk|jp|de|fr|ru)(?::\d+)?(?:\/\S*)?$/i.test(plain)) return false;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(plain)) return false;
-  if (!/\s/.test(plain) && /^[\x21-\x7e]+$/.test(plain) && /[0-9_/\\@#]/.test(plain)) return false;
+  if (/^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?[,]?\s+)?(?:\d{1,4}[-/:.]\d{1,2}[-/:.]\d{1,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})(?:[T\s]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s*(?:[ap]m|UTC|GMT|Z|[+-]\d{2}:?\d{2}))?(?:\s*\([\d,.]+\s*[KMGT]?B\))?)?$/i.test(plain)) return false;
+  if (/^(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}|\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?(?:\s*(?:UTC|GMT|[+-]\d{2}:?\d{2}))?|\d+\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago)$/i.test(plain)) return false;
   return true;
 }
 

@@ -209,7 +209,7 @@ test('a segment missing again after the retry becomes a parse error; the rest ar
   const provider = fakeProvider(({ segs }) => writeSegs(segs.filter((s) => s.text !== 'bad')));
   const rig = makeRig({ provider });
   const r = await run(rig, { items: items('good', 'bad', 'fine') });
-  assert.equal(provider.calls.length, 2, 'exactly one retry');
+  assert.equal(provider.calls.length, 3, 'one missing-item retry, then one fallback model for the empty reply');
   assert.equal(textOf(r, 'i1'), '【译】good');
   assert.equal(textOf(r, 'i3'), '【译】fine');
   assert.equal(r.results.get('i2').error.code, ERR.PARSE);
@@ -230,7 +230,15 @@ test('a reply of pure prose fails every segment with a parse error', async () =>
   const r = await run(rig, { items: items('one', 'two') });
   assert.equal(r.results.get('i1').error.code, ERR.PARSE);
   assert.equal(r.results.get('i2').error.code, ERR.PARSE);
-  assert.equal(provider.calls.length, 3, 'one batch and two halves for JSON recovery');
+  assert.equal(provider.calls.length, 2, 'unparseable output fails over once per model, without per-item retry storms');
+});
+
+test('thinking prose fails this model and the chain supplies parsed translations',async()=>{
+  const provider=fakeProvider(({model,segs})=>model==='m1'?'好的，我现在需要处理用户的翻译请求。':JSON.stringify({t:segs.map(()=> '备用模型译文')}));
+  const rig=makeRig({provider});const result=await run(rig,{items:items('First paragraph','Second paragraph'),streamItems:false});
+  assert.deepEqual(provider.calls.map(c=>c.model),['m1','m2']);
+  assert.ok([...result.results.values()].every(r=>r.text==='备用模型译文'));
+  assert.equal(await rig.cache.count(),2);
 });
 
 test('429: the batch is retried after Retry-After and eventually succeeds', async () => {

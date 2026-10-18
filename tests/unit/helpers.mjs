@@ -39,7 +39,8 @@ export function testProfile(over = {}) {
 }
 
 export function testSettings({ profile = testProfile(), ...over } = {}) {
-  return mergeSettings(DEFAULT_SETTINGS, { provider: { active: profile.id, profiles: [profile] }, ...over });
+  // Legacy LLM-pipeline tests pin mode 'llm'; the double-engine tests choose their own mode.
+  return mergeSettings(DEFAULT_SETTINGS, { translation: { mode: 'llm' }, provider: { active: profile.id, profiles: [profile] }, ...over });
 }
 
 // Parses the numbered segments out of the user message the way a model would see them.

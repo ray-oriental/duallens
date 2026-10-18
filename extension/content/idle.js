@@ -3,8 +3,7 @@ export class IdleSlices {
   constructor() { this.generation = 0; this.started = 0; }
   cancel() { this.generation++; }
   schedule(fn) {
-    if (globalThis.requestIdleCallback) requestIdleCallback(fn, { timeout: 100 });
-    else setTimeout(() => fn({ timeRemaining: () => 8 }), 0);
+    setTimeout(() => fn({ timeRemaining: () => 8 }), 0);
   }
   run(iterator, consume) {
     const generation = this.generation;
@@ -17,7 +16,7 @@ export class IdleSlices {
         if (next.done) return;
         consume(next.value);
         steps++;
-      } while (steps < 32 && performance.now() - start < 8 && deadline.timeRemaining() > 1);
+      } while (steps < 256 && performance.now() - start < 8 && (steps < 32 || deadline.timeRemaining() > 1));
       this.schedule(tick);
     };
     this.schedule(tick);

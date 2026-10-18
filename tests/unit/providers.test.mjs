@@ -151,15 +151,41 @@ test('timeout aborts the request and reports network_error', async () => {
   assert.equal(aborted, true);
 });
 
-test('SJTU idle waiting is capped at twelve seconds without shortening unrelated endpoint settings',async()=>{
+test('the wait for the first token is long (the SJTU relay queues up to 50 s); only direct SJTU is capped, at 50 s',async()=>{
   const f=fakeFetch({body:JSON.stringify({choices:[{message:{content:'hello'}}]})});
   const {chat}=createProviders({fetchImpl:f});
   await chat({profile:gateway({timeoutMs:130000}),model:'sjtu/deepseek-chat',messages});
-  assert.equal(f.calls.at(-1).init.timeoutMs,12000);
+  assert.equal(f.calls.at(-1).init.timeoutMs,130000,'a gateway profile must not cancel a call its relay is still queueing');
   await chat({profile:openai({baseUrl:'https://models.sjtu.edu.cn/v1',timeoutMs:130000}),model:'deepseek-chat',messages});
-  assert.equal(f.calls.at(-1).init.timeoutMs,12000);
+  assert.equal(f.calls.at(-1).init.timeoutMs,50000);
   await chat({profile:openai({timeoutMs:130000}),model:'gpt-x',messages});
   assert.equal(f.calls.at(-1).init.timeoutMs,130000);
+});
+
+test('gateway streaming: first token may arrive late, then twelve seconds of silence is a stall',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const flush=()=>new Promise(r=>setImmediate(r));
+  let stream,aborted=false;
+  const f=async(url,init)=>new Response(new ReadableStream({start(c){
+    stream=c;init.signal.addEventListener('abort',()=>{aborted=true;c.error(new DOMException('aborted','AbortError'));});
+  }}),{headers:{'Content-Type':'text/event-stream'}});
+  const outcome=createProviders({fetchImpl:f}).chat({profile:gateway({timeoutMs:130000}),model:'auto',messages}).then(()=>'finished',e=>e);
+  await flush();
+  t.mock.timers.tick(100000);await flush();
+  assert.equal(aborted,false,'100 s before the first token is still within the first-token allowance');
+  stream.enqueue(new TextEncoder().encode('data: {"model":"ollama/qwen3:4b","choices":[{"delta":{"content":"a"}}]}\n\n'));await flush();
+  t.mock.timers.tick(11900);await flush();
+  assert.equal(aborted,false);
+  t.mock.timers.tick(200);
+  const e=await outcome;
+  assert.equal(aborted,true);assert.equal(e.code,ERR.NETWORK);assert.match(e.message,/超时（12 秒）/);
+});
+
+test('every error status keeps the gateway Retry-After and its machine-readable code',async()=>{
+  const {chat}=createProviders({fetchImpl:fakeFetch({status:503,headers:{'Retry-After':'3'},body:'{"error":{"code":"no_backend_available","message":"No backend"}}'})});
+  await assert.rejects(chat({profile:gateway(),model:'auto',messages}),e=>e.status===503&&e.serverCode==='no_backend_available'&&e.retryAfterMs===3000);
+  const busy=createProviders({fetchImpl:fakeFetch({status:429,headers:{'Retry-After':'2'},body:'{"error":{"code":"gateway_busy"}}'})});
+  await assert.rejects(busy.chat({profile:gateway(),model:'auto',messages}),e=>e.code===ERR.RATE_LIMITED&&e.serverCode==='gateway_busy'&&e.retryAfterMs===2000);
 });
 
 test('an external abort reports cancelled', async () => {

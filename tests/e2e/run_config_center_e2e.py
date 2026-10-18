@@ -33,7 +33,7 @@ def extension_case(pw, run):
             if req.url.endswith('/health'):
                 route.fulfill(status=200, content_type='application/json', body='{"ok":true,"name":"DualLens"}')
             elif req.url.endswith('/v1/models'):
-                route.fulfill(status=200, content_type='application/json', body=json.dumps({'data': [{'id': m} for m in MODELS]}))
+                route.fulfill(status=200, content_type='application/json', body=json.dumps({'data': [{'id': m} for m in ['auto'] + MODELS]}))
             else:
                 raise AssertionError('Unexpected provider request; discovery must not call a model')
 
@@ -46,9 +46,9 @@ def extension_case(pw, run):
         page.locator('#status').filter(has_text='修改后').wait_for()
         assert not calls
         page.click('#connect-gateway')
-        page.locator('#status').filter(has_text='已建立').wait_for()
+        page.locator('#status').filter(has_text='已选用网关 auto').wait_for()
         chain = json.loads(page.locator('#providerChain').input_value())
-        assert [c['model'] for c in chain] == ['sjtu/deepseek-chat','hermes/upstage/solar-mini4:free','ollama/qwen3:4b']
+        assert [c['model'] for c in chain] == ['auto'], 'a gateway offering auto is scheduled server-side; subscriptions never join the chain'
         page.click('#save')
         page.locator('#status').filter(has_text='已保存').wait_for()
         page.locator('#pairingText').fill(PAIR)
@@ -88,7 +88,7 @@ def extension_case(pw, run):
         assert page.locator('#profile').input_value() == 'gateway-tailscale'
         assert h.sw_eval("async () => (await chrome.storage.sync.get('settings.core'))['settings.core'].subtitles") == SUBTITLES
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        print('PASS extension_config_center: mock discovery chain, paired profiles, local-only Bearer, encrypted QR and import roundtrip', flush=True)
+        print('PASS extension_config_center: mock discovery (gateway auto), paired profiles, local-only Bearer, encrypted QR and import roundtrip', flush=True)
         return encrypted
     finally:
         h.close()

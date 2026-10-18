@@ -1,33 +1,41 @@
-import { LANGS, STYLES } from '../../shared/settings.js';
+import { LANGS, STYLES, TRANSLATION_MODES } from '../../shared/settings.js';
 import { PROVIDER_PRESETS } from '../../shared/presets.js';
+import { MT_ENGINES } from '../../background/mt.js';
 
 export const FORM_CSS = `
-.dl-settings { color-scheme:light dark; --bg:#f5f7fb; --panel:#fff; --fg:#182339; --muted:#58677d; --line:#d9e0ec; --accent:#365edd; color:var(--fg); background:var(--bg); font:14px/1.6 system-ui,sans-serif; padding:16px; max-width:960px; margin:auto; overflow-wrap:anywhere; }
-.dl-settings * { box-sizing:border-box; min-width:0; }
-.dl-settings section { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; margin:14px 0; }
-.dl-settings h2 { font-size:18px; margin:0 0 12px; }
-.dl-settings p { margin:8px 0; }
-.dl-settings .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-.dl-settings .wide { grid-column:1/-1; }
-.dl-settings label { display:block; color:var(--muted); }
-.dl-settings input,.dl-settings select,.dl-settings textarea,.dl-settings button { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; min-height:44px; max-width:100%; padding:9px; }
-.dl-settings input,.dl-settings select,.dl-settings textarea { display:block; width:100%; margin-top:5px; }
-.dl-settings textarea { min-height:90px; resize:vertical; }
-.dl-settings input[type=checkbox] { display:inline-block; width:20px; min-height:20px; margin:0 8px 0 0; }
-.dl-settings .check { display:flex; align-items:center; min-height:44px; }
-.dl-settings .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
-.dl-settings button { cursor:pointer; background:var(--panel); }
-.dl-settings button:disabled { opacity:.6; cursor:wait; }
-.dl-settings .primary { background:var(--accent); color:#fff; }
-.dl-settings .hint { color:var(--muted); font-size:13px; }
-.dl-settings a { color:var(--accent); }
-.dl-settings .status { min-height:24px; }
-.dl-settings .error { color:#ba2440; }
-.dl-settings .savebar { position:sticky; bottom:0; background:var(--panel); padding:12px; display:flex; gap:12px; align-items:center; justify-content:space-between; border:1px solid var(--line); border-radius:12px; }
-.dl-settings [hidden] { display:none!important; }
-.dl-settings :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-@media(prefers-color-scheme:dark) { .dl-settings { --bg:#111821; --panel:#1a2432; --fg:#e7edf6; --muted:#a0afc4; --line:#34435a; --accent:#365edd; } .dl-settings a { color:#aac0ff; } .dl-settings .error { color:#ff94a3; } }
-@media(max-width:599px) { .dl-settings { padding:8px; width:100%; } .dl-settings .grid { grid-template-columns:1fr; } .dl-settings section { padding:12px; } .dl-settings .savebar { padding:8px; } }
+.dl-settings{color-scheme:light dark;--bg:#f5f7fb;--panel:#fff;--fg:#182339;--muted:#58677d;--line:#d9e0ec;--accent:#365edd;color:var(--fg);background:var(--bg);font:14px/1.6 system-ui,sans-serif;padding:16px;max-width:960px;margin:auto;overflow-wrap:anywhere;}
+.dl-settings *{box-sizing:border-box;min-width:0;}
+.dl-settings section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0;}
+.dl-settings h2{font-size:18px;margin:0 0 12px;}
+.dl-settings p{margin:8px 0;}
+.dl-settings .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+.dl-settings .wide{grid-column:1/-1;}
+.dl-settings label{display:block;color:var(--muted);}
+.dl-settings input,.dl-settings select,.dl-settings textarea,.dl-settings button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;min-height:44px;max-width:100%;padding:9px;}
+.dl-settings input,.dl-settings select,.dl-settings textarea{display:block;width:100%;margin-top:5px;}
+.dl-settings textarea{min-height:90px;resize:vertical;}
+.dl-settings input[type=checkbox]{display:inline-block;width:20px;min-height:20px;margin:0 8px 0 0;}
+.dl-settings .check{display:flex;align-items:center;min-height:44px;}
+.dl-settings .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}
+.dl-settings button{cursor:pointer;background:var(--panel);}
+.dl-settings button:disabled{opacity:.6;cursor:wait;}
+.dl-settings .primary{background:var(--accent);color:#fff;}
+.dl-settings .hint{color:var(--muted);font-size:13px;}
+.dl-settings a{color:var(--accent);}
+.dl-settings .status{min-height:24px;}
+.dl-settings .error{color:#ba2440;}
+.dl-settings .savebar{position:sticky;bottom:0;background:var(--panel);padding:12px;display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:12px;}
+.dl-settings [hidden]{display:none!important;}
+.dl-settings:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+@media(prefers-color-scheme:dark){.dl-settings{--bg:#111821;--panel:#1a2432;--fg:#e7edf6;--muted:#a0afc4;--line:#34435a;--accent:#365edd;}
+.dl-settings a{color:#aac0ff;}
+.dl-settings .error{color:#ff94a3;}
+}
+@media(max-width:599px){.dl-settings{padding:8px;width:100%;}
+.dl-settings .grid{grid-template-columns:1fr;}
+.dl-settings section{padding:12px;}
+.dl-settings .savebar{padding:8px;}
+}
 `;
 
 export function drawLayout(root, { secretDialog = false } = {}) {
@@ -57,7 +65,8 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   const pairs = values => values.map(([id, name]) => ({ id, name }));
 
   const wizard = el('section', '', { id: 'wizard' });
-  wizard.append(el('h2', '首次使用向导'), el('p', '推荐 OpenRouter 免费模型，也可选择你自己的服务。'),
+  wizard.append(el('h2', '首次使用向导'), el('p', '现在就能翻译：默认用机器翻译（Microsoft 免费接口，无需 key），译文秒出。'),
+    el('p', '想要更好的译文？再添加一个大模型服务，它会在后台把机翻结果无感替换成精修译文。推荐 OpenRouter 免费模型，也可选择你自己的服务。'),
     el('p', '1 选预设 → 2 填 key → 3 获取模型 → 4 测试连接 → 5 保存'),
     el('p', '免费模型有每分钟和每日限额；自动备选不能绕过账号限额。未点击获取或测试前不会联网。', { class: 'hint' }));
   form.append(wizard);
@@ -68,6 +77,27 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(r.grid, 'displayMode', '显示方式', 'select', pairs([['bilingual', '双语对照'], ['translation-only', '仅译文']]));
   field(r.grid, 'style', '译文样式', 'select', STYLES);
   for (const [id, title] of [['minChars', '最短段落字符数'], ['inlineMaxChars', '行内译文阈值'], ['rootMarginPx', '预加载距离（px）'], ['batchDelayMs', '合批等待（ms）']]) field(r.grid, id, title, 'number');
+  field(r.grid, 'translateShortText', '翻译短文本（按钮、标签、导航项）', 'checkbox');
+
+  const t = section('翻译方式');
+  field(t.grid, 'translationMode', '翻译方式', 'select', TRANSLATION_MODES);
+  field(t.grid, 'mtEngine', '机器翻译引擎', 'select', MT_ENGINES);
+  field(t.grid, 'mtFallback', '失败时自动换另一家免费引擎', 'checkbox');
+  field(t.grid, 'mtRegion', 'Microsoft Translator 区域（官方接口可选，例如 eastasia）');
+  if (secretDialog) {
+    const row = el('div', '', { id: 'mt-key-row', class: 'wide' });
+    row.append(el('p', '官方机器翻译 key（Microsoft Translator 或 DeepL；仅存本机）'), el('p', '未设置', { id: 'mt-key-status', role: 'status' }));
+    const controls = el('div', '', { class: 'actions' }); row.append(controls);
+    button(controls, 'mt-set-key', '设置 key'); button(controls, 'mt-clear-key', '清除 key');
+    t.grid.append(row);
+  } else {
+    const key = field(t.grid, 'mtKey', '官方机器翻译 key（Microsoft Translator 或 DeepL；仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
+    key.parentElement.id = 'mt-key-row';
+  }
+  const mtActions = el('div', '', { class: 'actions wide' }); t.grid.append(mtActions);
+  button(mtActions, 'mt-test', '测试机器翻译');
+  t.box.append(el('p', '机翻先出译文（通常不到 1 秒），已配置的大模型随后在原位替换为精修结果；大模型失败时保留机翻，不打扰阅读。划词、悬停与输入框默认直接用机翻，划词卡片可「精修」。', { class: 'hint' }),
+    el('p', '默认的 Microsoft 与 Google 是免费的非官方接口，可能随时变动或失效，也没有服务保证；它们会收到需要翻译的网页文字。不想让网页文字发往它们，请选择「只用大模型」，或改用官方带 key 的引擎。', { class: 'hint' }));
 
   const p = section('模型服务');
   field(p.grid, 'profile', '编辑 / 切换服务', 'select');
