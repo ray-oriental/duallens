@@ -9,7 +9,7 @@ import stat
 import sys
 import tempfile
 import zipfile
-from check_project import CheckError, is_link, packaged_bytes, release_members, require, VERSIONED_ASSET_RE, rebuild_userscript, verify_userscript_version
+from check_project import CheckError, is_link, packaged_bytes, release_members, require, VERSIONED_ASSET_RE, USERSCRIPT_ASSETS, rebuild_userscript_assets, verify_userscript_version
 
 PROJECT = Path(__file__).resolve().parent.parent
 
@@ -44,10 +44,10 @@ def build_release(project_root: Path, output_dir: Path | None = None, target: st
         edge_manifest = dict(manifest)
         edge_manifest.pop('key', None)
         named[edge_name] = extension
-    existing = [p for p in output.iterdir() if VERSIONED_ASSET_RE.fullmatch(p.name) or p.name in {'duallens.user.js', 'SHA256SUMS'}] if output.exists() else []
+    existing = [p for p in output.iterdir() if VERSIONED_ASSET_RE.fullmatch(p.name) or p.name in USERSCRIPT_ASSETS | {'SHA256SUMS'}] if output.exists() else []
     for asset in existing:
         require(not is_link(asset) and asset.is_file(), f'unsafe existing release asset: {asset.name}')
-    for name in [*named, 'duallens.user.js', 'SHA256SUMS']:
+    for name in [*named, *USERSCRIPT_ASSETS, 'SHA256SUMS']:
         require(not is_link(output / name), f'linked existing output: {name}')
     cache = Path.home() / '.cache' / 'duallens-build'
     check_output_path(cache)
@@ -61,10 +61,11 @@ def build_release(project_root: Path, output_dir: Path | None = None, target: st
         user_script = project / 'scripts' / 'build_userscript.mjs'
         release_assets = list(named)
         if user_script.is_file():
-            content = rebuild_userscript(project)
-            verify_userscript_version(content, version)
-            (stage / 'duallens.user.js').write_bytes(content)
-            release_assets.append('duallens.user.js')
+            assets = rebuild_userscript_assets(project)
+            verify_userscript_version(assets['duallens.user.js'], version)
+            for name, content in assets.items():
+                (stage / name).write_bytes(content)
+                release_assets.append(name)
         sums = ''.join(f"{hashlib.sha256((stage / name).read_bytes()).hexdigest()}  {name}\n" for name in sorted(release_assets))
         (stage / 'SHA256SUMS').write_text(sums, encoding='utf-8', newline='\n')
         output.mkdir(parents=True, exist_ok=True)
@@ -76,7 +77,7 @@ def build_release(project_root: Path, output_dir: Path | None = None, target: st
             asset.unlink()
         for name in [*release_assets, 'SHA256SUMS']:
             shutil.copyfile(stage / name, output / name)
-    return [output / name for name in [*named, *(["duallens.user.js"] if user_script.is_file() else []), 'SHA256SUMS']]
+    return [output / name for name in [*release_assets, 'SHA256SUMS']]
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)

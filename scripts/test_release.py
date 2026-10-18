@@ -89,6 +89,52 @@ await fs.writeFile(output,'// ==UserScript==\\n// @version '+version+'\\n// ==/U
         verify_release(self.project, self.out)
         self.assertFalse((self.project / 'dist').exists(), 'builder wrote into source project instead of staging')
 
+    def settings_builder(self):
+        builder = self.userscript_builder()
+        builder.write_text(builder.read_text(encoding='utf-8') + r"""
+const panel='(function(){return {mountSettingsForm(){}};})();\n';
+const {createHash}=await import('node:crypto');
+const hash=createHash('sha256').update(panel).digest('hex');
+const line='// @resource duallens-settings https://github.com/ray-oriental/duallens/releases/download/v'+version+'/duallens-settings.js#sha256='+hash+'\n';
+await fs.writeFile(path.join(path.dirname(output),'duallens-settings.js'),panel);
+await fs.writeFile(output,(await fs.readFile(output,'utf8')).replace('// ==/UserScript==',line+'// ==/UserScript=='));
+""", encoding='utf-8')
+        return builder
+
+    def test_settings_resource_is_packaged_hashed_and_rebuilt(self):
+        self.settings_builder()
+        self.assertIn(self.out / 'duallens-settings.js', self.build())
+        self.assertIn('  duallens-settings.js\n', (self.out / 'SHA256SUMS').read_text())
+        verify_release(self.project, self.out)
+        resource = self.out / 'duallens-settings.js'
+        resource.write_text(resource.read_text() + '// tampered\n')
+        with self.assertRaisesRegex(CheckError, 'checksum mismatch'):
+            verify_release(self.project, self.out)
+        self.rehash()
+        with self.assertRaisesRegex(CheckError, 'rebuilt source'):
+            verify_release(self.project, self.out)
+        self.build(); resource.unlink()
+        with self.assertRaisesRegex(CheckError, 'missing release asset'):
+            verify_release(self.project, self.out)
+
+    def test_settings_resource_metadata_must_pin_release_version_and_digest(self):
+        builder = self.settings_builder()
+        original = builder.read_text(encoding='utf-8')
+        self.build()
+        before = (self.out / 'SHA256SUMS').read_bytes()
+        for code in [original.replace("'/duallens-settings.js#sha256='+hash", "'/duallens-settings.js#sha256='+'0'.repeat(64)"),
+                     original.replace("'/duallens-settings.js#sha256='", "'/wrong-settings.js#sha256='")]:
+            builder.write_text(code, encoding='utf-8')
+            with self.assertRaisesRegex(CheckError, 'settings resource metadata'):
+                self.build()
+            self.assertEqual((self.out / 'SHA256SUMS').read_bytes(), before)
+
+    def test_obsolete_settings_resource_is_removed_when_no_longer_built(self):
+        self.settings_builder(); self.build()
+        self.userscript_builder(); self.build()
+        self.assertFalse((self.out / 'duallens-settings.js').exists())
+        verify_release(self.project, self.out)
+
     def test_userscript_hash_metadata_and_rebuild_are_all_checked(self):
         self.userscript_builder()
         for mode, error in [('hash', 'checksum mismatch'), ('version', 'metadata version'), ('header', 'metadata header'), ('duplicate', 'metadata version'), ('bytes', 'rebuilt source')]:

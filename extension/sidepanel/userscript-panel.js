@@ -1,17 +1,24 @@
 import { createSettingsPanel } from '../userscript/panel.js';
-import { mountSettingsForm } from '../ui/forms/index.js';
+import { SETTINGS_RESOURCE_ERROR } from '../userscript/settings-resource.js';
 import { element, MEDIA_CSS, mountTextForm } from './text-form.js';
 import { mountSubtitleForm } from './subtitle-form.js';
 
 // Reuse the existing dialog and its destroy/race/focus handling without editing
 // the shared settings form or the other contributor's userscript entry point.
-export function createUserscriptMediaPanel(platform) {
+export function createUserscriptMediaPanel(platform, { loadSettingsForm }) {
   let selected = 'settings', showTab = null;
   const panel = createSettingsPanel({ store: platform.settingsStore, platform, mountForm: async root => {
     const style = element('style', MEDIA_CSS), tabs = element('div'); tabs.className = 'dl-media-tabs'; tabs.setAttribute('role', 'tablist');
     root.append(style, tabs);
     const pages = [], mounted = new Map(); let disposed = false;
-    for (const [id, label, mount] of [['settings', '设置', mountSettingsForm], ['text', '文本翻译', mountTextForm], ['subtitles', '视频字幕', mountSubtitleForm]]) {
+    const mountSettings = async (page, options) => {
+      page.textContent = '正在加载设置…';
+      const mount = await loadSettingsForm();
+      if (disposed) return;
+      page.replaceChildren();
+      return mount(page, options);
+    };
+    for (const [id, label, mount] of [['settings', '设置', mountSettings], ['text', '文本翻译', mountTextForm], ['subtitles', '视频字幕', mountSubtitleForm]]) {
       const button = element('button', label); button.type = 'button'; button.setAttribute('role', 'tab'); button.dataset.tab = id;
       const page = element('section'); page.className = 'dl-media-page'; page.setAttribute('role', 'tabpanel'); page.hidden = true;
       const tabId = `dl-media-tab-${id}`, pageId = `dl-media-page-${id}`;
@@ -31,7 +38,7 @@ export function createUserscriptMediaPanel(platform) {
       try {
         const result = await entry.mount(entry.page, { store: platform.settingsStore, platform });
         if (disposed) result?.destroy?.(); else mounted.set(id, result);
-      } catch { if (!disposed) entry.page.textContent = '页面加载失败，请关闭后重试'; }
+      } catch { if (!disposed) entry.page.textContent = id === 'settings' ? SETTINGS_RESOURCE_ERROR : '页面加载失败，请关闭后重试'; }
     }
     showTab = select; await select(selected);
     return { destroy() { disposed = true; showTab = null; for (const result of mounted.values()) result?.destroy?.(); root.replaceChildren(); } };

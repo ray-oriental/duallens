@@ -47,6 +47,8 @@ Android Edge + Tampermonkey                         │
 所以由 `loader.js` 用 `import(chrome.runtime.getURL('content/main.js'))` 动态导入，被导入的文件列在
 `web_accessible_resources` 里。`scripts/build_userscript.mjs` 仅为用户脚本将同一静态模块图与 CSS 打包成 IIFE；
 不改变可直接加载的 `extension/`。用户脚本的页内面板经 `mountForm` 复用 `mountSettingsForm`，关闭调用 `destroy()`。
+v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的版本固定 `@resource` 缓存，
+首次打开设置时本地校验并加载，错误显示中文重新安装说明；扩展 options 仍直接导入。详见 PLATFORMS §2。
 
 ## 2. 文件归属（并行开发时谁写哪里）
 
@@ -118,7 +120,8 @@ siteRules: {
 - `selection` / `hover` / `input` 为 `on` / `off` / `default`，缺省等同 default，沿用相应全局开关。
   off 时卸下对应事件/UI，并阻止显式入口；触屏 hover 同样控制长按。运行时覆盖不回写全局偏好。
 - `pushState` / `replaceState`、`popstate`、hash/navigation 事件重新判定；独立规则 RouteWatcher 在未翻译/never 时也运行，
-  隔离世界未收到事件时以 1 秒轮询兜底。异步语言检测不能把上一条路由的自动决定带入下一页。
+  与翻译共用同一窗口/隔离世界的检测器。Navigation API 可用时不轮询；仅不可用时以可见页面 1 秒轮询兜底，
+  隐藏暂停、重新可见立即检查。异步语言检测不能把上一条路由的自动决定带入下一页。
 - 弹出页“仅当前路径”生成 `host[:port]/first-segment/*`（根路径为 `host[:port]/*`）。
   回到默认写入显式 default，而非删除继承关系。非机密明文/加密备份均保留新增字段；密钥规则不变。
 
@@ -197,9 +200,9 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
    自动源语言会把可靠检测及短日文提示传给模型，同一请求不混用不同源语言；编辑后重新判定，明确指定的源语言优先。
 4. **懒翻译**：`IntersectionObserver`，`rootMargin` 取设置里的像素值（默认 600px）。进入范围的单元按
    实际源节点 Range 的视口位置排优先级，攒 80ms 再发一批。共用高宿主元素的小说各段分别判断；被观察宿主持续相交时，滚动/缩放仍重新检查待翻范围，不整篇放行。
-5. **动态内容**：`MutationObserver` 监听新增节点（防抖 300ms）；SPA 换页用 Navigation API 的 `currententrychange` 事件、
-   `popstate`/`hashchange`，再加 1s 轮询 `location.href` 兜底（内容脚本在隔离世界，包装 `history.pushState`
-   拦不到页面自己的调用）；我们自己的插入要识别并忽略，避免死循环。
+5. **动态内容**：`MutationObserver` 监听新增节点（防抖 300ms）；SPA 换页用 Navigation API 的 `navigatesuccess` / `currententrychange` 事件、
+   `popstate`/`hashchange`；仅 Navigation API 不可用时在可见页面 1s 轮询 `location.href` 兜底（内容脚本在隔离世界，包装 `history.pushState`
+   拦不到页面自己的调用），隐藏暂停。我们自己的插入要识别并忽略，避免死循环。
    我们插入的元素：`dl-t`（译文）、`dl-o`（仅译文模式的原文隐藏包裹）、`dl-w`（宿主为 flex/grid 时的块级包裹）、
    `dl-r`（失败重试控件）、`dl-ui`（closed shadow root 宿主，挂在 documentElement 末尾）。混合内容里的行内
    「run 单元」把 `data-dl-id`/`data-dl-state` 挂在 `dl-t` 上。站点规则的 include/exclude 接受字符串或字符串数组。

@@ -26,6 +26,7 @@ PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/SETUP-ALL-DEVICES.md',
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
 VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store)-v\d+(?:\.\d+){0,3}\.zip')
+USERSCRIPT_ASSETS = {'duallens.user.js', 'duallens-settings.js'}
 
 class CheckError(ValueError):
     pass
@@ -193,7 +194,7 @@ def release_members(project: Path) -> tuple[dict, dict[str, Path], dict[str, Pat
     portable = {'extension/' + name: path for name, path in assets.items()}
     for name in PUBLIC_FILES + PUBLIC_DOCS + GATEWAY_FILES:
         portable[name] = safe_file(project, name)
-    for directory, suffixes in [('gateway', {'.py', '.ps1'}), ('scripts', {'.py'}), ('tests', {'.py', '.mjs', '.html', '.md', '.png'}), ('.github', {'.yml', '.yaml', '.md'})]:
+    for directory, suffixes in [('gateway', {'.py', '.ps1'}), ('scripts', {'.py', '.mjs'}), ('tests', {'.py', '.mjs', '.html', '.md', '.png'}), ('.github', {'.yml', '.yaml', '.md'})]:
         portable.update(public_source_files(project, directory, suffixes))
     # The portable bundle must retain all locally linked Markdown documentation from README.
     readme = portable['README.md'].read_text(encoding='utf-8-sig')
@@ -207,14 +208,30 @@ def release_members(project: Path) -> tuple[dict, dict[str, Path], dict[str, Pat
     return m, extension, portable
 
 
-def rebuild_userscript(project: Path) -> bytes:
+def rebuild_userscript_assets(project: Path) -> dict[str, bytes]:
     builder = safe_file(project, 'scripts/build_userscript.mjs')
     with tempfile.TemporaryDirectory(prefix='duallens-verify-user-') as temporary:
         output = Path(temporary) / 'duallens.user.js'
         result = subprocess.run(['node', str(builder), '--output', str(output)], cwd=project,
                                 capture_output=True, check=False)
         require(result.returncode == 0 and output.is_file(), 'userscript rebuild failed')
-        return output.read_bytes()
+        assets = {'duallens.user.js': output.read_bytes()}
+        panel = Path(temporary) / 'duallens-settings.js'
+        text = assets['duallens.user.js'].decode('utf-8')
+        refs = re.findall(r'^//\s*@resource\s+duallens-settings\s+(\S+)\s*$', text, re.M)
+        if panel.exists() or refs:
+            require(panel.is_file() and not is_link(panel), 'settings resource rebuild missing or linked')
+            content = panel.read_bytes()
+            version = read_manifest(project / 'extension')['version']
+            digest = hashlib.sha256(content).hexdigest()
+            require(refs == [f'https://github.com/ray-oriental/duallens/releases/download/v{version}/duallens-settings.js#sha256={digest}'],
+                    'settings resource metadata differs from rebuilt asset')
+            assets['duallens-settings.js'] = content
+        return assets
+
+
+def rebuild_userscript(project: Path) -> bytes:
+    return rebuild_userscript_assets(project)['duallens.user.js']
 
 def verify_userscript_version(content: bytes, version: str) -> None:
     try:
@@ -234,9 +251,11 @@ def verify_release(project: Path, dist: Path) -> None:
         names[edge_name] = extension
     user_name = 'duallens.user.js'
     expected_assets = set(names)
+    rebuilt = {}
     if (project / 'scripts/build_userscript.mjs').is_file():
-        expected_assets.add(user_name)
-    actual_assets = {p.name for p in dist.iterdir() if VERSIONED_ASSET_RE.fullmatch(p.name) or p.name == user_name}
+        rebuilt = rebuild_userscript_assets(project)
+        expected_assets.update(rebuilt)
+    actual_assets = {p.name for p in dist.iterdir() if VERSIONED_ASSET_RE.fullmatch(p.name) or p.name in USERSCRIPT_ASSETS}
     require(actual_assets == expected_assets, 'unexpected, stale or missing release asset')
     checksum_file = safe_file(dist, 'SHA256SUMS')
     checksums = {}
@@ -251,7 +270,8 @@ def verify_release(project: Path, dist: Path) -> None:
     if user_name in expected_assets:
         content = safe_file(dist, user_name).read_bytes()
         verify_userscript_version(content, m['version'])
-        require(content == rebuild_userscript(project), 'userscript differs from rebuilt source')
+        for name, expected in rebuilt.items():
+            require(safe_file(dist, name).read_bytes() == expected, f'userscript asset differs from rebuilt source: {name}')
     for name, expected in names.items():
         archive = safe_file(dist, name)
         require(hashlib.sha256(archive.read_bytes()).hexdigest() == checksums[name], f'checksum mismatch: {name}')

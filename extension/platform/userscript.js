@@ -18,6 +18,7 @@ import { installTimedtextObserver } from '../content/subtitles/observer-runtime.
 import { observeTimedtext, fetchTimedtext, fetchGMCrossHostTrack } from '../content/subtitles/observe.js';
 import { isYouTube, originalTrackURL } from '../content/subtitles/track.js';
 import { createUserscriptMediaPanel } from '../sidepanel/userscript-panel.js';
+import { createSettingsFormLoader } from '../userscript/settings-resource.js';
 
 // Capture the sandbox's native prompt before any awaits; never use host-page prompt.
 const sandboxPrompt = typeof prompt === 'function' ? prompt.bind(globalThis) : null;
@@ -80,9 +81,10 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
     },
   };
   const store = platform.settingsStore = createSettingsStore({ syncArea, localArea });
+  const loadSettingsForm = createSettingsFormLoader(gm.getResourceText);
   let mediaPanel;
   const openPanel = tab => {
-    mediaPanel ||= createUserscriptMediaPanel(platform);
+    mediaPanel ||= createUserscriptMediaPanel(platform, { loadSettingsForm });
     return mediaPanel.open(tab);
   };
   platform.openSettings = () => { void openPanel('settings'); };

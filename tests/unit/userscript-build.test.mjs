@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 import { buildBundle, metadata, buildUserscript, compactSource } from '../../scripts/build_userscript.mjs';
 
 async function fixture(files, fn) {
@@ -102,13 +103,19 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
-    assert.ok(Buffer.byteLength(content)<=360000,'ordinary startup bundle exceeds 360 KB');
-    for (const module of ['ui/forms/qrcode.js', 'ui/forms/qrcodegen.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js']) {
+    assert.ok(Buffer.byteLength(content)<=330000,'startup bundle exceeds the 330 KB slimming target');
+    for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js']) {
       assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
     }
     assert.ok(content.includes('@grant        GM_getResourceText'));
-    assert.equal((content.match(/^\/\/ @resource\s+/gm)||[]).length,2);
-    assert.equal((content.match(/#sha256=[a-f0-9]{64}/g)||[]).length,2);
+    assert.equal((content.match(/^\/\/ @resource\s+/gm)||[]).length,3);
+    assert.equal((content.match(/#sha256=[a-f0-9]{64}/g)||[]).length,3);
+    const panel = await fs.readFile(path.join(root, a.resource.file), 'utf8');
+    assert.equal(Buffer.byteLength(panel), a.resource.bytes);
+    assert.equal(createHash('sha256').update(panel).digest('hex'), a.resource.sha256);
+    assert.ok(content.includes(`@resource     duallens-settings https://github.com/ray-oriental/duallens/releases/download/v${a.version}/duallens-settings.js#sha256=${a.resource.sha256}`));
+    assert.equal(typeof new Function('return (\n' + panel.trim().replace(/;$/, '') + '\n);')().mountSettingsForm, 'function');
+    for (const module of ['ui/forms/index.js', 'ui/forms/validation.js', 'ui/validation.js']) assert.ok(panel.includes('"' + module + '"'));
     const vendor=path.resolve('extension/vendor/tesseract');
     for(const file of ['worker.min.js','tesseract-core-simd-lstm.js']) assert.ok(!content.includes(await fs.readFile(path.join(vendor,file),'utf8')),'OCR source was inlined');
     for (const grant of ['GM_xmlhttpRequest', 'GM_getValue', 'GM_setValue', 'GM_deleteValue', 'GM_registerMenuCommand', 'GM_addValueChangeListener']) assert.ok(content.includes('@grant        ' + grant));

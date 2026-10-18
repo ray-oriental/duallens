@@ -138,6 +138,13 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 - 产物 `dist/duallens.user.js`、`dist/duallens.bookmarklet.js` 由 `scripts/build_release.py` 一起生成，并进入
   Release 资产与 SHA-256 校验文件。Edge 商店包由 `build_release.py --target edge-store` 生成：去掉 manifest 里的
   `key` 字段，其余与 zip 相同。
+- v0.5 用户脚本将共享设置表单（`ui/forms/**`、`ui/validation.js` 及面板专用依赖）拆为
+  `dist/duallens-settings.js`，随 Release 发布并进入 `SHA256SUMS`。启动脚本以 `@resource duallens-settings`
+  引用当前 manifest 版本的 `releases/download/v{version}/duallens-settings.js#sha256=…`；
+  首次打开设置页签才读取 `GM_getResourceText`，按启动脚本内嵌的字节数和 SHA-256 校验后在隔离沙箱执行。
+  打开面板不联网；缺失、校验或执行失败时显示中文错误与重新安装说明。HTTP 页同样在本地校验。
+  已加载表单在当前文档内复用，关闭时仍销毁实例；扩展 options 继续直接导入原生模块。
+  启动包目标 ≤330000 字节，构建硬预算保持 360000 字节。
 
 ## 3. 设置 v2：可同步设置与机密分离
 
@@ -181,7 +188,9 @@ match 可含 HTTP(S) 协议、端口和任意 `*` 路径通配，忽略网页查
 最长非通配路径、最少通配符的规则优先，完整排序、旧格式继承和校验约束见 [SPEC §3.1](SPEC.md#31-站点与路径规则v05-增量)。
 never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页、快捷键或用户脚本菜单手动翻译；
 这修正了 v0.4 实际代码连手动入口一起禁用的行为。selection/hover/input 关闭时对应 UI、事件与手动功能入口均禁用，
-触屏长按受 hover 控制。SPA 路由变化重新判定，独立监听在未翻译状态仍有效，隔离世界用 1 秒轮询兜底。
+触屏长按受 hover 控制。SPA 路由变化重新判定，独立监听在未翻译状态仍有效。
+规则与翻译共用同一窗口/隔离世界的路由检测器：支持 Navigation API 时监听 `navigatesuccess` / `currententrychange`，
+并保留 `popstate` / `hashchange`，不轮询；仅不支持时以 1 秒轮询兜底，页面隐藏时暂停，重新可见时立即检查。
 弹出页可选整个站点或当前第一段路径；手机面板可直接编辑同样的路径规则和四项开关。
 新增字段继续进入非机密同步/明文及加密备份，不改变 GM 私有存储与真机验收边界。
 

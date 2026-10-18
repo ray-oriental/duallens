@@ -169,6 +169,9 @@ def main():
             assert h.sw_eval("async () => (await chrome.storage.local.get('settings')).settings.provider.active") == "mock"
             assert not errors, "Settings page has JS errors"
             print("PASS popup_service_switch: selected mock and saved without horizontal overflow")
+            # Resume the options page after opening a separate popup tab. Chromium 130
+            # can stall screenshots of the background tab even after fonts are ready.
+            page.bring_to_front()
 
             # Real shared rule controls, including malformed-pattern feedback and synchronized readback.
             page.locator('#rule-match').fill('https://example.com/mail/*')

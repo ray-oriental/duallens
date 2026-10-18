@@ -201,56 +201,78 @@ export class MutationWatcher {
   }
 }
 
-// Isolated-world history hooks need the Navigation API and polling to cover page routes.
+// Rules and active translation subscribe to one detector in this window/world.
+const routeDetectors = new WeakMap();
+function routeDetector(win, doc) {
+  const callbacks = new Set(), restore = [];
+  let poll = 0;
+  const check = () => { for (const cb of [...callbacks]) cb(); };
+  const listen = (target, name, fn) => {
+    target.addEventListener(name, fn);
+    restore.push(() => target.removeEventListener(name, fn));
+  };
+  const nav = win.navigation;
+  if (nav && typeof nav.addEventListener === 'function' && typeof nav.removeEventListener === 'function') {
+    listen(nav, 'navigatesuccess', check);
+    listen(nav, 'currententrychange', check);
+  } else {
+    // History wrappers cannot see the page world's calls from an isolated world.
+    // Only this legacy path needs polling, and only while the page is visible.
+    const visibility = () => {
+      if (doc.visibilityState === 'hidden') { clearInterval(poll); poll = 0; }
+      else { check(); if (!poll) poll = setInterval(check, 1000); }
+    };
+    listen(doc, 'visibilitychange', visibility);
+    visibility();
+    restore.push(() => clearInterval(poll));
+    for (const name of ['pushState', 'replaceState']) {
+      const orig = win.history[name];
+      try {
+        const wrapped = function (...args) {
+          const result = orig.apply(this, args);
+          queueMicrotask(check);
+          return result;
+        };
+        win.history[name] = wrapped;
+        restore.push(() => { if (win.history[name] === wrapped) win.history[name] = orig; });
+      } catch { /* Navigation events and the visible-only fallback still work. */ }
+    }
+  }
+  listen(win, 'popstate', check);
+  listen(win, 'hashchange', check);
+  return { callbacks, stop() { for (const remove of restore) remove(); } };
+}
+
 export class RouteWatcher {
   constructor(onChange) {
     this.onChange = onChange;
     this.href = '';
-    this.poll = 0;
-    this.restore = [];
+    this.detector = null;
     this.check = () => {
-      if (location.href === this.href) return;
+      if (!this.detector || location.href === this.href) return;
       this.href = location.href;
       this.onChange();
     };
   }
 
   start() {
-    if (this.poll) return;
+    if (this.detector) return;
     this.href = location.href;
-    const nav = window.navigation;
-    if (nav && nav.addEventListener) {
-      nav.addEventListener('currententrychange', this.check);
-      this.restore.push(() => nav.removeEventListener('currententrychange', this.check));
+    this.win = window;
+    if (!routeDetectors.has(window)) {
+      routeDetectors.set(window, routeDetector(window, document));
     }
-    window.addEventListener('popstate', this.check);
-    window.addEventListener('hashchange', this.check);
-    this.restore.push(() => {
-      window.removeEventListener('popstate', this.check);
-      window.removeEventListener('hashchange', this.check);
-    });
-    for (const name of ['pushState', 'replaceState']) {
-      const orig = history[name];
-      try {
-        const check = this.check;
-        history[name] = function (...args) {
-          const r = orig.apply(this, args);
-          queueMicrotask(check);
-          return r;
-        };
-        this.restore.push(() => {
-          history[name] = orig;
-        });
-      } catch {
-        /* history is not writable here: the other signals still work */
-      }
-    }
-    this.poll = setInterval(this.check, 1000);
+    this.detector = routeDetectors.get(window);
+    this.detector.callbacks.add(this.check);
   }
 
   stop() {
-    clearInterval(this.poll);
-    this.poll = 0;
-    for (const r of this.restore.splice(0)) r();
+    if (!this.detector) return;
+    this.detector.callbacks.delete(this.check);
+    if (!this.detector.callbacks.size) {
+      this.detector.stop();
+      routeDetectors.delete(this.win);
+    }
+    this.detector = null;
   }
 }

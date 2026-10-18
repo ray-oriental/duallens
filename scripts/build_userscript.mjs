@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 import { OCR_RESOURCES } from '../extension/content/comics/runtime-resources.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -220,7 +221,7 @@ function parseModule(source, file) {
   return { source, imports, exports, edits };
 }
 
-export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
+export async function buildBundle(entry, { root = path.dirname(entry), entryExports = [] } = {}) {
   root = await fs.realpath(root);
   const graph = new Map(), active = new Set();
   async function visit(file) {
@@ -247,6 +248,10 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
   // Emit only getters consumed by this static graph; namespace imports keep every getter.
   // Module bodies still run unchanged, including side effects and live bindings.
   const used=new Map([...graph.keys()].map(file=>[file,new Set()]));
+  for (const name of entryExports) {
+    if (!graph.get(entryFile).exports.some(e => e.local === name)) fail(entry, `missing entry export ${name}`);
+    used.get(entryFile).add(name);
+  }
   for(const mod of graph.values())for(const item of mod.imports) {
     const names=item.namespace ? graph.get(item.file).exports.map(e=>e.local) : item.bindings.map(b=>b.imported);
     for(const name of names)used.get(item.file).add(name);
@@ -270,14 +275,14 @@ export async function buildBundle(entry, { root = path.dirname(entry) } = {}) {
     code += '\n__x(__e,{' + mod.exports.filter(e=>used.get(file).has(e.local)).map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
     factories.push(`${JSON.stringify(id(file))}:function(__e,__r){\n${code}\n}`);
   }
-  const bundle = `// Modules: ${JSON.stringify([...graph.keys()].map(f=>path.relative(root,f).replaceAll('\\','/')))}\n(function() {\n'use strict';\nfunction __x(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __r(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __r);\n return out;\n}\n__r(${JSON.stringify(id(entryFile))});\n})();\n`;
+  const bundle = `// Modules: ${JSON.stringify([...graph.keys()].map(f=>path.relative(root,f).replaceAll('\\','/')))}\n(function() {\n'use strict';\nfunction __x(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __r(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __r);\n return out;\n}\n${entryExports.length ? 'return ' : ''}__r(${JSON.stringify(id(entryFile))});\n})();\n`;
   // Validate before touching the output. Unsupported/unrewritten ESM and top-level await fail.
   new vm.Script(bundle, { filename: 'duallens.user.js' });
   new Function(bundle);
   return bundle;
 }
 
-export function metadata(version) {
+export function metadata(version, resources = []) {
   if (!/^\d+(?:\.\d+){0,3}$/.test(version)) throw new Error('Invalid manifest version');
   return `// ==UserScript==
 // @name         DualLens 双语对照翻译
@@ -297,6 +302,7 @@ export function metadata(version) {
 // @grant        GM_addValueChangeListener
 // @grant        GM_getResourceText
 ${OCR_RESOURCES.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).join('\n')}
+${resources.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).join('\n')}
 // @connect      *
 // @downloadURL  https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js
 // @updateURL    https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js
@@ -306,12 +312,21 @@ ${OCR_RESOURCES.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`)
 
 export async function buildUserscript({ project = PROJECT, output = path.join(project, 'dist', 'duallens.user.js') } = {}) {
   const manifest = JSON.parse((await fs.readFile(path.join(project, 'extension', 'manifest.json'), 'utf8')).replace(/^\uFEFF/, ''));
+  const settings = await buildBundle(path.join(project, 'extension', 'ui', 'forms', 'index.js'), {
+    root: path.join(project, 'extension'), entryExports: ['mountSettingsForm'],
+  });
+  const resource = { name: 'duallens-settings', file: 'duallens-settings.js', bytes: Buffer.byteLength(settings),
+    sha256: createHash('sha256').update(settings).digest('hex'),
+    url: `https://github.com/ray-oriental/duallens/releases/download/v${manifest.version}/duallens-settings.js` };
   const bundle = await buildBundle(path.join(project, 'extension', 'userscript', 'entry.js'), { root: path.join(project, 'extension') });
-  const content = metadata(manifest.version) + bundle;
+  const marker = "'__DUALLENS_SETTINGS_RESOURCE__'";
+  if (bundle.split(marker).length !== 2) throw new Error('Settings resource descriptor placeholder missing or duplicated');
+  const content = metadata(manifest.version, [resource]) + bundle.replace(marker, JSON.stringify(resource));
   if(Buffer.byteLength(content)>360000) throw new Error('Userscript exceeds the 360 KB startup budget');
   await fs.mkdir(path.dirname(output), { recursive: true });
+  await fs.writeFile(path.join(path.dirname(output), resource.file), settings, 'utf8');
   await fs.writeFile(output, content, 'utf8');
-  return { output, bytes: Buffer.byteLength(content), version: manifest.version };
+  return { output, bytes: Buffer.byteLength(content), version: manifest.version, resource };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -319,6 +334,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const args = process.argv.slice(2);
     if (args.length && !(args.length === 2 && args[0] === '--output')) throw new Error('Usage: node scripts/build_userscript.mjs [--output path]');
     const result = await buildUserscript(args.length ? { output: path.resolve(args[1]) } : {});
-    console.log(`PASS userscript v${result.version}: ${result.bytes} bytes; syntax valid`);
+    console.log(`PASS userscript v${result.version}: ${result.bytes} bytes; settings resource: ${result.resource.bytes} bytes; syntax valid`);
   } catch (error) { console.error(`FAIL userscript: ${error.message}`); process.exitCode = 1; }
 }
