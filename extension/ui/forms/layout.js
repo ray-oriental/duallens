@@ -239,8 +239,8 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(i.grid, 'inputMode', COPY.s63, 'select', pairs([['replace', COPY.s64], ['bilingual', COPY.s65]]));
   field(i.grid, 'inputOrder', COPY.s66, 'select', pairs([['source-first', COPY.s67], ['translation-first', COPY.s68]]));
   for (const [name, title] of [['hover', COPY.s69], ['input', COPY.s70]]) {
-    field(i.grid, name + 'Profile', title + COPY.s71, 'select');
-    field(i.grid, name + 'Model', title + COPY.s72, 'text', [], { maxlength: '256' });
+    field(i.grid, name + 'Profile', l10n('polishFeatureService',[name==='hover'?l10n('polishHoverShort'):l10n('polishInputShort')]), 'select');
+    field(i.grid, name + 'Model', l10n('polishFeatureModel',[name==='hover'?l10n('polishHoverShort'):l10n('polishInputShort')]), 'text', [], { maxlength: '256' });
   }
   i.box.append(el('p', COPY.s73, { class: 'hint' }));
   field(i.grid, 'floatSide', COPY.s74, 'select', pairs([['right', COPY.s75], ['left', COPY.s76]]));

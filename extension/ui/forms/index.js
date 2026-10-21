@@ -82,7 +82,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   // Extension settings have their own origin and retain the ordinary password field.
   const dialog = platform.kind !== 'extension';
   const ui = drawLayout(root, { secretDialog:dialog });
-  mountSiteRules(ui);
+  const siteRules=mountSiteRules(ui);
   const $ = id => ui.querySelector('#' + id);
   $('save').disabled=true;
   let s, pid = '', dirty = false, saving = false, closed = false, drawToken = 0, loadingKey = false;
@@ -167,7 +167,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     if (!dialog) { fill('apiKey', ''); $('apiKey').disabled = true; }
     else { $('set-key').disabled = $('clear-key').disabled = true; $('key-status').textContent = COPY.s1; }
     $('key-row').hidden = p.kind === 'mock'; $('baseUrl').disabled = p.kind === 'mock'; $('jsonMode').disabled = p.kind === 'mock';
-    $('credential-label').textContent = COPY.s5;
+    $('credential-label').textContent = l10n('polishKey');
     const preset = getPreset(p.preset);
     $('provider-description').textContent = preset?.description || COPY.s6;
     $('key-link').hidden = !preset?.keyUrl;
@@ -201,7 +201,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     for (const [id, path] of Object.entries(bind)) fill(id, path.split('.').reduce((v, k) => v[k], s));
     fill('glossary', s.glossary.map(t => `${t.src} → ${t.dst}`).join('\n'));
     fill('always', s.siteRules.always.join('\n')); fill('never', s.siteRules.never.join('\n'));
-    fill('customRules', JSON.stringify(s.siteRules.custom, null, 2));
+    fill('customRules', JSON.stringify(s.siteRules.custom, null, 2));siteRules.draw();
     fill('translationMode', s.translation.mode); fill('mtEngine', s.translation.mt.engine);
     fill('mtFallback', s.translation.mt.fallback); fill('mtRegion', s.translation.mt.region);
     await drawMtKey();
@@ -250,12 +250,12 @@ export async function mountSettingsForm(root, { store, platform }) {
       for (const id of edited) await store.setSecret(id, drafts.get(id));
       if(chosen?.baseUrl && platform.localArea) await acknowledge(platform.localArea,llmDestination(chosen.baseUrl));
       edited.clear();
-      dirty = false; showSync(); await showWizard(); interactions?.draw(); notice(COPY.s12);
+      dirty = false;siteRules.close();siteRules.draw(); showSync(); await showWizard(); interactions?.draw(); notice(COPY.s12);
     } finally { saving = false; }
     return s;
   }
   on('settings-form', 'input', event => {
-    if (event.target.name==='style-tile' || interactions?.isImmediate(event.target) || ['backupText','backupPassword'].includes(event.target.id)) return;
+    if (['style-tile','translation-method'].includes(event.target.name) || interactions?.isImmediate(event.target) || ['backupText','backupPassword'].includes(event.target.id)) return;
     dirty = true;
     if (event.target === $('backupText')) $('backup-qr').hidden = true;
     if (event.target === $('apiKey') && pid) edited.add(pid);
@@ -339,7 +339,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     choices($('profile'), [{ id: '', name: COPY.s8 }, ...s.provider.profiles], id);
     for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: COPY.s7 }, ...s.provider.profiles], read(name + 'Profile'));
     if(['ollama','lmstudio'].includes(preset)){s.translation.mode='llm';fill('translationMode','llm');}
-    await drawProfile(); setSelectedChain(); notice(COPY.s26);
+    await drawProfile(); setSelectedChain(); notice(['ollama','lmstudio'].includes(preset)?l10n('polishLocalReady'):COPY.s26);
   });
   action('load-models', async () => {
     captureProfile(); const p = profile(); notice(COPY.s27);
@@ -456,7 +456,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   let interactions;
   s = await store.load();
   interactions = installSettingsInteractions(ui,{store,platform,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,captureProfile,onSaved:showSync,notice,bind,simple,nums});
-  await draw(); notice(COPY.s55);$('save').disabled=false;
+  await draw(); notice(['common','ai','sites','glossary'].includes(platform.settingsGroup||globalThis.location?.hash.slice(1)||'common')?COPY.s55:'');$('save').disabled=false;
   const off = store.onChange?.(async () => {
     if (saving || closed) return;
     if (dirty) { showSync(); return; }

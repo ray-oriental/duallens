@@ -38,7 +38,7 @@ test('acknowledging only primary cannot authorize a fallback, and official engin
   await assert.rejects(f.guard(f.settings,{}),e=>e.destination.id==='mt:google');assert.equal(f.requests(),0);
   for(const engine of ['deepl','microsoft-api'])assert.deepEqual(requestDestinations(fixture('mt',engine).settings).map(d=>d.id),['mt:'+engine]);
   assert.match(destinationMessage(requestDestinations(f.settings)[1]),/微软失败时才用谷歌/);
-  assert.match(destinationMessage(requestDestinations(fixture().settings)[0]),/文字和标题/);
+  assert.match(destinationMessage(requestDestinations(fixture().settings)[0]),/文字和页面标题/);
 });
 test('mock and loopback are exempt; remote override and unreadable state fail closed',async()=>{
   const f=fixture();

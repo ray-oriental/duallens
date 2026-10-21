@@ -75,10 +75,10 @@
     "message": "模型返回了非 JSON 内容（可能是思考型模型）"
   },
   "mk": {
-    "message": "Microsoft（免费，非官方接口）"
+    "message": "微软（免费）"
   },
   "ml": {
-    "message": "Google（免费，非官方接口）"
+    "message": "谷歌（免费）"
   },
   "mm": {
     "message": "Microsoft Translator（官方，需 key）"
@@ -672,7 +672,7 @@
     "message": "关闭 (Esc)"
   },
   "m5k": {
-    "message": "双语"
+    "message": "显示：双语对照"
   },
   "m5l": {
     "message": "精修"
@@ -1073,16 +1073,16 @@
     "message": "引用块（左细线）"
   },
   "m90": {
-    "message": "机翻先出，大模型精修（推荐）"
+    "message": "自动（推荐）"
   },
   "m91": {
-    "message": "只用机器翻译（最快）"
+    "message": "只用机器翻译"
   },
   "m92": {
-    "message": "只用大模型"
+    "message": "只用 AI 服务"
   },
   "m93": {
-    "message": "大模型优先，慢或失败时机翻兜底"
+    "message": "AI 服务优先，慢或失败时用机器翻译"
   },
   "m94": {
     "message": "演示（不调用模型）"
@@ -1420,7 +1420,7 @@
     "message": "（免费）"
   },
   "mbm": {
-    "message": "$p1$机器翻译$p2$",
+    "message": "$p1$$p2$",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1454,10 +1454,10 @@
     "message": "未设置"
   },
   "mbt": {
-    "message": "设置已同步；API 密钥 仅存此设备。"
+    "message": "设置已同步；API 密钥仅存此设备。"
   },
   "mbu": {
-    "message": "此设备未同步；配置与 API 密钥 保存在本机。"
+    "message": "此设备未同步；配置与 API 密钥保存在本机。"
   },
   "mbv": {
     "message": "API 密钥（仅存本机）"
@@ -1466,7 +1466,7 @@
     "message": "使用自己的模型服务；不会自动联网。"
   },
   "mbx": {
-    "message": "选择一个服务"
+    "message": "不使用 AI 服务"
   },
   "mby": {
     "message": "站点规则 JSON 格式无效"
@@ -1487,22 +1487,22 @@
     "message": "输入此服务的 API 密钥（留空清除；取消保留原值）"
   },
   "mc4": {
-    "message": "API 密钥 含有非法字符"
+    "message": "API 密钥含有非法字符"
   },
   "mc5": {
     "message": "密钥修改尚未保存；点击保存设置。"
   },
   "mc6": {
-    "message": "输入此机器翻译服务的 密钥（留空清除；取消保留原值）"
+    "message": "输入此机器翻译服务的密钥（留空清除；取消保留原值）"
   },
   "mc7": {
-    "message": "密钥 含有非法字符"
+    "message": "密钥含有非法字符"
   },
   "mc8": {
-    "message": "机器翻译 密钥 修改尚未保存；点击保存设置。"
+    "message": "机器翻译密钥修改尚未保存；点击保存设置。"
   },
   "mc9": {
-    "message": "机器翻译 密钥 清除尚未保存；点击保存设置。"
+    "message": "机器翻译密钥清除尚未保存；点击保存设置。"
   },
   "mca": {
     "message": "密钥清除尚未保存；点击保存设置。"
@@ -1511,7 +1511,7 @@
     "message": "先选择一个服务预设"
   },
   "mcc": {
-    "message": "填写 密钥，获取模型并测试；最后保存。"
+    "message": "填写密钥，获取模型并测试；最后保存。"
   },
   "mcd": {
     "message": "正在获取模型列表…"
@@ -1544,13 +1544,13 @@
     "message": "正在测试机器翻译…"
   },
   "mcn": {
-    "message": "配置导出口令（留空导出不含 密钥 的明文；取消停止导出）"
+    "message": "配置导出口令（留空导出不含密钥的明文；取消停止导出）"
   },
   "mco": {
     "message": "已取消导出"
   },
   "mcp": {
-    "message": "已导出；明文配置不含 密钥，加密配置包含 密钥。"
+    "message": "已导出；明文配置不含密钥，加密配置包含密钥。"
   },
   "mcq": {
     "message": "设置手机配置导出口令（至少 8 个字符；取消停止）"
@@ -1708,13 +1708,13 @@
     "message": "首次使用向导"
   },
   "mdw": {
-    "message": "现在就能翻译：默认用机器翻译（Microsoft 免费接口，无需 密钥），译文秒出。"
+    "message": "现在就能翻译：默认用机器翻译（Microsoft 免费接口，无需密钥），译文秒出。"
   },
   "mdx": {
     "message": "想要更好的译文？再添加一个大模型服务，它会在后台把机翻结果无感替换成精修译文。推荐 OpenRouter 免费模型，也可选择你自己的服务。"
   },
   "mdy": {
-    "message": "1 选预设 → 2 填 密钥 → 3 获取模型 → 4 测试连接 → 5 保存"
+    "message": "1 选预设 → 2 填密钥 → 3 获取模型 → 4 测试连接 → 5 保存"
   },
   "mdz": {
     "message": "免费模型有每分钟和每日限额；自动备选不能绕过账号限额。未点击获取或测试前不会联网。"
@@ -1759,28 +1759,28 @@
     "message": "Microsoft Translator 区域（官方接口可选，例如 eastasia）"
   },
   "med": {
-    "message": "官方机器翻译 密钥（Microsoft Translator 或 DeepL；仅存本机）"
+    "message": "官方机器翻译密钥（Microsoft Translator 或 DeepL；仅存本机）"
   },
   "mee": {
-    "message": "设置 密钥"
+    "message": "设置密钥"
   },
   "mef": {
-    "message": "清除 密钥"
+    "message": "清除密钥"
   },
   "meg": {
     "message": "测试机器翻译"
   },
   "meh": {
-    "message": "机翻先显示，大模型随后原位精修；失败保留机翻。划词、悬停、输入框优先机翻，划词可「精修」。"
+    "message": "机器翻译先显示，AI 服务随后原位精修；失败时保留机器翻译。"
   },
   "mei": {
-    "message": "免费 Microsoft/Google 为非官方接口，无可用性保证，会收到待译文字。可改用「只用大模型」或带 密钥 的官方引擎。"
+    "message": "免费微软和谷歌接口为非官方接口，可能限流或变动。"
   },
   "mej": {
     "message": "模型服务"
   },
   "mek": {
-    "message": "编辑 / 切换服务"
+    "message": "当前使用"
   },
   "mel": {
     "message": "新增服务预设"
@@ -1792,22 +1792,22 @@
     "message": "添加所选服务"
   },
   "meo": {
-    "message": "服务商说明 / 获取 密钥"
+    "message": "获取密钥 ↗"
   },
   "mep": {
     "message": "服务名称"
   },
   "meq": {
-    "message": "兼容 API 基础地址"
+    "message": "基础地址"
   },
   "mer": {
     "message": "在浏览器原生对话框中输入；修改后点击保存。"
   },
   "mes": {
-    "message": "模型标识"
+    "message": "模型"
   },
   "met": {
-    "message": "获取模型列表"
+    "message": "获取模型"
   },
   "meu": {
     "message": "测试连接"
@@ -1954,7 +1954,7 @@
     "message": "自定义风格要求"
   },
   "mg6": {
-    "message": "术语表（每行 原词 → 译词）"
+    "message": "术语（每行：原词 → 译词）"
   },
   "mg7": {
     "message": "站点规则"
@@ -1981,7 +1981,7 @@
     "message": "默认"
   },
   "mgf": {
-    "message": "自动"
+    "message": "总是"
   },
   "mgg": {
     "message": "从不（允许手动）"
@@ -2017,25 +2017,25 @@
     "message": "清空译文缓存"
   },
   "mgr": {
-    "message": "导出或导入加密配置时，浏览器原生对话框会询问口令；加密导出口令至少 8 个字符；留空则生成不含 密钥 的明文。"
+    "message": "导出或导入加密配置时，浏览器原生对话框会询问口令；加密导出口令至少 8 个字符；留空则生成不含密钥的明文。"
   },
   "mgs": {
-    "message": "备份口令（留空则导出不含 密钥 的明文）"
+    "message": "口令（留空则导出不含密钥的配置）"
   },
   "mgt": {
-    "message": "配置文本（加密文件可在设备之间搬运）"
+    "message": "配置文本"
   },
   "mgu": {
-    "message": "导出配置"
+    "message": "导出"
   },
   "mgv": {
-    "message": "导入配置文本"
+    "message": "导入"
   },
   "mgw": {
     "message": "导出到手机"
   },
   "mgx": {
-    "message": "复制配置文本"
+    "message": "复制文本"
   },
   "mgy": {
     "message": "从电脑导入"
@@ -2044,13 +2044,13 @@
     "message": "加密配置二维码"
   },
   "mh0": {
-    "message": "选择配置文件"
+    "message": "选择文件"
   },
   "mh1": {
-    "message": "加密备份含所填 密钥，请妥善保管。口令不会保存。明文导入保留本机 密钥。译文缓存不会导出。"
+    "message": "加密备份含所填密钥，请妥善保管。口令不会保存。明文导入保留本机密钥。译文缓存不会导出。"
   },
   "mh2": {
-    "message": "保存设置"
+    "message": "保存"
   },
   "mh3": {
     "message": "常用"
@@ -2170,7 +2170,7 @@
     "message": "翻译此页图片"
   },
   "mi6": {
-    "message": "尚未翻译此页"
+    "message": "尚未翻译"
   },
   "mi7": {
     "message": "此页面无法翻译"
@@ -2248,7 +2248,7 @@
     "message": "不会自动翻译任何网站。"
   },
   "miw": {
-    "message": "悬浮球、划词翻译等功能默认关闭，可在增强功能里打开。"
+    "message": "悬浮球、划词翻译等默认关闭，可在「增强功能」里打开。"
   },
   "mix": {
     "message": "手机没有工具栏按钮。从 Tampermonkey 菜单打开 DualLens，或在增强功能里打开悬浮球。"
@@ -2604,5 +2604,220 @@
   },
   "commandToggleHover": {
     "message": "开关悬停翻译"
+  },
+  "polishAutomatic": {
+    "message": "自动（推荐）"
+  },
+  "polishAutomaticHint": {
+    "message": "机器翻译先显示；配置了 AI 服务后，在后台精修并原位替换。"
+  },
+  "polishMT": {
+    "message": "只用机器翻译"
+  },
+  "polishMTHint": {
+    "message": "最快，不使用 AI 服务。"
+  },
+  "polishAI": {
+    "message": "只用 AI 服务"
+  },
+  "polishAIHint": {
+    "message": "不使用免费机器翻译。需要先添加 AI 服务。"
+  },
+  "polishUnofficial": {
+    "message": "免费接口为非官方接口，可能限流或变动。"
+  },
+  "polishChoose": {
+    "message": "选择上面的服务开始配置。"
+  },
+  "polishAIDestination": {
+    "message": "使用后，网页文字和页面标题会发送给 $p1$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishPreview": {
+    "message": "示例"
+  },
+  "polishEmptyRules": {
+    "message": "还没有规则。"
+  },
+  "polishAddRule": {
+    "message": "添加规则"
+  },
+  "polishGlossaryHint": {
+    "message": "术语表会提供给 AI 服务；机器翻译不使用术语表。"
+  },
+  "polishWho": {
+    "message": "发给谁"
+  },
+  "polishWhat": {
+    "message": "发什么"
+  },
+  "polishWhen": {
+    "message": "什么时候"
+  },
+  "polishText": {
+    "message": "网页文字"
+  },
+  "polishTextTitle": {
+    "message": "网页文字、页面标题、命中的术语和自定义提示"
+  },
+  "polishWhenTranslate": {
+    "message": "主动翻译时"
+  },
+  "polishWhenFallback": {
+    "message": "微软失败时"
+  },
+  "polishWhenRefine": {
+    "message": "AI 翻译或精修时"
+  },
+  "polishTransfer": {
+    "message": "迁移到手机"
+  },
+  "polishTransferSteps": {
+    "message": "1. 设置口令并生成加密配置。2. 在手机 DualLens 设置的数据与隐私中粘贴配置，或扫描二维码。3. 输入同一口令导入。"
+  },
+  "polishPrivacy": {
+    "message": "隐私政策"
+  },
+  "polishFeedback": {
+    "message": "反馈问题"
+  },
+  "polishShortcuts": {
+    "message": "快捷键"
+  },
+  "polishShortcutHint": {
+    "message": "Alt+A 翻译此页；Alt+W 切换显示方式；Alt+I 翻译输入框；Alt+S 文本翻译。可在浏览器的扩展快捷键页修改。"
+  },
+  "polishLicenses": {
+    "message": "第三方组件与许可"
+  },
+  "polishTranslating": {
+    "message": "正在翻译…"
+  },
+  "polishAlwaysHint": {
+    "message": "打开此站的页面时自动翻译"
+  },
+  "polishNeverHint": {
+    "message": "不自动翻译，仍可手动翻译"
+  },
+  "polishPath": {
+    "message": "仅 $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishInputShort": {
+    "message": "输入框翻译"
+  },
+  "polishSubtitlesShort": {
+    "message": "视频字幕"
+  },
+  "polishSelectionShort": {
+    "message": "划词翻译"
+  },
+  "polishHoverShort": {
+    "message": "悬停翻译"
+  },
+  "polishService": {
+    "message": "更换服务"
+  },
+  "polishDetails": {
+    "message": "详情"
+  },
+  "polishCancelSend": {
+    "message": "取消，不发送"
+  },
+  "polishConsentAI": {
+    "message": "将使用 $p1$（$p2$）翻译。本页文字和页面标题会发送给它。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "polishConsentMT": {
+    "message": "将使用 $p1$（$p2$）翻译。本页文字会发送给它。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "polishDisplayOnly": {
+    "message": "显示：仅译文"
+  },
+  "polishCurrent": {
+    "message": "当前使用"
+  },
+  "polishStyle0": {
+    "message": "默认"
+  },
+  "polishStyle1": {
+    "message": "无装饰"
+  },
+  "polishStyle2": {
+    "message": "虚线"
+  },
+  "polishStyle3": {
+    "message": "背景"
+  },
+  "polishStyle4": {
+    "message": "学习"
+  },
+  "polishStyle5": {
+    "message": "引用块"
+  },
+  "polishTextTab": {
+    "message": "文本"
+  },
+  "polishSubtitleFiles": {
+    "message": "字幕文件"
+  },
+  "polishComponents": {
+    "message": "PDF.js、Tesseract.js 与 Tesseract.js Core：Apache-2.0；附带的字体和编解码组件保留各自许可。"
+  },
+  "polishTranslateInto": {
+    "message": "翻译成"
+  },
+  "polishKey": {
+    "message": "密钥"
+  },
+  "polishWhenPrimaryFails": {
+    "message": "$p1$失败时",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishLocalReady": {
+    "message": "选择模型，测试连接后保存。"
+  },
+  "polishFeatureService": {
+    "message": "$p1$服务",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishFeatureModel": {
+    "message": "$p1$模型（留空使用服务默认模型）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
   }
 }

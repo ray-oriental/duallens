@@ -88,6 +88,7 @@ def userscript_case(page, base):
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#rule-match').length===1")
     page.evaluate("__platformFixture.elements('nav a[href=\"#sites\"]')[0].click()")
+    click_shadow(page, '#site-rule-new')
     page.evaluate("""() => {
       for (const [field,value] of Object.entries({match:'127.0.0.1/mail/*',page:'never',selection:'off',hover:'off',input:'off'})) {
         const input=__platformFixture.elements('#rule-'+field)[0];
@@ -95,7 +96,6 @@ def userscript_case(page, base):
       }
     }""")
     click_shadow(page, '#site-rule-add')
-    click_shadow(page, '#save-sites')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent==='设置已保存')")
     saved=page.evaluate("__platformFixture.data('duallens:local')['settings.sites'].siteRules")
     assert saved == rules(), 'mobile editor changed path or feature fields'

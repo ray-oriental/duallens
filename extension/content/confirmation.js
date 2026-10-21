@@ -16,17 +16,17 @@ export function confirmationCard({message,platform,label=UI.continue,signal,left
   if(signal?.aborted)return Promise.resolve(false);
   return new Promise(resolve=>{
     const ui=root?null:createOverlay(CSS),box=document.createElement('section');box.className=root?'dl-notice dl-confirmation':'confirm'+(left?' left':'');
-    box.setAttribute('role','dialog');box.setAttribute('aria-label',UI.title);
+    box.setAttribute('role','alertdialog');box.setAttribute('aria-label',UI.title);
     const p=document.createElement('p');p.textContent=message;
     const actions=document.createElement('div');actions.className='actions';
     const finish=ok=>{ui?.detach();box.remove();document.removeEventListener('keydown',key,true);signal?.removeEventListener('abort',abort);resolve(ok);};
     const key=e=>{if(e.key==='Escape'){e.stopImmediatePropagation();finish(false);}};
     const abort=()=>finish(false);
     const button=(text,fn,cls='')=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.className=cls;b.onclick=fn;return b;};
-    const close=button('×',()=>finish(false),'close');close.setAttribute('aria-label',UI.close);
+    const close=button('×',()=>finish(false),'close');close.setAttribute('aria-label',l10n('polishCancelSend'));
     actions.append(button(UI.change,()=>{finish(false);platform.openSettings(group);}),button(label,()=>finish(true),'primary'));
     box.append(p,close,actions);if(root)root.append(box);else{ui.el.append(box);ui.attach();}
-    document.addEventListener('keydown',key,true);signal?.addEventListener('abort',abort,{once:true});
+    actions.lastChild.focus();document.addEventListener('keydown',key,true);signal?.addEventListener('abort',abort,{once:true});
   });
 }
 

@@ -110,7 +110,7 @@ test('startup locale dictionary excludes onboarding/settings copy but lazy resou
   const lazy=await buildBundle(path.join(root,'extension/userscript/ui-resource.js'),{root:path.join(root,'extension'),entryExports:['mountSettingsForm']});
   const dictionary=bundle=>unpackLocale(bundle.match(/messages\s*=\s*unpackLocale\("([^"]+)"\)/)?.[1]);
   const initial=dictionary(startup),settings=dictionary(lazy);
-  assert.ok(initial.m41&&initial.m82,'content confirmation copy is present');
+  assert.ok(initial.m41&&initial.polishConsentAI,'content confirmation copy is present');
   assert.equal(initial.mik,undefined,'onboarding must be lazy');
   assert.equal(initial.mhy,undefined,'device transfer must be lazy');
   for (const key of ['m8u','m90','m8j','mk']) {

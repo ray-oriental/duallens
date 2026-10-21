@@ -75,10 +75,10 @@
     "message": "The model returned non-JSON content, possibly reasoning text"
   },
   "mk": {
-    "message": "Microsoft (free, unofficial)"
+    "message": "Microsoft (free)"
   },
   "ml": {
-    "message": "Google (free, unofficial)"
+    "message": "Google (free)"
   },
   "mm": {
     "message": "Microsoft Translator (official, requires a key)"
@@ -654,7 +654,7 @@
     "message": "Retry"
   },
   "m5e": {
-    "message": "Detect automatically"
+    "message": "Auto-detect"
   },
   "m5f": {
     "message": "Translation result"
@@ -672,7 +672,7 @@
     "message": "Close (Esc)"
   },
   "m5k": {
-    "message": "Bilingual"
+    "message": "Display: Bilingual"
   },
   "m5l": {
     "message": "Refine"
@@ -1073,7 +1073,7 @@
     "message": "Quote (left border)"
   },
   "m90": {
-    "message": "Machine translation + AI refinement"
+    "message": "Automatic (recommended)"
   },
   "m91": {
     "message": "Machine translation only"
@@ -1082,7 +1082,7 @@
     "message": "AI service only"
   },
   "m93": {
-    "message": "AI first, machine translation fallback"
+    "message": "AI first, machine translation on delay or failure"
   },
   "m94": {
     "message": "Demo (no model calls)"
@@ -1295,7 +1295,7 @@
     "message": "Floating button"
   },
   "mav": {
-    "message": "Shortcut at the page edge"
+    "message": "Edge shortcut button"
   },
   "maw": {
     "message": "Selection translation"
@@ -1310,19 +1310,19 @@
     "message": "Hold Shift to translate a paragraph"
   },
   "mb0": {
-    "message": "Input translation"
+    "message": "Input box translation"
   },
   "mb1": {
-    "message": "Press Space three times to translate"
+    "message": "Press Space 3 times"
   },
   "mb2": {
-    "message": "Add bilingual video subtitles"
+    "message": "Bilingual video subtitles"
   },
   "mb3": {
     "message": "Image text"
   },
   "mb4": {
-    "message": "Recognize image text, then translate"
+    "message": "Read and translate images"
   },
   "mb5": {
     "message": "Site access was not granted. The feature stays off."
@@ -1370,7 +1370,7 @@
     }
   },
   "mbf": {
-    "message": ", with $p1$ on failure",
+    "message": ", or $p1$ if it fails",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1381,7 +1381,7 @@
     "message": "Failures are reported directly, without forwarding to free endpoints."
   },
   "mbh": {
-    "message": "Webpage text will be sent to $p1$$p2$. $p3$",
+    "message": "Page text goes to $p1$$p2$.$p3$",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1420,7 +1420,7 @@
     "message": " (free)"
   },
   "mbm": {
-    "message": "$p1$ machine translation$p2$",
+    "message": "$p1$$p2$",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1431,13 +1431,13 @@
     }
   },
   "mbn": {
-    "message": "Long-press a paragraph to translate"
+    "message": "Long-press a paragraph"
   },
   "mbo": {
     "message": "Pause over a paragraph to translate"
   },
   "mbp": {
-    "message": "Hold $p1$ to translate a paragraph",
+    "message": "Hold $p1$ on a paragraph",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1466,7 +1466,7 @@
     "message": "Use your own model service. No automatic connections."
   },
   "mbx": {
-    "message": "Choose a service"
+    "message": "No AI service"
   },
   "mby": {
     "message": "Invalid site rules JSON"
@@ -1598,7 +1598,7 @@
     "message": "Translation cache cleared"
   },
   "md5": {
-    "message": "Changes save automatically. Save AI services, site rules and glossary manually."
+    "message": "Most changes save automatically. AI services, site rules and the glossary use Save."
   },
   "md6": {
     "message": "Could not read updated settings"
@@ -1771,16 +1771,16 @@
     "message": "Test machine translation"
   },
   "meh": {
-    "message": "Machine translation appears first, then AI refines it in place. Failures keep the machine translation. Selection, hover and input use machine translation first; selection offers Refine."
+    "message": "Machine translation appears first. AI refinement replaces it when ready; failures keep the first translation."
   },
   "mei": {
-    "message": "Free Microsoft/Google endpoints are unofficial, have no availability guarantee, and receive text to translate. You can use AI only or official engines with your own key."
+    "message": "Free Microsoft and Google endpoints are unofficial and may change or rate-limit requests."
   },
   "mej": {
     "message": "Model services"
   },
   "mek": {
-    "message": "Edit / Switch service"
+    "message": "Currently using"
   },
   "mel": {
     "message": "New service preset"
@@ -1792,13 +1792,13 @@
     "message": "Add selected service"
   },
   "meo": {
-    "message": "Provider information / Get a key"
+    "message": "Get a key ↗"
   },
   "mep": {
     "message": "Service name"
   },
   "meq": {
-    "message": "API base address"
+    "message": "Base URL"
   },
   "mer": {
     "message": "Enter in the browser's native dialog, then save."
@@ -1807,7 +1807,7 @@
     "message": "Model"
   },
   "met": {
-    "message": "Get model list"
+    "message": "Get models"
   },
   "meu": {
     "message": "Test connection"
@@ -1930,7 +1930,7 @@
     "message": "Prompts and terms"
   },
   "mfy": {
-    "message": "Translation tone"
+    "message": "Writing style"
   },
   "mfz": {
     "message": "General"
@@ -1954,7 +1954,7 @@
     "message": "Custom style instructions"
   },
   "mg6": {
-    "message": "Glossary (one source → translation per line)"
+    "message": "Terms (one per line: source → translation)"
   },
   "mg7": {
     "message": "Site rules"
@@ -1981,7 +1981,7 @@
     "message": "Default"
   },
   "mgf": {
-    "message": "Automatic"
+    "message": "Always"
   },
   "mgg": {
     "message": "Never (manual allowed)"
@@ -2020,22 +2020,22 @@
     "message": "The browser's native dialog asks for an encryption passphrase. Exports require at least 8 characters. Leave blank for plaintext without keys."
   },
   "mgs": {
-    "message": "Backup passphrase (blank for plaintext without keys)"
+    "message": "Passphrase (leave empty to export without keys)"
   },
   "mgt": {
-    "message": "Configuration text (encrypted files can move between devices)"
+    "message": "Configuration text"
   },
   "mgu": {
-    "message": "Export configuration"
+    "message": "Export"
   },
   "mgv": {
-    "message": "Import configuration text"
+    "message": "Import"
   },
   "mgw": {
     "message": "Export to phone"
   },
   "mgx": {
-    "message": "Copy configuration text"
+    "message": "Copy text"
   },
   "mgy": {
     "message": "Import from computer"
@@ -2044,13 +2044,13 @@
     "message": "Encrypted configuration QR code"
   },
   "mh0": {
-    "message": "Choose configuration file"
+    "message": "Choose file"
   },
   "mh1": {
     "message": "Encrypted backups contain your keys. Keep them safe. The passphrase is not stored. Plaintext imports keep local keys. Translation cache is not exported."
   },
   "mh2": {
-    "message": "Save settings"
+    "message": "Save"
   },
   "mh3": {
     "message": "General"
@@ -2170,7 +2170,7 @@
     "message": "Translate images on this page"
   },
   "mi6": {
-    "message": "This page has not been translated"
+    "message": "Not translated yet"
   },
   "mi7": {
     "message": "This page cannot be translated"
@@ -2182,7 +2182,7 @@
     "message": "Translate into"
   },
   "mia": {
-    "message": "Translate to"
+    "message": "To"
   },
   "mib": {
     "message": "Engine"
@@ -2242,13 +2242,13 @@
     "message": "Ready"
   },
   "miu": {
-    "message": "Click Translate this page, or press Alt+A."
+    "message": "Click \"Translate this page\", or press Alt+A."
   },
   "miv": {
     "message": "No site is translated automatically."
   },
   "miw": {
-    "message": "Floating button, selection translation and other features are off by default. Enable them under Enhancements."
+    "message": "Other features are off by default. Turn them on in \"Enhancements\"."
   },
   "mix": {
     "message": "Phones have no toolbar button. Open DualLens from the Tampermonkey menu, or enable the floating button under Enhancements."
@@ -2604,5 +2604,220 @@
   },
   "commandToggleHover": {
     "message": "Toggle hover translation"
+  },
+  "polishAutomatic": {
+    "message": "Automatic (recommended)"
+  },
+  "polishAutomaticHint": {
+    "message": "Machine translation appears first. If an AI service is configured, it refines the text in the background."
+  },
+  "polishMT": {
+    "message": "Machine translation only"
+  },
+  "polishMTHint": {
+    "message": "Fastest. No AI service is used."
+  },
+  "polishAI": {
+    "message": "AI service only"
+  },
+  "polishAIHint": {
+    "message": "No free machine translation. Add an AI service first."
+  },
+  "polishUnofficial": {
+    "message": "Free endpoints are unofficial and may change or rate-limit requests."
+  },
+  "polishChoose": {
+    "message": "Choose a service above to start configuring it."
+  },
+  "polishAIDestination": {
+    "message": "Page text and title will be sent to $p1$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishPreview": {
+    "message": "Example"
+  },
+  "polishEmptyRules": {
+    "message": "No rules yet."
+  },
+  "polishAddRule": {
+    "message": "Add rule"
+  },
+  "polishGlossaryHint": {
+    "message": "The glossary is sent to AI services. Machine translation does not use it."
+  },
+  "polishWho": {
+    "message": "Sent to"
+  },
+  "polishWhat": {
+    "message": "Content"
+  },
+  "polishWhen": {
+    "message": "When"
+  },
+  "polishText": {
+    "message": "Page text"
+  },
+  "polishTextTitle": {
+    "message": "Page text, title, matching glossary terms and custom instructions"
+  },
+  "polishWhenTranslate": {
+    "message": "When you translate"
+  },
+  "polishWhenFallback": {
+    "message": "If Microsoft fails"
+  },
+  "polishWhenRefine": {
+    "message": "During AI translation or refinement"
+  },
+  "polishTransfer": {
+    "message": "Send to phone"
+  },
+  "polishTransferSteps": {
+    "message": "1. Set a passphrase and generate an encrypted configuration. 2. Paste it into Data and privacy on your phone, or scan the QR code. 3. Enter the same passphrase to import."
+  },
+  "polishPrivacy": {
+    "message": "Privacy policy"
+  },
+  "polishFeedback": {
+    "message": "Report an issue"
+  },
+  "polishShortcuts": {
+    "message": "Keyboard shortcuts"
+  },
+  "polishShortcutHint": {
+    "message": "Alt+A: Translate page; Alt+W: Switch display; Alt+I: Translate input; Alt+S: Text translation. Change these on the browser’s extension shortcuts page."
+  },
+  "polishLicenses": {
+    "message": "Third-party components and licenses"
+  },
+  "polishTranslating": {
+    "message": "Translating…"
+  },
+  "polishAlwaysHint": {
+    "message": "Translate this site automatically"
+  },
+  "polishNeverHint": {
+    "message": "Manual translation is still available"
+  },
+  "polishPath": {
+    "message": "Only $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishInputShort": {
+    "message": "Input box"
+  },
+  "polishSubtitlesShort": {
+    "message": "Subtitles"
+  },
+  "polishSelectionShort": {
+    "message": "Selection"
+  },
+  "polishHoverShort": {
+    "message": "Hover"
+  },
+  "polishService": {
+    "message": "Choose service"
+  },
+  "polishDetails": {
+    "message": "Details"
+  },
+  "polishCancelSend": {
+    "message": "Cancel, do not send"
+  },
+  "polishConsentAI": {
+    "message": "Using $p1$ ($p2$). Page text and title will be sent to it.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "polishConsentMT": {
+    "message": "Using $p1$ ($p2$). Page text will be sent to it.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "polishDisplayOnly": {
+    "message": "Display: Translation only"
+  },
+  "polishCurrent": {
+    "message": "Currently using"
+  },
+  "polishStyle0": {
+    "message": "Default"
+  },
+  "polishStyle1": {
+    "message": "Plain"
+  },
+  "polishStyle2": {
+    "message": "Dashed"
+  },
+  "polishStyle3": {
+    "message": "Highlight"
+  },
+  "polishStyle4": {
+    "message": "Learning"
+  },
+  "polishStyle5": {
+    "message": "Quote"
+  },
+  "polishTextTab": {
+    "message": "Text"
+  },
+  "polishSubtitleFiles": {
+    "message": "Subtitle files"
+  },
+  "polishComponents": {
+    "message": "PDF.js, Tesseract.js and Tesseract.js Core: Apache-2.0. Bundled fonts and codecs retain their own licenses."
+  },
+  "polishTranslateInto": {
+    "message": "Translate into"
+  },
+  "polishKey": {
+    "message": "Key"
+  },
+  "polishWhenPrimaryFails": {
+    "message": "If $p1$ fails",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishLocalReady": {
+    "message": "Choose a model, test the connection, then save."
+  },
+  "polishFeatureService": {
+    "message": "$p1$ service",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "polishFeatureModel": {
+    "message": "$p1$ model (blank for service default)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
   }
 }

@@ -55,6 +55,9 @@ def exercise(page, toggle, mode, extension, idle_check=None, request_count=None)
     wait(frames['mail'], "document.querySelector('#message')?.textContent.includes('second message')")
     translated(frames['mail'])
     wait(frames['mail'], "document.querySelector('#message')?.textContent.includes('second message') && document.querySelectorAll('dl-t').length===1 && !!document.querySelector('dl-t[data-dl-state=done]')")
+    # document.write can emit a second lifecycle event after the first done node.
+    # Require one terminal translation to remain stable across that event boundary.
+    wait(frames['mail'], "() => {const ok=document.querySelector('#message')?.textContent.includes('second message')&&document.querySelectorAll('dl-t').length===1&&!!document.querySelector('dl-t[data-dl-state=done]');if(!ok){window.__frameStableSince=0;return false;}window.__frameStableSince||=performance.now();return performance.now()-window.__frameStableSince>400;}")
     assert frames['mail'].locator('dl-t').count() == 1, 'replaced document translated twice: '+frames['mail'].evaluate('document.body.outerHTML')
     if extension:
         frames['cross'].goto(frames['cross'].url + '?new-message=2')

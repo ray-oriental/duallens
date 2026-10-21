@@ -31,7 +31,7 @@ export function requestDestinations(s, req = {}) {
 }
 export function destinationMessage(d) {
   if (d.fallback) return l10n('m80', [d.host]);
-  return l10n('m82', [d.name, d.id.startsWith('llm:') ? l10n('m81') : '', d.host]);
+  return d.id.startsWith('llm:')?l10n('polishConsentAI',[d.name,d.host]):l10n('polishConsentMT',[d.name,d.host]);
 }
 export function createConfirmationGuard(localArea) {
   return async (settings, req) => {

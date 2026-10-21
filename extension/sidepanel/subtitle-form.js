@@ -1,6 +1,5 @@
 import { t as l10n } from '../shared/i18n.js';
 import { element, field, selectOptions, MEDIA_CSS } from './text-form.js';
-import { subtitleOptions } from '../content/subtitles/track.js';
 import { MAX_SUBTITLE_BYTES, parseSubtitles, serializeSubtitles } from '../content/subtitles/files.js';
 import { SubtitleScheduler } from '../content/subtitles/scheduler.js';
 import { withSendConfirmation, confirmationCard } from '../content/confirmation.js';
@@ -9,17 +8,7 @@ export async function mountSubtitleForm(root, { platform }) {
   let currentSettings = await platform.settingsStore.load();
   platform = withSendConfirmation(platform, () => currentSettings, {prompt:opts=>confirmationCard({...opts,root})});
   const style = element('style', MEDIA_CSS); const form = element('form'); form.className = 'dl-subtitle-settings';
-  form.append(element('h2', l10n('m23')));
-  const enabled = field(form, l10n('m9h'), element('select')); enabled.name = 'subtitle-enabled';
-  selectOptions(enabled, [['off', l10n('m9i')], ['on', l10n('m9j')]], 'off');
-  const mode = field(form, l10n('m9k'), element('select')); mode.name = 'subtitle-mode';
-  selectOptions(mode, [['bilingual', l10n('m9l')], ['translation-only', l10n('m4f')]], 'bilingual');
-  const position = field(form, l10n('m9m'), element('select')); position.name = 'subtitle-position';
-  selectOptions(position, [['bottom', l10n('m9n')], ['top', l10n('m9o')]], 'bottom');
-  const size = field(form, l10n('m9p'), element('input')); size.name = 'subtitle-size'; size.type = 'number'; size.min = '16'; size.max = '48'; size.step = '1'; size.required = true;
-  form.append(element('p', l10n('m9q')));
-  const save = element('button', l10n('m9r')); save.type = 'submit'; form.append(save);
-  const status = element('p'); status.setAttribute('role', 'status'); form.append(status); root.append(style, form);
+  const status=element('p');status.setAttribute('role','status');root.append(style,form);
   let disposed = false, version = 0;
   form.append(element('h2', l10n('m9s')));
   const file = field(form, l10n('m9t'), element('input')); file.type = 'file'; file.accept = '.srt,.vtt'; file.name = 'subtitle-file';
@@ -71,23 +60,15 @@ export async function mountSubtitleForm(root, { platform }) {
   cancel.addEventListener('click', () => { stop(); translate.disabled = !cues.length; fileStatus.textContent = l10n('ma2'); });
   let translationKey;
   async function reload() {
-    const token = ++version, settings = await platform.settingsStore.load(), options = subtitleOptions(settings);
+    const token = ++version, settings = await platform.settingsStore.load();
     if (disposed || token !== version) return;
     currentSettings = settings;
     const key = JSON.stringify(['targetLang', 'sourceLang', 'translation', 'provider', 'prompt', 'glossary'].map(k => settings[k]));
     if (translationKey && translationKey !== key) { stop(); for (const cue of cues) cue.translation = null; show(); translate.disabled = !cues.length; }
     translationKey = key;
-    enabled.value = options.enabled ? 'on' : 'off'; mode.value = options.mode; position.value = options.position; size.value = options.fontSize;
   }
   const off = platform.settingsStore.onChange(() => { void reload().catch(() => {}); });
-  form.addEventListener('submit', async event => {
-    event.preventDefault(); save.disabled = true;
-    try {
-      await platform.settingsStore.save({ subtitles: subtitleOptions({ subtitles: { enabled: enabled.value === 'on', mode: mode.value, position: position.value, fontSize: size.value } }) });
-      if (!disposed) status.textContent = l10n('ma3');
-    } catch { if (!disposed) status.textContent = l10n('ma4'); }
-    finally { if (!disposed) save.disabled = false; }
-  });
+  form.addEventListener('submit',event=>event.preventDefault());
   try { await reload(); } catch { status.textContent = l10n('ma5'); }
   return { destroy() { disposed = true; version++; off(); stop(); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } form.remove(); style.remove(); } };
 }

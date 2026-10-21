@@ -22,3 +22,8 @@ export function engineSummary(s) {
   return {name:l10n('mbm', [mt, ['microsoft','google'].includes(engine)?l10n('mbl'):'']),privacy:mtLine,full:mtLine,group:'common'};
 }
 export function featureDescription(key,s,coarse=false) {if(key==='hover')return coarse?l10n('mbn'):s.hover.modifier==='none'?l10n('mbo'):l10n('mbp', [s.hover.modifier==='Control'?'Ctrl':s.hover.modifier]);if(key==='input'&&s.input.trigger==='shortcut')return l10n('mbq');return FEATURES.find(f=>f[0]===key)?.[2]||'';}
+
+export function engineDisclosure(doc,s,onChange) {
+  const summary=engineSummary(s),box=element(doc,'div',null,{class:'engine-disclosure'}),row=element(doc,'div',null,{class:'engine-row'}),change=element(doc,'button',l10n('mic'),{type:'button',class:'dl-text-button'});
+  change.onclick=()=>onChange(summary.group);row.append(element(doc,'span',l10n('mib')),element(doc,'strong',summary.name),change);box.append(row,element(doc,'p',summary.privacy,{class:'privacy',title:summary.full}));return box;
+}

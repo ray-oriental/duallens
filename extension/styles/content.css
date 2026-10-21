@@ -34,3 +34,5 @@ dl-t.dl-t.dl-solo::before,dl-t.dl-t.dl-solo::after{content:none;}
 ytm-shorts-lockup-view-model dl-t,ytm-shorts-lockup-view-model-v2 dl-t,[class*="shortsLockupViewModelHost"] dl-t{color:#fff!important;background:rgba(0,0,0,.85);text-shadow:none;padding:0 .12em;box-decoration-break:clone;-webkit-box-decoration-break:clone;}
 
 @media print{dl-t.dl-s-blur{filter:none;}dl-t[data-dl-state="pending"],dl-t[data-dl-state="error"]{display:none!important;}dl-t{color:inherit!important;text-shadow:none;}}
+
+h1 dl-t.dl-block,h2 dl-t.dl-block,h3 dl-t.dl-block{font-weight:400;font-size:.75em}

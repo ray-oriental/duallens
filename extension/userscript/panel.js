@@ -62,7 +62,7 @@ export function createSettingsPanel({ store, platform, mountForm, kind='settings
       panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', kind==='popup'?TEXT.popup:TEXT.settings);
       if(kind==='popup') panel.classList.add('popup-panel');
       const head = node('div'); head.className = 'head';
-      const exit = node('button', TEXT.close); exit.type = 'button'; exit.addEventListener('click', close);
+      const exit = node('button', '×'); exit.type = 'button'; exit.setAttribute('aria-label',TEXT.close); exit.addEventListener('click', close);
       head.append(node('h2', kind==='popup'?TEXT.popup:TEXT.settings), exit);
       // Shared-form integration seam, inside the closed shadow root.
       const mount = node('div'); mount.className = 'settings-form-mount';

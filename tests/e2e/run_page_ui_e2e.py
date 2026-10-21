@@ -72,7 +72,11 @@ def run(pw,base,dark):
         # One-line failure uses a real failed request and a retry button.
         profile['model']=''
         settings(page,{'provider':{'profiles':[profile]}})
-        click_shadow(page,'.card .tool[aria-expanded]');click_shadow(page,'.services .retry')
+        before_menu=page.evaluate("__platformFixture.elements('.card')[0].getBoundingClientRect().height")
+        click_shadow(page,'.card .tool[aria-expanded]')
+        check(page.evaluate("__platformFixture.elements('.card')[0].getBoundingClientRect().height")==before_menu,'More expanded the translation card')
+        shot(page,theme+'-selection-more')
+        click_shadow(page,'.selection-menu>button:nth-child(2)');click_shadow(page,'.services .retry')
         page.wait_for_function("__platformFixture.elements('.dst.err').length===1")
         shot(page,theme+'-error')
         check(page.evaluate("__platformFixture.elements('.dst.err')[0].textContent.includes('重试')"),'error has no retry')

@@ -185,7 +185,7 @@ def desktop_cases(page, base):
     page.wait_for_function("__platformFixture.elements('.dst').some(e=>e.textContent.startsWith('【译】'))")
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('form').length===1")
-    fill_shadow(page, '目标语言', 'ja')
+    fill_shadow(page, '翻译成', 'ja')
     click_shadow(page, 'button[type=submit]')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     check(all(page.evaluate("[...document.querySelectorAll('dl-ui')].map(e=>e.shadowRoot===null)")), 'overlay must stay closed')
@@ -219,7 +219,7 @@ def settings_resource_case(page, base):
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
     check(page.evaluate('__platformFixture.calls.length') == 0, 'opening settings made a network/model request')
-    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, '#save')
+    fill_shadow(page, '翻译成', 'ja'); click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     page.keyboard.press('Escape'); command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#targetLang')[0]?.value==='ja'")
@@ -377,7 +377,7 @@ def openrouter_profile_case(page, base):
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
     assert_secret_private(page)
     # Saving an unrelated field preserves the stored key; public export remains key-free.
-    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, '#save')
+    fill_shadow(page, '翻译成', 'ja'); click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'unedited key overwritten')
     secret_prompt(page, '#export', '')
@@ -385,12 +385,17 @@ def openrouter_profile_case(page, base):
     assert_secret_private(page)
     secret_prompt(page, '#export', 'e2e backup passphrase')
     page.wait_for_function("__platformFixture.elements('#backupText')[0].value.startsWith('duallens-config:v1:')")
+    encrypted=page.evaluate("__platformFixture.elements('#backupText')[0].value")
     click_shadow(page, '#clear-key')
     check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'clear happened before confirmation')
     click_shadow(page, '.confirmation button:last-child')
     click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local').secrets.openrouter.apiKey===''")
     check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '未设置', 'clear status missing')
+    # Group switches clear migration text. Re-enter the saved encrypted payload deliberately.
+    click_shadow(page, '[data-group-link=data]')
+    check(page.evaluate("__platformFixture.elements('#backupText')[0].value") == '', 'migration text leaked across groups')
+    page.evaluate("text=>{const input=__platformFixture.elements('#backupText')[0];input.value=text;input.dispatchEvent(new Event('input',{bubbles:true}));}", encrypted)
     # Cancellation preserves the cleared state; native passphrase import restores the key.
     secret_prompt(page, '#import-button', None)
     check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == '', 'cancel import changed key')
@@ -501,7 +506,7 @@ def mobile_cases(page, base):
     panel = rect(page, '.panel')
     if page.viewport_size['width'] < 600:
         check(panel['x'] == 0 and panel['y'] == 0 and panel['width'] == page.viewport_size['width'], 'narrow settings not fullscreen')
-    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, 'button[type=submit]')
+    fill_shadow(page, '翻译成', 'ja'); click_shadow(page, 'button[type=submit]')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     page.keyboard.press('Escape')
     # Long-page metrics include translation start and the full viewport-by-viewport scroll.

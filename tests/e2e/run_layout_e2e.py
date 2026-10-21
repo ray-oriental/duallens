@@ -34,10 +34,11 @@ def quiet_typography(h):
         inj.showTranslation(u,f,{mode:'bilingual',style:'muted',inlineMaxChars:24,stage:'draft'});typeUnits.push(u);
       }
     }""",f'chrome-extension://{h.ext_id}')
-    assert h.js("""() => typeUnits.filter(u=>u.host.id!=='short').every(u=>{
+    assert h.js("""() => typeUnits.filter(u=>!['short','card'].includes(u.host.id)).every(u=>{
       const a=getComputedStyle(u.host),b=getComputedStyle(u.tEl);
       return b.fontSize===a.fontSize&&b.lineHeight===a.lineHeight&&b.textIndent===a.textIndent&&b.fontFamily.startsWith(a.fontFamily)&&b.fontFamily.includes('PingFang SC')&&b.fontStyle==='normal'&&b.borderLeftWidth==='0px'&&b.backgroundColor==='rgba(0, 0, 0, 0)'&&Math.abs(parseFloat(b.marginBlockStart)/parseFloat(b.fontSize)-.3)<.01;
     })"""), 'block inherits font, line height, indent; normal style, no decoration'
+    assert h.js("() => {const u=typeUnits.find(u=>u.host.id==='card'),a=getComputedStyle(u.host),b=getComputedStyle(u.tEl);return b.fontWeight==='400'&&Math.abs(parseFloat(b.fontSize)/parseFloat(a.fontSize)-.75)<.001}"), 'heading translation is normal weight at 75% of source size'
     assert h.js("""() => {const u=typeUnits.at(-1),cs=getComputedStyle(u.tEl);return Math.abs(parseFloat(cs.fontSize)/16-.92)<.01&&Math.abs(parseFloat(cs.marginInlineStart)/parseFloat(cs.fontSize)-.35)<.01&&getComputedStyle(u.tEl,'::before').content==='none'&&u.host.getBoundingClientRect().height===28} """), 'inline has thin spacing without separator or control growth'
     assert h.js("""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');
       const c=document.createElement('canvas').getContext('2d');c.fillStyle=getComputedStyle(document.querySelector('#dark dl-t')).color;c.fillRect(0,0,1,1);

@@ -3,6 +3,9 @@ import { DEFAULT_SETTINGS,mergeSettings,STYLES } from '../../shared/settings.js'
 import { featureNeedsBroad,requestBroad,requestOrigin,requestMTOrigin } from '../../shared/permissions.js';
 import { acknowledge,llmDestination } from '../../shared/device-state.js';
 import { element,FEATURES,TEXT as COMMON,engineSummary,featureDescription } from '../components.js';
+import { PREVIEW_SAMPLES as previews } from '../../shared/preview-samples.js';
+import { requestDestinations } from '../../shared/destinations.js';
+import { isLocalUrl } from '../../shared/device-state.js';
 import { GROUPS } from './navigation.js';
 import { validateSettings } from '../validation.js';
 
@@ -25,7 +28,8 @@ export function installSettingsInteractions(ui,ctx){
   async function select(next,force=false){
     if(!GROUPS.some(([id])=>id===next))next='common';if(next===group&&!force)return;
     if(group&&getDirty()&&!force){if(!await ask(T.discard)){if(platform.kind==='extension')win.history.replaceState(null,'','#'+group);return;}setDirty(false);setSettings(await store.load());await draw();}
-    group=next;for(const page of ui.querySelectorAll('[data-group]'))page.hidden=page.dataset.group!==group;
+    $('saved-toast').classList.remove('show');$('status').textContent='';$('status').classList.remove('error');for(const id of ['result-test','result-load-models','result-mt-test'])$(id)?.remove();if(group&&group!==next){$('backupText').value='';$('backup-qr').hidden=true;if($('backupPassword'))$('backupPassword').value='';}
+    group=next;const title=ui.querySelector(`[data-group="${group}"] .group-title`);title.append($('saved-toast'));if(['common','ai','sites','glossary'].includes(group))notice(l10n('md5'));for(const page of ui.querySelectorAll('[data-group]'))page.hidden=page.dataset.group!==group;
     for(const link of ui.querySelectorAll('[data-group-link]')){if(link.dataset.groupLink===group){link.setAttribute('aria-current','page');link.scrollIntoView({block:'nearest',inline:'nearest'});}else link.removeAttribute('aria-current');}
     if(platform.kind==='extension'&&win.location.hash!=='#'+group)win.history.replaceState(null,'','#'+group);
   }
@@ -40,6 +44,7 @@ export function installSettingsInteractions(ui,ctx){
     try{validateSettings(mergeSettings(before,patch));await store.save(patch);if(closed)return;setSettings(mergeSettings(getSettings(),patch));setDirty(previousDirty);n.removeAttribute('aria-invalid');ui.querySelector('#error-'+n.id)?.remove();flash();drawView();}
     catch(error){setSettings(before);setDirty(previousDirty);if(n.type==='checkbox')n.checked=!value;n.setAttribute('aria-invalid','true');ui.querySelector('#error-'+n.id)?.remove();const help=el('small',error.message||T.failure,{class:'field-error',id:'error-'+n.id});n.parentElement.append(help);notice(error.message||T.failure,true);}
   }
+  for(const radio of ui.querySelectorAll('[name=translation-method]'))on(radio,'change',()=>{if(radio.checked){$('translationMode').value=radio.value;void persistField($('translationMode'));}});
   on($('settings-form'),'change',event=>{const n=event.target;if(immediate(n))void persistField(n);});
   for(const b of ui.querySelectorAll('#style-tiles input'))on(b,'change',()=>{if(b.checked){$('style').value=b.value;void persistField($('style'));}});
   for(const b of ui.querySelectorAll('[data-preset]'))on(b,'click',()=>{$('providerPreset').value=b.dataset.preset;$('add-profile').click();});
@@ -62,14 +67,22 @@ export function installSettingsInteractions(ui,ctx){
   on($('inputMode'),'change',()=>{$('inputOrder').parentElement.hidden=$('inputMode').value!=='bilingual';});
   function drawView(){
     const s=getSettings(),p=getProfile(),summary=engineSummary(s);
+    const configured=!!p&&p.kind!=='mock';$('provider-card').hidden=!configured;$('provider-empty').hidden=configured;$('prompt-card').hidden=!configured;if(p)$('provider-name').textContent=p.name;
+    for(const radio of ui.querySelectorAll('[name=translation-method]'))radio.checked=radio.value===s.translation.mode;
+    $('style-preview').textContent=previews[s.targetLang]||previews.en;
+    const rows=$('privacy-rows');rows.replaceChildren();const addRow=(who,what,when)=>{const tr=el('tr');for(const text of [who,what,when])tr.append(el('td',text));rows.append(tr);};for(const d of requestDestinations(s))addRow(d.name,d.id.startsWith('llm:')?l10n('polishTextTitle'):l10n('polishText'),d.id.startsWith('mt:')&&d.id!=='mt:'+s.translation.mt.engine?l10n('polishWhenPrimaryFails',[COMMON.mt[s.translation.mt.engine]]):d.id.startsWith('llm:')?l10n('polishWhenRefine'):l10n('polishWhenTranslate'));
+    $('mt-unofficial').hidden=!['microsoft','google'].includes(s.translation.mt.engine);$('mtFallback').parentElement.hidden=!['microsoft','google'].includes(s.translation.mt.engine);
+
     for(const [key]of FEATURES){$('details-'+key).hidden=!s[key].enabled;const hint=ui.querySelector(`[data-feature="${key}"] small`);if(hint)hint.textContent=featureDescription(key,s,platform.coarse);}
     for(const input of ui.querySelectorAll('#style-tiles input'))input.checked=input.value===s.style;$('style-preview').dataset.style=s.style;$('learn-hint').hidden=s.style!=='blur';
     for(const input of ui.querySelectorAll('#display-segments input'))input.checked=input.value===s.displayMode;
     $('inputOrder').parentElement.hidden=$('inputMode').value!=='bilingual';$('customPrompt').parentElement.hidden=$('preset').value!=='custom';
     $('privacy-current').textContent=summary.full;$('mt-destination').textContent=engineSummary({...s,translation:{...s.translation,mode:'mt'}}).full;
-    $('ai-destination').textContent=p?.baseUrl?summary.full:'';
+    $('ai-destination').textContent=p?.baseUrl?(isLocalUrl(p.baseUrl)?COMMON.local:l10n('polishAIDestination',[p.name])):'';
     const local=['ollama','lmstudio'].includes(p?.preset);$('localOnly').parentElement.hidden=!local;$('localOnly').checked=s.translation.mode==='llm';$('localEngine').parentElement.hidden=!local;$('local-help').hidden=!local;$('freeModels').parentElement.hidden=p?.preset!=='openrouter';
-    if(local){$('localEngine').value=p.preset;$('key-row').hidden=true;}
+    $('key-row').hidden=!p||local||p.kind==='mock';if(local){$('localEngine').value=p.preset;$('key-link').hidden=true;}
+    const address=$('baseUrl').parentElement,advanced=$('provider-card details .grid');if(p?.preset==='custom'||local)$('model').closest('.frow').before(address);else advanced.prepend(address);
+
     for(const tile of ui.querySelectorAll('[data-preset]'))tile.setAttribute('aria-pressed',String(tile.dataset.preset===(local?'ollama':p?.preset)));
     $('chain-profile').replaceChildren(...s.provider.profiles.filter(p=>p.kind!=='mock').map(p=>el('option',p.name,{value:p.id})));drawChain();
     $('delete-profile').disabled=!p;
