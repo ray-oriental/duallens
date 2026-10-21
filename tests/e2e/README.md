@@ -50,3 +50,7 @@ For the second command set DUALLENS_MODEL and, if needed, DUALLENS_API_KEY in th
 Use --repo to stage another checkout; --device desktop|phone|tablet|all, repeatable --only, --timeout, --headed, --out or hash-checked --resume. Missing measurements remain distinct from zero. Coverage is structural, not semantic. Restore controls may explain only matching site attribute changes, never text/order changes or extension residue. PDF rows use separate reader text-block metrics. Access walls are UNREACHABLE; native mobile PDF is UNSUPPORTED.
 
 Chromium/GM stubs and device emulation do not certify actual Tampermonkey isolation or physical devices. Complete [MOBILE_ACCEPTANCE.md](MOBILE_ACCEPTANCE.md) and actual desktop Chrome/Edge acceptance separately. Report real-provider results separately from mock summaries.
+
+The real-page acceptance runner defaults to `--ack`: it seeds only the configured translation destinations in device-local consent state before translation. Use `--no-ack` to verify the first-send card and zero translation-service requests instead. Repeat `--device` to add devices, or use `--device all` (the default) for desktop, phone and tablet.
+
+Mobile acceptance captures only the current viewport: Chromium 130 beyond-viewport capture can reset mobile emulation and reflow fixed overlays. The mobile runner uses a fresh context; desktop still uses an isolated extension profile and the popup tab-ensure path. Staged test host grants do not validate native activeTab gestures.

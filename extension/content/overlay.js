@@ -7,10 +7,9 @@ const HOST_STYLE=[
   'all:initial',
   'display:block',
   'position:fixed',
-  'inset:0 auto auto 0',
-  'width:0',
-  'height:0',
-  'overflow:visible',
+  'inset:0',
+  'contain:strict',
+  'overflow:clip',
   'margin:0',
   'padding:0',
   'border:0',
@@ -66,7 +65,7 @@ const UI={close:l10n('m44'),retry:l10n('m5d')};
 let toastOverlay=null;
 let toastTimer=0;
 
-const TOAST_CSS=`.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);max-width:min(420px,calc(100vw - 32px));padding:8px 14px;border-radius:8px;background:var(--bg);color:var(--fg);border:1px solid var(--line);box-shadow:var(--shadow);pointer-events:auto;display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .15s;}.toast.show{opacity:1;}.toast button{color:var(--accent);flex:none}`;
+const TOAST_CSS=`.toast{position:fixed;left:50%;bottom:calc(16px + var(--safe-bottom));transform:translateX(-50%);width:min(360px,calc(100vw - 32px - var(--safe-left) - var(--safe-right)));overflow-wrap:anywhere;padding:8px 14px;border-radius:8px;background:var(--bg);color:var(--fg);border:1px solid var(--line);box-shadow:var(--shadow);pointer-events:auto;display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .15s;}.toast span{min-width:0;flex:1}.toast.show{opacity:1;}.toast button{color:var(--accent);flex:none}`;
 
 export function toast(text,kind='info',ms=2600,retry){
   if(!toastOverlay){

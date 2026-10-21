@@ -994,12 +994,7 @@
     "message": "Microsoft Translator"
   },
   "m80": {
-    "message": "Google is used only if Microsoft fails. This page's text will be sent to $p1$.",
-    "placeholders": {
-      "p1": {
-        "content": "$1"
-      }
-    }
+    "message": "If Microsoft fails, text on this page will be sent to Google."
   },
   "m81": {
     "message": " and title"
@@ -2733,24 +2728,18 @@
     "message": "Cancel, do not send"
   },
   "polishConsentAI": {
-    "message": "Using $p1$ ($p2$). Page text and title will be sent to it.",
+    "message": "DualLens will use $p1$. Text and the title of this page will be sent to $p1$.",
     "placeholders": {
       "p1": {
         "content": "$1"
-      },
-      "p2": {
-        "content": "$2"
       }
     }
   },
   "polishConsentMT": {
-    "message": "Using $p1$ ($p2$). Page text will be sent to it.",
+    "message": "DualLens will use $p1$. Text on this page will be sent to $p1$.",
     "placeholders": {
       "p1": {
         "content": "$1"
-      },
-      "p2": {
-        "content": "$2"
       }
     }
   },
@@ -2819,5 +2808,11 @@
         "content": "$1"
       }
     }
+  },
+  "consentMicrosoft": {
+    "message": "DualLens will use Microsoft's free translator. Text on this page will be sent to Microsoft."
+  },
+  "consentMicrosoftFallback": {
+    "message": "DualLens will use Microsoft's free translator. Text on this page will be sent to Microsoft, and to Google if Microsoft fails."
   }
 }

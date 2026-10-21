@@ -162,8 +162,8 @@ def direct_request(req, llm='none'):
         return {'status': response.code, 'responseText': body.decode('utf-8'), 'responseHeaders': str(response.headers)}
 
 
-GM_STUB = r"""({settings,secrets}) => {
-  const data=new Map([['duallens:local', {'settings.core':settings,secrets}]]), listeners=new Map(), commands=new Map(), roots=[];
+GM_STUB = r"""({settings,secrets,acked}) => {
+  const data=new Map([['duallens:local', {'settings.core':settings,secrets,'ui.device':{onboarded:true,acked}}]]), listeners=new Map(), commands=new Map(), roots=[];
   const attach=Element.prototype.attachShadow;
   Element.prototype.attachShadow=function(init) {const root=attach.call(this,init);if(this.localName==='dl-ui')roots.push({host:this,root});return root;};
   window.GM_getValue=(k,d)=>structuredClone(data.get(k)??d);
@@ -194,18 +194,21 @@ PDF_SAMPLE = r"""({n,ids})=>{
 
 
 class Browser:
-    def __init__(self, pw, ext, bundle, run, device, llm, headed=False):
+    def __init__(self, pw, ext, bundle, run, device, llm, headed=False, ack=True):
         self.pw, self.ext, self.bundle, self.run, self.device, self.llm = pw, ext, bundle, run, device, llm
         self.ctx = self.sw = self.ext_id = None
+        self.mobile_browser = self.bridge = None
         self.transport = {}
         self.http_tasks = {}
         self.profile = run / ('profile-' + device)
         self.headed = headed
+        self.ack = ack
+        self.network_requests = []
 
     async def start(self):
         width, height, touch = DEVICES[self.device]
-        opts = dict(headless=False, viewport={'width': width, 'height': height},
-                    args=['--no-first-run', '--no-default-browser-check', '--no-proxy-server'],
+        opts = dict(headless=False, locale='zh-CN', device_scale_factor=1, viewport={'width': width, 'height': height},
+                    args=['--no-first-run', '--no-default-browser-check', '--no-proxy-server', '--force-device-scale-factor=1'],
                     has_touch=touch, is_mobile=touch)
         if not self.headed:
             opts['args'].insert(0, '--headless=new')
@@ -215,12 +218,26 @@ class Browser:
             opts['user_agent'] = DESKTOP_UA
             opts['args'] += [f'--disable-extensions-except={self.ext}', f'--load-extension={self.ext}']
             opts['ignore_default_args'] = ['--disable-extensions']
-        self.ctx = await self.pw.chromium.launch_persistent_context(str(self.profile), **opts)
+        if touch:
+            # Mobile needs no extension profile. A fresh browser context also avoids
+            # Chromium 130's persistent --headless=new screenshot metrics reset.
+            launch_args=[a for a in opts.pop('args') if a!='--headless=new']
+            opts.pop('headless')
+            self.mobile_browser=await self.pw.chromium.launch(headless=not self.headed,args=launch_args)
+            self.ctx=await self.mobile_browser.new_context(**opts)
+        else:
+            self.ctx = await self.pw.chromium.launch_persistent_context(str(self.profile), **opts)
+        if not touch:
+            from urllib.parse import urlsplit
+            hosts = MT_HOSTS | ({urlsplit(self.llm).hostname} if self.llm != 'none' else set())
+            self.ctx.on('request', lambda req: self.network_requests.append(urlsplit(req.url).hostname)
+                        if urlsplit(req.url).hostname in hosts else None)
         if touch:
             async def http(source, req):
                 from urllib.parse import urlsplit
                 began = time.monotonic()
                 record = {'host': urlsplit(req['url']).hostname}
+                self.network_requests.append(record['host'])
                 pending = self.http_tasks.setdefault(source['page'], set())
                 pending.add(asyncio.current_task())
                 try:
@@ -235,6 +252,11 @@ class Browser:
                     self.transport.setdefault(source['page'], []).append(record)
                     pending.discard(asyncio.current_task())
             await self.ctx.expose_binding('__acceptanceHTTP', http)
+            # Seed manager-private device state before any target navigation;
+            # evaluating the userscript later must not reset that consent.
+            seed={'settings':settings(self.llm),'acked':acknowledged_destinations(self.llm) if self.ack else [],
+                  'secrets':{'acceptance':{'apiKey':os.environ.get('DUALLENS_API_KEY','')}} if self.llm != 'none' else {}}
+            await self.ctx.add_init_script(script='('+GM_STUB+')('+json.dumps(seed)+');')
         else:
             self.sw = next((w for w in self.ctx.service_workers if w.url.startswith('chrome-extension:')), None)
             if self.sw is None:
@@ -243,20 +265,26 @@ class Browser:
             bridge = await self.ctx.new_page()
             await bridge.goto(f'chrome-extension://{self.ext_id}/ui/options.html')
             await bridge.evaluate("""async ({patch,key})=>{const {saveSettings,getDefaultSettingsStore}=await import('../shared/settings.js');await saveSettings(patch);if(key)await getDefaultSettingsStore().setSecret('acceptance',key);}""", {'patch':settings(self.llm),'key':os.environ.get('DUALLENS_API_KEY','') if self.llm != 'none' else ''})
-            await bridge.close()
+            await bridge.evaluate("acked=>chrome.storage.local.set({'ui.device':{onboarded:true,acked}})", acknowledged_destinations(self.llm) if self.ack else [])
+            self.bridge = bridge
 
     async def attach(self, page):
         if self.device != 'desktop':
             # Match the canonical userscript runner: GM storage is private to this page
             # instance, real anonymous HTTP is supplied by the test host. Security of
             # Tampermonkey's isolated world is deliberately NOT claimed by this harness.
-            await page.evaluate(GM_STUB, {'settings':settings(self.llm),'secrets':{'acceptance':{'apiKey':os.environ.get('DUALLENS_API_KEY','')}} if self.llm != 'none' else {}})
             await page.evaluate(self.bundle.read_text(encoding='utf-8'))
             await page.wait_for_function('window.__acceptanceGM?.ready()', timeout=20000)
             return None
         tab = await self.sw.evaluate("async u=>(await chrome.tabs.query({})).find(t=>t.url===u)?.id", page.url)
         if tab is None:
             raise RuntimeError('Extension tab not found')
+        try:
+            ensured = await asyncio.wait_for(self.bridge.evaluate("tabId=>chrome.runtime.sendMessage({type:'tab-ensure',tabId})",tab),20)
+        except asyncio.TimeoutError:
+            raise RuntimeError('Content injection handshake timed out') from None
+        if not ensured or not ensured.get('ok'):
+            raise RuntimeError('Content injection failed: '+str(ensured.get('reason') if ensured else 'no response'))
         for _ in range(60):
             r = await self.send(tab, {'type': 'get-state'})
             if r is not None:
@@ -278,6 +306,8 @@ class Browser:
     async def close(self):
         if self.ctx:
             await self.ctx.close()
+        if self.mobile_browser:
+            await self.mobile_browser.close()
 
     async def drain(self, page):
         tasks = list(self.http_tasks.pop(page, set()))
@@ -287,6 +317,16 @@ class Browser:
             # callbacks should target a destroyed page.
             await asyncio.gather(*tasks, return_exceptions=True)
             await page.wait_for_timeout(100)
+
+
+def acknowledged_destinations(llm):
+    """Only destinations used by this harness's explicit settings, never wildcard consent."""
+    from urllib.parse import urlsplit
+    ids = ['mt:microsoft', 'mt:google']
+    if llm != 'none':
+        url = urlsplit(llm)
+        ids.append('llm:' + url.scheme + '://' + url.netloc)
+    return ids
 
 
 def settings(llm):
@@ -324,12 +364,20 @@ async def unreachable(page, response):
 
 async def screenshot(page, out, stem, issues):
     paths, errors = [], []
+    mobile = bool(re.search(r'-(?:phone|tablet)(?:-|$)', stem))
     async def capture(filename, clip=None):
         # Native Chromium capture avoids Playwright caret/style mutation, font
         # waits on blocked pages, and viewport-only clipping of PDF page 11.
         client = await page.context.new_cdp_session(page)
         try:
-            options = {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': True}
+            options = {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': not mobile}
+            if mobile:
+                # Chromium 130's beyond-viewport capture can change mobile device
+                # metrics, reflow the page and clip fixed cards. Capture the actual
+                # compositor viewport without a clip or any emulation changes.
+                result = await asyncio.wait_for(client.send('Page.captureScreenshot', options), 12)
+                (out / filename).write_bytes(base64.b64decode(result['data']))
+                return
             if clip is None:
                 try:
                     clip = await page.evaluate('()=>({x:scrollX,y:scrollY,width:innerWidth,height:innerHeight})')
@@ -349,7 +397,7 @@ async def screenshot(page, out, stem, issues):
     except Exception:
         size = page.viewport_size or {'width': 1280, 'height': 800}
         full_clip = {'x': 0, 'y': 0, **size}
-    for label, clip in [('viewport', None), ('full', full_clip)]:
+    for label, clip in ([('viewport', None)] if mobile else [('viewport', None), ('full', full_clip)]):
         filename = stem + '-' + label + '.png'
         try:
             await capture(filename, clip)
@@ -359,6 +407,9 @@ async def screenshot(page, out, stem, issues):
     # One screenshot per issue. No scroll_into_view: screenshots must not trigger
     # additional lazy translations or alter the measured viewport cohort.
     for i, issue in enumerate(issues):
+        if mobile:
+            issue['screenshot'] = stem + '-viewport.png'
+            continue
         b = issue.get('box', {})
         if not b or b['width'] <= 0 or b['height'] <= 0:
             continue
@@ -419,6 +470,35 @@ async def restore_control(browser, site, out, theme, duration, capture_after):
         await control.close()
 
 
+async def verify_no_ack(browser, page, requests_before, baseline_width=None):
+    client = await browser.ctx.new_cdp_session(page)
+    try:
+        end = time.monotonic() + 8
+        while time.monotonic() < end:
+            tree = (await client.send('Accessibility.getFullAXTree'))['nodes']
+            dialog = next((n for n in tree if n.get('role', {}).get('value') == 'alertdialog'), None)
+            if dialog:
+                break
+            await page.wait_for_timeout(100)
+        else:
+            raise AssertionError('No first-send confirmation card')
+        await page.wait_for_timeout(750)
+        assert requests_before == 0 and len(browser.network_requests) == 0, 'Translation HTTP before consent'
+        assert await page.locator('dl-t,dl-o,dl-w,dl-r').count() == 0, 'Progress markers before consent'
+        remote=await client.send('DOM.resolveNode',{'backendNodeId':dialog['backendDOMNodeId']})
+        geometry=(await client.send('Runtime.callFunctionOn',{'objectId':remote['object']['objectId'],
+            'functionDeclaration':"function(){return {box:this.getBoundingClientRect().toJSON(),button:this.querySelector('.primary').getBoundingClientRect().toJSON(),width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,fixed:getComputedStyle(this).position==='fixed'}}",
+            'returnByValue':True}))['result']['value']
+        if geometry['fixed']:
+            for key in ['box','button']:
+                box=geometry[key]
+                assert box['left']>=16 and box['right']<=geometry['width']-16 and box['top']>=0 and box['bottom']<=geometry['height'], 'Consent outside viewport'
+            assert baseline_width is None or geometry['scroll']==baseline_width, 'Consent expanded page width'
+        return geometry
+    finally:
+        await client.detach()
+
+
 async def web_case(browser, site, out, theme, timeout):
     device = browser.device + ('-dark' if theme == 'dark' else '')
     r = {'id': site['id'], 'category': site['category'], 'device': device, 'url': site['url'],
@@ -472,7 +552,26 @@ async def web_case(browser, site, out, theme, timeout):
         r['cohort'] = await page.evaluate('__dlAcceptance.freeze()')
         await page.evaluate('__dlAcceptance.start()')
         restore_start = time.monotonic()
+        requests_before = len(browser.network_requests)
+        baseline_width = await page.evaluate('document.documentElement.scrollWidth')
         await browser.toggle(page, tab)
+        if not browser.ack:
+            r['confirmation_geometry'] = await verify_no_ack(browser,page,requests_before,baseline_width)
+            r['confirmation_visible'] = True
+            r['translation_requests'] = 0
+            if browser.device == 'desktop':
+                # Chromium 130 persistent headless capture can stall with an open
+                # top-layer popover. AX and DOM verify this gate; desktop visuals
+                # are covered by the isolated offline UI suite.
+                r['screenshots'] = []
+                r['screenshot_note'] = 'Desktop popover capture omitted; AX/geometry verified'
+            else:
+                r['screenshots'], r['screenshot_errors'] = await screenshot(page, out, site['id']+'-'+device, [])
+            await page.keyboard.press('Escape')
+            r.update(await page.evaluate('__dlAcceptance.restoreResult()'))
+            assert r['restore_identical'], 'Cancel changed original page'
+            r.update(status='PASS', acceptance_mode='first-send-confirmation')
+            return r
         deadline = time.monotonic() + timeout
         idle_since = None
         observed_start = time.monotonic()
@@ -575,7 +674,16 @@ async def pdf_case(browser, site, out, number, theme, timeout):
         source_pixels = await page.locator(original_selector).evaluate(pixel_digest)
         await page.evaluate(PROBE)
         await page.evaluate('__dlAcceptance.freeze()')
+        requests_before = len(browser.network_requests)
         await page.evaluate("window.__acceptancePdfStart=performance.now();document.querySelector('#translate').click()")
+        if not browser.ack:
+            await verify_no_ack(browser,page,requests_before)
+            r['screenshots'],r['screenshot_errors'] = await screenshot(page,out,r['id']+'-'+device,[])
+            await page.keyboard.press('Escape')
+            assert source_dom == await page.locator(original_selector).evaluate(text_layer), 'PDF source DOM changed'
+            assert source_pixels == await page.locator(original_selector).evaluate(pixel_digest), 'PDF source pixels changed'
+            r.update(status='PASS',acceptance_mode='first-send-confirmation',confirmation_visible=True,translation_requests=0,restore_identical=True)
+            return r
         end = time.monotonic() + timeout
         latest = []
         while time.monotonic() < end:
@@ -654,7 +762,7 @@ async def run(args):
     completed = {(r['id'], r['device']) for r in rows}
     metadata = {'run_id': stamp, 'started_utc': datetime.now(timezone.utc).isoformat(), 'repo': str(repo),
         'llm': args.llm, 'policy': 'free MT; optional explicit OpenAI-compatible endpoint; key read only from environment',
-        'emulation_only': True, 'coverage_version': 3, 'restore_version': 2, 'headed': args.headed,
+        'emulation_only': True, 'coverage_version': 3, 'restore_version': 2, 'headed': args.headed, 'ack': args.ack,
         'timeout_seconds': args.timeout or (95 if args.llm != 'none' else 25),
         'probe_sha256': hashlib.sha256(PROBE.encode('utf-8')).hexdigest(),
         'limits': ['Desktop Chromium only, not actual Chrome/Edge or physical Android',
@@ -666,6 +774,8 @@ async def run(args):
                    'Control is a sequential fresh navigation of matched duration, not simultaneous deterministic replay',
                    'Name/identifier/unchanged-MT exclusions are auditable heuristics, not semantic model judgements']}
     if previous:
+        if previous['metadata'].get('ack', True) != args.ack:
+            raise ValueError('Consent mode changed; use a fresh output directory')
         if previous['metadata'].get('coverage_version') != metadata['coverage_version']:
             raise ValueError('Coverage algorithm changed; use a fresh output directory')
         metadata['run_id'] = previous['metadata']['run_id']
@@ -698,9 +808,9 @@ async def run(args):
             raise ValueError('Userscript changed since checkpoint; run into a fresh output directory')
         reports_allowed = True
         async with async_playwright() as pw:
-            devices = list(DEVICES) if args.device == 'all' else [args.device]
+            devices = list(DEVICES) if not args.device or 'all' in args.device else list(dict.fromkeys(args.device))
             for device in devices:
-                browser = Browser(pw, ext, bundle, run_dir, device, args.llm, headed=args.headed)
+                browser = Browser(pw, ext, bundle, run_dir, device, args.llm, headed=args.headed, ack=args.ack)
                 try:
                     await browser.start()
                     metadata['browser_version'] = browser.ctx.browser.version if browser.ctx.browser else 'persistent Chromium'
@@ -727,19 +837,25 @@ async def run(args):
     return 1 if any(r['status'] != 'PASS' for r in rows) else 0
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, default=REPO)
     parser.add_argument('--only', action='append', default=[])
-    parser.add_argument('--device', choices=['desktop', 'phone', 'tablet', 'all'], default='all')
+    parser.add_argument('--device', action='append', choices=['desktop', 'phone', 'tablet', 'all'], help='Repeat to add devices; all (default) runs desktop, phone and tablet')
+    parser.add_argument('--ack', action=argparse.BooleanOptionalAction, default=True, help='Pre-confirm selected destinations (default); --no-ack checks confirmation and zero translation HTTP')
     parser.add_argument('--llm', default='none', metavar='BASE_URL', help='Explicit OpenAI-compatible base URL; default none. Key: DUALLENS_API_KEY; model: DUALLENS_MODEL')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--resume', type=Path, help='Resume a checkpoint directory; extension/userscript hashes must match')
     parser.add_argument('--timeout', type=float, help='Observation deadline in seconds (default MT=25/LLM=95)')
     parser.add_argument('--headed', action='store_true', help='Visible Chromium; no headless flag; ordinary desktop UA')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.timeout is not None and not 3 <= args.timeout <= 180:
         parser.error('--timeout must be 3..180 seconds')
+    return args
+
+
+def main():
+    args = parse_args()
     try:
         args.llm = validate_llm_url(args.llm)
         if args.llm != 'none' and not os.environ.get('DUALLENS_MODEL'):

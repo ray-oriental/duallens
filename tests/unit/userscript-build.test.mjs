@@ -36,6 +36,15 @@ test('shared export helper preserves live function bindings',async()=>{
   });
 });
 
+test('compact private export slots preserve aliases, namespace names and public resource exports',async()=>{
+  await fixture({'dep.js':'export const longPrivateName=7; export const other=9;',
+    'entry.js':'import {longPrivateName as first,other as second} from "./dep.js"; export function publicResource(){return first+second;}'},async root=>{
+    const code=await buildBundle(path.join(root,'entry.js'),{root,entryExports:['publicResource']});
+    const out=vm.runInNewContext(code,{});assert.equal(out.publicResource(),16);
+    assert.ok(!code.includes('"longPrivateName":()=>'));
+  });
+});
+
 test('unused export getters are omitted while side effects and imported getters remain',async()=>{
   await fixture({'dep.js':'globalThis.effect=7; export const unusedGetterName=1; export const used=2;',
     'entry.js':'import {used} from "./dep.js";globalThis.result=used;'},async root=>{

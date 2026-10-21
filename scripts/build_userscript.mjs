@@ -322,6 +322,11 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
   }
   const ids=new Map([...graph.keys()].map((file,i)=>[file,i]));
   const id=file=>ids.get(file);
+  // Private named imports use compact property ids; namespace and public resource
+  // exports retain their names. Source bindings and live getters remain unchanged.
+  const named=new Set(entryExports.length?[entryFile]:[]);
+  for(const mod of graph.values())for(const item of mod.imports)if(item.namespace)named.add(item.file);
+  const slots=new Map([...graph].map(([file,mod])=>[file,new Map(mod.exports.map((e,i)=>[e.local,named.has(file)?e.local:i]))]));
   const factories = [];
   for (const [file, mod] of graph) {
     let code = mod.source;
@@ -331,12 +336,12 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
         const item = mod.imports[edit.importIndex];
         const require = `__r(${JSON.stringify(id(item.file))})`;
         replacement = item.namespace ? `const ${item.namespace} = ${require};` : item.bindings.length
-          ? `const { ${item.bindings.map((b) => b.imported===b.local ? b.local : `${b.imported}: ${b.local}`).join(', ')} } = ${require};` : `${require};`;
+          ? `const { ${item.bindings.map((b) => `${JSON.stringify(slots.get(item.file).get(b.imported))}: ${b.local}`).join(', ')} } = ${require};` : `${require};`;
       }
       code = code.slice(0, edit.start) + replacement + code.slice(edit.end);
     }
     code = compactSource(code, path.relative(root,file));
-    code += '\n__x(__e,{' + mod.exports.filter(e=>used.get(file).has(e.local)).map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
+    code += '\n__x(__e,{' + mod.exports.filter(e=>used.get(file).has(e.local)).map(e=>`${JSON.stringify(slots.get(file).get(e.local))}:()=>${e.imported}`).join(',') + '});';
     factories.push(`${JSON.stringify(id(file))}:function(__e,__r){\n${code}\n}`);
   }
   const bundle = `// Modules: ${JSON.stringify([...graph.keys()].map(f=>path.relative(root,f).replaceAll('\\','/')))}\n(function() {\n'use strict';\nfunction __x(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __r(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __r);\n return out;\n}\n${entryExports.length ? 'return ' : ''}__r(${JSON.stringify(id(entryFile))});\n})();\n`;

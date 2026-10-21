@@ -11,6 +11,16 @@ from playwright.async_api import async_playwright
 
 
 class ReportTests(unittest.TestCase):
+    def test_consent_cli_defaults_and_repeated_devices(self):
+        self.assertTrue(runner.parse_args([]).ack)
+        args=runner.parse_args(['--no-ack','--device','phone','--device','tablet'])
+        self.assertFalse(args.ack)
+        self.assertEqual(args.device,['phone','tablet'])
+        self.assertTrue(runner.parse_args(['--no-ack','--ack']).ack)
+        self.assertEqual(runner.acknowledged_destinations('none'),['mt:microsoft','mt:google'])
+        self.assertEqual(runner.acknowledged_destinations('https://fixture.example/v1'),
+                         ['mt:microsoft','mt:google','llm:https://fixture.example'])
+
     def test_restore_exempts_only_same_control_attribute_and_never_text_or_residue(self):
         delta = {'path':'body:0/div:0','attribute':'aria-valuenow','before':'10','after':'11'}
         control = {'complete':True,'restore_attribute_activity':[delta]}
@@ -111,6 +121,35 @@ class ReportTests(unittest.TestCase):
 
 
 class ProbeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_manager_consent_seed_exists_before_page_scripts(self):
+        context=await self.browser.new_context()
+        try:
+            for ack in [True,False]:
+                seed={'settings':runner.settings('none'),'secrets':{},
+                      'acked':runner.acknowledged_destinations('none') if ack else []}
+                page=await context.new_page()
+                await page.add_init_script(script='('+runner.GM_STUB+')('+json.dumps(seed)+');')
+                await page.goto('data:text/html,<script>window.earlyState=GM_getValue("duallens:local")["ui.device"]</script>')
+                self.assertEqual(await page.evaluate('earlyState.acked'),seed['acked'])
+                self.assertTrue(await page.evaluate('earlyState.onboarded'))
+                await page.close()
+        finally:await context.close()
+
+    async def test_mobile_capture_preserves_viewport_and_fixed_card(self):
+        context=await self.browser.new_context(viewport={'width':375,'height':812},is_mobile=True,has_touch=True)
+        try:
+            page=await context.new_page()
+            await page.set_content('<meta name="viewport" content="width=device-width, initial-scale=1"><div style="height:4000px"></div><aside style="position:fixed;right:16px;bottom:16px;width:343px">Confirm</aside>')
+            before=await page.evaluate('({w:innerWidth,h:innerHeight,scroll:document.documentElement.scrollWidth,box:document.querySelector("aside").getBoundingClientRect().toJSON()})')
+            with tempfile.TemporaryDirectory() as tmp:
+                paths,errors=await runner.screenshot(page,Path(tmp),'probe-phone',[])
+                self.assertEqual(errors,[]);self.assertEqual(paths,['probe-phone-viewport.png'])
+                png=(Path(tmp)/paths[0]).read_bytes()
+                self.assertEqual((int.from_bytes(png[16:20],'big'),int.from_bytes(png[20:24],'big')),(375,812))
+            after=await page.evaluate('({w:innerWidth,h:innerHeight,scroll:document.documentElement.scrollWidth,box:document.querySelector("aside").getBoundingClientRect().toJSON()})')
+            self.assertEqual(after,before)
+        finally:await context.close()
+
     async def asyncSetUp(self):
         self.pw = await async_playwright().start()
         self.browser = await self.pw.chromium.launch(headless=True, args=['--no-proxy-server'])

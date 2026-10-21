@@ -25,13 +25,19 @@ export function requestDestinations(s, req = {}) {
   }
   if (mode !== 'mt') for (const {profile} of chain) if (profile.kind !== 'mock') {
     const id = llmDestination(profile.baseUrl);
-    if (id) dests.push({id, name:profile.name || new URL(profile.baseUrl).hostname, host:new URL(profile.baseUrl).host});
+    if (id) dests.push({id, name:profile.name?.trim() || new URL(profile.baseUrl).hostname, host:new URL(profile.baseUrl).host});
   }
   return dests.filter((d,i,a) => a.findIndex(x => x.id === d.id) === i);
 }
 export function destinationMessage(d) {
-  if (d.fallback) return l10n('m80', [d.host]);
-  return d.id.startsWith('llm:')?l10n('polishConsentAI',[d.name,d.host]):l10n('polishConsentMT',[d.name,d.host]);
+  if (d.fallback) return l10n('m80');
+  if (d.id === 'mt:microsoft') return l10n('consentMicrosoft');
+  return d.id.startsWith('llm:')?l10n('polishConsentAI',[d.name.trim()]):l10n('polishConsentMT',[d.name.trim()]);
+}
+export function destinationNotice(dests) {
+  const pair=dests.some(d=>d.id==='mt:microsoft')&&dests.some(d=>d.id==='mt:google'&&d.fallback);
+  return {message:dests.filter(d=>!pair||!d.fallback).map(d=>pair&&d.id==='mt:microsoft'?l10n('consentMicrosoftFallback'):destinationMessage(d)).join('\n'),
+    details:dests.map(d=>d.name.trim()+': '+d.host).join('\n')};
 }
 export function createConfirmationGuard(localArea) {
   return async (settings, req) => {

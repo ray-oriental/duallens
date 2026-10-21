@@ -294,7 +294,7 @@ export class InputBox{
   }
 
   #fallback(text){
-    this.failure?.detach();const ui=createOverlay('.failure{position:fixed;bottom:24px;left:8px;max-width:calc(100vw - 16px);padding:12px;background:var(--bg);border:1px solid var(--line);border-radius:12px;pointer-events:auto}.failure textarea{display:block;max-width:100%;width:320px}');
+    this.failure?.detach();const ui=createOverlay('.failure{position:fixed;bottom:calc(16px + var(--safe-bottom));left:calc(16px + var(--safe-left));width:min(360px,calc(100vw - 32px - var(--safe-left) - var(--safe-right)));padding:12px;background:var(--bg);border:1px solid var(--line);border-radius:12px;pointer-events:auto}.failure textarea{display:block;max-width:100%;width:100%}');
     const box=node('div','failure'),value=node('textarea'),copy=node('button','',UI.s10),close=node('button','',UI.s12);
     box.setAttribute('role','alert');value.readOnly=true;value.value=text;value.setAttribute('aria-label',UI.s9);
     copy.onclick=async()=>{try{await navigator.clipboard.writeText(text);copy.textContent=UI.s11;}catch{value.select();}};

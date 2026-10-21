@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createConfirmationGuard,requestDestinations,destinationMessage} from '../../extension/shared/destinations.js';
+import {createConfirmationGuard,requestDestinations,destinationMessage,destinationNotice} from '../../extension/shared/destinations.js';
 import {createTranslator} from '../../extension/background/translator.js';
 import {createHandlers} from '../../extension/background/handlers.js';
 import {createMT} from '../../extension/background/mt.js';
@@ -21,6 +21,17 @@ function fixture(mode='llm',engine='microsoft') {
   return {settings,translator,cache,guard,ack(ids){acked=ids;},requests:()=>network+provider.calls.length};
 }
 
+test('consent uses plain copy and keeps hosts only in collapsed details',()=>{
+  const notice=destinationNotice(requestDestinations(fixture('mt').settings));
+  assert.equal(notice.message,'将使用微软免费翻译，本页文字会发送给微软；失败时改用谷歌。');
+  assert.match(notice.details,/edge\.microsoft\.com/);assert.match(notice.details,/clients5\.google\.com/);
+  const ai=destinationNotice([{id:'llm:https://fixture.example',name:'  Fixture AI  ',host:'fixture.example'}]);
+  assert.equal(ai.message,'将使用Fixture AI，本页文字和标题会发送给Fixture AI。');
+  assert.equal(ai.details,'Fixture AI: fixture.example');
+  const primary=destinationNotice(requestDestinations({...fixture('mt').settings,translation:{mode:'mt',mt:{engine:'microsoft',fallback:false}}}));
+  assert.ok(!primary.message.includes('谷歌'));assert.ok(!primary.details.includes('google'));
+});
+
 for(const mode of ['mt','llm','mt+llm','auto']) for(const purpose of ['page','selection','hover','input','pdf','text','subtitle','comics']) {
   test(`worker rejects unconfirmed ${purpose}/${mode} with zero MT/LLM network calls`,async()=>{
     const f=fixture(mode);
@@ -37,8 +48,8 @@ test('acknowledging only primary cannot authorize a fallback, and official engin
   const f=fixture('mt');f.ack(['mt:microsoft']);
   await assert.rejects(f.guard(f.settings,{}),e=>e.destination.id==='mt:google');assert.equal(f.requests(),0);
   for(const engine of ['deepl','microsoft-api'])assert.deepEqual(requestDestinations(fixture('mt',engine).settings).map(d=>d.id),['mt:'+engine]);
-  assert.match(destinationMessage(requestDestinations(f.settings)[1]),/微软失败时才用谷歌/);
-  assert.match(destinationMessage(requestDestinations(fixture().settings)[0]),/文字和页面标题/);
+  assert.match(destinationMessage(requestDestinations(f.settings)[1]),/微软失败时将改用谷歌/);
+  assert.match(destinationMessage(requestDestinations(fixture().settings)[0]),/文字和标题/);
 });
 test('mock and loopback are exempt; remote override and unreadable state fail closed',async()=>{
   const f=fixture();

@@ -1,7 +1,7 @@
 import { t as l10n } from '../shared/i18n.js';
 // Content-only gate shared by the extension and userscript. No text crosses the transport
 // until every possible destination (including fallbacks) has been acknowledged on this device.
-import{requestDestinations,destinationMessage}from '../shared/destinations.js';
+import{requestDestinations,destinationNotice}from '../shared/destinations.js';
 export {requestDestinations};
 import{loadDeviceState,needsConfirmation,acknowledge}from '../shared/device-state.js';
 import{createOverlay}from './overlay.js';
@@ -10,14 +10,16 @@ const UI={
   title:l10n('m41'),continue:l10n('m42'),change:l10n('m43'),close:l10n('m44'),stopped:l10n('m45'),
   download:l10n('m46'),ocr:l10n('m47'),
 };
-const CSS=`.confirm{position:fixed;right:max(16px,var(--safe-right));bottom:max(16px,var(--safe-bottom));width:320px;max-width:calc(100vw - 32px);padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);box-shadow:var(--shadow);pointer-events:auto}.confirm.left{right:auto;left:max(16px,var(--safe-left))}.confirm p{margin:4px 24px 12px 0;overflow-wrap:anywhere}.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.confirm button{padding:6px 10px;color:var(--accent);background:transparent}.confirm .primary{background:var(--accent);color:var(--accent-fg)}.confirm .close{position:absolute;right:6px;top:6px;padding:2px 8px;color:var(--fg2)}`;
+const CSS=`.confirm{position:fixed;right:calc(16px + var(--safe-right));bottom:calc(16px + var(--safe-bottom));width:min(360px,calc(100vw - 32px - var(--safe-left) - var(--safe-right)));max-height:calc(100dvh - 32px - var(--safe-top) - var(--safe-bottom));overflow:auto;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);box-shadow:var(--shadow);pointer-events:auto}.confirm.left{right:auto;left:calc(16px + var(--safe-left))}.confirm p{margin:4px 24px 12px 0;overflow-wrap:anywhere;white-space:pre-line}.confirm details{margin-bottom:12px}.confirm summary{cursor:pointer;color:var(--fg2)}.actions{position:sticky;bottom:0;background:var(--bg);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.confirm button{padding:6px 10px;color:var(--accent);background:transparent}.confirm .primary{background:var(--accent);color:var(--accent-fg)}.confirm .close{position:absolute;right:6px;top:6px;padding:2px 8px;color:var(--fg2)}`;
 
-export function confirmationCard({message,platform,label=UI.continue,signal,left=false,root,group='common'}){
+export function confirmationCard({message,details,platform,label=UI.continue,signal,left=false,root,group='common'}){
   if(signal?.aborted)return Promise.resolve(false);
   return new Promise(resolve=>{
     const ui=root?null:createOverlay(CSS),box=document.createElement('section');box.className=root?'dl-notice dl-confirmation':'confirm'+(left?' left':'');
     box.setAttribute('role','alertdialog');box.setAttribute('aria-label',UI.title);
     const p=document.createElement('p');p.textContent=message;
+    const disclosure=document.createElement('details'),summary=document.createElement('summary'),hosts=document.createElement('p');
+    summary.textContent=l10n('polishDetails');hosts.textContent=details;disclosure.append(summary,hosts);
     const actions=document.createElement('div');actions.className='actions';
     const finish=ok=>{ui?.detach();box.remove();document.removeEventListener('keydown',key,true);signal?.removeEventListener('abort',abort);resolve(ok);};
     const key=e=>{if(e.key==='Escape'){e.stopImmediatePropagation();finish(false);}};
@@ -25,7 +27,7 @@ export function confirmationCard({message,platform,label=UI.continue,signal,left
     const button=(text,fn,cls='')=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.className=cls;b.onclick=fn;return b;};
     const close=button('×',()=>finish(false),'close');close.setAttribute('aria-label',l10n('polishCancelSend'));
     actions.append(button(UI.change,()=>{finish(false);platform.openSettings(group);}),button(label,()=>finish(true),'primary'));
-    box.append(p,close,actions);if(root)root.append(box);else{ui.el.append(box);ui.attach();}
+    box.append(p,close);if(details)box.append(disclosure);box.append(actions);if(root)root.append(box);else{ui.el.append(box);ui.attach();}
     actions.lastChild.focus();document.addEventListener('keydown',key,true);signal?.addEventListener('abort',abort,{once:true});
   });
 }
@@ -50,7 +52,7 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
         const missing=dests.filter(d=>needsConfirmation(state,d.id));
         if(missing.length){
           const s=getSettings();
-          const ok=await prompt({message:missing.map(d=>destinationMessage(d)).join(' '),platform:p,signal:job.abort.signal,
+          const ok=await prompt({...destinationNotice(missing),platform:p,signal:job.abort.signal,
             group:missing.some(d=>d.id.startsWith('llm:'))?'ai':'common',
             left:s.floatBall?.enabled&&s.floatBall.side!=='left'});
           if(!ok&&req.purpose==='page')out.onDecline?.();

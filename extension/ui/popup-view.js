@@ -1,6 +1,6 @@
 import { t as l10n, uiLanguage } from '../shared/i18n.js';
 import {confirmationCard} from '../content/confirmation.js';
-import {destinationMessage} from '../shared/destinations.js';
+import {destinationNotice} from '../shared/destinations.js';
 import { LANGS,siteRuleFor,setSitePageRule } from '../shared/settings.js';
 import { loadDeviceState,updateDeviceState,acknowledge,mtDestination } from '../shared/device-state.js';
 import { featureNeedsBroad,requestBroad } from '../shared/permissions.js';
@@ -20,7 +20,7 @@ export async function mountPopup(root,{store,platform,localArea=platform.localAr
   let host='';try{host=new URL(url).hostname;}catch{/* unavailable tab */}
   const say=message=>{if(feedback)feedback.textContent=message;};
   async function run(fn){try{for(let retry=0;retry<8;retry++){const result=await fn(),error=result?.error;if(error?.code!=='confirmation-required')return result;
-    if(!error.destination||!await confirmationCard({message:destinationMessage(error.destination),platform:{...platform,openSettings:onSettings},root:box,group:error.destination.id.startsWith('llm:')?'ai':'common'}))return;
+    if(!error.destination||!await confirmationCard({...destinationNotice([error.destination]),platform:{...platform,openSettings:onSettings},root:box,group:error.destination.id.startsWith('llm:')?'ai':'common'}))return;
     await acknowledge(localArea,error.destination.id);}}catch(error){say(error.message||T.failure);}}
   const button=(text,fn,attrs={})=>{const b=el('button',text,{type:'button',...attrs});b.addEventListener('click',()=>run(fn));return b;};
   async function persist(patch){s=await store.save(patch);if(!closed)draw();}

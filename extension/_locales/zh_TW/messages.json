@@ -994,12 +994,7 @@
     "message": "微软 Translator"
   },
   "m80": {
-    "message": "微软失败时才用谷歌，本页文字会发送到 $p1$。",
-    "placeholders": {
-      "p1": {
-        "content": "$1"
-      }
-    }
+    "message": "微软失败时将改用谷歌，本页文字会发送给谷歌。"
   },
   "m81": {
     "message": "和标题"
@@ -2733,24 +2728,18 @@
     "message": "取消，不发送"
   },
   "polishConsentAI": {
-    "message": "将使用 $p1$（$p2$）翻译。本页文字和页面标题会发送给它。",
+    "message": "将使用$p1$，本页文字和标题会发送给$p1$。",
     "placeholders": {
       "p1": {
         "content": "$1"
-      },
-      "p2": {
-        "content": "$2"
       }
     }
   },
   "polishConsentMT": {
-    "message": "将使用 $p1$（$p2$）翻译。本页文字会发送给它。",
+    "message": "将使用$p1$，本页文字会发送给$p1$。",
     "placeholders": {
       "p1": {
         "content": "$1"
-      },
-      "p2": {
-        "content": "$2"
       }
     }
   },
@@ -2819,5 +2808,11 @@
         "content": "$1"
       }
     }
+  },
+  "consentMicrosoft": {
+    "message": "将使用微软免费翻译，本页文字会发送给微软。"
+  },
+  "consentMicrosoftFallback": {
+    "message": "将使用微软免费翻译，本页文字会发送给微软；失败时改用谷歌。"
   }
 }
