@@ -1,5 +1,8 @@
 import { parsePattern } from '../../shared/site-pattern.js';
 
+// User-visible copy is centralized for the next localization pass.
+const COPY=Object.freeze({s0:"规则已加入列表；点击保存设置。",s1:"站点模式或规则 JSON 无效，例如 example.com/docs/*"});
+
 // Shared compact editor; selector/style fields survive updates of an existing pattern.
 export function mountSiteRules(root) {
   const $ = id => root.querySelector('#' + id), json = $('customRules');
@@ -20,7 +23,7 @@ export function mountSiteRules(root) {
       if (!rules.includes(rule)) rules.push(rule);
       json.value = JSON.stringify(rules, null, 2);
       json.dispatchEvent(new Event('input', { bubbles: true }));
-      $('status').textContent = '规则已加入列表；点击保存设置。';
-    } catch { $('status').textContent = '站点模式或规则 JSON 无效，例如 example.com/docs/*'; }
+      $('status').textContent = COPY.s0;
+    } catch { $('status').textContent = COPY.s1; }
   };
 }

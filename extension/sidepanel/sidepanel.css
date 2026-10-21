@@ -1,5 +1,1 @@
-:root { color-scheme:light dark; --fg:#1f2328;--fg2:#59636e;--bg:#fff;--bg2:#f6f8fa;--line:#d1d9e0;--accent:#4263eb;--accent-fg:#fff; }
-body { margin:0;padding:16px;background:var(--bg);color:var(--fg);font:16px/1.5 "Segoe UI","Microsoft YaHei",sans-serif; }
-h1 { font-size:20px;margin:0 0 12px; }
-summary { cursor:pointer;min-height:44px;padding:12px 0; }
-@media(prefers-color-scheme:dark) { :root { --fg:#e6edf3;--fg2:#9198a1;--bg:#1c2128;--bg2:#262c36;--line:#3d444d;--accent:#748ffc;--accent-fg:#101418; } }
+body{margin:0;padding:16px;background:var(--dl-bg);color:var(--dl-text);font:14px/1.5 var(--dl-font)}h1{font-size:20px;margin:0 0 12px}summary{cursor:pointer;min-height:44px;padding:12px 0}

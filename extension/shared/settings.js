@@ -27,6 +27,15 @@ export const LANGS = Object.freeze([
   { code: 'th', name: 'ไทย' },
 ]);
 
+// Match the browser UI language once for fresh settings; persisted choices always win.
+export function defaultTargetLanguage(language = globalThis.navigator?.language) {
+  const tag = String(language || '').toLowerCase().replace(/_/g, '-');
+  const exact = LANGS.find(l => l.code.toLowerCase() === tag);
+  if (exact) return exact.code;
+  if (/^zh(?:-|$)/.test(tag)) return /(?:tw|hk|mo|hant)/.test(tag) ? 'zh-TW' : 'zh-CN';
+  return LANGS.find(l => l.code.toLowerCase() === tag.split('-')[0])?.code || 'zh-CN';
+}
+
 // Visual styles for inserted translations; CSS lives in styles/content.css as .dl-s-<id>.
 export const STYLES = Object.freeze([
   { id: 'muted', name: '默认（轻微弱化）', legacyIds: ['italic', 'bold'] },
@@ -49,7 +58,7 @@ export const TRANSLATION_MODES = Object.freeze([
 
 export const DEFAULT_SETTINGS = Object.freeze({
   version: SETTINGS_VERSION,
-  targetLang: 'zh-CN',
+  targetLang: defaultTargetLanguage(),
   sourceLang: 'auto',
   displayMode: 'bilingual', // 'bilingual' | 'translation-only'
   style: 'muted',
@@ -103,7 +112,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // A leading "/xx " (e.g. "/ja ") overrides targetLang for that one translation.
   input: { enabled: false, trigger: 'triple-space', targetLang: 'en', prefixOverride: true,
     mode: 'replace', order: 'source-first', profileId: '', model: '' },
-  floatBall: { enabled: false, side: 'right', topRatio: 0.6 },
+  floatBall: { autoHide: true, enabled: false, side: 'right', topRatio: 0.6 },
 
   siteRules: {
     always: [], // host patterns to auto-translate on load
@@ -147,7 +156,7 @@ export function publicSettings(value) {
   if (!isPlainObject(value)) return value;
   const out = {};
   for (const [key, val] of Object.entries(value)) {
-    if (/^(secrets|apiKey|api_key|pairingToken|remote_token|token|password|authorization|proxy_token|__proto__|constructor|prototype)$/i.test(key)) continue;
+    if (/^(ui(?:\..*)?|secrets|apiKey|api_key|pairingToken|remote_token|token|password|authorization|proxy_token|__proto__|constructor|prototype)$/i.test(key)) continue;
     out[key] = publicSettings(val);
   }
   return out;
@@ -195,7 +204,7 @@ function mirrorDigest(value) {
   return sha256Hex(JSON.stringify(canonical(value)));
 }
 
-export function createSettingsStore({ syncArea, localArea }) {
+export function createSettingsStore({ syncArea, localArea, browserLanguage }) {
   if (!localArea) throw new Error('需要本机设置存储');
   let serial = Promise.resolve();
   let status = { synced: false, reason: 'unavailable' };
@@ -206,6 +215,10 @@ export function createSettingsStore({ syncArea, localArea }) {
   };
   async function persist(input, legacySecrets = {}, preserveProvider = false) {
     preserveProvider ||= (input?.version ?? 1) < SETTINGS_VERSION;
+    if (input && (input.version ?? 1) < 3 && ['floatBall','selection','hover','input','comics'].some(f => input[f]?.enabled)) {
+      const state = (await localArea.get('ui.device'))['ui.device'];
+      if (!state) await localArea.set({ 'ui.device': { onboarded: true, acked: [], upgradeNoticeSeen: false } });
+    }
     const s = publicSettings(migrateSettings(input));
     s.version = SETTINGS_VERSION;
     validateSiteRules(s.siteRules);
@@ -264,7 +277,7 @@ export function createSettingsStore({ syncArea, localArea }) {
         status = { synced: false, reason: 'unavailable' };
       } catch { status = { synced: false, reason: 'unavailable' }; }
     }
-    const combined = got['settings.core'] ? combine(got) : structuredClone(DEFAULT_SETTINGS);
+    const combined = got['settings.core'] ? combine(got) : {...structuredClone(DEFAULT_SETTINGS),targetLang:defaultTargetLanguage(browserLanguage)};
     return combined.version < SETTINGS_VERSION ? persist(combined) : publicSettings(combined);
   }
   const store = {
@@ -314,7 +327,7 @@ export function getDefaultSettingsStore() {
   if (!storage?.local) throw new Error('默认扩展存储不可用，请传入 SettingsStore');
   if (defaultStorage !== storage) {
     defaultStorage = storage;
-    defaultStore = createSettingsStore({ localArea: chromeStorageArea(storage.local, 'local', storage.onChanged),
+    defaultStore = createSettingsStore({ browserLanguage:globalThis.chrome?.i18n?.getUILanguage?.(),localArea: chromeStorageArea(storage.local, 'local', storage.onChanged),
       syncArea: storage.sync && chromeStorageArea(storage.sync, 'sync', storage.onChanged) });
   }
   return defaultStore;
@@ -383,6 +396,7 @@ export function validateSiteRules(rules) {
 }
 
 export function validateInteractionSettings(s) {
+  if (typeof s.floatBall?.autoHide !== 'boolean') throw new Error('悬浮球自动隐藏开关无效');
   if (!['replace', 'bilingual'].includes(s.input?.mode) ||
       !['source-first', 'translation-first'].includes(s.input?.order)) throw new Error('输入框双语模式或顺序无效');
   for (const name of ['hover', 'input']) {

@@ -347,6 +347,8 @@ LLM 缓存命中直接返回终稿，不为这些项目请求 MT。官方 MT key
 
 ## 11. 实现约束
 
+UI 设置增量：`floatBall.autoHide` 为布尔值，默认 `true`；目标语言的新安装默认值由 `defaultTargetLanguage()` 匹配浏览器语言，已有配置优先。`ui.device` 是独立本机状态，公共设置及所有配置导出/导入忽略 `ui` 和 `ui.*`。设置页的七组哈希、即时保存与表单保存约定见 PLATFORMS §3 和 DESIGN §5。桌面与 closed shadow root 的 UI 使用同一令牌/组件 CSS；修改 CSS 后运行 `node scripts/sync_ui_styles.mjs` 更新随源码分发的内联副本，扩展安装仍无需构建。
+
 - manifest 的公开 key 只固定开发版扩展身份，不含签名私钥。
 - JSON 长度错误不得回退扫描其内部 seg；纯解释文本不回填。源语言和标题参与缓存。
 - 验证流程见 VALIDATION.md，平台与待办边界见 PLATFORMS.md 和 ROADMAP.md。

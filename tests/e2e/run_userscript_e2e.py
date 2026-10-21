@@ -115,6 +115,10 @@ def rect(page, selector):
 
 
 def click_shadow(page, selector):
+    # Navigate the v1 grouped UI before exercising the actual pointer target.
+    group = page.evaluate("s=>__platformFixture.elements(s)[0]?.closest('[data-group]')?.dataset.group", selector)
+    if group:
+        page.evaluate("g=>__platformFixture.elements('[data-group-link]').find(n=>n.dataset.groupLink===g)?.click()", group)
     page.evaluate("s => __platformFixture.elements(s)[0]?.scrollIntoView({block:'center'})", selector)
     r = rect(page, selector)
     check(bool(r), 'missing UI control: ' + selector)
@@ -316,7 +320,7 @@ def openrouter_profile_case(page, base):
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
     page.evaluate("() => {const e=__platformFixture.elements('#providerPreset')[0];e.value='openrouter';e.dispatchEvent(new Event('change',{bubbles:true}));}")
-    click_shadow(page, '#add-profile')
+    click_shadow(page, '#preset-openrouter')
     page.wait_for_function("__platformFixture.elements('#profile')[0].value==='openrouter'&&!__platformFixture.elements('#set-key')[0].disabled")
     check(page.evaluate("__platformFixture.elements('input[type=password]').length") == 0, 'userscript rendered a secret/password input')
     # A hostile page hooks composed keyboard/paste events and replaces its window.prompt.
@@ -366,7 +370,10 @@ def openrouter_profile_case(page, base):
     assert_secret_private(page)
     secret_prompt(page, '#export', 'e2e backup passphrase')
     page.wait_for_function("__platformFixture.elements('#backupText')[0].value.startsWith('duallens-config:v1:')")
-    click_shadow(page, '#clear-key'); click_shadow(page, '#save')
+    click_shadow(page, '#clear-key')
+    check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'clear happened before confirmation')
+    click_shadow(page, '.confirmation button:last-child')
+    click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local').secrets.openrouter.apiKey===''")
     check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '未设置', 'clear status missing')
     # Cancellation preserves the cleared state; native passphrase import restores the key.

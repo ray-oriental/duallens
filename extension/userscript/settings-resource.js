@@ -19,6 +19,7 @@ export function createSettingsFormLoader(getResourceText, spec = RESOURCE) {
         // Only the pinned, verified release code runs in this sandbox. No DOM script/global bridge.
         const module = new Function('return (\n' + source.trim().replace(/;$/, '') + '\n);')();
         if (typeof module?.mountSettingsForm !== 'function') throw new Error();
+        module.mountSettingsForm.version=spec.version || spec.url?.match(/\/v([^/]+)\/duallens-settings\.js$/)?.[1] || null;
         return module.mountSettingsForm;
       } catch { pending = null; throw new Error(SETTINGS_RESOURCE_ERROR); }
     });

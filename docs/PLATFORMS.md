@@ -154,6 +154,9 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 
 ## 3. 设置 v3：可同步设置与机密分离
 
+- v1 界面增量：`floatBall.autoHide:boolean` 默认 `true`，随公共设置同步；新安装的 `targetLang` 匹配浏览器界面语言（中文地区/文字变体分别匹配简繁），不支持时回退 `zh-CN`，已有选择保持不变。
+- `ui.device` 独立存在 `localArea`，包含 `onboarded`、`acked`、`upgradeNoticeSeen`，不进入设置分片、明文或加密配置；恢复默认保留它和本机密钥。旧版迁移确实关闭过增强功能时，记录本机一次性升级提示。
+
 - `syncArea` 存非机密设置，`localArea` 存 `secrets`：`{ [profileId]: { apiKey } }`。API key **永远**不进同步区、
   不进导出（除非走加密导出）、不进日志、不进页面上下文以外的任何地方。
 - `chrome.storage.sync` 单项上限 8 KB、总量 100 KB：设置拆成 `settings.core`、`settings.glossary`、`settings.sites`
@@ -164,14 +167,15 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 - 统一入口 `createSettingsStore({ syncArea, localArea })`，返回
   `{ load(), save(patch), getSecret(id), setSecret(id, key), onChange(cb) }`。旧的 `loadSettings/saveSettings`
   改为基于默认平台的薄包装，保持现有调用不坏。
+- 可选的 `browserLanguage` 注入浏览器界面语言，仅影响新安装默认目标语言；省略时用 navigator.language。默认扩展 UI 存储包装器从 chrome.i18n.getUILanguage 传入，已保存的目标语言始终优先。
 - **跨 profile 的备选链**：`provider.chain = [{ profileId, model }, …]`。冷却仍以「profile + 模型」为单位，429/502/503/
   连接失败时立刻换下一项（SPEC §8 的规则不变，只是范围从一个 profile 扩大到整条链）。
 - **服务商预设** `extension/shared/presets.js`：OpenAI、DeepSeek、OpenRouter（免费模型发现）、Ollama（`http://localhost:11434/v1`）、LM Studio（`http://localhost:1234/v1`）及自定义。Ollama 需配置 `OLLAMA_ORIGINS` 允许扩展来源。其它设备须使用它们可以访问的服务地址；无需任何固定本机服务。
 - **OpenRouter 免费模型**：`GET https://openrouter.ai/api/v1/models`（公开、无需 key），筛出输入输出单价都为 0 的模型，
   按上下文长度和是否支持 `response_format` 排序供用户挑选；请求头带 `X-Title: DualLens`。免费档有每分钟和每日上限，
   所以默认链里放 2 到 3 个不同厂商的免费模型。
-- **首次使用向导**：设置页第一次打开、或当前链里没有一个可用 profile 时显示：选预设 → 填 key → 获取模型 → 测试连接 →
-  保存。用户脚本的页内设置面板用同一组表单组件。
+- **首次上手**：第一次打开弹出页时显示语言、翻译方式/去向、完成三步，可跳过；完成不触发翻译。确认免费翻译时记录微软和谷歌两个去向，跳过不确认。AI 服务在设置中主动保存并获得来源权限后确认实际来源。
+- 设置按 `common/ai/enhance/sites/glossary/data/about` 七组显示，即时字段自动保存，AI、网站规则和术语表使用分组保存/取消。用户脚本设置仍从校验后的独立资源按需挂载；该资源额外提供 `mountSettingsForm.mountPopup`，供手机底部面板复用日常弹出页。
 - 用户脚本的 key 与备份口令只能通过 `platform.promptSecret` 输入。API key 区只显示「已设置 / 未设置」及设置、清除按钮，
   不创建 key/password 输入框；原生对话框不得预填旧值，也不得调用网页的 `window.prompt`。页面的 composed 输入事件可穿过 closed shadow root，不能依赖圆点编辑器隔离密钥。
   真机验收必须确认 Tampermonkey 启用了隔离世界；[官方 sandbox 文档](https://www.tampermonkey.net/documentation.php?q=sandbox)说明 DOM 模式在隔离上下文未启用时可能使用其他已启用上下文，不能将页面世界运行作为安全配置。

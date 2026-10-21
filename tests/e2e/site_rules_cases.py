@@ -58,11 +58,15 @@ def extension_case(h):
     # A tab-opened popup is otherwise its own active tab. Resolve the actual fixture tab.
     popup.add_init_script(f"chrome.tabs.query = async () => [await chrome.tabs.get({h.tab_id})]")
     popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
-    popup.wait_for_function("document.querySelector('#site').value==='always'")
-    popup.select_option('#site-scope', 'path')
-    popup.select_option('#site', 'never')
+    popup.locator('#onboard-skip, input[name="本站"]').first.wait_for(state='attached')
+    if popup.locator('#onboard-skip').count():
+        popup.click('#onboard-skip')
+    popup.locator('input[name="本站"][value="always"]').wait_for(state='attached')
+    popup.locator('input[name="本站"][value="always"]:checked').wait_for(state='attached')
+    popup.locator('#site-path').check()
+    popup.locator('input[name="本站"][value="never"]').check()
     h.wait_state(lambda s: s['dormant'], 10, 'popup path rule applied')
-    popup.wait_for_function("document.querySelector('#status').textContent==='站点规则已保存'")
+    assert popup.locator('input[name="本站"][value="never"]').is_checked()
     assert popup.locator('#toggle').is_enabled(), 'never popup blocked manual translation'
     popup.click('#toggle'); h.wait_units(['#p-plain'])
     popup.close()
@@ -77,6 +81,7 @@ def userscript_case(page, base):
     # The same visual editor must save paths and all feature flags on a narrow mobile panel.
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#rule-match').length===1")
+    page.evaluate("__platformFixture.elements('nav a[href=\"#sites\"]')[0].click()")
     page.evaluate("""() => {
       for (const [field,value] of Object.entries({match:'127.0.0.1/mail/*',page:'never',selection:'off',hover:'off',input:'off'})) {
         const input=__platformFixture.elements('#rule-'+field)[0];
@@ -84,7 +89,7 @@ def userscript_case(page, base):
       }
     }""")
     click_shadow(page, '#site-rule-add')
-    click_shadow(page, 'button[type=submit]')
+    click_shadow(page, '#save-sites')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent==='设置已保存')")
     saved=page.evaluate("__platformFixture.data('duallens:local')['settings.sites'].siteRules")
     assert saved == rules(), 'mobile editor changed path or feature fields'

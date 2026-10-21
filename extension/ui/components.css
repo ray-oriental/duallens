@@ -1,0 +1,53 @@
+/* Shared controls. Keep surface-specific layout in its owning module. */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.dl-theme { color:var(--dl-text); background:var(--dl-bg); font:var(--dl-fs-md)/1.5 var(--dl-font); }
+button,input,select,textarea { font:inherit; color:inherit; }
+button { cursor:pointer; }
+button:disabled { opacity:.55; cursor:default; }
+button,.dl-button { min-height:36px; padding:6px 12px; border:1px solid var(--dl-border-strong); border-radius:var(--dl-r-sm); background:var(--dl-surface); color:var(--dl-text); }
+button:hover:not(:disabled) { background:var(--dl-inset); }
+button.primary,.dl-primary { background:var(--dl-accent); border-color:var(--dl-accent); color:var(--dl-on-accent); font-weight:600; }
+button.primary:hover:not(:disabled),.dl-primary:hover:not(:disabled) { background:var(--dl-accent-hover); }
+.dl-hero { min-height:40px; width:100%; font-weight:600; }
+button.dl-text-button { border-color:transparent; background:transparent; color:var(--dl-text-2); padding:4px 8px; }
+button.dl-danger { color:var(--dl-danger); border-color:var(--dl-danger); }
+input:not([type=checkbox]):not([type=radio]),select,textarea { min-height:36px; max-width:100%; padding:6px 10px; border:1px solid var(--dl-border-strong); border-radius:var(--dl-r-sm); background:var(--dl-surface); color:var(--dl-text); }
+select { cursor:pointer; }
+textarea { resize:vertical; min-height:100px; }
+input::placeholder,textarea::placeholder { color:var(--dl-text-3); }
+:is(button,input,select,textarea,a,summary,[tabindex]):focus-visible { outline:2px solid var(--dl-accent); outline-offset:2px; }
+input[type=checkbox][role=switch] { appearance:none; flex:none; width:34px; height:20px; min-height:20px; border:1.5px solid var(--dl-border-strong); border-radius:var(--dl-r-pill); background:transparent; position:relative; cursor:pointer; margin:0; }
+input[type=checkbox][role=switch]::before { content:''; position:absolute; width:12px; height:12px; top:2.5px; left:3px; border-radius:50%; background:var(--dl-border-strong); transition:transform var(--dl-dur-1) var(--dl-ease); }
+input[type=checkbox][role=switch]:checked { background:var(--dl-accent); border-color:var(--dl-accent); }
+input[type=checkbox][role=switch]:checked::before { background:var(--dl-on-accent); transform:translateX(13px); }
+.dl-segment { display:flex; gap:2px; padding:2px; margin:0; border:0; border-radius:10px; background:var(--dl-inset); }
+.dl-segment label { position:relative; display:flex; flex:1; min-width:0; cursor:pointer; }
+.dl-segment input { position:absolute; opacity:0; width:1px; height:1px; }
+.dl-segment span { display:flex; align-items:center; justify-content:center; min-height:28px; width:100%; padding:2px 8px; border-radius:var(--dl-r-sm); white-space:nowrap; font-size:13px; }
+.dl-segment input:checked + span { background:var(--dl-raised); box-shadow:var(--dl-shadow-1); outline:1px solid var(--dl-accent); font-weight:600; }
+.dl-segment input:focus-visible + span { outline:2px solid var(--dl-accent); outline-offset:2px; }
+.dl-card { background:var(--dl-surface); border:1px solid var(--dl-border); border-radius:var(--dl-r-md); padding:16px; }
+.dl-row { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--dl-border); }
+.dl-row:last-child { border-bottom:0; }
+.dl-row small,.dl-hint,.hint { color:var(--dl-text-2); font-size:13px; }
+.dl-radio-card { position:relative; display:flex; gap:8px; padding:12px; border:1px solid var(--dl-border-strong); border-radius:var(--dl-r-md); cursor:pointer; background:var(--dl-surface); }
+.dl-radio-card:has(input:checked) { border:2px solid var(--dl-accent); background:var(--dl-accent-soft); padding:11px; }
+.dl-radio-card input[type=radio] { accent-color:var(--dl-accent); width:16px; height:16px; min-width:16px; min-height:16px; margin:2px 0; flex:none; }
+.dl-radio-card small { display:block; color:var(--dl-text-2); }
+.dl-actions,.actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.dl-notice { padding:12px; background:var(--dl-surface); border-radius:var(--dl-r-md); box-shadow:var(--dl-shadow-2); color:var(--dl-text-2); }
+.dl-status { color:var(--dl-text-2); font-size:13px; overflow-wrap:anywhere; }
+.dl-warn { color:var(--dl-warn); }
+.dl-ok { color:var(--dl-ok); }
+details > summary { cursor:pointer; padding:8px 0; color:var(--dl-text-2); min-height:36px; }
+kbd { color:var(--dl-text); background:var(--dl-inset); border:1px solid var(--dl-border); border-radius:var(--dl-r-xs); padding:0 4px; font:12px/1.4 var(--dl-font); }
+a { color:var(--dl-accent); }
+@media (max-width:719px), (pointer:coarse) {
+  button,input:not([type=checkbox]):not([type=radio]),select,textarea,summary { min-height:44px; }
+  input:not([type=checkbox]):not([type=radio]),select,textarea { font-size:16px; }
+  .dl-segment span { min-height:40px; }
+  .dl-row { min-height:56px; }
+}
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+@media (forced-colors:active) { button,input,select,textarea,.dl-card,.dl-radio-card { border-color:CanvasText; } input[role=switch]:checked { background:Highlight; } :focus-visible { outline-color:Highlight; } .dl-segment input:checked+span { outline:2px solid Highlight; } }

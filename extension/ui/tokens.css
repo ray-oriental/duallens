@@ -1,0 +1,35 @@
+:root, :host, .dl-theme {
+  --dl-bg: #f6f6f7;  --dl-surface: #ffffff;  --dl-inset: #efeff1;  --dl-raised: #ffffff;
+  --dl-border: #e3e3e8;  --dl-border-strong: #7f7f8b;
+  --dl-text: #1c1c21;  --dl-text-2: #575762;  --dl-text-3: #6b6b76;
+  --dl-accent: #3556d6;  --dl-accent-hover: #2a47b8;  --dl-accent-soft: #e8edff;  --dl-on-accent: #ffffff;
+  --dl-ok: #17704f;  --dl-warn: #8a5a00;  --dl-danger: #b3283f;
+  --dl-scrim: rgba(16, 18, 27, .48);
+  --dl-shadow-1: 0 1px 2px rgba(16, 18, 27, .08);
+  --dl-shadow-2: 0 4px 16px rgba(16, 18, 27, .12), 0 0 0 1px rgba(16, 18, 27, .05);
+  --dl-shadow-3: 0 12px 32px rgba(16, 18, 27, .18), 0 0 0 1px rgba(16, 18, 27, .06);
+  --dl-font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
+  --dl-font-mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --dl-fs-xs: 12px;  --dl-fs-sm: 13px;  --dl-fs-md: 14px;  --dl-fs-lg: 16px;  --dl-fs-xl: 20px;  --dl-fs-card: 15px;
+  --dl-space-1: 4px;  --dl-space-2: 8px;  --dl-space-3: 12px;  --dl-space-4: 16px;
+  --dl-space-5: 24px;  --dl-space-6: 32px;  --dl-space-7: 48px;
+  --dl-r-xs: 4px;  --dl-r-sm: 8px;  --dl-r-md: 12px;  --dl-r-lg: 16px;  --dl-r-pill: 999px;
+  --dl-dur-1: 120ms;  --dl-dur-2: 180ms;  --dl-dur-3: 240ms;  --dl-ease: cubic-bezier(.2, 0, 0, 1);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root, :host, .dl-theme {
+    --dl-bg: #131316;  --dl-surface: #1b1b1f;  --dl-inset: #101013;  --dl-raised: #2a2a31;
+    --dl-border: #34343c;  --dl-border-strong: #82828f;
+    --dl-text: #ececf1;  --dl-text-2: #a9a9b5;  --dl-text-3: #9494a1;
+    --dl-accent: #8fa5ff;  --dl-accent-hover: #a9baff;  --dl-accent-soft: #252c4a;  --dl-on-accent: #0f1530;
+    --dl-ok: #5fcfa3;  --dl-warn: #e3b04b;  --dl-danger: #ff8b9c;
+    --dl-scrim: rgba(0, 0, 0, .60);
+    --dl-shadow-1: 0 1px 2px rgba(0, 0, 0, .40);
+    --dl-shadow-2: 0 4px 16px rgba(0, 0, 0, .50), 0 0 0 1px rgba(255, 255, 255, .06);
+    --dl-shadow-3: 0 12px 32px rgba(0, 0, 0, .60), 0 0 0 1px rgba(255, 255, 255, .08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root, :host, .dl-theme { --dl-dur-1: 0ms; --dl-dur-2: 0ms; --dl-dur-3: 0ms; }
+}

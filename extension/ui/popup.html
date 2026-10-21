@@ -1,15 +1,1 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DualLens</title><link rel="stylesheet" href="ui.css"></head>
-<body class="popup"><header><img src="../icons/48.png" alt=""><div><h1>DualLens 双语翻译</h1><small>用你自己的模型，读更大的世界</small></div></header>
-<div id="page-status" class="status" aria-live="polite">正在连接当前页面…</div>
-<button id="toggle" class="primary hero" disabled>翻译当前页面</button>
-<button id="pdf-open" class="hero" hidden disabled>用 DualLens 打开此 PDF</button>
-<button id="comics" class="hero" disabled>翻译此页漫画</button>
-<div class="grid"><label>目标语言<select id="target"></select></label><label>显示方式<select id="mode"><option value="bilingual">双语对照</option><option value="translation-only">仅显示译文</option></select></label>
-<label>译文样式<select id="style"></select></label><label>翻译方式<select id="tmode"></select></label>
-<label>机器翻译引擎<select id="engine"></select></label><label>翻译接口（大模型）<select id="profile"></select></label>
-<label class="wide">模型<input id="model" list="models" autocomplete="off"><datalist id="models"></datalist></label>
-<label>应用范围<select id="site-scope"><option value="host">整个站点</option><option value="path">仅当前路径</option></select></label>
-<label class="wide">当前站点<select id="site"><option value="">按需翻译</option><option value="always">自动翻译</option><option value="never">从不自动（允许手动）</option></select></label></div>
-<div class="actions"><button id="load-models">获取模型</button><button id="test">测试连接</button><button id="mt-test">测试机器翻译</button></div>
-<p id="subscription" class="hint" hidden>当前手动选择的订阅模型会消耗订阅额度；未设置每日上限。</p><p class="hint">Shift + 悬停翻译段落 · 划词显示译文 · 输入框连按三次空格翻译</p>
-<div id="status" class="status" role="status" aria-live="polite"></div><footer><small>Alt+A 翻译 / 恢复</small><button id="options">全部设置</button></footer><script type="module" src="popup.js"></script></body></html>
+﻿<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DualLens</title><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css"><link rel="stylesheet" href="popup.css"></head><body><script type="module" src="popup.js"></script></body></html>

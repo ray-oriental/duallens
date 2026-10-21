@@ -2,9 +2,12 @@ import { getDefaultSettingsStore } from '../shared/settings.js';
 import { mountSettingsForm } from './forms/index.js';
 import { MSG_CACHE_CLEAR } from '../shared/protocol.js';
 import { drawQRCode } from './forms/qrcode.js';
+import { chromeStorageArea } from '../shared/storage-areas.js';
 
 const platform = {
   kind: 'extension',
+  localArea: chromeStorageArea(chrome.storage.local, 'local', chrome.storage.onChanged),
+  version: chrome.runtime.getManifest().version,
   renderQr: drawQRCode,
   comics: {
     languages:lang=>chrome.runtime.sendMessage({type:lang?'comic-languages-delete':'comic-languages-list',lang}),

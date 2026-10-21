@@ -1,21 +1,22 @@
 import { LANGS } from '../shared/settings.js';
+import { SHARED_CSS } from '../ui/theme.js';
 
-export const MEDIA_CSS = `
-.dl-text,.dl-subtitle-settings { color:var(--fg,#1f2328); font:16px/1.5 "Segoe UI","Microsoft YaHei",sans-serif; }
+export const MEDIA_CSS = SHARED_CSS + `
+.dl-text,.dl-subtitle-settings { color:var(--dl-text,#1f2328); font:16px/1.5 var(--dl-font,system-ui); }
 .dl-text *, .dl-subtitle-settings * { box-sizing:border-box; }
 .dl-text label,.dl-subtitle-settings label { display:flex;flex-direction:column;gap:6px;margin:12px 0; }
 .dl-text input,.dl-text select,.dl-text textarea,.dl-subtitle-settings select,.dl-subtitle-settings input {
-  width:100%;min-height:44px;padding:8px;font:inherit;color:var(--fg,#1f2328);background:var(--bg2,#f6f8fa);
-  border:1px solid var(--line,#d1d9e0);border-radius:6px; }
+  width:100%;min-height:44px;padding:8px;font:inherit;color:var(--dl-text,#1f2328);background:var(--dl-inset,#f6f8fa);
+  border:1px solid var(--dl-border-strong,#d1d9e0);border-radius:8px; }
 .dl-text textarea { min-height:160px;resize:vertical; }
 .dl-text button,.dl-subtitle-settings button,.dl-media-tabs button { min-height:44px;min-width:44px;padding:8px 12px;
-  font:inherit;border:1px solid var(--line,#d1d9e0);border-radius:6px;color:var(--fg,#1f2328);background:var(--bg2,#f6f8fa);cursor:pointer; }
+  font:inherit;border:1px solid var(--dl-border-strong,#d1d9e0);border-radius:8px;color:var(--dl-text,#1f2328);background:var(--dl-inset,#f6f8fa);cursor:pointer; }
 .dl-text .actions,.dl-media-tabs { display:flex;gap:8px;flex-wrap:wrap; }
 .dl-text output { display:block;white-space:pre-wrap;overflow-wrap:anywhere;min-height:100px;padding:12px 0; }
-.dl-text .text-status,.dl-subtitle-settings p { color:var(--fg2,#59636e);overflow-wrap:anywhere; }
+.dl-text .text-status,.dl-subtitle-settings p { color:var(--dl-text-2,#59636e);overflow-wrap:anywhere; }
 .dl-text h2,.dl-subtitle-settings h2 { font-size:18px;margin:14px 0; }
-.dl-text button[type=submit],.dl-media-tabs button[aria-selected=true] { background:var(--accent,#4263eb);color:var(--accent-fg,#fff); }
-.dl-media-tabs { margin:12px 0;border-bottom:1px solid var(--line,#d1d9e0);padding-bottom:12px; }
+.dl-text button[type=submit],.dl-media-tabs button[aria-selected=true] { background:var(--dl-accent,#4263eb);color:var(--dl-on-accent,#fff); }
+.dl-media-tabs { margin:12px 0;border-bottom:1px solid var(--dl-border-strong,#d1d9e0);padding-bottom:12px; }
 .dl-media-page[hidden] { display:none!important; }
 `;
 

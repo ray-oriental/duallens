@@ -41,7 +41,7 @@ export function createUserscriptMediaPanel(platform, { loadSettingsForm }) {
       } catch { if (!disposed) entry.page.textContent = id === 'settings' ? SETTINGS_RESOURCE_ERROR : '页面加载失败，请关闭后重试'; }
     }
     showTab = select; await select(selected);
-    return { destroy() { disposed = true; showTab = null; for (const result of mounted.values()) result?.destroy?.(); root.replaceChildren(); } };
+    return { async canClose(){for(const result of mounted.values())if(result?.canClose&&!await result.canClose())return false;return true;},destroy() { disposed = true; showTab = null; for (const result of mounted.values()) result?.destroy?.(); root.replaceChildren(); } };
   } });
   return { open(tab = 'settings') { selected = tab; if (showTab) return showTab(tab); return panel.open(); }, close: panel.close };
 }
