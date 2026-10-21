@@ -119,12 +119,18 @@ def cases(h, calls):
     p.wait_for_timeout(350)
     assert p.locator('#reject').inner_text() == 'LEFT hello RIGHT'
     assert h.ui("f=>f.elements('.failure textarea').some(e=>e.value==='【译】hello')")
-    assert h.ui("f=>f.elements('.failure').some(e=>e.textContent.includes('编辑器未确认写回'))")
+    assert h.ui("f=>f.elements('.failure').some(e=>e.textContent.includes('未写回译文'))")
     passed('all_strategies_rejected_explicit_copy_fallback')
     h.ui("f=>f.elements('.failure button').find(b=>b.textContent==='关闭').click()")
 
     # A fake OpenAI transport is delayed, and records only model/endpoint identity.
     profile = {'id': 'interaction-test', 'name': 'Interaction fixture', 'kind': 'openai', 'baseUrl': 'https://input.duallens.invalid/v1', 'model': 'base-model', 'fallbackModels': [], 'jsonMode': True, 'maxItems': 20, 'maxChars': 4000, 'concurrency': 2, 'timeoutMs': 5000}
+    # This regression tests editor behavior with a previously confirmed fake destination.
+    # First-send blocking and dismissal have their own page_ui acceptance runner.
+    if h.session:
+        h.session.sw_eval("() => chrome.storage.local.set({'ui.device':{acked:['llm:https://input.duallens.invalid']}})")
+    else:
+        p.evaluate("() => GM_setValue('duallens:local',{...__platformFixture.data('duallens:local'),'ui.device':{acked:['llm:https://input.duallens.invalid']}})")
     if h.session:
         profiles = h.session.sw_eval("async()=>(await chrome.storage.local.get('settings.core'))['settings.core'].provider.profiles")
     else:
@@ -177,7 +183,7 @@ def cases(h, calls):
         p.wait_for_timeout(80)
         h.ui("f=>f.elements('.icon').find(e=>e.classList.contains('show')).click()")
     p.wait_for_timeout(150)
-    h.ui("f=>{const a=f.elements('[aria-label=划词服务]')[0],b=f.elements('[aria-label=划词模型]')[0];a.value='interaction-test';a.dispatchEvent(new Event('change'));b.value='selection-model';f.elements('.services button')[0].click();}")
+    h.ui("f=>{const a=f.elements('[aria-label=划词服务]')[0],b=f.elements('[aria-label=划词模型]')[0];a.value='interaction-test';a.dispatchEvent(new Event('change'));b.value='selection-model';f.elements('.services .retry')[0].click();}")
     p.wait_for_timeout(450)
     assert any(c['model'] == 'selection-model' for c in calls())
     assert h.ui("f=>f.elements('.dst').some(e=>e.textContent.startsWith('【译】'))")

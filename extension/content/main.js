@@ -18,6 +18,7 @@ import { ComicTranslator } from './comics/controller.js';
 import { VideoSubtitles } from './subtitles/controller.js';
 import { subtitleOptions } from './subtitles/track.js';
 import { clearToast } from './overlay.js';
+import { withSendConfirmation } from './confirmation.js';
 
 
 class App {
@@ -33,6 +34,7 @@ class App {
       }
       return this.effectiveSettings;
     };
+    this.platform = platform = withSendConfirmation(platform, this.getSettings);
     this.comics = new ComicTranslator({ platform, getSettings: this.getSettings });
     this.subtitles = new VideoSubtitles({ platform, getSettings: this.getSettings });
 

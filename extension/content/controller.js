@@ -16,12 +16,15 @@ import {measurePresentation,measureColor} from './presentation.js';
 import {uiTranslation} from '../shared/ui-glossary.js';
 import {metadataTranslation} from '../shared/metadata.js';
 import {FrameRoots} from './frames.js';
+import {withSendConfirmation} from './confirmation.js';
 
 const MAX_REQUEST_ITEMS=50;
 const CHURN_LIMIT=12; // re-translations of one host within a minute before we leave it alone
 
 export class PageTranslator {
   constructor({getSettings,onChange,platform,getContext,onActiveChange,canRequest=()=>true}) {
+    platform=withSendConfirmation(platform,getSettings);
+    platform.onDecline=()=>this.stop();
     this.platform=platform;
     this.canRequest=canRequest;
     this.getContext=getContext || (()=>({title:document.title,host:location.hostname,url:location.href}));
@@ -447,7 +450,7 @@ export class PageTranslator {
     unit.state='error';
     unit.error=error;
     inj.markError(unit,error && error.message);
-    if((unit.retryCount||0)<2){unit.retryCount=(unit.retryCount||0)+1;setTimeout(()=>{if(!unit.dead&&this.active&&unit.state==='error'){unit.state='idle';this.lazy.watch(unit);}},error?.code===ERR.RATE_LIMITED?60000:16000);}
+    if(error?.code!=='CANCELLED'&&(unit.retryCount||0)<2){unit.retryCount=(unit.retryCount||0)+1;setTimeout(()=>{if(!unit.dead&&this.active&&unit.state==='error'){unit.state='idle';this.lazy.watch(unit);}},error?.code===ERR.RATE_LIMITED?60000:16000);}
   }
 
   // The LLM stage gave up on a unit that already shows its machine-translation draft: the draft stays.

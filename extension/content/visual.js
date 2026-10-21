@@ -7,7 +7,7 @@ export function lensIcon(monochrome = false) {
   for (const [cx, cy, color, alpha] of [[9, 9, '#4263eb', '.72'], [15, 15, '#20c997', '1']]) {
     const c = document.createElementNS(ns, 'circle');
     c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', '7');
-    c.setAttribute('fill', monochrome ? '#ffffff' : color); c.setAttribute('fill-opacity', alpha);
+    c.setAttribute('fill', monochrome ? 'currentColor' : color); c.setAttribute('fill-opacity', alpha);
     svg.append(c);
   }
   return svg;

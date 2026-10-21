@@ -134,6 +134,21 @@ Range 按祖先 frame 的视口裁切并映射至控制器视口；隐藏或小�
 slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫描 slot fallback。动态新增的开放组件也会被发现。
 关闭的 shadow root 不可访问，跳过；DualLens 自身 closed-shadow UI 保持原样。
 
+### v1 页面首次发送确认
+
+`content/confirmation.js` 在内容侧包装 `TranslatorService`，扩展与用户脚本共用。
+页面、划词、悬停、输入框、字幕与漫画的文字请求在放行前使用 `shared/device-state.js`
+检查本机 `ui.device.acked`；本地回环和演示免确认。主引擎与可能的备用去向一并列出，
+同意后逐个 `acknowledge`，关闭或 Esc 则本次不发送；不把确认状态写入同步设置。
+临时服务选择也参与检查，同一批并发请求共用卡片；取消、服务变更使等待中的请求失效。
+`translateBatch` 继续支持可选 `done`，等待期间的取消不得启动迟到的请求。
+首次缺少 OCR 语言包时，另行确认下载；已经安装的语言包直接复用。
+
+页面 UI 使用 closed shadow root 内的设计令牌。悬浮球为桌面 36px / 触屏 44px，
+`floatBall.autoHide !== false` 时空闲 2.5 秒只露出 24px；长按、菜单键和 Shift+F10
+可打开菜单。划词临时服务选择收进「更多」，关闭功能会立即卸下其被动监听和界面。
+专项离线验收入口为 `tests/e2e/run_page_ui_e2e.py`；真实设备验收仍按移动清单执行。
+
 ## 2. 打包
 
 - 扩展保持零构建：`extension/` 目录可直接加载。

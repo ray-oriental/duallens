@@ -158,6 +158,11 @@ siteRules: {
 
 ### 4.1 网页翻译：长连接端口 `dl-translate`（content → background）
 
+内容侧先经 `content/confirmation.js` 检查本机去向确认，再调用现有消息协议。
+未确认时不创建翻译传输请求；「继续翻译」写入设备本机状态，关闭或 Esc 返回
+`CANCELLED`，不发送文字。`signal` 只在内容侧用于取消等待，不进入一次性消息。
+页面入口及独立页面控制器都接入此门禁，避免临时服务或额外扫描根绕过确认。
+
 ```js
 // C → B
 { type: 'translate', reqId, to, from: 'auto', draft: true, purpose: 'page', mode?,

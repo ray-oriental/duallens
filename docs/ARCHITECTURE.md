@@ -32,6 +32,15 @@ Comic site entries accept optional `imageHosts` and same-site root `referer` met
 
 ## Settings and shared UI
 
+Content translation services are wrapped by `content/confirmation.js` before page, interaction,
+subtitle and comic consumers receive them. It checks the device-state destination contract, serializes
+confirmation cards and rechecks destinations before dispatch. Batch cancellation aborts a waiting card;
+legacy transports without `done` finish only after terminal results. The extension and userscript use
+the same closed-shadow card and device-local acknowledgements. OCR recognition separately checks
+installed language packs before requesting download confirmation; concurrent images share the prompt
+for a language. The owning page controller supplies `onDecline` on the guarded facade so dismissal
+stops queued page batches as well as the current request.
+
 Every platform uses `createSettingsStore({ syncArea, localArea })`. On the extension both areas use the common Chrome adapters from `shared/storage-areas.js`; quota/unavailable fallback belongs to the shared store, not a second platform wrapper. Nonsecret settings are split across `settings.core`, `settings.glossary` and `settings.sites`. API keys stay in local `secrets`; the local compatibility mirror is key-free. New installations have no selected provider and make no automatic model requests.
 
 The userscript uses a single GM private record for both areas. GM storage is local per script/manager; it is not cloud sync. Transitional GM public settings are migrated once, preserving an existing versioned configuration and newer local secrets. Encrypted configuration export/import is the explicit device-transfer path; plaintext exports omit secrets. Other devices need their own keys unless the user intentionally imports an encrypted backup.
