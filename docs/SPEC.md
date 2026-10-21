@@ -225,6 +225,21 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
    `dl-t`、拆掉 `dl-o`、移除扩展添加的标记，恢复页面原有 `data-dl-id/state` 与 `dl-only`，DOM 回到原状。
 8. **安全**：模型输出**永远不走 `innerHTML`**。只用 `createTextNode`，以及按 §6 克隆页面上原有的元素。
 
+### 译文样式
+
+默认 `muted` 沿用宿主字体族、字号、字重、行高与对齐，站点字体之后补本地 CJK 回退栈
+`"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif`。
+块级译文间距 `.3em`，继承首行缩进，无边框、背景或图标，段落译文不使用斜体。
+颜色按原文前景与逐层合成的纯色背景轻微调和，对比度至少 4.5；高对比偏好不弱化。
+背景图、渐变及祖先 opacity/filter 的最终像素仍需实页检查。
+短行内译文为 `.92em`，仅以 `margin-inline-start:.35em` 分隔，无「·」，短控件沿用实测溢出回退。
+草稿与终稿复用同一 `dl-t`，同步替换节点内文本，外观一致，无精修状态点；不同长度仍可能改变高度。
+打印默认保留译文，学习模式解除模糊，等待与错误标记不打印。
+
+仅保留 `muted` 默认弱化、`plain` 无装饰、`dashed` 虚线、`highlight` 背景淡色、`blur` 学习、`quote` 左细线六种。
+旧 id 在呈现入口（含站点规则及运行中切换）映射：`italic/bold → muted`、`underline/dotted/wavy → dashed`、
+`marker/card → highlight`、`mask → blur`、`divider → quote`。映射在 `STYLES[].legacyIds`；持久配置归一化由设置层接入。
+
 ## 6. 行内格式占位符
 
 序列化单元时：

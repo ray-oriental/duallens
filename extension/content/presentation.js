@@ -1,4 +1,10 @@
 // Pure presentation policy; computed style is sampled separately in the controller's read phase.
+import { STYLES } from '../shared/settings.js';
+
+// Resolve both global and per-site legacy preferences without rewriting unrelated settings.
+export function normalizeStyle(id) {
+  return STYLES.find(s=>s.id===id || s.legacyIds?.includes(id))?.id || 'muted';
+}
 export function denseLinkMenu(el) {
   if(!el?.matches('span,nav,[role="navigation"]') || el.querySelectorAll(':scope > a').length < 3) return false;
   // Link-heavy prose (scores, authors and dates) still needs its sentence context.
@@ -23,8 +29,8 @@ export function contrastRatio(a,b) {
   const x=luminance(a),y=luminance(b);
   return(Math.max(x,y) + .05) /(Math.min(x,y) + .05);
 }
-export function translationColor(foreground,background) {
-  const muted=foreground.map((v,i)=> Math.round(v * .92 + background[i] * .08));
+export function translationColor(foreground,background,{moreContrast=false}={}) {
+  const muted=foreground.map((v,i)=> Math.round(v * (moreContrast?1:.92) + background[i] * (moreContrast?0:.08)));
   const color=contrastRatio(muted,background) >=4.5 ? muted:contrastRatio(foreground,background) >=4.5 ? foreground:
     contrastRatio([0,0,0],background) > contrastRatio([255,255,255],background) ? [0,0,0]:[255,255,255];
   return `rgb(${color.join(',')})`;
@@ -59,7 +65,7 @@ export function measureColor(host) {
   let bg=doc.defaultView.matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(doc.documentElement).colorScheme.includes('dark') ? [18,18,18]:[255,255,255];
   for(const c of backgrounds) bg=bg.map((v,i)=> c[i] *(c[3] ?? 1) + v *(1 -(c[3] ?? 1)));
   const color=fg.slice(0,3).map((v,i)=> v *(fg[3] ?? 1) + bg[i] *(1 -(fg[3] ?? 1)));
-  return translationColor(color,bg);
+  return translationColor(color,bg,{moreContrast:doc.defaultView.matchMedia('(prefers-contrast: more)').matches});
 }
 
 export function presentationFacts(unit) {

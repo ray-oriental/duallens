@@ -202,7 +202,7 @@ JS_NO_TRACE = """() => document.querySelectorAll(
   'dl-t, dl-o, dl-w, dl-r, [data-dl-id], [data-dl-state], .dl-only, .dl-solo, .dl-hide').length === 0"""
 
 JS_STYLE_MUTED = """() => document.querySelectorAll('dl-t[data-dl-state="done"].dl-s-muted').length"""
-JS_STYLE_UNDERLINE = """() => document.querySelectorAll('dl-t[data-dl-state="done"].dl-s-underline').length > 0 &&
+JS_STYLE_UNDERLINE = """() => document.querySelectorAll('dl-t[data-dl-state="done"].dl-s-dashed').length > 0 &&
   document.querySelectorAll('dl-t.dl-s-muted').length === 0"""
 
 JS_LP_TRANSLATED_COUNT = """() => [...document.querySelectorAll('p.lp')].filter((p) => p.querySelector('dl-t[data-dl-state="done"]')).length"""

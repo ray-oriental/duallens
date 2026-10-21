@@ -29,21 +29,12 @@ export const LANGS = Object.freeze([
 
 // Visual styles for inserted translations; CSS lives in styles/content.css as .dl-s-<id>.
 export const STYLES = Object.freeze([
+  { id: 'muted', name: '默认（轻微弱化）', legacyIds: ['italic', 'bold'] },
   { id: 'plain', name: '无装饰' },
-  { id: 'muted', name: '弱化（灰色）' },
-  { id: 'underline', name: '下划线' },
-  { id: 'dashed', name: '虚线下划线' },
-  { id: 'dotted', name: '点状下划线' },
-  { id: 'wavy', name: '波浪线' },
-  { id: 'highlight', name: '背景高亮' },
-  { id: 'marker', name: '马克笔' },
-  { id: 'quote', name: '引用块' },
-  { id: 'card', name: '卡片' },
-  { id: 'divider', name: '分隔线' },
-  { id: 'italic', name: '斜体' },
-  { id: 'bold', name: '加粗' },
-  { id: 'blur', name: '模糊（悬停显示）' },
-  { id: 'mask', name: '遮罩（悬停显示）' },
+  { id: 'dashed', name: '虚线下划线', legacyIds: ['underline', 'dotted', 'wavy'] },
+  { id: 'highlight', name: '背景淡色', legacyIds: ['marker', 'card'] },
+  { id: 'blur', name: '学习（悬停显示）', legacyIds: ['mask'] },
+  { id: 'quote', name: '引用块（左细线）', legacyIds: ['divider'] },
 ]);
 
 export const PROMPT_PRESETS = Object.freeze(['general', 'tech', 'academic', 'news', 'social', 'custom']);

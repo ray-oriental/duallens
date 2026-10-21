@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { choosePresentation, translationColor, contrastRatio } from '../../extension/content/presentation.js';
+import { choosePresentation, translationColor, contrastRatio, normalizeStyle } from '../../extension/content/presentation.js';
+import { STYLES } from '../../extension/shared/settings.js';
 import { preserveIdentities } from '../../extension/pdf/segments.js';
 import { isTranslatable, isShortText } from '../../extension/content/serialize.js';
 
@@ -28,6 +29,28 @@ test('translation colours soften only while contrast remains at least 4.5 on lig
   for (const [fg,bg] of [[[20,20,20],[255,255,255]],[[230,230,230],[20,20,20]],[[150,150,150],[255,255,255]],[[90,90,90],[100,100,100]]]) {
     const rgb=translationColor(fg,bg).match(/\d+/g).map(Number);
     assert.ok(contrastRatio(rgb,bg)>=4.5);
+  }
+});
+test('six explicit styles resolve every former id including site-rule preferences', () => {
+  assert.deepEqual(STYLES.map(s=>s.id), ['muted','plain','dashed','highlight','blur','quote']);
+  const mapping={plain:'plain',muted:'muted',underline:'dashed',dashed:'dashed',dotted:'dashed',wavy:'dashed',
+    highlight:'highlight',marker:'highlight',quote:'quote',card:'highlight',divider:'quote',italic:'muted',bold:'muted',blur:'blur',mask:'blur'};
+  for(const [old,next] of Object.entries(mapping)) {
+    assert.equal(normalizeStyle(old),next,old);
+    assert.equal(normalizeStyle(normalizeStyle(old)),next,'idempotent '+old);
+  }
+  assert.equal(normalizeStyle('unknown'),'muted');
+  assert.equal(normalizeStyle(undefined),'muted');
+});
+test('high contrast preserves accessible source colour and repairs inaccessible colours', () => {
+  assert.equal(translationColor([30,60,90],[255,255,255],{moreContrast:true}),'rgb(30,60,90)');
+  assert.equal(translationColor([230,220,210],[18,18,18],{moreContrast:true}),'rgb(230,220,210)');
+  for(let n=0;n<=255;n+=15) for(const bg of [[255,255,255],[18,18,18],[100,120,140]]) {
+    const fg=[n,Math.min(n+12,255),n];
+    for(const moreContrast of [true,false]) {
+      const rgb=translationColor(fg,bg,{moreContrast}).match(/\d+/g).map(Number);
+      assert.ok(contrastRatio(rgb,bg)>=4.5,`${fg} on ${bg}`);
+    }
   }
 });
 test('visible short words and product labels translate; identifiers and dates do not', () => {

@@ -7,7 +7,7 @@
 // may remain outside that source range; tail keeps the translation after an excluded suffix.
 
 import {TAG_T,TAG_O,TAG_W,TAG_R} from './util.js';
-import {measurePresentation} from './presentation.js';
+import {measurePresentation,normalizeStyle} from './presentation.js';
 import {prepareLayout,fitLayout,releaseLayout} from './adaptive-layout.js';
 
 // All writes go through this hook so the mutation observer can discard its own records.
@@ -118,6 +118,9 @@ function createT(u) {
   t.setAttribute('data-dl-id',u.id);
   t.setAttribute('translate','no'); // keep browser-level translators away from our output
   if(u.lang) t.setAttribute('lang',u.lang);
+  // Keep the site's chosen fonts first; only missing CJK glyphs use our local fallbacks.
+  const family=getComputedStyle(u.host).fontFamily;
+  t.style.fontFamily=family+',"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
   return t;
 }
 
@@ -227,7 +230,7 @@ export function showTranslation(u,fragment,{mode,style,inlineMaxChars,stage='fin
     }
     const t=ensureT(u);
     u.inline=decideInline(u,inlineMaxChars);
-    t.className=`dl-t ${u.inline ? 'dl-inline' : 'dl-block'} dl-s-${style}`;
+    t.className=`dl-t ${u.inline ? 'dl-inline' : 'dl-block'} dl-s-${normalizeStyle(style)}`;
     if(u.translationColor) t.style.setProperty('--dl-fg',u.translationColor);
     t.setAttribute('data-dl-state','done');
     t.setAttribute('data-dl-stage',stage);
@@ -312,7 +315,7 @@ export function setStyle(u,style) {
   if(!u.tEl) return;
   write(()=> {
     const t=u.tEl;
-    t.className=t.className.replace(/\bdl-s-\S+/,`dl-s-${style}`);
+    t.className=t.className.replace(/\bdl-s-\S+/,`dl-s-${normalizeStyle(style)}`);
   });
 }
 

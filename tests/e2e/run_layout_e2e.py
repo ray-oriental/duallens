@@ -8,6 +8,58 @@ import sys
 e.CASES.clear()
 
 
+@e.case('quiet_typography', 'Inherited typography, six styles, dark contrast, staged text and exact restore')
+def quiet_typography(h):
+    h.open('article.html')
+    h.page.set_viewport_size({'width':900,'height':1000})
+    h.js("""() => {
+      document.body.innerHTML=`<main style="font-family:Georgia,serif;font-size:18px;line-height:1.6;color:#263444;max-width:700px">
+      <p id="indent" style="text-indent:2em;font-style:italic">An indented paragraph with the site's own font and line height.</p>
+      <ul><li id="list">A list item aligned with the original list text.</li></ul>
+      <blockquote style="border-left:2px solid #888;padding-left:20px"><p id="quote">A quotation keeps its original left border and text alignment.</p></blockquote>
+      <table><tr><td id="cell">A table cell with a longer sentence to keep both languages readable.</td></tr></table>
+      <h3 id="card" style="font-size:21px;line-height:1.5">A card title retains the original heading.</h3>
+      <p id="dark" style="background:#121820;color:#dbe3ed;padding:12px">A paragraph on a dark background stays readable.</p>
+      <nav><button id="short" style="font:16px/24px Georgia;width:250px;height:28px">Search</button></nav></main>`;
+      window.typeBefore=document.body.outerHTML;
+    }""")
+    h.js("""async ext=>{
+      const inj=await import(ext+'/content/injector.js');
+      const {measureColor}=await import(ext+'/content/presentation.js');
+      window.typeInj=inj;window.typeUnits=[];
+      for(const id of ['indent','list','quote','cell','card','dark','short']) {
+        const host=document.getElementById(id);
+        const u={id:'type-'+id,host,first:host.firstChild,last:host.lastChild,whole:true,plain:host.textContent,state:'done',lang:'zh-CN',presentation:id==='short'?'inline':'block',layoutFacts:{interactive:id==='short',title:id==='card'},translationColor:measureColor(host)};
+        const f=document.createDocumentFragment();f.append(document.createTextNode(id==='short'?'搜索':'这是一段安静整齐的中文译文。'));
+        inj.showTranslation(u,f,{mode:'bilingual',style:'muted',inlineMaxChars:24,stage:'draft'});typeUnits.push(u);
+      }
+    }""",f'chrome-extension://{h.ext_id}')
+    assert h.js("""() => typeUnits.filter(u=>u.host.id!=='short').every(u=>{
+      const a=getComputedStyle(u.host),b=getComputedStyle(u.tEl);
+      return b.fontSize===a.fontSize&&b.lineHeight===a.lineHeight&&b.textIndent===a.textIndent&&b.fontFamily.startsWith(a.fontFamily)&&b.fontFamily.includes('PingFang SC')&&b.fontStyle==='normal'&&b.borderLeftWidth==='0px'&&b.backgroundColor==='rgba(0, 0, 0, 0)'&&Math.abs(parseFloat(b.marginBlockStart)/parseFloat(b.fontSize)-.3)<.01;
+    })"""), 'block inherits font, line height, indent; normal style, no decoration'
+    assert h.js("""() => {const u=typeUnits.at(-1),cs=getComputedStyle(u.tEl);return Math.abs(parseFloat(cs.fontSize)/16-.92)<.01&&Math.abs(parseFloat(cs.marginInlineStart)/parseFloat(cs.fontSize)-.35)<.01&&getComputedStyle(u.tEl,'::before').content==='none'&&u.host.getBoundingClientRect().height===28} """), 'inline has thin spacing without separator or control growth'
+    assert h.js("""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');return contrastRatio(getComputedStyle(document.querySelector('#dark dl-t')).color.match(/[\\d.]+/g).map(Number),[18,24,32])>=4.5}""",f'chrome-extension://{h.ext_id}')
+    h.js("""() => {window.typeDraft=typeUnits.map(u=>({node:u.tEl,height:u.tEl.getBoundingClientRect().height,opacity:getComputedStyle(u.tEl).opacity}));for(const u of typeUnits){const f=document.createDocumentFragment();f.append(document.createTextNode(u.host.id==='short'?'查找':'这是同一节点中的中文终稿。'));typeInj.showTranslation(u,f,{mode:'bilingual',style:'muted',inlineMaxChars:24,stage:'final'})}}""")
+    assert h.js("() => typeUnits.every((u,i)=>u.tEl===typeDraft[i].node&&getComputedStyle(u.tEl).opacity===typeDraft[i].opacity&&u.tEl.getBoundingClientRect().height===typeDraft[i].height)"), 'same node; no opacity or equal-line-height jump'
+    out=e.E2E_ROOT/'v1'/'type'/'layout'
+    out.mkdir(parents=True,exist_ok=True)
+    h.page.screenshot(path=str(out/'typography-light.png'))
+    media=h.ctx.new_cdp_session(h.page)
+    media.send('Emulation.setEmulatedMedia',{'features':[{'name':'prefers-contrast','value':'more'}]})
+    assert h.js("() => typeUnits.every(u=>getComputedStyle(u.tEl).color===getComputedStyle(u.host).color)"), 'high contrast does not weaken source'
+    h.page.screenshot(path=str(out/'typography-contrast.png'))
+    media.send('Emulation.setEmulatedMedia',{'media':'print','features':[]})
+    h.js("() => typeInj.setStyle(typeUnits[0],'mask')")
+    assert h.js("() => getComputedStyle(typeUnits[0].tEl).filter==='none'&&getComputedStyle(typeUnits[0].tEl).display==='block'"), 'print includes revealed learning text'
+    h.page.screenshot(path=str(out/'typography-print.png'))
+    media.send('Emulation.setEmulatedMedia',{'media':'screen','features':[]})
+    media.detach()
+    h.js("() => {for(const u of typeUnits)typeInj.restore(u)}")
+    assert h.js('() => document.body.outerHTML===typeBefore'), 'exact DOM restore'
+    return 'list, quote, indent, cell, card, dark, inline; same-node refinement; contrast/print; exact restore'
+
+
 @e.case('comic_flow', 'Image links, narrow flow, scroll discovery, dismissed panels and exact restore')
 def comic_flow(h):
     h.open('article.html')
@@ -151,7 +203,7 @@ def visible_controls(h):
     assert h.js("() => !document.querySelector('#button dl-o,#clamp dl-o') && document.querySelector('#prose dl-t').classList.contains('dl-block') && getComputedStyle(document.querySelector('#clamp')).overflow==='visible'"), 'bilingual source and released clipping'
     assert h.js("() => document.querySelector('#icon').title.startsWith('【译】') && !document.querySelector('#button').hasAttribute('title') && document.querySelector('#button dl-t').textContent==='前往'"), 'icon attribute and inline control'
     assert h.js("() => document.querySelectorAll('#prose dl-t').length===1 && document.querySelector('#select').value==='eng'")
-    assert h.js("() => getComputedStyle(document.querySelector('#label dl-t'),'::before').content.includes('·')")
+    assert h.js("() => getComputedStyle(document.querySelector('#label dl-t'),'::before').content==='none'")
     assert h.js("() => document.querySelector('#label dl-t').style.getPropertyValue('--dl-fg')==='rgb(0,0,0)'"), 'accessible inherited colour'
     h.js("() => {document.querySelector('#search').placeholder='Find books';document.querySelector('#later').hidden=false}")
     h.wait_js("() => document.querySelector('#search').placeholder==='【译】Find books' && document.querySelector('#later dl-t[data-dl-state=done]')")
@@ -282,7 +334,7 @@ def layout_round4(h):
     h.js("() => {window.r4Translation=document.querySelector('#expander dl-t');document.querySelector('#expander').style.height='40px'}")
     h.page.wait_for_timeout(650)
     assert h.js("() => document.querySelector('#expander dl-t')===r4Translation && document.querySelector('#expander').getBoundingClientRect().bottom<=document.querySelector('#after').getBoundingClientRect().top+1")
-    assert h.js("() => getComputedStyle(document.querySelector('h1')).lineHeight!=='10px'")
+    assert h.js("() => getComputedStyle(document.querySelector('h1')).lineHeight==='10px'")
     h.page.locator('ytm-shorts-lockup-view-model').scroll_into_view_if_needed()
     h.wait_js("() => document.querySelector('ytm-shorts-lockup-view-model dl-t[data-dl-state=done]')")
     assert h.js("() => getComputedStyle(document.querySelector('ytm-shorts-lockup-view-model dl-t')).backgroundColor==='rgba(0, 0, 0, 0.85)'")
