@@ -54,6 +54,7 @@ def exercise(page, toggle, mode, extension, idle_check=None, request_count=None)
     page.evaluate('replaceMailLater()')
     wait(frames['mail'], "document.querySelector('#message')?.textContent.includes('second message')")
     translated(frames['mail'])
+    wait(frames['mail'], "document.querySelector('#message')?.textContent.includes('second message') && document.querySelectorAll('dl-t').length===1 && !!document.querySelector('dl-t[data-dl-state=done]')")
     assert frames['mail'].locator('dl-t').count() == 1, 'replaced document translated twice: '+frames['mail'].evaluate('document.body.outerHTML')
     if extension:
         frames['cross'].goto(frames['cross'].url + '?new-message=2')

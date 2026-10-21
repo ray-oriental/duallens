@@ -127,7 +127,9 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
   })();
   const getSettings = async () => {
     await platform.ready;
-    return performanceSettings(await store.load(), coarse);
+    const settings=performanceSettings(await store.load(), coarse);
+    // Never persist a translation when the manager cannot establish a normal context.
+    return gm.info?.isIncognito===false ? settings : {...settings,cache:{...settings.cache,enabled:false}};
   };
   const getSecret = id => store.getSecret(id);
   const providers = createProviders({ fetchImpl: asFetch(platform.http), getSecret });

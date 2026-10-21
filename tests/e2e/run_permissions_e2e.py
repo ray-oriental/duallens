@@ -95,7 +95,8 @@ globalThis.permissionTestCommand=async(name,tabId)=>{for(const cb of testCommand
                 assert broad()
                 print('SKIP optional-native-prompt: broad grant seeded by fixture manifest reload, not native approval dialog', flush=True)
                 skipped += 1
-                h.settings({'floatBall': {'enabled': True}})
+                h.settings({'floatBall': {'enabled': True},'subtitles': {'enabled': True}})
+                until(lambda: ui.evaluate("async()=> (await chrome.storage.local.get('settings')).settings.subtitles.enabled"))
                 until(scripts, lambda value: any(s['id'] == 'duallens-pages' for s in value))
                 page = h.ctx.new_page(); page.goto(base + '/article.html?resident=1')
                 until(lambda: page.locator('dl-ui').count())
@@ -104,7 +105,7 @@ globalThis.permissionTestCommand=async(name,tabId)=>{for(const cb of testCommand
 
                 assert ui.evaluate("() => chrome.permissions.remove({origins:['<all_urls>']})")
                 until(scripts, lambda value: not value)
-                until(lambda: ui.evaluate("async()=> (await import(chrome.runtime.getURL('shared/settings.js'))).loadSettings()"),
+                until(lambda: ui.evaluate("async()=> (await import('chrome-extension://' + chrome.runtime.id + '/shared/settings.js')).loadSettings()"),
                       lambda settings: not settings['floatBall']['enabled'])
                 assert not broad()
                 until(lambda: page.locator('dl-ui').count(), lambda count: count == 0)

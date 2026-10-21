@@ -44,10 +44,12 @@ def run(pw,base,dark):
         profile={'id':'remote','kind':'openai','name':'Fixture AI','baseUrl':'https://consent.duallens.invalid/v1','model':'test',
             'maxItems':20,'maxChars':4000,'concurrency':2,'timeoutMs':5000,'fallbackModels':[]}
         settings(page,{'provider':{'active':'remote','chain':[],'profiles':[profile]},'translation':{'mode':'llm','mt':{'engine':'mock'}}})
+        original=page.locator('body').inner_html()
         command(page,'翻译 / 恢复当前页面')
         page.wait_for_function("__platformFixture.elements('.confirm').length===1")
         check(page.evaluate('__platformFixture.calls.length')==0,'text sent before confirmation')
         check(page.evaluate("document.querySelector('dl-ui').shadowRoot===null"),'UI root is open')
+        check(page.locator('dl-t,dl-o,dl-w,dl-r').count()==0,'paragraph progress appeared before consent')
         shot(page,theme+'-confirmation')
         click_shadow(page,'.confirm .primary')
         page.wait_for_function("document.querySelector('#p-plain dl-t')?.textContent.includes('【译】')")
@@ -77,10 +79,13 @@ def run(pw,base,dark):
         page.keyboard.press('Escape')
         profile['baseUrl']='https://other.duallens.invalid/v1';profile['model']='test'
         settings(page,{'provider':{'profiles':[profile]}})
+        original=page.locator('#p-plain').inner_html()
         before=page.evaluate('__platformFixture.calls.length');command(page,'翻译 / 恢复当前页面')
         page.wait_for_function("__platformFixture.elements('.confirm').length===1")
         click_shadow(page,'.confirm .close');page.wait_for_timeout(400)
         check(page.evaluate('__platformFixture.calls.length')==before,'close sent a translation')
+        check(page.locator('dl-t,dl-o,dl-w,dl-r').count()==0,'close left progress placeholders')
+        check(page.locator('#p-plain').inner_html()==original,'close changed original DOM')
         page.wait_for_timeout(16500)
         check(elements(page,'.confirm')==0,'dismissed consent reopened on automatic retry')
         check(page.evaluate('__platformFixture.calls.length')==before,'automatic retry sent cancelled text')

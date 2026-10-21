@@ -24,7 +24,7 @@ DualLens 使用你选择的服务。默认 Microsoft 免费非官方机器翻译
 
 选择 OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 或自定义预设，填写地址、模型和自己的 API key，手动获取模型、测试连接后保存。OpenRouter 免费发现仅列出输入输出标价均为零的候选；限额和可用性由服务商决定。可配置跨服务备选链。
 
-本地预设为 `http://localhost:11434/v1`（Ollama）和 `http://localhost:1234/v1`（LM Studio），需自行启动服务。Ollama 需配置 `OLLAMA_ORIGINS` 允许扩展来源。localhost 指当前设备，手机不能通过它访问电脑；其它设备须填可访问地址。远程带密钥接口使用 HTTPS，URL 中不能包含凭据。
+本地预设为 `http://localhost:11434/v1`（Ollama）和 `http://localhost:1234/v1`（LM Studio），需自行启动服务。Ollama 需配置 `OLLAMA_ORIGINS` 允许具体扩展来源，例如 `setx OLLAMA_ORIGINS "chrome-extension://<扩展 ID>"`；扩展 ID 从浏览器扩展详情页获取，勿使用所有扩展的通配来源。localhost 指当前设备，手机不能通过它访问电脑；其它设备须填可访问地址。远程带密钥接口使用 HTTPS，URL 中不能包含凭据。
 
 API key 仅存设备本地，不进公共设置同步。用户脚本用浏览器原生对话框输入 key，网页表单不显示已存 key。网络翻译仅在用户主动操作或显式配置的自动规则触发时发生。
 

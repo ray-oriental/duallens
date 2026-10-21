@@ -1,19 +1,30 @@
-# Edge Add-ons store listing (English)
+# DualLens – Bilingual Web Translation
 
-## Short description (≤132 characters)
+Read any page next to its translation. Quiet by default, no account or telemetry; text goes only to the service you choose.
 
-Read webpages bilingually with your chosen model service, while preserving layout and keeping privacy controls local.
+DualLens shows a translation right under each paragraph, so you can read in two languages at once. Switch to translation-only, or back to the original, at any time.
 
-## Detailed description
+Quiet by default
+• Nothing is added to a page until you ask: click the toolbar button, press Alt+A, or use the right-click menu.
+• Extra features are off until you switch them on in the popup: floating button, selection, hover and input-box translation, video captions, text in images.
+• No welcome tab, no badge, no ads.
 
-DualLens adds paragraph-level bilingual, translation-only and restore-original views. The v0.4 default uses free machine translation without a key, with optional refinement through your own OpenAI-compatible service. Failed refinement keeps the machine translation. Default Microsoft/Google endpoints are unofficial and may change or fail; translation actions send them the requested text. Settings can select official keyed engines, disable MT fallback, or disable MT with LLM-only mode. API keys stay local, outside sync and telemetry. Desktop supports Chrome and Edge; Android Edge uses the Release userscript with Tampermonkey.
+Translate the way you like
+• Free machine translation works out of the box — no account, no key.
+• Optionally refine with your own AI service: OpenAI, DeepSeek, OpenRouter, a local model (Ollama, LM Studio) or any OpenAI-compatible endpoint. You pay the provider directly.
+• Also included: PDF pages shown side by side, bilingual captions for HTML5 video and YouTube, a side panel for free text, per-site rules and a glossary.
+• The current interface is in Simplified Chinese.
 
-This release focuses on webpages. PDF, EPUB, subtitles, OCR, documents, and iframe translation are not implemented.
+Your data
+• DualLens has no accounts, analytics or servers of its own. The developer receives nothing.
+• When you translate, the text is sent straight from your browser to the service you selected. By default that is Microsoft's free machine-translation endpoint, with Google's as a fallback. These are unofficial, undocumented endpoints: they can change or stop working, their handling of text is governed by their own terms, and DualLens is not affiliated with or endorsed by Microsoft or Google. You can switch to official keyed engines, turn the fallback off, or use AI services only.
+• Before text is first sent to any service, setup, Settings or the current tool explains the destination and asks you to confirm. Local models on your own computer need no confirmation.
+• API keys stay on this device. Translation cache and settings are stored in your browser and can be cleared.
+• Details: https://github.com/ray-oriental/duallens/blob/main/docs/PRIVACY.md
 
-## Suggested category
+Permissions
+• Installing asks only for access to the translation services' addresses. Pages are read on demand through "activeTab". Access to all sites is requested only if you turn on a feature that has to be present before you click, and you can revoke it at any time.
 
-Productivity
+Open source (MIT): https://github.com/ray-oriental/duallens
 
-## Keywords
-
-bilingual translation, webpage translator, AI translation, side-by-side reading, privacy
+Category: Productivity

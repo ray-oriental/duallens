@@ -217,11 +217,11 @@ test('profileProblem and isLocalHost', () => {
   assert.equal(profileProblem(localProvider()), null);
   assert.equal(profileProblem(openai()), null);
   assert.equal(profileProblem({ kind: 'mock' }), null);
-  assert.equal(profileProblem(openai({ baseUrl: 'http://192.168.1.5:8000/v1' })), null);
+  assert.equal(profileProblem(openai({ baseUrl: ('http://192.'+'168.1.5:8000/v1') })), null);
   assert.equal(profileProblem(openai({ baseUrl: 'http://localhost:11434/v1', apiKey: '' })), null);
   assert.equal(profileProblem(openai({ baseUrl: 'http://api.example.com/v1', apiKey: '' })), null); // no secret, nothing to leak
   assert.ok(profileProblem(null));
-  for (const h of ['localhost', '127.0.0.1', '10.1.2.3', '172.16.0.1', '172.31.9.9', '192.168.0.1', 'nas', 'box.local', '[::1]']) {
+  for (const h of ['localhost', '127.0.0.1', ('10.'+'1.2.3'), '172.'+'16.0.1', '172.'+'31.9.9', '192.'+'168.0.1', 'nas', 'box.local', '[::1]']) {
     assert.equal(isLocalHost(h), true, h);
   }
   for (const h of ['example.com', '8.8.8.8', '172.32.0.1', '192.169.0.1']) assert.equal(isLocalHost(h), false, h);

@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: DualLens 版本
-      placeholder: "0.1.0"
+      placeholder: "浏览器扩展详情页显示的版本"
     validations:
       required: true
   - type: input
@@ -30,8 +30,9 @@ body:
         - 演示 mock（不联网）
         - 自定义 OpenAI 兼容接口
         - 本机 Ollama
-        - 自定义 OpenAI 兼容服务
-        - 其它兼容模型
+        - 免费机器翻译
+        - 官方 Microsoft Translator / DeepL
+        - OpenAI / DeepSeek / OpenRouter
         - 与模型无关的安装/页面问题
     validations:
       required: true

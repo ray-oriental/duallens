@@ -171,7 +171,7 @@ JS_SET_SETTINGS = """async (patch) => {
     for (const [k, v] of Object.entries(over)) out[k] = deep(out[k], v);
     return out;
   };
-  const { loadSettings, saveSettings } = await import(chrome.runtime.getURL('shared/settings.js'));
+  const { loadSettings, saveSettings } = await import('chrome-extension://' + chrome.runtime.id + '/shared/settings.js');
   const next = await saveSettings(deep(await loadSettings(), patch));
   return next;
 }"""

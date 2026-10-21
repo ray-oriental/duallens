@@ -3,8 +3,14 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from check_project import CheckError, PRIVACY_TERMS, check_privacy
+import os
+from unittest.mock import patch
+from check_project import CheckError, check_privacy
 
+
+# Synthetic examples are assembled so fixtures do not themselves contain private-looking metadata.
+PRIVACY_TERMS = ('C:' + chr(92) + 'Users' + chr(92) + 'example-user', '/' + 'home' + '/example-user',
+                 '192.' + '168.4.5', 'reader' + '@' + 'private.example', 'sk-' + 'x' * 32)
 
 class PrivacyTests(unittest.TestCase):
     def test_each_policy_term_is_rejected_case_insensitively(self):
@@ -42,6 +48,22 @@ class PrivacyTests(unittest.TestCase):
             with self.assertRaisesRegex(CheckError, 'new.txt:1'): check_privacy(root)
             new.write_text('public')
             self.assertEqual(check_privacy(root), 1)
+
+    def test_optional_private_terms_are_local_and_missing_file_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'public'; root.mkdir(); (root/'README.md').write_text('synthetic-private-marker')
+            terms=Path(tmp)/'terms.txt'
+            with patch.dict(os.environ, {'DUALLENS_PRIVACY_TERMS_FILE':str(terms)}):
+                self.assertEqual(check_privacy(root),1)
+                terms.write_text('# local only\nsynthetic-private-marker\n')
+                with self.assertRaisesRegex(CheckError,'README.md:1'):check_privacy(root)
+                terms.write_text('different-marker')
+                self.assertEqual(check_privacy(root),1)
+
+    def test_noreply_author_email_is_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); (root/'README.md').write_text('author'+'@'+'users.noreply.github.com')
+            self.assertEqual(check_privacy(root),1)
 
     def test_error_does_not_echo_sensitive_line(self):
         with tempfile.TemporaryDirectory() as tmp:

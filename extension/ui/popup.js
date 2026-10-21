@@ -10,7 +10,8 @@ try {
     const r=await chrome.runtime.sendMessage({type:'tab-ensure',tabId:tab.id});
     restricted=r?.ok!==true;
   }catch{restricted=true;}
-  const pdf=!reader&&tab?.id?await chrome.runtime.sendMessage({type:'pdf-status',tabId:tab.id}).catch(()=>null):null;
+  const looksPDF=(()=>{try{return /\.pdf$/i.test(new URL(tab?.url).pathname);}catch{return false;}})();
+  const pdf=!reader&&tab?.id&&(restricted||looksPDF)?await chrome.runtime.sendMessage({type:'pdf-status',tabId:tab.id}).catch(()=>null):null;
   const commands=await chrome.commands?.getAll?.()||[];
   const localArea=chromeStorageArea(chrome.storage.local,'local',chrome.storage.onChanged);
   const view=await mountPopup(document.body,{store:getDefaultSettingsStore(),localArea,platform:{kind:'extension',localArea},url:tab?.url,restricted,

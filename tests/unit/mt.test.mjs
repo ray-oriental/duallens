@@ -43,7 +43,7 @@ async function run(mt, items, over = {}) {
 test('chain order: primary first, the free engines as fallback, mock alone', () => {
   assert.deepEqual(mtChain(), ['microsoft', 'google']);
   assert.deepEqual(mtChain({ engine: 'google' }), ['google', 'microsoft']);
-  assert.deepEqual(mtChain({ engine: 'deepl' }), ['deepl', 'microsoft', 'google']);
+  assert.deepEqual(mtChain({ engine: 'deepl' }), ['deepl']);
   assert.deepEqual(mtChain({ engine: 'deepl', fallback: false }), ['deepl']);
   assert.deepEqual(mtChain({ engine: 'mock' }), ['mock']);
   assert.deepEqual(mtChain({ engine: 'unknown-engine' }), ['microsoft', 'google']);
@@ -159,7 +159,7 @@ test('google: auto source answers [[text, lang]], explicit source answers [text]
   assert.equal(call.url, 'https://clients5.google.com/translate_a/t');
   assert.match(call.headers['Content-Type'], /x-www-form-urlencoded/);
   const sent = new URLSearchParams(call.body);
-  assert.equal(sent.get('client'), 'dict-chrome-ex');
+  assert.equal(sent.get('client'), 'gtx');
   assert.equal(sent.get('tl'), 'zh-CN');
   assert.equal(sent.get('format'), null);
   assert.equal(sent.getAll('q')[0], 'plain & text');
@@ -244,12 +244,12 @@ test('deepl: key from secrets, free-tier host for :fx keys, xml tag handling onl
   assert.doesNotMatch(JSON.stringify(failing.get(1)), /paid-key/);
 });
 
-test('keyed engines without a key are a config error and the chain moves on', async () => {
+test('keyed engines without a key fail without contacting a free engine', async () => {
   const fetch = fakeFetch((url) => ({ body: msBody('微软') }));
   const mt = createMT({ fetchImpl: fetch });
   const got = await run(mt, [{ id: 1, text: 'x' }], { chain: ['deepl', 'microsoft'] });
-  assert.deepEqual([got.get(1).engine, got.get(1).text], ['microsoft', '微软']);
-  assert.equal(fetch.calls.length, 1, 'DeepL was never called without a key');
+  assert.equal(got.get(1).error.code, ERR.CONFIG);
+  assert.equal(fetch.calls.length, 0, 'No network request without the official key');
 });
 
 test('microsoft-api sends the key and the region header', async () => {

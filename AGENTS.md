@@ -4,7 +4,7 @@
 
 DualLens is an independent Chrome/Edge MV3 web translation extension. This repository contains original source, icons, tests and public documentation. Never copy third-party extension code, proprietary rules, prompts, models or brand assets into the project. Reference packages and private analysis are not release inputs.
 
-The current release is P0 web translation. Do not describe PDF/EPUB, subtitles, OCR, documents, iframe or Firefox/Safari support as implemented.
+The extension includes webpage and PDF translation, subtitles, local image OCR and frame translation. The Android userscript is distributed separately. Describe support only to the extent verified; EPUB and Firefox/Safari are not implemented.
 
 ## Layout
 

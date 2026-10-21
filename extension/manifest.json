@@ -18,13 +18,7 @@
   "host_permissions": [
     "https://edge.microsoft.com/*",
     "https://api-edge.cognitive.microsofttranslator.com/*",
-    "https://clients5.google.com/*",
-    "https://api.cognitive.microsofttranslator.com/*",
-    "https://api.deepl.com/*",
-    "https://api-free.deepl.com/*",
-    "https://api.openai.com/*",
-    "https://api.deepseek.com/*",
-    "https://openrouter.ai/*"
+    "https://clients5.google.com/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
@@ -83,7 +77,9 @@
         "shared/site-pattern.js",
         "shared/storage-areas.js",
         "shared/ui-glossary.js",
-        "styles/content.css"
+        "styles/content.css",
+        "shared/destinations.js",
+        "shared/errors.js"
       ],
       "matches": [
         "http://*/*",

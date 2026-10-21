@@ -1,17 +1,14 @@
 // Content-only gate shared by the extension and userscript. No text crosses the transport
 // until every possible destination (including fallbacks) has been acknowledged on this device.
-import{providerChain}from '../shared/settings.js';
-import{loadDeviceState,needsConfirmation,acknowledge,llmDestination,mtDestination}from '../shared/device-state.js';
+import{requestDestinations,destinationMessage}from '../shared/destinations.js';
+export {requestDestinations};
+import{loadDeviceState,needsConfirmation,acknowledge}from '../shared/device-state.js';
 import{createOverlay}from './overlay.js';
 
 const UI={
   title:'确认发送',continue:'继续翻译',change:'更换服务',close:'关闭',stopped:'本次未翻译。',
-  sentence:(name,host)=>`将使用 ${name} 翻译，本页文字会发送到 ${host}。`,
-  microsoft:'微软机器翻译',google:'谷歌机器翻译','microsoft-api':'微软 Translator',deepl:'DeepL',
   download:'下载语言包',ocr:'需下载语言包，图片在本机识别。',
 };
-const HOSTS={microsoft:'edge.microsoft.com / api-edge.cognitive.microsofttranslator.com',google:'clients5.google.com',
-  'microsoft-api':'api.cognitive.microsofttranslator.com',deepl:'api.deepl.com / api-free.deepl.com'};
 const CSS=`.confirm{position:fixed;right:max(16px,var(--safe-right));bottom:max(16px,var(--safe-bottom));width:320px;max-width:calc(100vw - 32px);padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);box-shadow:var(--shadow);pointer-events:auto}.confirm.left{right:auto;left:max(16px,var(--safe-left))}.confirm p{margin:4px 24px 12px 0;overflow-wrap:anywhere}.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.confirm button{padding:6px 10px;color:var(--accent);background:transparent}.confirm .primary{background:var(--accent);color:var(--accent-fg)}.confirm .close{position:absolute;right:6px;top:6px;padding:2px 8px;color:var(--fg2)}`;
 
 export function confirmationCard({message,platform,label=UI.continue,signal,left=false,root,group='common'}){
@@ -32,35 +29,14 @@ export function confirmationCard({message,platform,label=UI.continue,signal,left
   });
 }
 
-export function requestDestinations(s,req={}){
-  let chain=providerChain(s);
-  if(req.profileId!==undefined){const profile=s.provider.profiles.find(p=>p.id===req.profileId);
-    if(profile)chain=[{profile,model:req.model||profile.model},...chain];}
-  chain=chain.filter(c=>c.model?.trim()&&(c.profile.kind==='mock'||c.profile.baseUrl));
-  const mode=req.mode||s.translation?.mode||'mt+llm';
-  const dests=[];
-  if(mode!=='llm'){
-    const engine=s.translation?.mt?.engine||'microsoft';
-    const engines=[engine,...(engine!=='mock'&&s.translation?.mt?.fallback!==false?['microsoft','google']:[])];
-    for(const id of engines)dests.push({id:mtDestination(id),name:UI[id]||id,host:HOSTS[id]||''});
-  }
-  // Quick interactions can fall back to the configured LLM; explicit MT cannot.
-  if(mode!=='mt'){
-    for(const{profile}of chain)if(profile.kind!=='mock'){
-      const id=llmDestination(profile.baseUrl);if(id)dests.push({id,name:profile.name||new URL(profile.baseUrl).hostname,host:new URL(profile.baseUrl).hostname});
-    }
-  }
-  return dests.filter((d,i,a)=>a.findIndex(x=>x.id===d.id)===i);
-}
-
 const GATED=Symbol('confirmed');
 export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={}){
   if(p[GATED])return p;
   const waiting=new Map();let serial=Promise.resolve();
   const stopped=()=>({ok:false,error:{code:'CANCELLED',message:UI.stopped}});
-  async function ensure(req,signal){
+  async function ensure(req,signal,forced){
     if(signal?.aborted)return false;
-    const dests=requestDestinations(getSettings(),req),key=JSON.stringify(dests.map(d=>d.id));
+    const dests=forced?[forced]:requestDestinations(getSettings(),req),key=JSON.stringify(dests.map(d=>d.id));
     if(!dests.length)return true;
     // Child agents have no consent UI and cannot infer permission from local storage.
     if(p.frameAgent)return dests.every(d=>!needsConfirmation({acked:p.confirmedDestinations?.()||[]},d.id));
@@ -73,7 +49,7 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
         const missing=dests.filter(d=>needsConfirmation(state,d.id));
         if(missing.length){
           const s=getSettings();
-          const ok=await prompt({message:missing.map(d=>UI.sentence(d.name,d.host)).join(' '),platform:p,signal:job.abort.signal,
+          const ok=await prompt({message:missing.map(d=>destinationMessage(d)).join(' '),platform:p,signal:job.abort.signal,
             group:missing.some(d=>d.id.startsWith('llm:'))?'ai':'common',
             left:s.floatBall?.enabled&&s.floatBall.side!=='left'});
           if(!ok&&req.purpose==='page')out.onDecline?.();
@@ -81,7 +57,7 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
           for(const d of missing)await acknowledge(p.localArea,d.id);
           out.onDestinationConfirmed?.();
         }
-        return key===JSON.stringify(requestDestinations(getSettings(),req).map(d=>d.id));
+        return !!forced||key===JSON.stringify(requestDestinations(getSettings(),req).map(d=>d.id));
       };
       job.promise=serial.then(run).catch(()=>false).finally(()=>waiting.delete(key));
       serial=job.promise;waiting.set(key,job);
@@ -96,15 +72,33 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
   const out={...p,[GATED]:true,confirmSend:ensure,translator(){
     const svc=p.translator();
     return{...svc,
-      async translateText(req){const{signal,...body}=req;return await ensure(body,signal)?svc.translateText(body):stopped();},
+      async translateText(req){const{signal,...body}=req;if(!await ensure(body,signal))return stopped();
+        for(let retry=0;retry<8;retry++){const result=await svc.translateText(body);
+          if(result?.error?.code!=='confirmation-required')return result;
+          if(!result.error.destination||!await ensure(body,signal,result.error.destination))return stopped();
+        }return stopped();},
       translateBatch(req,onPartial){
         const abort=new AbortController();let handle,finish;
         const done=(async()=>{
           if(await ensure(req,abort.signal)){
             if(abort.signal.aborted)return;
-            let left=req.items.length;const complete=new Promise(r=>{finish=r;});
-            handle=svc.translateBatch(req,results=>{if(!abort.signal.aborted)onPartial(results);left-=results.filter(r=>r.stage!=='draft').length;if(!left)finish();});
-            await(handle.done||complete);
+            let pending=req.items;
+            for(let retry=0;pending.length&&retry<8&&!abort.signal.aborted;retry++){
+              let left=pending.length;const complete=new Promise(r=>{finish=r;});const blocked=new Map();
+              handle=svc.translateBatch({...req,items:pending},results=>{
+                const delivered=[];
+                for(const r of results){if(r.error?.code==='confirmation-required'&&r.error.destination)blocked.set(r.id,r.error.destination);else delivered.push(r);}
+                if(!abort.signal.aborted&&delivered.length)onPartial(delivered);
+                left-=results.filter(r=>r.stage!=='draft').length;if(left<=0)finish();
+              });
+              await(handle.done||complete);
+              if(!blocked.size)break;
+              const dests=[...new Map([...blocked.values()].map(d=>[d.id,d])).values()];
+              for(const d of dests)if(!await ensure(req,abort.signal,d)){
+                if(!abort.signal.aborted)onPartial(pending.map(it=>({id:it.id,error:stopped().error})));return;
+              }
+              pending=pending.filter(it=>blocked.has(it.id));
+            }
           }else if(!abort.signal.aborted)onPartial(req.items.map(item=>({id:item.id,error:stopped().error})));
         })();
         return{done,cancel(){abort.abort();handle?.cancel();finish?.();}};
@@ -115,8 +109,8 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
     const packs=await p.comics.languages?.();
     if(!packs?.ok||!packs.languages.some(l=>l.lang===req.lang)){
       // Language keys and serialized destination-list keys cannot collide.
-      if(!waiting.has(req.lang))waiting.set(req.lang,prompt({message:UI.ocr,platform:p,label:UI.download}));
-      if(!await waiting.get(req.lang)){waiting.delete(req.lang);return stopped();}
+      if(!waiting.has(req.lang))waiting.set(req.lang,prompt({message:`${UI.ocr} 来源：GitHub raw.githubusercontent.com；体积：${({eng:'4.11 MB',jpn:'2.47 MB',jpn_vert:'3.04 MB',kor:'1.68 MB'})[req.lang]||'约 11.3 MB'}（下载前校验固定大小与 SHA-256）。`,platform:p,label:UI.download}));
+      let ok;try{ok=await waiting.get(req.lang);}finally{waiting.delete(req.lang);}if(!ok)return stopped();
     }
     return p.comics.recognize(req);
   }};

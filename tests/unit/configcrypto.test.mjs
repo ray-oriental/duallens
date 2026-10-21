@@ -37,3 +37,10 @@ test('reject unsafe plaintext objects, oversized input and prototype secrets', a
   await assert.rejects(importConfig('a'.repeat(2 * 1024 * 1024 + 1)));
   await assert.rejects(exportConfig(DEFAULT_SETTINGS, { password: 'test', secrets: JSON.parse('{"__proto__":{"apiKey":"sk-test-not-real"}}') }));
 });
+
+test('encrypted exports require eight characters while plaintext and legacy imports remain supported',async()=>{
+ for(const password of ['a','1234567','😀'.repeat(7)])await assert.rejects(exportConfig(DEFAULT_SETTINGS,{password}),/8/);
+ const exported=await exportConfig(DEFAULT_SETTINGS,{password:'12345678'});
+ assert.ok((await importConfig(exported,'12345678')).settings);
+ assert.ok((await exportConfig(DEFAULT_SETTINGS)).startsWith('{'));
+});

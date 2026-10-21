@@ -18,7 +18,7 @@ spec.loader.exec_module(e2e)
 MOCK = r"""(() => {
  const data={},listeners=new Set(); window.uiData=data;window.uiMessages=[];
  const area={async get(keys){return keys===null?structuredClone(data):Object.fromEntries((Array.isArray(keys)?keys:[keys]).filter(k=>k in data).map(k=>[k,structuredClone(data[k])]))},async set(items){Object.assign(data,structuredClone(items));for(const cb of listeners)cb(Object.fromEntries(Object.keys(items).map(k=>[k,{}])),'local')},async remove(keys){for(const k of keys)delete data[k]}};
- window.chrome={storage:{local:area,sync:area,onChanged:{addListener:cb=>listeners.add(cb),removeListener:cb=>listeners.delete(cb)}},commands:{async getAll(){return[{name:'toggle-page',shortcut:'Alt+A'}]}},tabs:{async query(){return[{id:7,url:'https://docs.example.com/guide/intro'}]},async sendMessage(id,msg){uiMessages.push(msg.type);if(msg.type==='get-state')return window.uiState;if(msg.type==='command'){uiState={...uiState,translated:!uiState.translated};return{ok:true}}},async create(){}},permissions:{async request(){return window.allowPermission},async contains(){return false}},runtime:{async sendMessage(msg){uiMessages.push(msg.type);return msg.type==='tab-ensure'?{ok:true,injected:true}:{ok:true,available:false}},getURL:p=>'/extension/'+p}};
+ window.chrome={storage:{local:area,sync:area,onChanged:{addListener:cb=>listeners.add(cb),removeListener:cb=>listeners.delete(cb)}},commands:{async getAll(){return[{name:'toggle-page',shortcut:'Alt+A'}]}},tabs:{async query(){return[{id:7,url:'https://docs.example.com/guide/intro'}]},async sendMessage(id,msg){uiMessages.push(msg.type);if(msg.type==='get-state')return window.uiState;if(msg.type==='command'){uiState={...uiState,translated:!uiState.translated};return{ok:true}}},async create(){}},permissions:{async request(){uiMessages.push("permission-request");return window.allowPermission},async contains(){return false}},runtime:{async sendMessage(msg){uiMessages.push(msg.type);return msg.type==='tab-ensure'?{ok:true,injected:true}:{ok:true,available:false}},getURL:p=>'/extension/'+p}};
  window.uiState={translated:false,done:0,pending:0,failed:0};window.allowPermission=false;
 })();"""
 
@@ -117,6 +117,9 @@ def main():
             assert page.locator('#chain-list button').first.is_disabled()
             page.locator('nav a[href="#data"]').click()
             # Clicking a disabled move button must not mark the form dirty.
+            page.locator('#backupPassword').fill('short')
+            page.click('#export')
+            page.locator('#status').filter(has_text='至少需要 8').wait_for()
             page.locator('#backupPassword').fill('ui fixture passphrase')
             with page.expect_download():
                 page.click('#export')
@@ -173,7 +176,15 @@ def main():
                 assert not popup.locator('#feature-selection').is_checked()
                 assert '权限' in popup.locator('#status').inner_text()
                 assert not popup.evaluate("uiData.settings?.selection?.enabled||false")
+                assert 'pdf-status' not in popup.evaluate('uiMessages'), 'normal pages must not be probed'
+                popup.locator('#feature-subtitles').click()
+                assert not popup.locator('#feature-subtitles').is_checked()
+                assert popup.evaluate("uiMessages.includes('permission-request')")
                 popup.evaluate('allowPermission=true')
+                popup.locator('#feature-subtitles').click()
+                popup.wait_for_function("uiData.settings?.subtitles?.enabled===true")
+                popup.wait_for_timeout(100)
+                assert popup.locator('#feature-subtitles').is_checked()
                 popup.locator('input[name="本站"][value="always"]').check()
                 popup.locator('#site-path').wait_for()
                 assert popup.locator('.dl-popup').bounding_box()['height'] <= 600
@@ -229,6 +240,18 @@ def main():
                 print('PASS mobile_panel: menu seam, bottom sheet at 375px, >=44px rows, fullscreen lazy settings, light/dark')
             finally:
                 mobile_context.close()
+            page.bring_to_front()
+            page.locator('nav a[href="#ai"]').click()
+            page.locator('[data-preset=ollama]').click()
+            page.locator('#localOnly').wait_for()
+            assert page.locator('#localOnly').is_checked()
+            assert page.locator('#translationMode').input_value()=='llm'
+            page.locator('#model').fill('fixture-local')
+            page.click('#save')
+            page.locator('#status').filter(has_text='已保存').wait_for()
+            assert h.sw_eval("async()=> (await chrome.storage.local.get('settings')).settings.translation.mode")=='llm'
+            assert '只发送到你本机' in page.locator('#ai-destination').inner_text()
+            page.screenshot(path=str(artifact/'settings-local-only.png'),full_page=True)
             assert not errors, errors
         finally:
             h.close()

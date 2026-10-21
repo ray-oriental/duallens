@@ -59,7 +59,7 @@ test('loopback endpoints and demo do not prompt',async()=>{
 test('all interaction purposes and temporary profile/fallback choices are covered',()=>{
   const f=fixture();for(const purpose of ['page','selection','hover','input','subtitles','comics'])assert.equal(requestDestinations(f.settings(),{purpose})[0].id,'llm:https://fixture.example');
   const s=mergeSettings(f.settings(),{translation:{mode:'mt+llm',mt:{engine:'deepl'}}});
-  assert.deepEqual(requestDestinations(s).map(d=>d.id),['mt:deepl','mt:microsoft','mt:google','llm:https://fixture.example']);
+  assert.deepEqual(requestDestinations(s).map(d=>d.id),['mt:deepl','llm:https://fixture.example']);
 });
 test('cancelled batch never starts after continuation, and concurrent batches share one card',async()=>{
   let accept,prompts=0;const f=fixture({},({signal})=>{prompts++;return new Promise(r=>{accept=r;signal.addEventListener('abort',()=>r(false));});});
@@ -109,6 +109,24 @@ test('concurrent OCR images share the first language download confirmation',asyn
   const p=withSendConfirmation(f.platform,f.settings,{prompt:()=>{prompts++;return new Promise(r=>{accept=r;});}});
   const a=p.comics.recognize({lang:'eng'}),b=p.comics.recognize({lang:'eng'});
   await new Promise(r=>setImmediate(r));assert.equal(prompts,1);assert.equal(recognized,0);
-  accept(true);await Promise.all([a,b]);await p.comics.recognize({lang:'eng'});
+  accept(true);await Promise.all([a,b]);f.platform.comics.languages=async()=>({ok:true,languages:[{lang:'eng'}]});await p.comics.recognize({lang:'eng'});
   assert.equal(prompts,1);assert.equal(recognized,3);
+});
+
+test('deleting OCR data requires source-and-size confirmation again',async()=>{
+  const f=fixture();let prompts=0,installed=false;
+  f.platform.comics={async languages(){return {ok:true,languages:installed?[{lang:'eng'}]:[]};},async recognize(){installed=true;return {ok:true};}};
+  const p=withSendConfirmation(f.platform,f.settings,{prompt:async opts=>{assert.match(opts.message,/GitHub.*4.11 MB/);prompts++;return true;}});
+  await p.comics.recognize({lang:'eng'});await p.comics.recognize({lang:'eng'});assert.equal(prompts,1);
+  installed=false;await p.comics.recognize({lang:'eng'});assert.equal(prompts,2);
+});
+test('background refusal shows confirmation and retries text and batch without exposing the error as a translation',async()=>{
+ const f=fixture({provider:{active:'mock',profiles:[{id:'mock',kind:'mock',model:'mock'}]}});
+ const destination={id:'mt:google',name:'Google',host:'clients5.google.com'};let calls=0,prompts=0;
+ f.platform.translator=()=>({async translateText(){return ++calls===1?{ok:false,error:{code:'confirmation-required',destination}}:{ok:true,text:'ok'};},
+ translateBatch(req,cb){calls++;cb(req.items.map(it=>calls===1?{id:it.id,error:{code:'confirmation-required',destination}}:{id:it.id,text:'ok'}));return{done:Promise.resolve(),cancel(){}};}});
+ const svc=withSendConfirmation(f.platform,f.settings,{prompt:async()=>{prompts++;return true;}}).translator();
+ assert.equal((await svc.translateText({text:'fixture'})).text,'ok');assert.equal(prompts,1);
+ calls=0;await f.platform.localArea.set({'ui.device':{acked:[]}});const results=[];
+ await svc.translateBatch(req,rs=>results.push(...rs)).done;assert.equal(results.length,1);assert.equal(results[0].text,'ok');assert.equal(prompts,2);
 });

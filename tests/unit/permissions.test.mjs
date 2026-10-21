@@ -11,6 +11,7 @@ import { createSubtitleHandlers } from '../../extension/background/subtitles.js'
 test('release manifest uses optional page hosts and concrete translation hosts, no static injection', () => {
   const m = JSON.parse(readFileSync(new URL('../../extension/manifest.json', import.meta.url)));
   assert.equal(m.content_scripts, undefined);
+  assert.deepEqual(m.host_permissions,['https://edge.microsoft.com/*','https://api-edge.cognitive.microsofttranslator.com/*','https://clients5.google.com/*']);
   assert.deepEqual(m.optional_host_permissions, ['<all_urls>']);
   assert.ok(m.host_permissions.every(pattern => /^https:\/\/[^*<>]+\/\*$/.test(pattern)));
   for (const name of ['activeTab', 'scripting']) assert.ok(m.permissions.includes(name));

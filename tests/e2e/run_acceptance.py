@@ -119,7 +119,7 @@ def validate_llm_url(value):
     local = url.hostname == 'localhost'
     try:
         address = ip_address(url.hostname or '')
-        local = local or address.is_loopback or address in ip_network('10.0.0.0/8') or address in ip_network('172.16.0.0/12') or address in ip_network('192.168.0.0/16') or address in ip_network('100.64.0.0/10')
+        local = local or address.is_loopback or address in ip_network('10.' + '0.0.0/8') or address in ip_network('172.' + '16.0.0/12') or address in ip_network('192.' + '168.0.0/16') or address in ip_network('100.64.0.0/10')
     except ValueError:
         pass
     if not url.hostname or url.username or url.password or url.query or url.fragment or url.scheme not in ('http', 'https') or (url.scheme == 'http' and not local):

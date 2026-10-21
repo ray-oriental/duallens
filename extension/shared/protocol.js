@@ -35,6 +35,7 @@ export const PRIORITY = Object.freeze({ VISIBLE: 0, NEAR: 1, PREFETCH: 2 });
 
 // error.code values carried in partial results and one-shot responses
 export const ERR = Object.freeze({
+  CONFIRMATION_REQUIRED: 'confirmation-required',
   RATE_LIMITED: 'rate_limited',
   PROVIDER: 'provider_error',
   NETWORK: 'network_error',

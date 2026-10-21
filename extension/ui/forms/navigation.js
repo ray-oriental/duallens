@@ -90,7 +90,8 @@ export function organizeLayout(container,form,{field,button}) {
   if($('apiKey')) button(main,'show-key',COMMON.showKey);
   field(main,'localEngine',T.localEngine,'select',[{id:'ollama',name:'Ollama'},{id:'lmstudio',name:'LM Studio'}]);field(main,'freeModels',T.freeModels,'checkbox');
   move(main,['baseUrl']);provider.append(el('p','',{id:'ai-destination',class:'hint'}));
-  const local=el('div',null,{id:'local-help'});local.append(el('p',T.origin,{class:'hint'}));button(local,'copy-origin',T.copy);provider.append(local);
+  field(main,'localOnly','只用本地模型（不使用在线机器翻译）','checkbox');
+  const local=el('div',null,{id:'local-help'});local.append(el('p','勾选后只使用 AI 服务；备用服务链也请仅保留本机地址。',{class:'hint'}));local.append(el('p',T.origin,{class:'hint'}));button(local,'copy-origin',T.copy);provider.append(local);
   const adv=advanced(provider,['profileName','jsonMode','maxItems','maxChars','concurrency','timeoutMs','fallbackModels']);move(adv,['providerChain']);$('providerChain').parentElement.hidden=true;adv.append(el('h3',T.chain),el('div','',{id:'chain-list'}));
   const chainControls=el('div',null,{class:'actions wide'});field(chainControls,'chain-profile',COPY.s46,'select');field(chainControls,'chain-model',COPY.s47);button(chainControls,'chain-add',T.add);adv.append(chainControls);button(provider,'delete-profile',T.delete).className='dl-danger';
   const providerActions=el('div',null,{class:'group-actions'});button(providerActions,'cancel-ai',T.cancel);move(providerActions,['save']);provider.append(providerActions);

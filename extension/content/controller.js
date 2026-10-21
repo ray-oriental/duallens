@@ -123,6 +123,15 @@ export class PageTranslator {
     if(this.active) return;
     this.activation = new AbortController();
     this.active=true;
+    const signal=this.activation.signal;
+    void this.platform.confirmSend({purpose:'page'},signal).then(ok=>{
+      if(!ok){if(!signal.aborted)this.stop();return;}
+      if(!signal.aborted&&this.active)this.#begin();
+    });
+    this.onActiveChange();
+  }
+
+  #begin() {
     this.lazy.setMargin(this.s.lazy.rootMarginPx);
     this.watch.start();
     this.frames.start();
@@ -478,6 +487,7 @@ export class PageTranslator {
       unit.engine=engine;
       unit.state='done';
       inj.setStage(unit,stage,engine);
+      this.#refreshColor(unit);
       return;
     }
     unit.translated=text;
@@ -495,7 +505,15 @@ export class PageTranslator {
       stage,
       engine,
     });
+    this.#refreshColor(unit);
     this.lazy.scroll();
+  }
+
+  #refreshColor(unit) {
+    if(unit.attribute || !unit.tEl)return;
+    // Themes can change while waiting; layout adaptation can also change inherited table colours.
+    const color=measureColor(unit.host);
+    if(color)inj.write(()=>{unit.translationColor=color;unit.tEl.style.setProperty('--dl-fg',color);});
   }
 
   retry(id) {

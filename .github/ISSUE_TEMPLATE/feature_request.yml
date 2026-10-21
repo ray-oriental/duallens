@@ -21,4 +21,4 @@ body:
     id: scope
     attributes:
       label: 替代方案与范围
-      description: 首版是P0网页翻译。PDF、字幕、EPUB、OCR是ROADMAP中的后续功能，请区分当前缺陷与新阶段建议。
+      description: 当前已包含网页、PDF、字幕与本地 OCR。请对照 ROADMAP 与实际设备验证范围，区分现有缺陷和新功能。

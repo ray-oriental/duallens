@@ -15,9 +15,9 @@ export function engineSummary(s) {
   const p=activeProfile(s),ai=p&&(p.kind==='mock'||p.baseUrl&&p.model),mode=s.translation.mode,engine=s.translation.mt.engine,mt=TEXT.mt[engine]||engine;
   const fallback=s.translation.mt.fallback&&['microsoft','google'].includes(engine)?TEXT.mt[engine==='microsoft'?'google':'microsoft']:'';
   const hosts=[...new Set(providerChain(s).filter(c=>c.profile.kind!=='mock').map(c=>{try{return new URL(c.profile.baseUrl).host;}catch{return c.profile.name;}}))].join('、');
-  if(mode==='llm') {if(!ai)return {name:'AI 服务',privacy:TEXT.none,full:TEXT.none,group:'ai'};const local=isLocalUrl(p.baseUrl);return {name:local?`本地模型 ${p.name}`:p.name,privacy:local?TEXT.local:`文字和页面标题会发送给 ${hosts||p.name}。`,full:local?TEXT.local:`网页文字和页面标题会发送给 ${hosts||p.name}。`,group:'ai'};}
-  const mtLine=`网页文字会发送给${mt}${fallback?`，失败时改用${fallback}`:''}。`;
-  if(ai&&mode!=='mt')return {name:'机器翻译 + AI 精修',privacy:`网页文字会发送给${mt}和所选 AI 服务。`,full:`${mtLine}网页文字和页面标题也会发送给 ${hosts||p.name}。`,group:'ai'};
+  if(mode==='llm') {if(!ai)return {name:'AI 服务',privacy:TEXT.none,full:TEXT.none,group:'ai'};const local=providerChain(s).every(c=>c.profile.kind==='mock'||isLocalUrl(c.profile.baseUrl));return {name:local?`本地模型 ${p.name}`:p.name,privacy:local?TEXT.local:`文字和页面标题会发送给 ${hosts||p.name}。`,full:local?TEXT.local:`网页文字和页面标题会发送给 ${hosts||p.name}。`,group:'ai'};}
+  const mtLine=`网页文字会发送给${mt}${fallback?`，失败时改用${fallback}`:''}。${['deepl','microsoft-api'].includes(engine)?'失败时直接报错，不转发到免费端点。':''}`;
+  if(ai&&mode!=='mt')return {name:'机器翻译 + AI 精修',privacy:`${mtLine}文字和页面标题也会发送给所选 AI 服务。`,full:`${mtLine}网页文字和页面标题也会发送给 ${hosts||p.name}。`,group:'ai'};
   return {name:`${mt}机器翻译${['microsoft','google'].includes(engine)?'（免费）':''}`,privacy:mtLine,full:mtLine,group:'common'};
 }
 export function featureDescription(key,s,coarse=false) {if(key==='hover')return coarse?'长按段落翻译':s.hover.modifier==='none'?'停留片刻翻译段落':`按住 ${s.hover.modifier==='Control'?'Ctrl':s.hover.modifier} 翻译段落`;if(key==='input'&&s.input.trigger==='shortcut')return '按 Alt+I 翻译输入框';return FEATURES.find(f=>f[0]===key)?.[2]||'';}

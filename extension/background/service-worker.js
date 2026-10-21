@@ -20,6 +20,7 @@ import { toErrorInfo } from '../shared/errors.js';
 import { createProviders } from './providers.js';
 import { createQueue } from './queue.js';
 import { createCache } from './cache.js';
+import { createConfirmationGuard } from '../shared/destinations.js';
 import { createTranslator } from './translator.js';
 import { createHandlers } from './handlers.js';
 import { createComicHandlers } from './comics.js';
@@ -35,12 +36,14 @@ const queue = createQueue();
 const cache = createCache();
 const getSecret = id => getDefaultSettingsStore().getSecret(id);
 const providers = createProviders({ getSecret });
-const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings, getSecret });
+const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings, getSecret, confirmRequest:createConfirmationGuard(chrome.storage.local) });
 const handlers = createHandlers({
   translator,
   cache,
   providers,
   getSettings: loadSettings,
+  // Side panels have no sender.tab: avoid persistence unless a normal tab is authoritative.
+  privateContext: sender => sender?.tab?.incognito !== false,
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
 Object.assign(handlers,createFrameHandlers(chrome));
@@ -129,7 +132,7 @@ chrome.runtime.onConnect.addListener((port) => {
     retain();
     translator
       .translate(
-        { ...msg, items, priority, reqId: `${portId}:${reqId}` },
+        { ...msg, incognito:port.sender?.tab?.incognito!==false, items, priority, reqId: `${portId}:${reqId}` },
         {
           signal: ctrl.signal,
           onPartial: (results) => {

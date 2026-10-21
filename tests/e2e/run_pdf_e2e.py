@@ -140,6 +140,42 @@ def viewer(h, url, view=None, viewport=None):
     return page, errors
 
 
+def pdf_consent(h):
+    profile={'id':'consent','kind':'openai','name':'Offline consent fixture','baseUrl':'https://consent.example/v1',
+             'model':'fixture','requiresKey':False,'fallbackModels':[]}
+    h.settings({'provider':{'active':'consent','profiles':[profile],'chain':[]},'translation':{'mode':'llm'}})
+    h.sw_eval("""()=>{globalThis.pdfConsentCalls=0;const original=globalThis.fetch;
+      globalThis.fetch=async(url,init)=>{if(String(url).startsWith('https://consent.example/')){
+        pdfConsentCalls++;const messages=JSON.parse(init.body).messages;const user=messages.find(m=>m.role==='user').content;
+        const input=JSON.parse(user.slice(user.indexOf('{'),user.lastIndexOf('}')+1));
+        return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({t:input.t.map(t=>'【译】'+t)})}}]}),{status:200,headers:{'content-type':'application/json'}});
+      }return original(url,init);};}""")
+    h.ctx.add_init_script("""(()=>{window.consentRoots=[];const attach=Element.prototype.attachShadow;
+      Element.prototype.attachShadow=function(opts){const root=attach.call(this,opts);consentRoots.push(root);return root;};})();""")
+    page,errors=viewer(h,h.base+'/pdf-field-notebook.pdf','side')
+    assert 'consent.example' in page.locator('#privacy').inner_text()
+    # Call the worker directly to prove the reader cannot bypass the network guard.
+    refusal=page.evaluate("()=>chrome.runtime.sendMessage({type:'translate-text',purpose:'pdf',text:'Synthetic PDF text'})")
+    assert refusal['error']['code']=='confirmation-required'
+    assert refusal['error']['destination']['id']=='llm:https://consent.example'
+    assert h.sw_eval('()=>pdfConsentCalls')==0
+    before=page.locator('#pdf-pages').inner_html()
+    page.click('#translate')
+    wait_for(page,"()=>consentRoots.some(r=>r.querySelector('.confirm'))")
+    assert page.locator('.tb,.tb-wait,.rf-t').count()==0
+    assert h.sw_eval('()=>pdfConsentCalls')==0
+    page.evaluate("()=>consentRoots.find(r=>r.querySelector('.confirm')).querySelector('.close').click()")
+    page.wait_for_timeout(200)
+    assert page.locator('#pdf-pages').inner_html()==before
+    page.click('#translate')
+    wait_for(page,"()=>consentRoots.some(r=>r.querySelector('.confirm'))")
+    page.evaluate("()=>consentRoots.find(r=>r.querySelector('.confirm')).querySelector('.primary').click()")
+    page.locator('.tb[data-stage=final]').first.wait_for(timeout=20000)
+    assert h.sw_eval('()=>pdfConsentCalls')>0
+    assert not errors,errors
+    return 'worker refuses PDF sends with zero network; reader discloses actual destination; close preserves DOM; consent retries successfully'
+
+
 def pdf_reading(h):
     page, errors = viewer(h, h.base + '/pdf-field-notebook.pdf', 'side')
     page.wait_for_timeout(500)
@@ -483,7 +519,7 @@ def main():
     Thread(target=server.serve_forever, daemon=True).start()
     base = f'http://127.0.0.1:{server.server_address[1]}'
     results = []
-    cases = [('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt)]
+    cases = [('pdf_consent',pdf_consent), ('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt)]
     try:
         with e2e.sync_playwright() as p:
             for name, case in cases:

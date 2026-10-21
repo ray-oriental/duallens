@@ -10,5 +10,5 @@
 <label>主题<select id="theme"><option value="auto">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
 <button id="settings">模型设置</button><label class="file-button">选择本地 PDF<input id="local-file" type="file" accept="application/pdf,.pdf"></label></div></div>
 <div class="info"><p id="status" role="status" aria-live="polite">正在打开 PDF…</p>
-<p class="hint" title="PDF 在此设备解析和渲染；点击“翻译”后，视口内与相邻页的文本块发往你配置的模型服务。扫描件需先 OCR。本地 file:// 链接需在扩展详情页允许访问文件网址，也可直接选择文件。">本地解析 · 点击翻译后只发送视口附近的文本块 · 扫描件需先 OCR</p></div></header>
+<p class="hint" id="privacy">本地解析；翻译前将说明实际发送去向。</p></div></header>
 <main id="pdf-pages" aria-label="PDF 页面"></main><script type="module" src="viewer.js"></script></body></html>

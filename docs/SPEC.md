@@ -359,3 +359,12 @@ UI 设置增量：`floatBall.autoHide` 为布尔值，默认 `true`；目标语�
 - 验证流程见 VALIDATION.md，平台与待办边界见 PLATFORMS.md 和 ROADMAP.md。
 
 配置导入可调用 `store.save(settings, {preserveProvider:true})` 保留服务默认模型与 chain 的独立值；日常保存仍对齐链首项。
+
+
+### Destination consent and private browsing
+
+Translation requests through the background worker fail closed with `{code:'confirmation-required', message, destination:{id,name,host,fallback?}}` until `ui.device.acked` contains every destination in the effective request chain. Loopback and mock destinations are exempt. The worker checks before translation and again before provider/MT network dispatch. Content, PDF, side-panel and popup consumers show their own confirmation UI and retry only after acknowledgement. Existing proactive content consent remains. Settings-page model discovery/connection tests are explicit synthetic probes, not page translation.
+
+Official keyed MT engines never fall back to free endpoints; only free engines fall back to one another. The Google free adapter uses `client=gtx`. Incognito is derived from the extension sender, never from caller-supplied flags, and bypasses cache reads/writes. Contexts without an authoritative normal-window flag also bypass caching; the userscript uses the manager flag and disables caching when that flag is unavailable. Before first page consent no scan, translation wrapper or paragraph pending marker is created; closing the card leaves the source DOM intact.
+
+Required translation hosts are the three free-MT hosts; all keyed engines and AI hosts request optional origin access on save/test. Automatic subtitles require the same broad optional host access as other resident features. Web-accessible resources enumerate only the content module graph. Dynamic resource origins are deferred: Chromium 130 rejects those module imports under the isolated-world CSP; the static origin remains required for this supported test browser.

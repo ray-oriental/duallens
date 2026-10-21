@@ -1,3 +1,5 @@
+import {confirmationCard} from '../content/confirmation.js';
+import {destinationMessage} from '../shared/destinations.js';
 import { LANGS,siteRuleFor,setSitePageRule } from '../shared/settings.js';
 import { loadDeviceState,updateDeviceState,acknowledge,mtDestination } from '../shared/device-state.js';
 import { featureNeedsBroad,requestBroad } from '../shared/permissions.js';
@@ -16,7 +18,9 @@ export async function mountPopup(root,{store,platform,localArea=platform.localAr
   const revokedText=revoked?.features?.length?EXTRA.revoked:'';
   let host='';try{host=new URL(url).hostname;}catch{/* unavailable tab */}
   const say=message=>{if(feedback)feedback.textContent=message;};
-  async function run(fn){try{await fn();}catch(error){say(error.message||T.failure);}}
+  async function run(fn){try{for(let retry=0;retry<8;retry++){const result=await fn(),error=result?.error;if(error?.code!=='confirmation-required')return result;
+    if(!error.destination||!await confirmationCard({message:destinationMessage(error.destination),platform:{...platform,openSettings:onSettings},root:box}))return;
+    await acknowledge(localArea,error.destination.id);}}catch(error){say(error.message||T.failure);}}
   const button=(text,fn,attrs={})=>{const b=el('button',text,{type:'button',...attrs});b.addEventListener('click',()=>run(fn));return b;};
   async function persist(patch){s=await store.save(patch);if(!closed)draw();}
   async function finish(skip=false){device=await updateDeviceState(localArea,{onboarded:true,upgradeNoticeSeen:true});if(closed)return;draw();if(ai&&!skip)onSettings('ai');}
@@ -39,7 +43,7 @@ export async function mountPopup(root,{store,platform,localArea=platform.localAr
     if(pdfAvailable)box.append(button(EXTRA.pdf,onPDF,{id:'pdf-open'}));
     if(s.comics.enabled&&!restricted)box.append(button(EXTRA.images,async()=>{await pageMessage({type:'command',name:'translate-comics'});await refresh();},{id:'comics'}));
     if(!device.upgradeNoticeSeen){const note=el('div',null,{class:'dl-notice',id:'upgrade-notice'});note.append(el('p',T.upgrade),button(T.understood,async()=>{device=await updateDeviceState(localArea,{upgradeNoticeSeen:true});draw();}));box.append(note);void updateDeviceState(localArea,{upgradeNoticeSeen:true});}
-    const card=el('section',null,{class:'dl-card'}),toggle=button(state?.translated?T.original:T.translate,async()=>{await pageMessage({type:'command',name:'toggle-page'});await refresh();},{class:state?.translated?'dl-hero':'dl-hero primary',id:'toggle'});toggle.disabled=restricted||!state;if(shortcut)toggle.append(el('kbd',shortcut));card.append(toggle,el('p',statusText(),{class:'page-status dl-status',id:'page-status','aria-live':'polite'}));
+    const card=el('section',null,{class:'dl-card'}),toggle=button(state?.translated?T.original:T.translate,async()=>{const result=await pageMessage({type:'command',name:'toggle-page'});if(result?.error)return result;await refresh();},{class:state?.translated?'dl-hero':'dl-hero primary',id:'toggle'});toggle.disabled=restricted||!state;if(shortcut)toggle.append(el('kbd',shortcut));card.append(toggle,el('p',statusText(),{class:'page-status dl-status',id:'page-status','aria-live':'polite'}));
     const row=el('div',null,{class:'display-row'});row.append(segmented(doc,T.mode,[['bilingual',T.bilingual],['translation-only',T.translation]],s.displayMode,value=>run(()=>persist({displayMode:value}))),el('span',T.to),languages(s.targetLang,value=>persist({targetLang:value}),'target'));card.append(row);
     const summary=engineSummary(s),engine=el('div',null,{class:'engine-row'});engine.append(el('span',T.engine),el('strong',summary.name),button(T.change,()=>onSettings(summary.group),{class:'dl-text-button'}));card.append(engine,el('p',summary.privacy,{class:'privacy',title:summary.full}));box.append(card);
     const site=el('section',null,{class:'dl-card'}),siteHead=el('div',null,{class:'site-head'}),mode=host?siteRuleFor(s,url).mode||'':'';

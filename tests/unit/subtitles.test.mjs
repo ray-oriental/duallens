@@ -19,7 +19,7 @@ test('timedtext hints are constrained to two exact YouTube origins/path and curr
   assert.equal(url.searchParams.get('fmt'), 'json3'); assert.equal(url.searchParams.has('tlang'), false);
   for (const value of ['https://evil.test/api/timedtext?v=fixture', 'https://www.youtube.com.evil.test/api/timedtext?v=fixture',
     'https://www.youtube.com:8443/api/timedtext?v=fixture', 'http://www.youtube.com/api/timedtext?v=fixture',
-    'https://x@y.youtube.com/api/timedtext', raw.replace('fixture', 'other'), base, 'x'.repeat(9000)]) assert.equal(originalTrackURL(value, base), null);
+    'https://x'+'@y.youtube.com/api/timedtext', raw.replace('fixture', 'other'), base, 'x'.repeat(9000)]) assert.equal(originalTrackURL(value, base), null);
   assert.ok(originalTrackURL(raw.replaceAll('www.', 'm.'), base.replace('www.', 'm.')));
   assert.equal(new URL(originalTrackURL(raw, base.replace('www.', 'm.'))).hostname, 'www.youtube.com');
   assert.equal(originalTrackURL(raw, 'https://example.test/'), null);

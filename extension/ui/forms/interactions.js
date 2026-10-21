@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS,mergeSettings,STYLES } from '../../shared/settings.js';
-import { featureNeedsBroad,requestBroad,requestOrigin } from '../../shared/permissions.js';
+import { featureNeedsBroad,requestBroad,requestOrigin,requestMTOrigin } from '../../shared/permissions.js';
 import { acknowledge,llmDestination } from '../../shared/device-state.js';
 import { element,FEATURES,TEXT as COMMON,engineSummary,featureDescription } from '../components.js';
 import { GROUPS } from './navigation.js';
@@ -34,6 +34,7 @@ export function installSettingsInteractions(ui,ctx){
   async function persistField(n){
     const path=fieldPath(n.id);if(!path)return;const before=getSettings(),value=val(n),feature=path.endsWith('.enabled')?path.split('.')[0]:null;
     if(value&&feature&&featureNeedsBroad(feature)&&platform.kind==='extension'&&!await requestBroad(platform.permissionAPI)){n.checked=false;notice(T.denied);drawView();return;}
+    if(n.id==='mtEngine'&&platform.kind==='extension'&&!await requestMTOrigin(value,platform.permissionAPI)){n.value=before.translation.mt.engine;notice(T.originDenied);return;}
     const patch=patchFor(path,value);const previousDirty=getDirty();setDirty(true);
     try{validateSettings(mergeSettings(before,patch));await store.save(patch);if(closed)return;setSettings(mergeSettings(getSettings(),patch));setDirty(previousDirty);n.removeAttribute('aria-invalid');ui.querySelector('#error-'+n.id)?.remove();flash();drawView();}
     catch(error){setSettings(before);setDirty(previousDirty);if(n.type==='checkbox')n.checked=!value;n.setAttribute('aria-invalid','true');ui.querySelector('#error-'+n.id)?.remove();const help=el('small',error.message||T.failure,{class:'field-error',id:'error-'+n.id});n.parentElement.append(help);notice(error.message||T.failure,true);}
@@ -41,9 +42,10 @@ export function installSettingsInteractions(ui,ctx){
   on($('settings-form'),'change',event=>{const n=event.target;if(immediate(n))void persistField(n);});
   for(const b of ui.querySelectorAll('#style-tiles input'))on(b,'change',()=>{if(b.checked){$('style').value=b.value;void persistField($('style'));}});
   for(const b of ui.querySelectorAll('[data-preset]'))on(b,'click',()=>{$('providerPreset').value=b.dataset.preset;$('add-profile').click();});
+  on($('localOnly'),'change',()=>{$('translationMode').value=$('localOnly').checked?'llm':'mt+llm';setSettings(mergeSettings(getSettings(),{translation:{mode:$('translationMode').value}}));setDirty(true);drawView();});
   on($('localEngine'),'change',()=>{const p=getProfile();if(!p)return;p.preset=$('localEngine').value;p.baseUrl=p.preset==='ollama'?'http://127.0.0.1:11434/v1':'http://127.0.0.1:1234/v1';$('baseUrl').value=p.baseUrl;setDirty(true);drawView();});
   if($('show-key'))on($('show-key'),'click',()=>{const key=$('apiKey');key.type=key.type==='password'?'text':'password';$('show-key').setAttribute('aria-pressed',String(key.type==='text'));$('show-key').textContent=key.type==='text'?COMMON.hideKey:COMMON.showKey;});
-  on($('copy-origin'),'click',async()=>{const command='setx OLLAMA_ORIGINS "chrome-extension://*"';try{await win.navigator.clipboard.writeText(command);notice(T.copied);}catch{notice(T.copyFallback+command);}});
+  on($('copy-origin'),'click',async()=>{const command=`setx OLLAMA_ORIGINS "chrome-extension://${globalThis.chrome?.runtime?.id||'<扩展 ID>'}"`;try{await win.navigator.clipboard.writeText(command);notice(T.copied);}catch{notice(T.copyFallback+command);}});
   function chain(){try{return JSON.parse($('providerChain').value||'[]');}catch{return[];}}
   function setChain(entries){$('providerChain').value=JSON.stringify(entries,null,2);setDirty(true);drawChain();}
   function drawChain(){const root=$('chain-list');root.replaceChildren();chain().forEach((entry,i)=>{const row=el('div',null,{class:'chain-row'});row.append(el('span',`${getSettings().provider.profiles.find(p=>p.id===entry.profileId)?.name||entry.profileId} / ${entry.model}`));for(const [label,delta]of[[T.up,-1],[T.down,1],[T.remove,0]]){const b=el('button',label,{type:'button','aria-label':`${label} ${entry.model}`});b.disabled=delta!==0&&(i+delta<0||i+delta>=chain().length);b.addEventListener('click',()=>{const values=chain();if(delta)[values[i],values[i+delta]]=[values[i+delta],values[i]];else values.splice(i,1);setChain(values);});row.append(b);}root.append(row);});}
@@ -64,8 +66,8 @@ export function installSettingsInteractions(ui,ctx){
     for(const input of ui.querySelectorAll('#display-segments input'))input.checked=input.value===s.displayMode;
     $('inputOrder').parentElement.hidden=$('inputMode').value!=='bilingual';$('customPrompt').parentElement.hidden=$('preset').value!=='custom';
     $('privacy-current').textContent=summary.full;$('mt-destination').textContent=engineSummary({...s,translation:{...s.translation,mode:'mt'}}).full;
-    $('ai-destination').textContent=p?.baseUrl?(/^(http:\/\/(localhost|127\.)|http:\/\/\[::1\])/.test(p.baseUrl)?T.local:T.destination(new URL(p.baseUrl).host)):'';
-    const local=['ollama','lmstudio'].includes(p?.preset);$('localEngine').parentElement.hidden=!local;$('local-help').hidden=!local;$('freeModels').parentElement.hidden=p?.preset!=='openrouter';
+    $('ai-destination').textContent=p?.baseUrl?summary.full:'';
+    const local=['ollama','lmstudio'].includes(p?.preset);$('localOnly').parentElement.hidden=!local;$('localOnly').checked=s.translation.mode==='llm';$('localEngine').parentElement.hidden=!local;$('local-help').hidden=!local;$('freeModels').parentElement.hidden=p?.preset!=='openrouter';
     if(local){$('localEngine').value=p.preset;$('key-row').hidden=true;}
     for(const tile of ui.querySelectorAll('[data-preset]'))tile.setAttribute('aria-pressed',String(tile.dataset.preset===(local?'ollama':p?.preset)));
     $('chain-profile').replaceChildren(...s.provider.profiles.filter(p=>p.kind!=='mock').map(p=>el('option',p.name,{value:p.id})));drawChain();

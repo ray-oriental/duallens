@@ -1,4 +1,4 @@
-"""Generate Edge store artwork from the real unpacked DualLens extension.
+"""Generate Chrome/Edge store artwork from the real unpacked DualLens extension.
 
 The browser scenes use the same isolated Playwright harness as the public E2E
 suite and the deterministic mock provider. No credentials or network requests
@@ -120,7 +120,7 @@ def _promo(page, path: Path) -> None:
       h1{{font-size:27px;margin:0}} p{{color:#b9c9df;margin:17px 0 20px;line-height:1.45}}
       .tag{{display:inline-block;padding:8px 12px;border:1px solid #466da5;border-radius:999px;color:#9fc9ff}}
       </style><main><header><img src='data:image/png;base64,{icon}' alt='DualLens icon'><h1>DualLens</h1></header>
-      <p>Read any webpage with original text and a clear second-line translation.<br>Bring your own model service and keep control of your settings.</p>
+      <p>Quiet by default. Free machine translation.<br>Optional AI, with your own settings and keys.</p>
       <span class='tag'>Bilingual reading · Translation-only mode</span></main>""")
     _screenshot(page, path, 440, 280)
 
@@ -187,8 +187,8 @@ def generate(output_dir: Path = OUT) -> list[Path]:
             options = session.ctx.new_page()
             options.goto(f"chrome-extension://{session.ext_id}/ui/options.html", wait_until="load")
             options.locator("#status").wait_for(timeout=10000)
-            options.select_option("#providerPreset", "openrouter")
-            options.locator("#add-profile").click()
+            options.locator('nav a[href="#ai"]').click()
+            options.locator('[data-preset="openrouter"]').click()
             options.locator("#profile").wait_for(timeout=10000)
             options.wait_for_timeout(400)
             options.locator("#apiKey").fill("")

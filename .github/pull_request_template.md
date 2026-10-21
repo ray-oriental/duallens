@@ -8,7 +8,7 @@
 - [ ] `python -B -m unittest discover -s scripts -p "test_*.py"`
 - [ ] `python -B scripts/check_project.py`
 - [ ] 页面交互变更已用 mock E2E 验证，或说明无法运行的原因
-- [ ] 修改后的功能描述与 P0 / ROADMAP 实际范围一致
+- [ ] 修改后的功能描述与 当前实现、设备验证与 ROADMAP 范围一致
 
 列出实际执行的检查和结果；无需配置账号或任何付费服务。
 

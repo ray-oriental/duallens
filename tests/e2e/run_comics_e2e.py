@@ -78,8 +78,16 @@ def settings_v2(h,patch):
     page=h.ctx.new_page();page.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
     page.locator('.dl-settings').wait_for()
     try:
-        return page.evaluate("async patch => {const {saveSettings}=await import(chrome.runtime.getURL('shared/settings.js'));return saveSettings(patch)}",patch)
+        return page.evaluate("async patch => {const {saveSettings}=await import('chrome-extension://' + chrome.runtime.id + '/shared/settings.js');return saveSettings(patch)}",patch)
     finally:page.close()
+
+def sync_sites(h):
+    page=h.ctx.new_page();page.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
+    try:
+        result=page.evaluate("()=>chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+        runner.check(result and result.get('ok'),'background registry sync did not acknowledge')
+    finally:page.close()
+
 
 def setup(h,lang):
     if not getattr(h,'consent_commands',False):
@@ -199,7 +207,7 @@ def comics_referer_rules(h):
         saved=options.evaluate("async()=>{const {loadSettings}=await import('../shared/settings.js');return (await loadSettings()).comics.canvasSites}")
         runner.check(saved==[entry],'saving settings lost CDN metadata')
     finally:options.close()
-    h.sw_eval("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+    sync_sites(h)
     rules=h.sw_eval('() => chrome.declarativeNetRequest.getSessionRules()')
     runner.check(len(rules)==1 and rules[0]['condition']['initiatorDomains']==[h.ext_id],str(rules))
     runner.check(rules[0]['condition']['resourceTypes']==['xmlhttprequest','other'],str(rules))
@@ -208,10 +216,10 @@ def comics_referer_rules(h):
     runner.check(h.sw_eval(probe,url)==200,'extension Referer was not set')
     runner.check(h.js(probe,url)==403,'website XHR was modified by extension rule')
     settings_v2(h,{'comics':{'canvasSites':[]}})
-    h.sw_eval("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+    sync_sites(h)
     runner.check(h.sw_eval(probe,url)==403,'removed site left a rule active')
     settings_v2(h,{'comics':{'canvasSites':[entry],'enabled':False}})
-    h.sw_eval("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
+    sync_sites(h)
     runner.check(h.sw_eval('() => chrome.declarativeNetRequest.getSessionRules()')==[],'disabled comics left session rules')
     settings_v2(h,{'comics':{'enabled':True,'canvasSites':['*.pixiv.net']}})
     h.js("() => document.querySelectorAll('figure').forEach(f=>{if(f.firstElementChild.id!=='eng')f.style.display='none'})")

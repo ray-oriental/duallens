@@ -7,6 +7,7 @@ import { registerPopupMenu } from './menu.js';
 if (window.top === window.self && /html/i.test(document.contentType || 'text/html')) {
   const boot = async () => {
     const gm = {
+      info: typeof GM_info==='object' ? GM_info : null,
       getValue: GM_getValue, setValue: GM_setValue, deleteValue: GM_deleteValue,
       addValueChangeListener: GM_addValueChangeListener,
       registerMenuCommand: GM_registerMenuCommand, xmlhttpRequest: GM_xmlhttpRequest,

@@ -22,9 +22,9 @@ class ReleaseTests(unittest.TestCase):
         self.write('extension/background/main.js', 'import "../shared/defs.js";\n')
         self.write('extension/content/loader.js', 'void 0;\n')
         self.write('extension/shared/defs.js', 'export const value = 1;\n')
-        self.write('extension/ui/popup.html', '<!doctype html><link rel="stylesheet" href="ui.css"><img src="../icons/1.png"><script type="module" src="popup.js"></script>')
+        self.write('extension/ui/popup.html', '<!doctype html><link rel="stylesheet" href="fixture.css"><img src="../icons/1.png"><script type="module" src="popup.js"></script>')
         self.write('extension/ui/popup.js', 'import "../shared/defs.js";\n')
-        self.write('extension/ui/ui.css', 'body { color: black; }\n')
+        self.write('extension/ui/fixture.css', 'body { color: black; }\n')
         icon = self.project / 'extension/icons/1.png'; icon.parent.mkdir(); icon.write_bytes(PNG)
         for name in PUBLIC_FILES + PUBLIC_DOCS:
             self.write(name, '# public fixture\n')
@@ -62,7 +62,7 @@ await fs.writeFile(output,'// ==UserScript==\\n// @version '+version+'\\n// ==/U
                 z.writestr(entry, data)
         self.rehash()
     def test_two_archives_and_sha256_validate(self):
-        paths = self.build(); self.assertEqual(len(paths),3)
+        paths = self.build(); self.assertEqual(len(paths),5)
         verify_release(self.project,self.out)
         with zipfile.ZipFile(self.out/'duallens-extension-v0.1.0.zip') as z:
             self.assertIn('manifest.json',z.namelist()); self.assertNotIn('extension/manifest.json',z.namelist())
@@ -75,11 +75,28 @@ await fs.writeFile(output,'// ==UserScript==\\n// @version '+version+'\\n// ==/U
         data['key'] = 'public-test-key'
         manifest.write_text(json.dumps(data), encoding='utf-8')
         paths = build_release(self.project, self.out, 'edge-store')
-        self.assertEqual([p.name for p in paths], ['duallens-extension-v0.1.0.zip', 'duallens-portable-v0.1.0.zip', 'duallens-edge-store-v0.1.0.zip', 'SHA256SUMS'])
+        self.assertEqual([p.name for p in paths], ['duallens-extension-v0.1.0.zip', 'duallens-portable-v0.1.0.zip', 'duallens-chrome-store-v0.1.0.zip', 'duallens-edge-store-v0.1.0.zip', 'SHA256SUMS'])
         verify_release(self.project, self.out)
         with zipfile.ZipFile(self.out/'duallens-edge-store-v0.1.0.zip') as edge:
             self.assertNotIn('key', json.loads(edge.read('manifest.json')))
-            self.assertEqual(set(edge.namelist()), {'LICENSE', 'manifest.json', 'background/main.js', 'content/loader.js', 'shared/defs.js', 'ui/popup.html', 'ui/popup.js', 'ui/ui.css', 'icons/1.png'})
+            self.assertEqual(set(edge.namelist()), {'LICENSE', 'manifest.json', 'background/main.js', 'content/loader.js', 'shared/defs.js', 'ui/popup.html', 'ui/popup.js', 'ui/fixture.css', 'icons/1.png'})
+
+    def test_both_store_packages_exclude_userscript_code_and_chrome_key_is_checked(self):
+        from check_project import USERSCRIPT_ONLY
+        for name in USERSCRIPT_ONLY:
+            self.write('extension/'+name,'void 0;\n')
+        paths=build_release(self.project,self.out,'chrome-store')
+        verify_release(self.project,self.out)
+        for kind in ['extension','chrome-store','edge-store']:
+            with zipfile.ZipFile(self.out/f'duallens-{kind}-v0.1.0.zip') as z:
+                self.assertFalse(USERSCRIPT_ONLY & set(z.namelist()))
+        with zipfile.ZipFile(self.out/'duallens-portable-v0.1.0.zip') as z:
+            self.assertIn('extension/userscript/entry.js',z.namelist())
+        name='duallens-chrome-store-v0.1.0.zip'
+        with zipfile.ZipFile(self.out/name) as z: manifest=json.loads(z.read('manifest.json'))
+        manifest['key']='public-test-key'
+        self.replace_zip_member(name,'manifest.json',json.dumps(manifest).encode())
+        with self.assertRaisesRegex(CheckError,'manifest contains key'):verify_release(self.project,self.out)
 
     def test_userscript_builder_is_optional_and_added_when_present(self):
         self.userscript_builder()

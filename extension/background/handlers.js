@@ -20,7 +20,7 @@ const MAX_TEXT_CHARS = 20000;
 export const MSG_MT_TEST = 'mt-test';
 const PURPOSES = new Set(['page', 'selection', 'input', 'hover', 'text', 'pdf']);
 
-export function createHandlers({ translator, cache, providers, getSettings, openOptions = async () => {}, now = () => Date.now() }) {
+export function createHandlers({ translator, cache, providers, getSettings, openOptions = async () => {}, privateContext = sender => sender?.tab?.incognito === true, now = () => Date.now() }) {
   const wrap = (fn) => async (msg, sender) => {
     try {
       return await fn(msg || {}, sender);
@@ -37,13 +37,13 @@ export function createHandlers({ translator, cache, providers, getSettings, open
   }
 
   return {
-    [MSG_TRANSLATE_TEXT]: wrap(async (msg) => {
+    [MSG_TRANSLATE_TEXT]: wrap(async (msg, sender) => {
       const text = typeof msg.text === 'string' ? msg.text : '';
       if (!text.trim()) throw new DLError(ERR.CONFIG, '没有要翻译的文字');
       if (text.length > MAX_TEXT_CHARS) throw new DLError(ERR.CONFIG, `文字太长（上限 ${MAX_TEXT_CHARS} 字）`);
       const settings = await getSettings();
       const out = await translator.translateTextEx({
-        text,
+        text, incognito:privateContext(sender),
         to: msg.to || settings.targetLang,
         from: msg.from || settings.sourceLang,
         ...(PURPOSES.has(msg.purpose) ? { purpose: msg.purpose } : {}),

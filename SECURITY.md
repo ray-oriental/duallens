@@ -1,19 +1,13 @@
 # Security and privacy
 
-Report suspected vulnerabilities privately using this repository's GitHub Security Advisories / Report a vulnerability page. Do not include API keys, cookies, OAuth files, private webpage text or a full browser profile in an issue or PR.
+Report vulnerabilities privately through this repository's GitHub Security Advisories / Report a vulnerability page. Never include API keys, cookies, private source text or browser profiles in public issues.
 
-## Data flow
+DualLens has no account backend, telemetry or remote configuration. Translation requests go directly to user-selected services. The background enforces device-local destination confirmation before translation requests; loopback models and mock providers are exempt. Official keyed machine-translation engines never fall back to free unofficial endpoints. Settings-page connection tests send only synthetic text after a deliberate user action.
 
-The extension sends extracted text to the provider selected in settings. The selected remote provider may receive webpage text. There is no telemetry, account backend or remote configuration service in DualLens.
+API keys are stored unencrypted in device-local browser or userscript-manager storage. They are never synced or included in plaintext exports. Encrypted backups can contain keys and require a passphrase of at least eight characters. Protect the operating-system account and browser profile.
 
-User-entered API keys remain in device-local extension or manager storage and are excluded from plaintext exports; passphrase-encrypted exports may include them. They are not encrypted storage; protect your browser profile.
+Model output becomes text nodes or validated safe clones, never executable markup. Restore must preserve original webpage state. Access to pages is temporary through activeTab unless the user grants optional host access for a persistent feature. Cross-origin frame agents rely on the top frame's confirmed destinations.
 
-## Boundaries
+PDF rendering and image OCR run locally. All extension code and WebAssembly are packaged; OCR language data is pinned and verified by size and SHA-256. The separately distributed userscript uses manager-cached, integrity-checked resources. Translation caches are device-local and disabled for incognito requests.
 
-- It accepts bounded, non-streaming plain-text requests. Non-loopback upstream URLs are refused.
-- Translation output is inserted as text and validated original-element clones, never innerHTML.
-- Optional subscription CLIs use empty temporary working directories, no project instructions and disabled tools. Only enable them for accounts you are authorized to use.
-- No local backend or subscription is selected automatically on a fresh extension installation.
-- CI uses mock providers and synthetic fixtures; no deployment credentials are required.
-
-The extension necessarily requests webpage access to translate arbitrary pages. First-release support is limited to top frames. Cloned inline images may repeat original resource requests. Do not upload private failure screenshots or runtime files to public issues.
+CI uses mock providers and synthetic fixtures without accounts, paid models or deployment credentials. See [Privacy](docs/PRIVACY.md) for storage, retention and external request details.

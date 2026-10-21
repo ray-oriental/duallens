@@ -9,6 +9,7 @@ export class DLError extends Error {
     super(message);
     this.name = 'DLError';
     this.code = code;
+    if (code === ERR.CONFIRMATION_REQUIRED && extra.destination) this.destination = extra.destination;
     if (extra.status != null) this.status = extra.status;
     if (extra.retryAfterMs != null) this.retryAfterMs = extra.retryAfterMs;
     if (extra.serverCode != null) this.serverCode = extra.serverCode; // provider machine-readable code
@@ -25,6 +26,7 @@ export function isCancelled(e) {
 
 // Normalises anything thrown into the { code, message } shape carried on the wire.
 export function toErrorInfo(e) {
-  if (e && KNOWN_CODES.has(e.code)) return { code: e.code, message: String(e.message || e.code) };
+  if (e && KNOWN_CODES.has(e.code)) return { code: e.code, message: String(e.message || e.code),
+    ...(e.code === ERR.CONFIRMATION_REQUIRED && e.destination ? {destination:e.destination} : {}) };
   return { code: ERR.PROVIDER, message: String((e && e.message) || e || 'unknown error') };
 }

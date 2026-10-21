@@ -345,6 +345,28 @@ def layout_round4(h):
     assert h.js("() => document.querySelector('#expander').style.height==='40px' && document.querySelector('h1').style.lineHeight==='10px' && !document.querySelector('dl-t,dl-w,dl-o')"),'restore keeps native expander change and exact original title styles'
     return 'hanging detection bounded; deep expander refits without retranslating; product/author atoms; visible aria-hidden; thumbnail backing; native styles restored'
 
+@e.case('pending_theme_color', 'A delayed translation follows the current page theme and restores exactly')
+def pending_theme_color(h):
+    html='<meta charset="utf-8"><style>body{color:black;background:white}p{font-size:18px}</style><p id="source">This paragraph waits for its synthetic translation while the page theme changes.</p>'
+    h.ctx.route('https://github.com/pending-theme-fixture',lambda route:route.fulfill(body=html,content_type='text/html'))
+    h.page=h.ctx.new_page();h.page.goto('https://github.com/pending-theme-fixture')
+    h.tab_id=h.sw_eval(e.JS_FIND_TAB,h.page.url);h.wait_ready()
+    before=h.js('()=>document.body.outerHTML')
+    h.js("""async ext=>{
+      const {PageTranslator}=await import(ext+'/content/controller.js');const {DEFAULT_SETTINGS}=await import(ext+'/shared/settings.js');
+      window.themeReplies=[];
+      window.themeController=new PageTranslator({getSettings:()=>({...DEFAULT_SETTINGS,translation:{mode:'llm'},provider:{...DEFAULT_SETTINGS.provider,active:'mock'}}),
+        platform:{detectLanguage:async()=>null,translator:()=>({translateBatch(req,cb){let cancelled=false;themeReplies.push(()=>{if(!cancelled)cb(req.items.map(it=>({id:it.id,text:'延迟返回的中文译文。'})));});return{cancel(){cancelled=true;}};}})}});
+      themeController.start();
+    }""",f'chrome-extension://{h.ext_id}')
+    h.wait_js('()=>themeReplies.length>0')
+    h.js("""()=>{const style=document.createElement('style');style.textContent='body{background:rgb(13,17,23);color:rgb(94,104,119)}';document.head.append(style);themeReplies.forEach(reply=>reply());}""")
+    h.wait_js("()=>!!document.querySelector('#source dl-t[data-dl-state=done]')")
+    assert h.js("()=>{const t=document.querySelector('#source dl-t');return getComputedStyle(t).color===getComputedStyle(t.parentElement).color}"), 'late response must retain current low-contrast source colour'
+    h.js('()=>themeController.stop()')
+    assert h.js('()=>document.body.outerHTML')==before, 'theme-change restore keeps original nodes and attributes'
+    return 'held response; theme changes after dispatch; current low-contrast source retained; exact restore'
+
 @e.case('coverage_round3', 'Capitalized navigation, edge identifiers, compact metadata and original whitespace identity')
 def coverage_round3(h):
     html='''<meta charset="utf-8"><style>.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)} .titleline{display:block}</style><header><nav><a href="/news">News</a><a href="/sport">Sport</a><a href="/business">Business</a><button>Platform</button></nav></header><main><h2 class="sr-only">Hidden breadcrumb heading</h2><div id="identity">\n\t<a href="/file/main/build">build</a>\n\t<div style="display:flex"><span>Useful public paragraph with enough words.</span></div>\n</div><span class="titleline"><a href="https://example.com/story">Neural Networks Are Already Clean</a> <span class="sitebit">(goodfire.com)</span></span><div class="subtext">41 points by <a class="hnuser" href="/user?id=alice">alice</a> 2 hours ago | <a href="/hide">hide</a> | <a href="/item?id=1">11 comments</a></div><a data-hovercard-type="user" href="/Alice">Alice</a><span class="topic-tag">typescript</span><span class="branch-name">main</span></main>'''
@@ -382,8 +404,8 @@ def coverage_round3(h):
     contrasts=h.js(r"""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');
       const c=document.createElement('canvas').getContext('2d'),rgb=color=>{c.fillStyle=color;c.fillRect(0,0,1,1);return [...c.getImageData(0,0,1,1).data].slice(0,3);};
       return [...document.querySelectorAll('dl-t')].filter(t=>t.dataset.dlState==='done').map(t=>{
-        const color=rgb(getComputedStyle(t).color),source=rgb(getComputedStyle(t.parentElement).color);
-        return {text:t.textContent,color,source,ratio:contrastRatio(color,[13,17,23]),sourceRatio:contrastRatio(source,[13,17,23]),same:JSON.stringify(color)===JSON.stringify(source)};
+        const color=rgb(getComputedStyle(t).color),source=rgb(getComputedStyle(t.parentElement).color),unit=[...round3.units.values()].find(u=>u.tEl===t);
+        return {text:t.textContent,raw:getComputedStyle(t).color,inline:t.getAttribute('style'),parent:t.parentElement.localName,host:unit?.host.localName,hostColor:unit&&getComputedStyle(unit.host).color,saved:unit?.translationColor,color,source,ratio:contrastRatio(color,[13,17,23]),sourceRatio:contrastRatio(source,[13,17,23]),same:JSON.stringify(color)===JSON.stringify(source)};
       });}""",f'chrome-extension://{h.ext_id}')
     assert all(c['ratio']>=4.5 or c['sourceRatio']<4.5 and c['same'] for c in contrasts), 'accessible translation or exact low-contrast source fallback: '+str(contrasts)
     h.js('() => round3.stop()')

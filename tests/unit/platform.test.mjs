@@ -256,3 +256,13 @@ test('extension adapter preserves language confidence and one-shot message shape
   api.runtime.onMessage.emit({ type: 'get-state' }, { id: 'test-extension' }, () => {});
   off(); assert.equal(calls, 1);
 });
+
+test('userscript incognito and unknown manager contexts never persist translation cache',async()=>{
+ for(const info of [{isIncognito:true},undefined,{isIncognito:false}]){
+  const gm=fakeGM();gm.info=info;const p=createUserscriptPlatform(gm);await p.ready;
+  await p.settingsStore.save({provider:{active:'mock'},translation:{mode:'llm'}});
+  assert.equal((await p.translator().translateText({text:'Synthetic test paragraph.'})).ok,true);
+  const stored=gm.values.get('duallens:local')||{};
+  assert.equal((stored['translation-cache']||[]).length>0,info?.isIncognito===false);
+ }
+});

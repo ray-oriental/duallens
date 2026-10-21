@@ -13,9 +13,9 @@
 - `offscreen`：仅在请求本地 OCR 时创建扩展文档进行图像解码和 Worker 识别，不上传图像。
 - `declarativeNetRequestWithHostAccess`：仅在已拥有目标 CDN 主机权限时，为本扩展 ID 发起的 `xmlhttprequest` / `other` 请求设置漫画站点公开根地址 Referer。规则不匹配网页请求；关闭图片文字、删除站点或撤销主机权限后移除相应会话规则。
 
-固定 `host_permissions` 仅包含实际翻译服务（均为 HTTPS）：`edge.microsoft.com`、`api-edge.cognitive.microsofttranslator.com`、`clients5.google.com`、`api.cognitive.microsofttranslator.com`、`api.deepl.com`、`api-free.deepl.com`、`api.openai.com`、`api.deepseek.com`、`openrouter.ai`。前两项为微软免费接口及其 token 后备路径，第三项为谷歌免费后备；其余为官方微软 / DeepL 及预设 AI 服务。免费非官方接口可能变动、限流或失效。
+必需主机仅为 `edge.microsoft.com`、`api-edge.cognitive.microsofttranslator.com`、`clients5.google.com`，用于默认免费非官方机翻。官方 Microsoft/DeepL 及 AI 服务均使用可选来源权限，保存或测试时按需申请。
 
-`optional_host_permissions: ["<all_urls>"]` 仅声明可申请范围，默认没有授予。开启 `featureNeedsBroad` 中的常驻功能或「总是翻译」规则时，UI 必须在用户手势中请求广泛权限；拒绝则不保存开启状态。字幕自动开启和按语言自动翻译同样依赖常驻注入。自定义 AI 和本地模型在保存 / 测试配置前按具体来源请求权限，无需申请所有网站。Chrome 匹配模式按主机授权，不把端口视为隔离边界。
+`optional_host_permissions: ["<all_urls>"]` 仅声明可申请范围，默认没有授予。开启悬浮球、划词、悬停、输入框、跨 frame、视频字幕、图片文字等常驻功能或「总是翻译」规则时，UI 必须在用户手势中请求广泛权限；拒绝则不保存开启状态。字幕自动开启和按语言自动翻译同样依赖常驻注入。自定义 AI 和本地模型在保存 / 测试配置前按具体来源请求权限，无需申请所有网站。Chrome 匹配模式按主机授权，不把端口视为隔离边界。
 
 | 操作 | 没有广泛权限 | 授权并开启所需功能 |
 | --- | --- | --- |
@@ -43,7 +43,7 @@ Installation does not request access to all websites and declares no static cont
 - `offscreen`: local image decoding and OCR Workers only after an OCR request.
 - `declarativeNetRequestWithHostAccess`: host-gated session rules set a public site-root Referer only for this extension's XHR/other requests to selected comic CDNs. Website requests are unaffected; disabling comics, deleting a site or losing host permission removes the rules.
 
-Required HTTPS hosts are limited to `edge.microsoft.com`, `api-edge.cognitive.microsofttranslator.com`, `clients5.google.com`, `api.cognitive.microsofttranslator.com`, `api.deepl.com`, `api-free.deepl.com`, `api.openai.com`, `api.deepseek.com` and `openrouter.ai`. They serve free unofficial Microsoft/Google translation, official Microsoft/DeepL, or user-configured preset AI providers. Unofficial services may change or fail.
+Required HTTPS hosts are limited to `edge.microsoft.com`, `api-edge.cognitive.microsofttranslator.com` and `clients5.google.com`. They serve free unofficial Microsoft/Google translation. Official Microsoft/DeepL and all AI provider hosts are optional and requested when saving or testing the service. Unofficial services may change or fail.
 
 Optional `<all_urls>` is a requestable scope, not an installation grant. UI must request it in the user's switch/rule gesture before enabling passive features or automatic translation; denial keeps them disabled. Automatic subtitles and language rules also need resident injection. Custom/local API configurations request their specific origin before testing or saving. Host patterns do not isolate ports.
 

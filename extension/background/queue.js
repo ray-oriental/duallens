@@ -62,7 +62,7 @@ export function createQueue(options = {}) {
       }).then(value => { s.rates.delete(model); settle(job, true, value); }, error => {
         if (job.settled) return;
         if (isCancelled(error)) return settle(job, false, cancelledError());
-        if (error?.code === ERR.CONFIG) return settle(job, false, error);
+        if (error?.code === ERR.CONFIG || error?.code === ERR.CONFIRMATION_REQUIRED) return settle(job, false, error);
         if(error?.serverCode==='untranslated_items'||error?.code===ERR.PARSE) {
           job.skipped.add(JSON.stringify([profile.id,model]));job.contentError=error;return;
         }

@@ -145,7 +145,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     return { ...profile, apiKey: await getSecret(profile.id) || profile.apiKey || '' };
   }
 
-  async function request(profile, { url, method, body, timeoutMs, idleMs = timeoutMs, signal, onDelta }) {
+  async function request(profile, { url, method, body, timeoutMs, idleMs = timeoutMs, signal, onDelta, beforeSend }) {
     const ctrl = new AbortController();
     let timedOut = false;
     let timer;
@@ -191,6 +191,8 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       else signal.addEventListener('abort', onAbort, { once: true });
     }
     try {
+      await beforeSend?.();
+      if (signal?.aborted) throw cancelledError();
       const res = await doFetch(url, {
         method,
         headers: { ...headersFor(profile), ...(onDelta ? { Accept: 'text/event-stream, application/json' } : {}) },
@@ -262,7 +264,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     return text.replace(/<seg id="(\d+)">([\s\S]*?)<\/seg>/g, '<seg id="$1">【译】$2</seg>');
   }
 
-  async function chat({ profile, model, messages, signal, onDelta }) {
+  async function chat({ profile, model, messages, signal, onDelta, beforeSend }) {
     if (signal && signal.aborted) throw cancelledError();
     if (profile && profile.kind === 'mock') return mockChat({ model: model || profile.model, messages, signal });
     profile = await withSecret(profile);
@@ -280,7 +282,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       method: 'POST',
       body: JSON.stringify(payload),
         timeoutMs: profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
-      signal, onDelta: onDelta || (() => {}),
+      signal, beforeSend, onDelta: onDelta || (() => {}),
     });
     let res=await send();
     if(res.status===400&&payload.response_format&&!/stream/i.test(serverMessage(res.text, profile))) {

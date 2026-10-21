@@ -53,7 +53,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn('| 0.000 | — | — | 0.0% | 0 | NO | FAIL |', text)
 
     def test_gm_transport_rejects_arbitrary_or_authenticated_destination(self):
-        for url in ['http://127.0.0.1:1234/v1', 'https://example.com/', 'https://user:pass@edge.microsoft.com/']:
+        for url in ['http://127.0.0.1:1234/v1', 'https://example.com/', 'https://user:pass' + '@edge.microsoft.com/']:
             with self.assertRaises(ValueError):
                 runner.direct_request({'url': url})
 

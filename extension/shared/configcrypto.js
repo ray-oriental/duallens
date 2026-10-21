@@ -32,6 +32,7 @@ function unbase64url(text) {
 export async function exportConfig(settings, { password = '', secrets = {} } = {}) {
   const clean = publicSettings(settings);
   if (!password) return JSON.stringify(clean, null, 2);
+  if ([...password].length < 8) throw new Error('加密导出口令至少需要 8 个字符');
   const plaintext = encoder.encode(JSON.stringify({ settings: clean, secrets: checkedSecrets(secrets) }));
   if (plaintext.length > MAX_BYTES) throw new Error('配置文件最大 1MB');
   const salt = crypto.getRandomValues(new Uint8Array(16));

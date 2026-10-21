@@ -58,7 +58,7 @@ export function isMtEngine(id) {
 // with a config error at run time and the next engine takes over.
 export function mtChain(mt = {}) {
   const primary = isMtEngine(mt.engine) ? mt.engine : 'microsoft';
-  if (primary === 'mock') return ['mock'];
+  if (!FREE_ORDER.includes(primary)) return [primary];
   const chain = [primary];
   if (mt.fallback !== false) for (const id of FREE_ORDER) if (!chain.includes(id)) chain.push(id);
   return chain;
@@ -160,7 +160,7 @@ function microsoftList(body, n) {
   return list.map(entry => entry?.translations?.[0]?.text);
 }
 
-export function createMT({ fetchImpl, getSecret = async () => '', now = () => Date.now(), timeoutMs = MT_LIMITS.timeoutMs,
+export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret = async () => '', now = () => Date.now(), timeoutMs = MT_LIMITS.timeoutMs,
   limits: runtimeLimits = MT_LIMITS } = {}) {
   const doFetch = (...args) => (fetchImpl || globalThis.fetch)(...args);
   const cooldowns = new Map();
@@ -201,10 +201,13 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
       else job.signal.addEventListener('abort', onAbort, { once: true });
     }
     try {
+      await confirmEngine(job.engine);
+      if(job.signal?.aborted)throw cancelledError();
       const res = await doFetch(url, { method, headers, body, signal: ctrl.signal, credentials: 'omit', cache: 'no-store' });
       const text = await res.text();
       return { status: res.status, text, retryAfter: res.headers?.get?.('retry-after') ?? null };
     } catch (e) {
+      if(e?.code===ERR.CONFIRMATION_REQUIRED)throw e;
       if (job.signal?.aborted) throw cancelledError();
       if (timedOut) throw new DLError(ERR.NETWORK, `机器翻译请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
       throw new DLError(ERR.NETWORK, '无法连接机器翻译服务');
@@ -262,7 +265,7 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
 
     async google(job) {
       const body = [
-        qs({ client: 'dict-chrome-ex', sl: googleLang(job.from), tl: googleLang(job.to), ...(job.html ? { format: 'html' } : {}) }),
+        qs({ client: 'gtx', sl: googleLang(job.from), tl: googleLang(job.to), ...(job.html ? { format: 'html' } : {}) }),
         ...textsOf(job).map(t => 'q=' + encodeURIComponent(t)),
       ].join('&');
       const res = await http(job, { url: GOOGLE_URL, headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body });
@@ -324,11 +327,12 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
         lastError = new DLError(ERR.PARSE, '机器翻译没有返回这一段的译文');
         failed(engine, lastError);
       } catch (e) {
-        if (isCancelled(e)) throw e;
+        if (isCancelled(e)||e?.code===ERR.CONFIRMATION_REQUIRED) throw e;
         lastError = e;
         failed(engine, e);
       }
     }
+    if(chain.some(id=>['deepl','microsoft-api'].includes(id))&&lastError)lastError.message+='；官方引擎失败，未转发到免费端点。';
     const error = lastError ? toErrorInfo(lastError) : { code: ERR.NETWORK, message: '机器翻译暂时不可用，稍后自动重试' };
     return job.items.map(it => results.get(it.id) || { id: it.id, error });
   }
@@ -337,6 +341,7 @@ export function createMT({ fetchImpl, getSecret = async () => '', now = () => Da
   // request with [{ id, text, plain?, engine } | { id, error }]. Resolves when every item reported.
   async function translate({ items, to, from = 'auto', chain = ['microsoft', 'google'], region = '', signal,priority, onResults = () => {}, limits = runtimeLimits }) {
     if (signal?.aborted) throw cancelledError();
+    if(['deepl','microsoft-api'].includes(chain[0]))chain=[chain[0]];
     // An exceptionally large inline group cannot be split with its markup intact. Send bounded
     // plain pieces instead; the LLM can restore its formatting. Never exceed vendor request limits.
     const long = new Map();

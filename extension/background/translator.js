@@ -41,7 +41,11 @@ export function planFor(settings, req, llmUsable) {
 
 export function createTranslator({ provider, cache, queue, getSettings, getSecret = async id =>
   globalThis.chrome?.storage?.local ? getDefaultSettingsStore().getSecret(id) : '', sha = sha256Hex, retryBatchMax = 8,
-  mt = createMT({ getSecret }), autoDelayMs = AUTO_DRAFT_DELAY_MS }) {
+  confirmRequest = async () => {},
+  mt = createMT({ getSecret, confirmEngine:async engine => {
+    const settings = await getSettings();
+    await confirmRequest({...settings,translation:{...settings.translation,mt:{...settings.translation.mt,engine}}},{mode:'mt'});
+  } }), autoDelayMs = AUTO_DRAFT_DELAY_MS }) {
   // Shared by every mode: settings with the per-request provider choice applied, and the usable LLM chain.
   async function prepare(req) {
     let settings = await getSettings();
@@ -67,6 +71,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     const items = (Array.isArray(req.items) ? req.items : []).filter((it) => it && it.id !== undefined);
     const to = req.to || settings.targetLang;
     const from = req.from || settings.sourceLang || 'auto';
+    if(req.incognito)settings={...settings,cache:{...settings.cache,enabled:false}};
     return { settings, chain, profile, items, to, from };
   }
 
@@ -251,7 +256,8 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
               if (s.aborted || /^(zh|ja|ko|ar|ru|th)/.test(to) && omitted(text,u.text,selected.kind)) return;
               completeUnit(u, text, model, selected);
             });
-            const content=await provider({profile:selected,model,messages,signal:s,onDelta: delta => stream.push(delta)});
+            await confirmRequest(settings,{mode:'llm',profileId:selected.id,model});
+            const content=await provider({profile:selected,model,messages,signal:s,beforeSend:()=>confirmRequest(settings,{mode:'llm',profileId:selected.id,model}),onDelta: delta => stream.push(delta)});
             const parsed=parseSegments(content,idMap);
             if(parsed.invalidJSON) throw new DLError(ERR.PARSE,'模型返回了非 JSON 内容（可能是思考型模型）',{serverCode:'invalid_translation'});
             if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
@@ -548,6 +554,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
   async function translate(req, { onPartial = () => {}, signal } = {}) {
     const ctx = await prepare(req);
     const plan = planFor(ctx.settings, req, ctx.chain.length > 0);
+    await confirmRequest(ctx.settings, {...req,mode:plan.llmFallback?'mt+llm':plan.mode});
     if (plan.mode === 'llm') return runLLM(req, ctx, { onPartial, signal });
     if (plan.mode === 'mt') return translateMTOnly(req, ctx, plan, { onPartial, signal });
     if(req.purpose==='page'||req.purpose==='pdf') {
@@ -562,10 +569,10 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
 
   // Plain-text translation for selection / input box / hover / side panel.
   // `mode` ('mt' | 'llm' | …) overrides the configured mode for this request only.
-  async function translateTextEx({ text, to, from, profileId, model, purpose, mode }, { signal } = {}) {
+  async function translateTextEx({ text, to, from, profileId, model, purpose, mode, incognito }, { signal } = {}) {
     let result = null;
     await translate(
-      { reqId: null, to, from, profileId, model, purpose: purpose || 'text', mode, streamItems: false, priority: PRIORITY.VISIBLE, context: {}, items: [{ id: 't', text: escapeText(text) }] },
+      { reqId: null, to, from, profileId, model, incognito, purpose: purpose || 'text', mode, streamItems: false, priority: PRIORITY.VISIBLE, context: {}, items: [{ id: 't', text: escapeText(text) }] },
       { onPartial: (r) => (result = r[0]), signal },
     );
     if (signal && signal.aborted) throw cancelledError();

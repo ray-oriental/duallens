@@ -6,6 +6,7 @@ import fnmatch
 import hashlib
 from html.parser import HTMLParser
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -21,25 +22,32 @@ ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.wo
 BLOCKED = {'.git', '.cache', '.duallens', 'private', 'runtime', 'reference', 'duallens-ref', 'node_modules', '__pycache__', 'venv', '.venv', 'credentials', 'secrets', 'backups'}
 PUBLIC_FILES = ('README.md', 'LICENSE', 'SECURITY.md', 'AGENTS.md', 'CONTRIBUTING.md', 'requirements-dev.txt', 'package.json', '.gitignore', '.gitattributes', 'CHANGELOG.md')
 # Add user documentation only through an explicit reviewed list; private research is never included.
-PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/USAGE.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md', 'docs/releases/v0.2.0.md', 'docs/releases/v0.3.0.md', 'docs/releases/v0.3.1.md', 'docs/releases/v0.4.0.md', 'docs/releases/v0.5.0.md', 'docs/releases/v0.6.0.md', 'docs/COMICS.md', 'docs/PDF.md', 'docs/SUBTITLES.md', 'docs/PRIVACY.md', 'docs/store/permissions.md')
+PUBLIC_DOCS = ('docs/ARCHITECTURE.md', 'docs/COMICS.md', 'docs/DESIGN.md', 'docs/PDF.md', 'docs/PLATFORMS.md', 'docs/PRIVACY.md', 'docs/PRODUCT.md', 'docs/ROADMAP.md', 'docs/SPEC.md', 'docs/SUBTITLES.md', 'docs/USAGE.md', 'docs/VALIDATION.md', 'docs/store/listing.en.md', 'docs/store/listing.zh-CN.md', 'docs/store/permissions.md', 'docs/store/submission-checklist.md')
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
-VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store)-v\d+(?:\.\d+){0,3}\.zip')
+VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store|chrome-store)-v\d+(?:\.\d+){0,3}\.zip')
 USERSCRIPT_ASSETS = {'duallens.user.js', 'duallens-settings.js'}
 
 class CheckError(ValueError):
     pass
 
-# Split literals keep the gate itself free of the private identifiers it rejects.
-# Equivalent to the maintainer's case-insensitive public-source grep policy.
-PRIVACY_TERMS = (
-    'sj' + 'tu', '\u4ea4\u5927', 'ddl' + '-hub', 'her' + 'mes',
-    'ray_' + 'oriental', 'D:' + '\\' + 'Workspace', 'C:' + '\\' + 'Users',
-    'codex' + '_project', 'Sj' + 'tuGym', '187' + '65', '86' + '45',
-    '187' + '90', '78' + '97', 'tail' + 'scale', 'zim' + 'bra',
-    'mail.' + 'sj' + 'tu', 'cla' + 'ude/', 'co' + 'dex/',
+# Only generic patterns belong in public source. Optional private terms stay on the maintainer's device.
+PRIVACY_PATTERNS = (
+    r'[A-Z]:[\\/](?:Users|Documents and Settings)[\\/][A-Za-z0-9_.-]+',
+    r'/(?:(?-i:Users)|home)/[A-Za-z0-9_.-]+',
+    r'(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\w.])',
+    r'(?<![\w.+-])(?![\w.+@-]*noreply)(?![\w.+-]+@[\w.-]*noreply)(?![\w.+-]+@(?:example\.(?:com|org|net)|[\w.-]+\.(?:test|invalid))\b)[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}',
+    r'(?<![\w-])(?:sk-[A-Za-z0-9_-]{24,}|gh[pousr]_[A-Za-z0-9]{30,}|AKIA[A-Z0-9]{16})(?![\w-])',
+    r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',
 )
-PRIVACY_RE = re.compile('|'.join(re.escape(term) for term in PRIVACY_TERMS), re.I)
+
+def privacy_regex():
+    terms = []
+    configured = os.environ.get('DUALLENS_PRIVACY_TERMS_FILE')
+    if configured and Path(configured).is_file():
+        terms = [line.strip() for line in Path(configured).read_text(encoding='utf-8-sig').splitlines()
+                 if line.strip() and not line.lstrip().startswith('#')]
+    return re.compile('|'.join([*PRIVACY_PATTERNS, *(re.escape(t) for t in terms)]), re.I)
 
 def check_privacy(project: Path) -> int:
     """Check tracked and new public files, or an unpacked source tree without Git.
@@ -62,15 +70,16 @@ def check_privacy(project: Path) -> int:
                 if path.is_dir(): visit(path)
                 elif path.is_file(): names.add(rel.as_posix())
         visit(project)
+    policy = privacy_regex()
     count = 0
     for name in sorted(names):
         if name.startswith('extension/vendor/') or not (project / name).exists():
             continue
         source = safe_file(project, name)
-        require(not PRIVACY_RE.search(name), f'private identifier in public filename: {name}')
+        require(not policy.search(name), f'private identifier in public filename: {name}')
         # Decode binary as well: embedded ASCII metadata must not escape inspection.
         content = source.read_bytes().decode('utf-8-sig', errors='replace')
-        match = PRIVACY_RE.search(content)
+        match = policy.search(content)
         line = content.count('\n', 0, match.start()) + 1 if match else 0
         require(match is None, f'private identifier in public file: {name}:{line}')
         count += 1
@@ -151,6 +160,35 @@ def extension_assets(extension: Path) -> dict[str, Path]:
     require(extension.is_dir() and not is_link(extension), 'missing or linked extension directory')
     visit(extension)
     return assets
+
+
+# Dedicated to the independently distributed userscript/settings resource, or unused by MV3.
+USERSCRIPT_ONLY = frozenset({
+    'content/comics/canvas-hook-runtime.js', 'content/comics/capabilities.js',
+    'content/comics/languages.js', 'content/comics/runtime-resources.js',
+    'content/comics/userscript-ocr.js', 'content/subtitles/observer-runtime.js',
+    'platform/cache.js', 'platform/storage.js', 'platform/userscript.js',
+    'sidepanel/userscript-panel.js', 'ui/common.js', 'ui/ui.css',
+    'userscript/entry.js', 'userscript/menu.js', 'userscript/panel.js',
+    'userscript/settings-resource.js', 'userscript/ui-resource.js',
+})
+
+def extension_runtime_assets(assets):
+    runtime = {name:source for name,source in assets.items() if name not in USERSCRIPT_ONLY}
+    root = assets['manifest.json'].parent
+    for name, source in runtime.items():
+        if source.suffix == '.js':
+            text=source.read_text(encoding='utf-8-sig')
+            for match in IMPORT_RE.finditer(text):
+                rel=local_reference(root,source,match.group(1) or match.group(2))
+                require(rel in runtime, f'extension import points at excluded asset: {rel}')
+            for ref in RESOURCE_RE.findall(text):
+                require(ref in runtime, f'extension getURL points at excluded asset: {ref}')
+        elif source.suffix == '.html':
+            parser=LocalResources();parser.feed(source.read_text(encoding='utf-8-sig'))
+            for ref in parser.resources:
+                require(local_reference(root,source,ref) in runtime, f'extension HTML points at excluded asset: {ref}')
+    return runtime
 
 def read_manifest(extension: Path) -> dict:
     m = json.loads(safe_file(extension, 'manifest.json').read_text(encoding='utf-8-sig'))
@@ -236,7 +274,7 @@ def public_source_files(project: Path, directory: str, suffixes: set[str]) -> di
 def release_members(project: Path) -> tuple[dict, dict[str, Path], dict[str, Path]]:
     check_privacy(project)
     m, assets = validate_extension(project / 'extension')
-    extension = {**assets, 'LICENSE': safe_file(project, 'LICENSE')}
+    extension = {**extension_runtime_assets(assets), 'LICENSE': safe_file(project, 'LICENSE')}
     portable = {'extension/' + name: path for name, path in assets.items()}
     for name in PUBLIC_FILES + PUBLIC_DOCS:
         portable[name] = safe_file(project, name)
@@ -292,9 +330,9 @@ def verify_userscript_version(content: bytes, version: str) -> None:
 def verify_release(project: Path, dist: Path) -> None:
     m, extension, portable = release_members(project)
     names = {f"duallens-extension-v{m['version']}.zip": extension, f"duallens-portable-v{m['version']}.zip": portable}
-    edge_name = f"duallens-edge-store-v{m['version']}.zip"
-    if (dist / edge_name).exists():
-        names[edge_name] = extension
+    store_names = {f"duallens-{store}-store-v{m['version']}.zip" for store in ('chrome','edge')}
+    for name in store_names:
+        names[name] = extension
     user_name = 'duallens.user.js'
     expected_assets = set(names)
     rebuilt = {}
@@ -329,12 +367,12 @@ def verify_release(project: Path, dist: Path) -> None:
                 require(not entry.is_dir() and not stat.S_ISLNK(entry.external_attr >> 16), f'linked or directory ZIP member: {entry.filename}')
                 require(entry.date_time == (1980, 1, 1, 0, 0, 0), f'non-deterministic ZIP timestamp: {entry.filename}')
                 content = z.read(entry.filename)
-                if name == edge_name and entry.filename == 'manifest.json':
+                if name in store_names and entry.filename == 'manifest.json':
                     store_manifest = json.loads(content)
-                    require('key' not in store_manifest, 'edge-store manifest contains key')
+                    require('key' not in store_manifest, 'store manifest contains key')
                     public_manifest = dict(m); public_manifest.pop('key', None)
-                    require(store_manifest == public_manifest, 'edge-store manifest differs from source')
-                    require(content == json.dumps(public_manifest, ensure_ascii=False, separators=(',', ':')).encode('utf-8'), 'edge-store manifest is not deterministic')
+                    require(store_manifest == public_manifest, 'store manifest differs from source')
+                    require(content == json.dumps(public_manifest, ensure_ascii=False, separators=(',', ':')).encode('utf-8'), 'store manifest is not deterministic')
                 else:
                     require(content == packaged_bytes(expected[entry.filename]), f'archive differs from source: {entry.filename}')
     require('manifest.json' in extension and 'extension/manifest.json' in portable, 'package layout lost manifest')

@@ -14,17 +14,22 @@ import { blockSource } from './segments.js';
 import { planBlock, sampleColors, cssColor, inkBounds } from './layout.js';
 import { PdfTranslations } from './translate.js';
 import { checkPDFBytes, readPDFURL, MAX_PDF_BYTES } from './source.js';
+import { withSendConfirmation } from '../content/confirmation.js';
+import { engineSummary } from '../ui/components.js';
 import { createOverlay } from '../content/overlay.js';
 import { lensIcon } from '../content/visual.js';
 
 GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.js', import.meta.url).href;
-const platform = createExtensionPlatform();
+const rawPlatform = createExtensionPlatform();
+const platform = withSendConfirmation(rawPlatform,()=>settings);
 const $ = id => document.getElementById(id);
 const VIEWS = ['side', 'translated', 'original', 'reflow'];
 const VIEW_KEY = 'duallens.pdf.view';
 const MAX_PIXELS = 4_000_000; // per canvas, independent of zoom and device pixel ratio
 const MAX_RESIDENT = 5; // pages holding canvases
 let settings = await platform.settingsStore.load();
+const updatePrivacy=()=>{document.getElementById('privacy').textContent=engineSummary(settings).full;};
+updatePrivacy();
 let view = initialView();
 let pdf, task, pages = [], epoch = 0, revision = 0, sourceRequest = 0, scale = 1;
 let busy = false, nearObserver, visibleObserver, scrollFrame = 0, requestTimer = 0;
@@ -650,8 +655,13 @@ function requestTranslations() {
   }
   stateChanged();
 }
-function activate() {
-  if (!pdf) return;
+let consent;
+async function activate() {
+  if (!pdf || consent) return;
+  const request=consent=new AbortController(),opened=epoch;
+  try {if(!await platform.confirmSend({purpose:'pdf'},request.signal)||request.signal.aborted||opened!==epoch)return;}
+  finally {if(consent===request)consent=null;}
+  if(!pdf)return;
   if (!session.active) {
     session.start();
     metrics.activated = performance.now(); metrics.firstDraft = metrics.firstFinal = 0;
@@ -667,6 +677,7 @@ function activate() {
   stateChanged();
 }
 function deactivate() {
+  consent?.abort();consent=null;
   session.stop();
   paintQueue.clear();
   updateTranslating(false);
@@ -857,7 +868,7 @@ $('local-file').addEventListener('change', () => {
   $('local-file').value = '';
 });
 const unsubscribe = platform.settingsStore.onChange(() => { void guarded(async () => {
-  const previous = settings; settings = await platform.settingsStore.load();
+  const previous = settings; settings = await platform.settingsStore.load(); updatePrivacy();
   const strip = value => JSON.stringify({ ...value, displayMode: null, style: null, floatBall: null });
   if (strip(previous) !== strip(settings)) retranslate();
   // The shared "bilingual / translation only" switch (popup, options) maps onto the PDF views.

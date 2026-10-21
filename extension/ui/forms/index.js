@@ -1,6 +1,6 @@
 import { mountPopup } from '../popup-view.js';
 import { installSettingsInteractions } from './interactions.js';
-import { requestOrigin, requestBroad } from '../../shared/permissions.js';
+import { requestOrigin, requestBroad, requestMTOrigin } from '../../shared/permissions.js';
 import { acknowledge,llmDestination } from '../../shared/device-state.js';
 import { providerChain } from '../../shared/settings.js';
 import { getPreset, profileFromPreset, recommendedFreeChain } from '../../shared/presets.js';
@@ -57,7 +57,7 @@ const COPY=Object.freeze({
   s37:"配置导出口令（留空导出不含 密钥 的明文；取消停止导出）",
   s38:"已取消导出",
   s39:"已导出；明文配置不含 密钥，加密配置包含 密钥。",
-  s40:"设置手机配置导出口令（不能为空；取消停止）",
+  s40:"设置手机配置导出口令（至少 8 个字符；取消停止）",
   s41:"导出到手机必须设置加密口令",
   s42:"加密配置已生成；请复制文本并在另一设备导入。口令通过其他安全方式传递。",
   s43:"加密配置已生成；手机扫码或复制文本，然后从电脑导入。口令通过其他安全方式传递。",
@@ -237,6 +237,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   async function save() {
     if (loadingKey) throw new Error(COPY.s10);
     const next = collect();
+    if(platform.kind==='extension' && !await requestMTOrigin(next.translation.mt.engine,platform.permissionAPI))throw new Error(COPY.s28);
     const chosen=next.provider.profiles.find(p=>p.id===next.provider.active);
     if(chosen?.baseUrl && platform.kind==='extension' && !await requestOrigin(chosen.baseUrl,platform.permissionAPI)) throw new Error(COPY.s28);
     if(platform.kind==='extension' && (next.siteRules.always.length || next.siteRules.custom.some(r=>r.page==='always'||['selection','hover','input'].some(f=>r[f]==='on')) || next.autoTranslateLangs.length) && !await requestBroad(platform.permissionAPI)) throw new Error(COPY.s28);
@@ -336,6 +337,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     const p = profileFromPreset(preset, id); s.provider.profiles.push(p); s.provider.active = id; pid = id; dirty = true;
     choices($('profile'), [{ id: '', name: COPY.s8 }, ...s.provider.profiles], id);
     for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: COPY.s7 }, ...s.provider.profiles], read(name + 'Profile'));
+    if(['ollama','lmstudio'].includes(preset)){s.translation.mode='llm';fill('translationMode','llm');}
     await drawProfile(); setSelectedChain(); notice(COPY.s26);
   });
   action('load-models', async () => {
@@ -373,7 +375,9 @@ export async function mountSettingsForm(root, { store, platform }) {
   });
   action('mt-test', async () => {
     if (!mtProbe) throw new Error(COPY.s35);
-    const engine = read('mtEngine'); notice(COPY.s36);
+    const engine = read('mtEngine');
+    if(platform.kind==='extension'&&!await requestMTOrigin(engine,platform.permissionAPI))throw new Error(COPY.s28);
+    notice(COPY.s36);
     const r = await mtProbe.test({ engine, region: read('mtRegion').trim() });
     notice(`机器翻译正常 · ${engine} · ${r.latencyMs} ms · ${r.sample}`);
   });

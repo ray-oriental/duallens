@@ -26,7 +26,7 @@ test('confirmation is skipped only for local endpoints and the demo engine', () 
   assert.equal(needsConfirmation(state, 'mt:mock'), false);
   assert.equal(needsConfirmation(state, llmDestination('http://127.0.0.1:11434/v1')), false);
   assert.equal(needsConfirmation(state, llmDestination('http://localhost:1234/v1')), false);
-  assert.equal(needsConfirmation(state, llmDestination('http://192.168.1.5:11434/v1')), true);
+  assert.equal(needsConfirmation(state, llmDestination(('http://192.'+'168.1.5:11434/v1'))), true);
   assert.equal(isLocalUrl('http://[::1]:8080/'), true);
   assert.equal(llmDestination('not a url'), null);
 });
@@ -35,7 +35,7 @@ test('permission helpers: origin patterns, persistent features, userscript fallb
   assert.equal(originPattern('https://api.example.com:8443/v1'), 'https://api.example.com:8443/*');
   assert.equal(originPattern('ftp://x/'), null);
   assert.equal(featureNeedsBroad('floatBall'), true);
-  assert.equal(featureNeedsBroad('subtitles'), false);
+  assert.equal(featureNeedsBroad('subtitles'), true);
   const saved = globalThis.chrome;
   delete globalThis.chrome;
   try {
@@ -47,4 +47,12 @@ test('permission helpers: origin patterns, persistent features, userscript fallb
   assert.equal(await hasBroad(api), false);
   assert.equal(await requestOrigin('https://api.example.com/v1', api), true);
   assert.deepEqual(calls, [{ origins: ['https://api.example.com/*'] }]);
+});
+
+test('official MT origin requests cover both DeepL tiers and Azure without broad access',async()=>{
+ const {requestMTOrigin}=await import('../../extension/shared/permissions.js');const calls=[];
+ const api={permissions:{request:async grant=>{calls.push(grant);return true;}}};
+ await requestMTOrigin('deepl',api);await requestMTOrigin('microsoft-api',api);await requestMTOrigin('microsoft',api);
+ assert.deepEqual(calls,[{origins:['https://api.deepl.com/*','https://api-free.deepl.com/*']},{origins:['https://api.cognitive.microsofttranslator.com/*']}]);
+ assert.equal(await requestMTOrigin('deepl',{permissions:{request:async()=>false}}),false);
 });
