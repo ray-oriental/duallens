@@ -74,7 +74,7 @@ export function createExtensionPlatform(api = globalThis.chrome) {
         } catch { resolve(null); }
       });
     },
-    openSettings: () => { void one({ type: 'open-options' }); },
+    openSettings: group => { void one({ type: 'open-options', group }); },
     registerCommand() { /* Manifest commands are routed through onMessage below. */ },
     onMessage(cb) {
       const listener = (msg, sender, reply) => {
@@ -86,6 +86,6 @@ export function createExtensionPlatform(api = globalThis.chrome) {
     },
     valid: () => !!api.runtime?.id,
   };
-  platform.settingsStore = createSettingsStore({ syncArea, localArea });
+  platform.settingsStore = createSettingsStore({ syncArea, localArea, browserLanguage:api.i18n?.getUILanguage?.() });
   return platform;
 }

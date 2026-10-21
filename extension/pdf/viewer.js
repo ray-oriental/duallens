@@ -891,12 +891,32 @@ window.addEventListener('pagehide', () => {
   void task?.destroy();
 }, { once: true });
 const file = new URL(location.href).searchParams.get('file');
-if (file) {
+const token = new URL(location.href).searchParams.get('token');
+if (token) {
   const request = ++sourceRequest;
-  void guarded(async () => {
+  history.replaceState(null,'',location.pathname);
+  void guarded(async()=>{
+    const {createPDFHandoff}=await import('./handoff.js');
+    const data=await createPDFHandoff().take(token);
+    if(request===sourceRequest)await open(data);
+  },request);
+} else if (file) {
+  const request = ++sourceRequest;
+  const read = () => guarded(async () => {
     const data = await readPDFURL(file, { fileAccess: () => chrome.extension.isAllowedFileSchemeAccess() });
     if (request === sourceRequest) await open(data);
   }, request);
+  void (async()=>{
+    const {hasOrigin,requestOrigin}=await import('../shared/permissions.js');
+    if(file.startsWith('file:')||await hasOrigin(file))return read();
+    message('读取此 PDF 需要你允许访问该来源。也可以选择已下载的本地文件。');
+    const allow=el('button');allow.textContent='允许此 PDF 来源';$('status').append(' ',allow);
+    allow.addEventListener('click',async()=>{
+      const granted=await requestOrigin(file);
+      if(request!==sourceRequest)return;
+      if(granted){allow.remove();void read();}
+    });
+  })();
 }
 else if (new URL(location.href).searchParams.get('notice') === 'not-pdf') {
   message('当前页面未确认是 PDF（或匿名探测失败）。请打开 PDF 文件后重试，也可选择已下载的本地 PDF。', true);

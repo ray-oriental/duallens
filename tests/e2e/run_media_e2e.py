@@ -360,13 +360,50 @@ def userscript_case(pw, host, width, height, touch):
         remove_runtime_dir(profile)
 
 
+def sidepanel_consent_case(pw, extension):
+    session=Session(pw,extension,'','sidepanel-consent');session.start()
+    try:
+        session.settings({'translation':{'mode':'llm'},'provider':{'active':'consent','chain':[],
+            'profiles':[{'id':'consent','kind':'openai','baseUrl':'https://fixture.example/v1','model':'test'}]}})
+        session.sw_eval("""()=>{globalThis.sideCalls=0;globalThis.fetch=async(url,opts)=>{
+          sideCalls++;const p=JSON.parse(opts.body),u=p.messages.find(m=>m.role==='user').content;
+          const input=JSON.parse(u.slice(u.indexOf('{'),u.lastIndexOf('}')+1));
+          return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({t:input.t.map(t=>'【译】'+t)})}}]}),{headers:{'Content-Type':'application/json'}});
+        };}""")
+        page=session.ctx.new_page();page.goto(f'chrome-extension://{session.ext_id}/sidepanel/index.html')
+        page.locator('[name=text-input]').fill('Private fixture text')
+        page.locator('.dl-text button[type=submit]').click()
+        page.locator('#text .dl-confirmation').wait_for()
+        assert session.sw_eval('()=>sideCalls')==0
+        assert 'fixture.example' in page.locator('.dl-confirmation').inner_text()
+        page.locator('.dl-confirmation .close').click()
+        page.wait_for_timeout(100);assert session.sw_eval('()=>sideCalls')==0
+        page.locator('.dl-text button[type=submit]').click()
+        page.locator('.dl-confirmation .primary').click()
+        page.locator('output').filter(has_text='【译】').wait_for()
+        session.sw_eval("()=>chrome.storage.local.set({'ui.device':{onboarded:true,acked:[],upgradeNoticeSeen:true}})")
+        page.locator('details>summary').click()
+        page.locator('[name=subtitle-file]').set_input_files({'name':'fixture.srt','mimeType':'text/plain',
+            'buffer':b'1\n00:00:00,000 --> 00:00:01,000\nA private subtitle fixture.\n'})
+        page.locator('button').filter(has_text='翻译字幕文件').click()
+        page.locator('#subtitles .dl-confirmation').wait_for()
+        count=session.sw_eval('()=>sideCalls');page.wait_for_timeout(100)
+        assert session.sw_eval('()=>sideCalls')==count
+        page.locator('#subtitles .dl-confirmation .primary').click()
+        page.locator('.subtitle-preview').filter(has_text='【译】').wait_for()
+        assert session.sw_eval('()=>sideCalls')>count
+        return 'text + subtitle file: inline first-send confirmation; close sends nothing, accept persists and dispatches'
+    finally:session.close()
+
+
 def main():
     E2E_ROOT.mkdir(parents=True, exist_ok=True); ARTIFACTS.mkdir(parents=True, exist_ok=True)
     run = E2E_ROOT / ('run-media-' + uuid.uuid4().hex[:8]); run.mkdir(); results = []
     try:
         extension, missing = stage_extension(run); check(not missing, 'missing extension assets')
         with sync_playwright() as pw:
-            cases = [('extension_www', lambda: extension_case(pw, extension, 'www.youtube.com')),
+            cases = [('sidepanel_consent', lambda: sidepanel_consent_case(pw, extension)),
+                     ('extension_www', lambda: extension_case(pw, extension, 'www.youtube.com')),
                      ('html5_extension', lambda: html5_case(pw, extension)),
                      ('html5_userscript_phone', lambda: html5_case(pw, width=375, height=812)),
                      ('html5_userscript_tablet', lambda: html5_case(pw, width=800, height=1280)),

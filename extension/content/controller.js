@@ -121,6 +121,7 @@ export class PageTranslator {
 
   start() {
     if(this.active) return;
+    this.activation = new AbortController();
     this.active=true;
     this.lazy.setMargin(this.s.lazy.rootMarginPx);
     this.watch.start();
@@ -154,6 +155,7 @@ export class PageTranslator {
   stop() {
     const was=this.active;
     this.active=false;
+    this.activation?.abort();
     this.slices.cancel();
     clearTimeout(this.flushTimer);
     this.flushTimer=0;

@@ -29,11 +29,11 @@ export function contrastRatio(a,b) {
   const x=luminance(a),y=luminance(b);
   return(Math.max(x,y) + .05) /(Math.min(x,y) + .05);
 }
-export function translationColor(foreground,background,{moreContrast=false}={}) {
-  const muted=foreground.map((v,i)=> Math.round(v * (moreContrast?1:.92) + background[i] * (moreContrast?0:.08)));
-  const color=contrastRatio(muted,background) >=4.5 ? muted:contrastRatio(foreground,background) >=4.5 ? foreground:
-    contrastRatio([0,0,0],background) > contrastRatio([255,255,255],background) ? [0,0,0]:[255,255,255];
-  return `rgb(${color.join(',')})`;
+export function translationColor(foreground,background,{moreContrast=false,supportsMix=false}={}) {
+  const rgb=c=>`rgb(${c.join(',')})`;
+  const raw=foreground.map((v,i)=>v*.78+background[i]*.22),muted=raw.map(Math.round);
+  if(moreContrast || contrastRatio(raw,background)<4.5 || contrastRatio(muted,background)<4.5) return rgb(foreground);
+  return supportsMix ? `color-mix(in srgb, ${rgb(foreground)} 78%, ${rgb(background)})` : rgb(muted);
 }
 
 const colorCache=new Map();
@@ -65,7 +65,7 @@ export function measureColor(host) {
   let bg=doc.defaultView.matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(doc.documentElement).colorScheme.includes('dark') ? [18,18,18]:[255,255,255];
   for(const c of backgrounds) bg=bg.map((v,i)=> c[i] *(c[3] ?? 1) + v *(1 -(c[3] ?? 1)));
   const color=fg.slice(0,3).map((v,i)=> v *(fg[3] ?? 1) + bg[i] *(1 -(fg[3] ?? 1)));
-  return translationColor(color,bg,{moreContrast:doc.defaultView.matchMedia('(prefers-contrast: more)').matches});
+  return translationColor(color,bg,{moreContrast:doc.defaultView.matchMedia('(prefers-contrast: more)').matches,supportsMix:doc.defaultView.CSS?.supports('color','color-mix(in srgb,black 78%,white)')});
 }
 
 export function presentationFacts(unit) {

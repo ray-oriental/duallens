@@ -1,6 +1,6 @@
 # PDF 双语阅读（P1，待 leader 合并与最终验收）
 
-桌面 Chrome / Edge 扩展内打开 `pdf/viewer.html?file=<URL 编码的地址>`。PDF.js 在设备上解析和渲染，不把 PDF 字节传给翻译服务；只有用户点击“翻译”后，视口内与相邻页的文本块通过 `platform.translator().translateBatch`、service worker、缓存及用户配置的服务链翻译。不发送 PDF URL、文件名、元数据或图片。
+桌面 Chrome / Edge 弹出页显式点击后，后台使用当前标签页 activeTab 读取 PDF，并打开 `pdf/viewer.html?token=<一次性令牌>`。阅读器从扩展来源 IndexedDB 原子读取并删除字节，同时移除地址栏令牌；未读记录五分钟有效，最多三份。`?file=<URL 编码的地址>` 仍兼容其他来源，缺少授权时先显示来源授权按钮。PDF.js 在设备上解析和渲染，不把 PDF 字节传给翻译服务；只有用户点击“翻译”后，视口内与相邻页的文本块通过 `platform.translator().translateBatch`、service worker、缓存及用户配置的服务链翻译。不发送 PDF URL、文件名、元数据或图片。
 
 ## 使用
 
@@ -14,7 +14,7 @@
 ## 实现与权限
 
 - `background/pdf.js` 为 `pdf-status` / `pdf-open` 消息提供处理器。消息只使用实际 `tabId` 对应的 URL，不信任消息中的 PDF URL；只支持 HTTP、HTTPS、file，不接受 URL 用户名/密码。
-- PDF 不增加权限，复用已有 `<all_urls>` 和 `contextMenus`。不使用 `webRequest`、`webRequestBlocking`、响应观察器或 PDF 标签页切换/更新监听，不扫描访问历史，不在启动或普通导航时探测 PDF。
+- PDF 工具栏入口使用已有 activeTab，不需常驻 `<all_urls>`；其他来源由阅读器按钮按需 requestOrigin。本地文件选择不需主机权限。不使用 `webRequest`、`webRequestBlocking`、响应观察器或 PDF 标签页切换/更新监听，不扫描访问历史，不在启动或普通导航时探测 PDF。
 - 只在 popup 打开时时先检查实际标签页 URL；`.pdf` 后缀无需网络探测。不确定的 HTTP(S) 地址发一次 HEAD；网络/HTTP 失败或没有 Content-Type 时，再发一次带 `Range: bytes=0-1023` 的 GET。每次请求超时 5 秒（两次失败最多约 10 秒），不重试、不跟随重定向、不带 cookie/认证、禁用 HTTP 缓存。读取响应头后立即取消响应体并中止请求，即使服务器忽略 Range 也不读取整份正文。成功的非 PDF HEAD 不触发 GET。不保留探测 URL 或结果缓存。
 - PDF 下载 30 秒超时，流式限制 64 MiB；最多 2000 页。字节检查 PDF 标头。pdf.js 禁用 `isEvalSupported` 与 XFA；不创建注释/表单层、不执行 PDF 文档脚本或自动外链。加密 PDF 暂需先在本地解密。
 - 页面通过 IntersectionObserver 在视口外 120% 的邻近范围解析/渲染，任务串行；翻译限视口内与前后各一页，不整本预翻译。最多保留五页原页画布/文本层及其译文底图，每张底图最多约四百万像素；远页释放画布，保留轻量分块数据和会话译文。离开范围的尚无结果请求可取消，重新靠近后再请求。

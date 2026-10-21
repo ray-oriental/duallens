@@ -458,6 +458,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     try { s = await store.load(); if (!closed) await draw(); } catch { notice(COPY.s56, true); }
   });
   return {
+    navigateGroup: group => interactions.select(group || 'common'),
     canClose: () => !dirty || interactions.ask(COMMON.discard),
     refresh: async () => { s = await store.load(); drafts.clear(); edited.clear(); dirty = false; await draw(); },
     destroy() { interactions.destroy(); closed = true; drawToken++; off?.(); unbind.forEach(fn => fn()); ui.remove(); drafts.clear(); edited.clear(); },

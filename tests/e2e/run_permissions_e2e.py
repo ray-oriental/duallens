@@ -115,6 +115,13 @@ globalThis.permissionTestCommand=async(name,tabId)=>{for(const cb of testCommand
                 assert notice['ui.permissionsRevoked']['features']
                 print('PASS revoke: real onRemoved unregisters, saves switches off, clears existing/new page UI and records notice', flush=True)
                 passed += 1
+                popup=h.ctx.new_page();popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
+                popup.locator('#permissions-revoked').wait_for()
+                assert '权限已撤销' in popup.locator('#permissions-revoked').inner_text()
+                until(lambda:popup.evaluate("()=>chrome.storage.local.get('ui.permissionsRevoked')"),lambda record:not record)
+                popup.close()
+                print('PASS revoke-popup: notice displayed and consumed by local-storage readback',flush=True)
+                passed += 1
             finally:
                 h.close()
     except Exception:

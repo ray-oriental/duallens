@@ -1,6 +1,7 @@
 import { createUserscriptPlatform } from '../platform/userscript.js';
 import { start } from '../content/main.js';
 import contentCSS from '../styles/content.css';
+import { registerPopupMenu } from './menu.js';
 
 // Grant bindings stay inside the bundle closure. No window properties or page message bridge.
 if (window.top === window.self && /html/i.test(document.contentType || 'text/html')) {
@@ -17,7 +18,8 @@ if (window.top === window.self && /html/i.test(document.contentType || 'text/htm
     platform.injectStyle(contentCSS);
     platform.contentCSS=contentCSS;
     platform.registerCommand('settings', 'DualLens 设置', platform.openSettings);
-    await start(platform);
+    const app = await start(platform);
+    registerPopupMenu({ platform, pageMessage: msg => app.pageMessage(msg) });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { void boot(); }, { once: true });
   else void boot();

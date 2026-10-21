@@ -2,14 +2,22 @@
 import {PageTranslator} from './controller.js';
 import {settingsEqual} from '../platform/settings-store.js';
 import {parentOwnsDocument} from './frames.js';
+import {requestDestinations} from './confirmation.js';
+import {needsConfirmation} from '../shared/device-state.js';
+
+export function frameMayTranslate(state) {
+  return !!state?.active && !!state.settings && requestDestinations(state.settings,{purpose:'page'})
+    .every(d=>!needsConfirmation({acked:state.confirmedDestinations||[]},d.id));
+}
 
 export function startFrameAgent(platform) {
   if(parentOwnsDocument())return;
   let snapshot=null,visible=false,root=null,translator=null,disposed=false,pushed=false;
+  platform={...platform,frameAgent:true,confirmedDestinations:()=>snapshot?.confirmedDestinations||[]};
   const stop=()=>{if(translator?.isActive())translator.stop();};
   const canRequest=()=>visible && !document.hidden && !!root?.getBoundingClientRect().width && innerWidth>=200 && innerHeight>=100;
   const reconcile=()=>{
-    if(disposed || !snapshot?.active){stop();return;}
+    if(disposed || !frameMayTranslate(snapshot)){stop();return;}
     if(!canRequest()){translator?.setPaused(true);return;}
     translator ||=new PageTranslator({platform,getSettings:()=>snapshot.settings,getContext:()=>snapshot.context,canRequest});
     translator.start();

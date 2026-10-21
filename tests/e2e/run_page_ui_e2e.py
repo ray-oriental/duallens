@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 from run_e2e import REPO, E2E_ROOT, start_fixtures, check
 from run_userscript_e2e import STUB, command, click_shadow
 
-OUT=E2E_ROOT/'v1'/'page'
+OUT=Path(os.environ.get('DUALLENS_PAGE_ARTIFACTS',str(E2E_ROOT/'v1'/'page')))
 
 def elements(page,selector):
     return page.evaluate('(s)=>__platformFixture.elements(s).length',selector)
@@ -28,6 +28,10 @@ def run(pw,base,dark):
         theme='dark' if dark else 'light'
         page.evaluate('(dark)=>{document.body.style.background=dark?"#131316":"white";document.body.style.color=dark?"#ececf1":"#1c1c21";}',dark)
         page.wait_for_function("__platformFixture.elements('.ball').length===1")
+        settings(page,{'floatBall':{'autoHide':False}})
+        page.wait_for_timeout(2700)
+        check(elements(page,'.ball.tucked')==0,'autoHide=false was not delivered to ball')
+        settings(page,{'floatBall':{'autoHide':True}})
         shot(page,theme+'-ball-idle')
         page.wait_for_timeout(2700)
         check(elements(page,'.ball.tucked')==1,'auto-hide did not tuck the ball')
@@ -80,6 +84,12 @@ def run(pw,base,dark):
         page.wait_for_timeout(16500)
         check(elements(page,'.confirm')==0,'dismissed consent reopened on automatic retry')
         check(page.evaluate('__platformFixture.calls.length')==before,'automatic retry sent cancelled text')
+        command(page,'翻译 / 恢复当前页面')
+        page.wait_for_function("__platformFixture.elements('.confirm').length===1")
+        click_shadow(page,'.confirm .actions button:not(.primary)')
+        page.wait_for_function("__platformFixture.elements('[data-group=ai]').some(e=>!e.hidden)")
+        check(page.evaluate('__platformFixture.calls.length')==before,'changing service sent waiting text')
+        page.keyboard.press('Escape')
         profile['baseUrl']='http://127.0.0.1:11434/v1'
         settings(page,{'provider':{'profiles':[profile]}})
         command(page,'翻译 / 恢复当前页面')

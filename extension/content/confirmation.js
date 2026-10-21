@@ -14,20 +14,20 @@ const HOSTS={microsoft:'edge.microsoft.com / api-edge.cognitive.microsofttransla
   'microsoft-api':'api.cognitive.microsofttranslator.com',deepl:'api.deepl.com / api-free.deepl.com'};
 const CSS=`.confirm{position:fixed;right:max(16px,var(--safe-right));bottom:max(16px,var(--safe-bottom));width:320px;max-width:calc(100vw - 32px);padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);box-shadow:var(--shadow);pointer-events:auto}.confirm.left{right:auto;left:max(16px,var(--safe-left))}.confirm p{margin:4px 24px 12px 0;overflow-wrap:anywhere}.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.confirm button{padding:6px 10px;color:var(--accent);background:transparent}.confirm .primary{background:var(--accent);color:var(--accent-fg)}.confirm .close{position:absolute;right:6px;top:6px;padding:2px 8px;color:var(--fg2)}`;
 
-export function confirmationCard({message,platform:p,label=UI.continue,signal,left=false}){
+export function confirmationCard({message,platform,label=UI.continue,signal,left=false,root,group='common'}){
   if(signal?.aborted)return Promise.resolve(false);
   return new Promise(resolve=>{
-    const ui=createOverlay(CSS),box=document.createElement('section');box.className='confirm'+(left?' left':'');
+    const ui=root?null:createOverlay(CSS),box=document.createElement('section');box.className=root?'dl-notice dl-confirmation':'confirm'+(left?' left':'');
     box.setAttribute('role','dialog');box.setAttribute('aria-label',UI.title);
     const p=document.createElement('p');p.textContent=message;
     const actions=document.createElement('div');actions.className='actions';
-    const finish=ok=>{ui.detach();document.removeEventListener('keydown',key,true);signal?.removeEventListener('abort',abort);resolve(ok);};
+    const finish=ok=>{ui?.detach();box.remove();document.removeEventListener('keydown',key,true);signal?.removeEventListener('abort',abort);resolve(ok);};
     const key=e=>{if(e.key==='Escape'){e.stopImmediatePropagation();finish(false);}};
     const abort=()=>finish(false);
     const button=(text,fn,cls='')=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.className=cls;b.onclick=fn;return b;};
     const close=button('×',()=>finish(false),'close');close.setAttribute('aria-label',UI.close);
-    actions.append(button(UI.change,()=>{finish(false);p.openSettings('common');}),button(label,()=>finish(true),'primary'));
-    box.append(p,close,actions);ui.el.append(box);ui.attach();
+    actions.append(button(UI.change,()=>{finish(false);platform.openSettings(group);}),button(label,()=>finish(true),'primary'));
+    box.append(p,close,actions);if(root)root.append(box);else{ui.el.append(box);ui.attach();}
     document.addEventListener('keydown',key,true);signal?.addEventListener('abort',abort,{once:true});
   });
 }
@@ -62,6 +62,8 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
     if(signal?.aborted)return false;
     const dests=requestDestinations(getSettings(),req),key=JSON.stringify(dests.map(d=>d.id));
     if(!dests.length)return true;
+    // Child agents have no consent UI and cannot infer permission from local storage.
+    if(p.frameAgent)return dests.every(d=>!needsConfirmation({acked:p.confirmedDestinations?.()||[]},d.id));
     let job=waiting.get(key);
     if(!job){
       job={users:0,abort:new AbortController()};
@@ -72,10 +74,12 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
         if(missing.length){
           const s=getSettings();
           const ok=await prompt({message:missing.map(d=>UI.sentence(d.name,d.host)).join(' '),platform:p,signal:job.abort.signal,
+            group:missing.some(d=>d.id.startsWith('llm:'))?'ai':'common',
             left:s.floatBall?.enabled&&s.floatBall.side!=='left'});
           if(!ok&&req.purpose==='page')out.onDecline?.();
           if(!ok||job.abort.signal.aborted)return false;
           for(const d of missing)await acknowledge(p.localArea,d.id);
+          out.onDestinationConfirmed?.();
         }
         return key===JSON.stringify(requestDestinations(getSettings(),req).map(d=>d.id));
       };
@@ -89,7 +93,7 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
     try{return await job.promise&&!signal?.aborted;}
     finally{signal?.removeEventListener('abort',release);release();}
   }
-  const out={...p,[GATED]:true,translator(){
+  const out={...p,[GATED]:true,confirmSend:ensure,translator(){
     const svc=p.translator();
     return{...svc,
       async translateText(req){const{signal,...body}=req;return await ensure(body,signal)?svc.translateText(body):stopped();},

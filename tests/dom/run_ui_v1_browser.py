@@ -5,6 +5,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 import importlib.util
 import json
+import os
 import sys
 import uuid
 
@@ -17,12 +18,12 @@ spec.loader.exec_module(e2e)
 MOCK = r"""(() => {
  const data={},listeners=new Set(); window.uiData=data;window.uiMessages=[];
  const area={async get(keys){return keys===null?structuredClone(data):Object.fromEntries((Array.isArray(keys)?keys:[keys]).filter(k=>k in data).map(k=>[k,structuredClone(data[k])]))},async set(items){Object.assign(data,structuredClone(items));for(const cb of listeners)cb(Object.fromEntries(Object.keys(items).map(k=>[k,{}])),'local')},async remove(keys){for(const k of keys)delete data[k]}};
- window.chrome={storage:{local:area,sync:area,onChanged:{addListener:cb=>listeners.add(cb),removeListener:cb=>listeners.delete(cb)}},commands:{async getAll(){return[{name:'toggle-page',shortcut:'Alt+A'}]}},tabs:{async query(){return[{id:7,url:'https://docs.example.com/guide/intro'}]},async sendMessage(id,msg){uiMessages.push(msg.type);if(msg.type==='get-state')return window.uiState;if(msg.type==='command'){uiState={...uiState,translated:!uiState.translated};return{ok:true}}},async create(){}},permissions:{async request(){return window.allowPermission},async contains(){return false}},runtime:{async sendMessage(msg){uiMessages.push(msg.type);throw Error('old worker')},getURL:p=>'/extension/'+p}};
+ window.chrome={storage:{local:area,sync:area,onChanged:{addListener:cb=>listeners.add(cb),removeListener:cb=>listeners.delete(cb)}},commands:{async getAll(){return[{name:'toggle-page',shortcut:'Alt+A'}]}},tabs:{async query(){return[{id:7,url:'https://docs.example.com/guide/intro'}]},async sendMessage(id,msg){uiMessages.push(msg.type);if(msg.type==='get-state')return window.uiState;if(msg.type==='command'){uiState={...uiState,translated:!uiState.translated};return{ok:true}}},async create(){}},permissions:{async request(){return window.allowPermission},async contains(){return false}},runtime:{async sendMessage(msg){uiMessages.push(msg.type);return msg.type==='tab-ensure'?{ok:true,injected:true}:{ok:true,available:false}},getURL:p=>'/extension/'+p}};
  window.uiState={translated:false,done:0,pending:0,failed:0};window.allowPermission=false;
 })();"""
 
 def main():
-    artifact = e2e.E2E_ROOT / 'v1' / 'ui'
+    artifact = Path(os.environ.get('DUALLENS_UI_ARTIFACTS', str(e2e.E2E_ROOT / 'v1' / 'ui')))
     artifact.mkdir(parents=True, exist_ok=True)
     run = e2e.E2E_ROOT / ('run-ui-v1-' + uuid.uuid4().hex[:8])
     run.mkdir(parents=True)
@@ -178,7 +179,7 @@ def main():
                 assert popup.locator('.dl-popup').bounding_box()['height'] <= 600
                 popup.screenshot(path=str(artifact/f'popup-path-{theme}.png'))
             checks += 1
-            print('PASS popup_states: onboarding/default/translated/path, <=600px, tab-ensure fallback, denied permission remains off')
+            print('PASS popup_states: onboarding/default/translated/path, <=600px, tab-ensure ready contract, denied permission remains off')
             # Exercise the owned mobile integration seam with native modules; the release
             # entry-point menu binding is deliberately left to its owner.
             mobile_context = p.chromium.launch_persistent_context(str(run/'mobile'),headless=True,

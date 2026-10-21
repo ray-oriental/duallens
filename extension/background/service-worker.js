@@ -44,6 +44,11 @@ const handlers = createHandlers({
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
 Object.assign(handlers,createFrameHandlers(chrome));
+handlers['open-options'] = async msg => {
+  const group=['common','ai','enhance','sites','glossary','data','about'].includes(msg.group)?msg.group:'common';
+  await chrome.tabs.create({url:chrome.runtime.getURL('ui/options.html#'+group)});
+  return {ok:true};
+};
 const tabInjector = createTabInjector(chrome);
 const permissionRegistry = createPermissionRegistry(chrome, getDefaultSettingsStore());
 handlers['tab-ensure'] = (msg, sender) => sender.url?.startsWith(chrome.runtime.getURL('')) ?

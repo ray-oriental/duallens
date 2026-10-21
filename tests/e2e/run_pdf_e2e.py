@@ -254,10 +254,12 @@ def pdf_math(h):
     popup = h.ctx.new_page()
     popup.add_init_script('if(globalThis.chrome?.tabs)chrome.tabs.query=async()=>[{id:' + str(h.tab_id) + ',url:' + json.dumps(page.url) + '}];')
     popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
+    popup.locator('#onboard-skip,#toggle').first.wait_for(state='attached')
+    if popup.locator('#onboard-skip').count():popup.locator('#onboard-skip').click()
     popup.locator('#toggle:enabled').wait_for()
     popup.click('#toggle')
     page.locator(first + ' .tb[data-stage="final"]').first.wait_for(timeout=20000)
-    popup.select_option('#mode', 'translation-only')
+    popup.locator('input[value=translation-only]').first.check()
     wait_for(page, "() => document.body.dataset.view === 'translated'")
     assert not page.locator(first + ' .sheet.orig').is_visible()
     h.command('toggle-page')
@@ -270,6 +272,7 @@ def pdf_math(h):
 def pdf_entries(h):
     bridge = h.ctx.new_page()
     bridge.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html')
+    bridge.evaluate("()=>chrome.storage.local.set({'ui.device':{onboarded:true,acked:[],upgradeNoticeSeen:true}})")
     def send(kind, tab_id):
         return bridge.evaluate('async req=>await chrome.runtime.sendMessage(req)', {'type':kind,'tabId':tab_id})
     for suffix in ['/pdf-field-notebook.pdf', '/download']:
@@ -277,13 +280,21 @@ def pdf_entries(h):
         h.ctx.pages[-1].wait_for_timeout(500)
         status = send('pdf-status', tab['id'])
         assert status['available'], f'PDF type not recognized: {suffix}'
+        popup=h.ctx.new_page()
+        popup.add_init_script('if(globalThis.chrome?.tabs)chrome.tabs.query=async()=>[{id:'+str(tab['id'])+',url:'+json.dumps(h.base+suffix)+'}];')
+        popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
+        popup.locator('#pdf-open').wait_for()
         with h.ctx.expect_page() as new_page:
-            opened = send('pdf-open', tab['id'])
-        assert opened['ok']
+            popup.locator('#pdf-open').click()
+        popup.close()
         pdf_page = new_page.value
         h.page = pdf_page
-        pdf_page.wait_for_url(f'chrome-extension://{h.ext_id}/pdf/viewer.html?*')
+        pdf_page.wait_for_url(f'chrome-extension://{h.ext_id}/pdf/viewer.html*')
         wait_for(pdf_page, rendered(1), 30)
+        assert '?' not in pdf_page.url, 'one-shot token retained in reader URL'
+        assert pdf_page.evaluate("""async()=>{const {createPDFHandoff}=await import('./handoff.js');
+          const db=await new Promise((ok,fail)=>{const r=indexedDB.open('duallens-pdf-handoff',1);r.onsuccess=()=>ok(r.result);r.onerror=()=>fail(r.error);});
+          return await new Promise(ok=>{const r=db.transaction('files').objectStore('files').count();r.onsuccess=()=>{db.close();ok(r.result);};});} """) == 0, 'reader left captured PDF bytes in handoff cache'
     page = h.ctx.new_page()
     h.page = page
     page.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html?file=file%3A%2F%2F%2FC%3A%2Fmissing.pdf')
@@ -301,6 +312,47 @@ def pdf_entries(h):
     assert page.locator('.pdf-page').count() == 6, 'Late URL response replaced the selected local PDF'
     assert not page.locator('#status.error').count(), 'An old source error replaced the current status'
     return '.pdf / application/pdf entry; file permission/local chooser; latest local selection wins over a slow URL'
+
+
+def pdf_handoff(h):
+    page=h.ctx.new_page();h.page=page
+    page.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html')
+    result=page.evaluate("""async()=>{
+      const {createPDFHandoff}=await import('./handoff.js');
+      let time=1000;const store=createPDFHandoff({now:()=>time});
+      const data=new TextEncoder().encode('%PDF-1.4\\nlocal fixture');
+      const token=await store.put(data);
+      const pair=await Promise.allSettled([store.take(token),store.take(token)]);
+      if(pair.filter(r=>r.status==='fulfilled').length!==1)throw Error('token replay accepted');
+      const first=pair.find(r=>r.status==='fulfilled').value;
+      if(new TextDecoder().decode(first)!==new TextDecoder().decode(data))throw Error('bytes changed');
+      const expired=await store.put(data);time+=300001;
+      try{await store.take(expired);throw Error('expiry accepted');}catch(e){if(e.message==='expiry accepted')throw e;}
+      const tokens=[];for(let i=0;i<4;i++)tokens.push(await store.put(data));
+      const kept=await Promise.allSettled(tokens.map(t=>store.take(t)));
+      if(kept.filter(r=>r.status==='fulfilled').length!==3)throw Error('unbounded cache');
+      try{await store.take('../invalid');throw Error('invalid accepted');}catch(e){if(e.message==='invalid accepted')throw e;}
+      return true;
+    }""")
+    assert result
+    return 'real extension IndexedDB: exact bytes, concurrent single consumption, replay/expiry/malformed rejection, bounded abandoned entries'
+
+
+def pdf_origin_prompt(h):
+    page=h.ctx.new_page();h.page=page
+    page.add_init_script("""if(globalThis.chrome?.permissions){
+      chrome.permissions.contains=async()=>false;
+      chrome.permissions.request=async request=>{window.originRequest=request;return false;};
+    }""")
+    calls=[]
+    h.ctx.route('https://files.example/**',lambda route:(calls.append(route.request.url),route.abort()))
+    page.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html?file=https%3A%2F%2Ffiles.example%2Ffixture.pdf')
+    page.locator('#status button').wait_for()
+    assert not calls,'direct source fetched before origin grant'
+    page.locator('#status button').click()
+    assert page.evaluate('()=>window.originRequest')=={'origins':['https://files.example/*']}
+    assert not calls and page.locator('.pdf-page').count()==0
+    return 'other reader source: button invokes scoped requestOrigin; denied permission sends no request'
 
 
 def pdf_stages(h):
@@ -431,7 +483,7 @@ def main():
     Thread(target=server.serve_forever, daemon=True).start()
     base = f'http://127.0.0.1:{server.server_address[1]}'
     results = []
-    cases = [('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_probe', pdf_probe)]
+    cases = [('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt)]
     try:
         with e2e.sync_playwright() as p:
             for name, case in cases:

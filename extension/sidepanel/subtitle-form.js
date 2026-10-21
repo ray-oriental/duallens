@@ -2,8 +2,11 @@ import { element, field, selectOptions, MEDIA_CSS } from './text-form.js';
 import { subtitleOptions } from '../content/subtitles/track.js';
 import { MAX_SUBTITLE_BYTES, parseSubtitles, serializeSubtitles } from '../content/subtitles/files.js';
 import { SubtitleScheduler } from '../content/subtitles/scheduler.js';
+import { withSendConfirmation, confirmationCard } from '../content/confirmation.js';
 
 export async function mountSubtitleForm(root, { platform }) {
+  let currentSettings = await platform.settingsStore.load();
+  platform = withSendConfirmation(platform, () => currentSettings, {prompt:opts=>confirmationCard({...opts,root})});
   const style = element('style', MEDIA_CSS); const form = element('form'); form.className = 'dl-subtitle-settings';
   form.append(element('h2', '视频双语字幕'));
   const enabled = field(form, '字幕翻译', element('select')); enabled.name = 'subtitle-enabled';
@@ -58,6 +61,7 @@ export async function mountSubtitleForm(root, { platform }) {
     stop(); const token = epoch; translate.disabled = true;
     try {
       const settings = await platform.settingsStore.load(); if (disposed || token !== epoch) return;
+      currentSettings = settings;
       service = platform.translator(); cancel.disabled = false;
       scheduler = new SubtitleScheduler({ service, cues, request: { to: settings.targetLang, from: settings.sourceLang }, onUpdate: show });
       scheduler.seek(0);
@@ -68,6 +72,7 @@ export async function mountSubtitleForm(root, { platform }) {
   async function reload() {
     const token = ++version, settings = await platform.settingsStore.load(), options = subtitleOptions(settings);
     if (disposed || token !== version) return;
+    currentSettings = settings;
     const key = JSON.stringify(['targetLang', 'sourceLang', 'translation', 'provider', 'prompt', 'glossary'].map(k => settings[k]));
     if (translationKey && translationKey !== key) { stop(); for (const cue of cues) cue.translation = null; show(); translate.disabled = !cues.length; }
     translationKey = key;

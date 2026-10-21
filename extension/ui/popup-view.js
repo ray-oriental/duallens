@@ -5,14 +5,18 @@ import { pathPattern } from '../shared/site-pattern.js';
 import { FEATURES,TEXT as COMMON,element,segmented,engineSummary,featureDescription } from './components.js';
 import { SHARED_CSS } from './theme.js';
 import { POPUP_CSS } from './popup-theme.js';
+const EXTRA = { revoked:'网站访问权限已撤销，相关增强功能与自动翻译已关闭。需要时可重新打开。',
+  pdf:'用 DualLens 打开此 PDF', images:'翻译此页图片' };
 const T=Object.freeze({title:'DualLens',text:'文本翻译',settings:'设置',translate:'翻译此页',original:'显示原文',idle:'尚未翻译此页',restricted:'此页面无法翻译',connecting:'正在连接当前页面…',mode:'显示方式',bilingual:'双语对照',translation:'仅译文',target:'翻译成',to:'译为',engine:'引擎',change:'更改',site:'本站',demand:'按需',always:'总是',never:'从不',path:'仅当前路径',pathHint:'规则已保存；从不仍允许手动翻译。',enhance:'增强功能',off:'全部默认关闭',skip:'跳过',next:'下一步',back:'上一步',start:'开始使用',languageTitle:'你想读哪种语言？',languageHint:'页面会翻译成这种语言，之后可以在弹出页更改。',browser:'已按浏览器语言选择。',engineTitle:'选择翻译方式',engineHint:'翻译时，网页文字会发送给翻译服务。可随时更改。',free:'免费机器翻译',freeHint:'无需账号和密钥。网页文字会发送给微软，失败时改用谷歌。',ai:'我自己的 AI 服务',aiHint:'使用你自己的密钥或本地模型。文字只发给你选择的服务。稍后在设置里添加。',ready:'准备好了',tips:['点「翻译此页」，或按 Alt+A。','不会自动翻译任何网站。','悬浮球、划词翻译等功能默认关闭，可在增强功能里打开。'],mobile:'手机没有工具栏按钮。从 Tampermonkey 菜单打开 DualLens，或在增强功能里打开悬浮球。',upgrade:'1.0 版起，增强功能默认关闭，已替你关闭了原来开启的几项。需要时在下方重新打开。',understood:'知道了',failure:'操作没有完成，请稍后重试。',step:n=>`第 ${n} 步，共 3 步`,progress:(done,pending,failed,refining)=>`已翻译 ${done} 段${refining?`，AI 精修中 ${refining} 段`:''}${pending?`，待翻译 ${pending} 段`:''}${failed?`，${failed} 段没有成功`:''}`});
 
-export async function mountPopup(root,{store,platform,localArea=platform.localArea,url='',pageMessage,onSettings=()=>platform.openSettings(),onText=()=>platform.openTextTranslation?.(),shortcut='',restricted=false}) {
+export async function mountPopup(root,{store,platform,localArea=platform.localArea,url='',pageMessage,onSettings=()=>platform.openSettings(),onText=()=>platform.openTextTranslation?.(),shortcut='',restricted=false,pdfAvailable=false,onPDF}) {
   const doc=root.ownerDocument,el=(tag,text,attrs)=>element(doc,tag,text,attrs),box=el('div',null,{class:'dl-theme dl-popup'}),style=el('style',SHARED_CSS+POPUP_CSS);box.append(style);root.append(box);
   let s=await store.load(),device=await loadDeviceState(localArea),closed=false,step=1,ai=false,state=null,refreshing=false,feedback,poll;
+  const revoked=(await localArea.get('ui.permissionsRevoked'))['ui.permissionsRevoked'];
+  const revokedText=revoked?.features?.length?EXTRA.revoked:'';
   let host='';try{host=new URL(url).hostname;}catch{/* unavailable tab */}
   const say=message=>{if(feedback)feedback.textContent=message;};
-  async function run(fn){try{await fn();}catch{say(T.failure);}}
+  async function run(fn){try{await fn();}catch(error){say(error.message||T.failure);}}
   const button=(text,fn,attrs={})=>{const b=el('button',text,{type:'button',...attrs});b.addEventListener('click',()=>run(fn));return b;};
   async function persist(patch){s=await store.save(patch);if(!closed)draw();}
   async function finish(skip=false){device=await updateDeviceState(localArea,{onboarded:true,upgradeNoticeSeen:true});if(closed)return;draw();if(ai&&!skip)onSettings('ai');}
@@ -29,8 +33,11 @@ export async function mountPopup(root,{store,platform,localArea=platform.localAr
   }
   function draw(){
     if(closed)return;box.replaceChildren(style);box.classList.remove('dl-onboarding');feedback=el('div',null,{id:'status',class:'dl-feedback dl-status dl-warn',role:'status','aria-live':'polite'});
+    if(revokedText){box.append(el('p',revokedText,{class:'dl-notice',id:'permissions-revoked',role:'status'}));void localArea.remove('ui.permissionsRevoked');}
     if(!device.onboarded){onboarding();box.append(feedback);return;}
     const head=el('header');head.append(el('span','◯◯',{class:'dl-mark','aria-hidden':'true'}),el('strong',T.title),button(T.text,onText,{class:'dl-text-button',id:'text-open'}),button(T.settings,()=>onSettings('common'),{class:'dl-text-button',id:'options'}));box.append(head);
+    if(pdfAvailable)box.append(button(EXTRA.pdf,onPDF,{id:'pdf-open'}));
+    if(s.comics.enabled&&!restricted)box.append(button(EXTRA.images,async()=>{await pageMessage({type:'command',name:'translate-comics'});await refresh();},{id:'comics'}));
     if(!device.upgradeNoticeSeen){const note=el('div',null,{class:'dl-notice',id:'upgrade-notice'});note.append(el('p',T.upgrade),button(T.understood,async()=>{device=await updateDeviceState(localArea,{upgradeNoticeSeen:true});draw();}));box.append(note);void updateDeviceState(localArea,{upgradeNoticeSeen:true});}
     const card=el('section',null,{class:'dl-card'}),toggle=button(state?.translated?T.original:T.translate,async()=>{await pageMessage({type:'command',name:'toggle-page'});await refresh();},{class:state?.translated?'dl-hero':'dl-hero primary',id:'toggle'});toggle.disabled=restricted||!state;if(shortcut)toggle.append(el('kbd',shortcut));card.append(toggle,el('p',statusText(),{class:'page-status dl-status',id:'page-status','aria-live':'polite'}));
     const row=el('div',null,{class:'display-row'});row.append(segmented(doc,T.mode,[['bilingual',T.bilingual],['translation-only',T.translation]],s.displayMode,value=>run(()=>persist({displayMode:value}))),el('span',T.to),languages(s.targetLang,value=>persist({targetLang:value}),'target'));card.append(row);

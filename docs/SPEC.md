@@ -40,7 +40,7 @@ Android Edge + Tampermonkey                         │
 `web_accessible_resources` 里。`scripts/build_userscript.mjs` 仅为用户脚本将同一静态模块图与 CSS 打包成 IIFE；
 不改变可直接加载的 `extension/`。用户脚本的页内面板经 `mountForm` 复用 `mountSettingsForm`，关闭调用 `destroy()`。
 v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的版本固定 `@resource` 缓存，
-首次打开设置时本地校验并加载，错误显示中文重新安装说明；扩展 options 仍直接导入。详见 PLATFORMS §2。
+首次打开用户脚本的弹出页、设置或文本/字幕工具时本地校验并加载，错误显示中文重新安装说明；扩展 options 仍直接导入。详见 PLATFORMS §2。
 
 ## 2. 文件归属（并行开发时谁写哪里）
 
@@ -59,8 +59,8 @@ v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的�
 失去广泛授权时保存关闭 floatBall/selection/hover/input/frames/comics/subtitles，清空 autoTranslateLangs 与 always 列表，
 custom 中 page:always 改 default、交互 on 改 off；保留 never、路径、样式和服务设置。新增本机键
 `ui.permissionsRevoked: {features:string[]}` 供 UI 下次提示，显示后由 UI 清除。授权恢复不会自动恢复这些开关。
-漫画 canvas 注册与 CDN Referer 会话规则另行检查各匹配主机的权限。PDF 权限不足返回 `permissionRequired` 来源模式，
-UI 应在明确用户手势中请求该来源后重试；跨来源字幕同样返回 permission 错误，不从内容脚本自动弹权限提示。
+漫画 canvas 注册与 CDN Referer 会话规则另行检查各匹配主机的权限。PDF 工具栏点击使用 activeTab 捕获并传递一次性令牌；
+其他阅读器来源由按钮手势调用 requestOrigin。跨来源字幕返回 permission 错误，不从内容脚本自动弹权限提示。
 
 | 归属 | 路径 |
 | --- | --- |
@@ -184,7 +184,7 @@ siteRules: {
 | `list-models` | `{ profileId? , presetId?, freeOnly? }`，presetId 优先，可在保存 profile 前发现模型 | `{ ok, models: [{ id, label, … }] }`；OpenRouter 默认仅返回免费模型 |
 | `provider-test` | `{ profileId }` | `{ ok, latencyMs, sample }` |
 | `cache-stats` / `cache-clear` | `{}` | `{ ok, entries }` |
-| `open-options` | `{}` | `{ ok }`；background 调 `chrome.runtime.openOptionsPage()`（内容脚本自己调不了） |
+| `open-options` | `{group?:'common'|'ai'|'enhance'|'sites'|'glossary'|'data'|'about'}` | `{ ok }`；background 打开 `ui/options.html#<group>`，非法分组回退 common |
 
 ### 4.3 background → content（`chrome.tabs.sendMessage`）
 
@@ -197,13 +197,13 @@ siteRules: {
 ### 4.4 v0.3 功能接入
 
 - iframe 增量：子 frame 经平台 `frameSnapshot()` 发送 `frame-snapshot`，后台只接受浏览器提供的非零 frameId 与 tabId，
-  定向向同一 tab 的 frameId:0 发送 `frame-top-state`。顶层返回 `{active,settings,context:{host,url,title}}`，
-  仅含公共设置；失败或无顶层响应时代理停止。子 frame 不注册命令、不显示 UI、不按自身站点自动启用。
+  定向向同一 tab 的 frameId:0 发送 `frame-top-state`。顶层返回 `{active,settings,confirmedDestinations,context:{host,url,title}}`，
+  仅含公共设置与去向标识；顶层确认全部候选去向后才放行，子代理只按推送列表判断，绝不显示确认卡；失败或无顶层响应时代理停止。子 frame 不注册命令、不显示 UI、不按自身站点自动启用。
   启动快照之后，顶层平台 `pushFrameState(state)` 发送 `frame-publish`，后台只接受 frameId:0，按 sender.tab.id
-  广播 `{type:'frame-state',state:{active,settings,context}}`，不增加快照字段。顶层忽略广播，仅子 frame 代理接收。
+  广播 `{type:'frame-state',state:{active,settings,context,confirmedDestinations}}`，携带 `confirmedDestinations:string[]` 字段。顶层忽略广播，仅子 frame 代理接收。
   同源/开放 ShadowRoot 扫描、跨域代理、事件驱动可见性与用户脚本限制见 PLATFORMS.md 的 iframe 增量。
 
-- PDF 的 `pdf-status` / `pdf-open` 使用实际标签页 URL，仅在显式入口探测；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
+- PDF 的 `pdf-status` / `pdf-open` 仅接受扩展页面，使用实际标签页 URL，仅在显式入口探测；后台在点击时以 activeTab 匿名取回字节，存扩展 IndexedDB，以 `?token=<uuid>` 交给阅读器原子读取并删除（64 MiB / 30 秒 / 五分钟有效，至多三份未读记录）；其他 `?file=` 来源须在阅读器按钮手势申请来源权限；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
 - PDF 阅读页默认宽屏同尺寸双栏对照：原页画布复制为译文底图，原坐标抹底覆盖译文并拟合字号；另有仅译文页、原文页、重排阅读。公式/图像/边距标识保留原像素，行内公式用本地裁图替换 `<xN/>`。文本分块在本地 Worker 中完成，翻译限视口与相邻页，经 `TranslatorService.translateBatch` 发送文本与公式占位符，不发送文件、图片、URL 或元数据。PDF 消费端支持可选的 `draft:true,purpose:'pdf'` 和同 id 的 `stage:'draft'/'final'` 回调；无 stage 当终稿，恢复取消并屏蔽旧请求结果。共享引擎/端口阶段传输需另外集成验收。
 - `open-sidepanel` / Alt+S 打开桌面文本侧栏；用户脚本用 `platform.openTextTranslation()` 打开原面板页签。
 - `platform.subtitles = { observe(callback), fetchTrack(url,{signal}) }` 注入受限 YouTube 取轨能力。`subtitle-track` / `subtitle-track-cancel` 只处理当前顶层 YouTube 视频的轨道；见 [SUBTITLES.md](SUBTITLES.md)。
@@ -253,7 +253,7 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
 默认 `muted` 沿用宿主字体族、字号、字重、行高与对齐，站点字体之后补本地 CJK 回退栈
 `"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif`。
 块级译文间距 `.3em`，继承首行缩进，无边框、背景或图标，段落译文不使用斜体。
-颜色按原文前景与逐层合成的纯色背景轻微调和，对比度至少 4.5；高对比偏好不弱化。
+muted 颜色按 78% 原文前景与 22% 逐层合成的纯色背景调和；结果不足 4.5:1 或高对比偏好时回退原文色。原文本身不达标时保留原色，不承诺修复原网页配色。
 背景图、渐变及祖先 opacity/filter 的最终像素仍需实页检查。
 短行内译文为 `.92em`，仅以 `margin-inline-start:.35em` 分隔，无「·」，短控件沿用实测溢出回退。
 草稿与终稿复用同一 `dl-t`，同步替换节点内文本，外观一致，无精修状态点；不同长度仍可能改变高度。

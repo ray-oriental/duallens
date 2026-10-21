@@ -1,5 +1,6 @@
 import { LANGS } from '../shared/settings.js';
 import { SHARED_CSS } from '../ui/theme.js';
+import { withSendConfirmation, confirmationCard } from '../content/confirmation.js';
 
 export const MEDIA_CSS = SHARED_CSS + `
 .dl-text,.dl-subtitle-settings { color:var(--dl-text,#1f2328); font:16px/1.5 var(--dl-font,system-ui); }
@@ -32,6 +33,8 @@ export function selectOptions(select, options, value) {
 }
 
 export async function mountTextForm(root, { platform }) {
+  let settings = await platform.settingsStore.load();
+  platform = withSendConfirmation(platform, () => settings, {prompt:opts=>confirmationCard({...opts,root})});
   const style = element('style', MEDIA_CSS); root.append(style);
   const service = platform.translator();
   const form = element('form'); form.className = 'dl-text';
@@ -52,9 +55,10 @@ export async function mountTextForm(root, { platform }) {
   const copy = element('button', '复制'), speak = element('button', '朗读');
   copy.type = speak.type = 'button'; copy.disabled = speak.disabled = true; actions.append(copy, speak); form.append(actions);
   root.append(form);
-  let settings, disposed = false, sequence = 0, modelSequence = 0, utterance = null;
+  let disposed = false, sequence = 0, modelSequence = 0, utterance = null, pending;
   const stopSpeech = () => { if (utterance) { globalThis.speechSynthesis?.cancel(); utterance = null; } };
   const reset = () => {
+    pending?.abort(); pending = null;
     sequence++; output.textContent = ''; copy.disabled = speak.disabled = true; translate.disabled = false;
     stopSpeech(); status.textContent = '';
   };
@@ -87,9 +91,10 @@ export async function mountTextForm(root, { platform }) {
     event.preventDefault();
     if (!input.value.trim()) return;
     reset(); const token = sequence;
+    pending = new AbortController();
     translate.disabled = true; status.textContent = '正在翻译…';
     try {
-      const result = await service.translateText({ text: input.value, from: from.value, to: to.value, purpose: 'text',
+      const result = await service.translateText({ text: input.value, from: from.value, to: to.value, purpose: 'text', signal:pending.signal,
         ...(profiles.value ? { profileId: profiles.value, model: models.value } : {}) });
       if (disposed || token !== sequence) return;
       if (!result.ok) { status.textContent = result.error?.message || '翻译失败'; return; }
@@ -123,5 +128,5 @@ export async function mountTextForm(root, { platform }) {
   const off = platform.settingsStore.onChange(() => { void reload().catch(() => { status.textContent = '设置读取失败'; }); });
   try { await reload(); }
   catch { status.textContent = '设置读取失败'; }
-  return { destroy() { disposed = true; sequence++; off(); stopSpeech(); service.dispose?.(); form.remove(); style.remove(); } };
+  return { destroy() { disposed = true; pending?.abort(); sequence++; off(); stopSpeech(); service.dispose?.(); form.remove(); style.remove(); } };
 }

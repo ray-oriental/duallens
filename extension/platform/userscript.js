@@ -17,8 +17,8 @@ import { installCanvasHook } from '../content/comics/canvas-hook-runtime.js';
 import { installTimedtextObserver } from '../content/subtitles/observer-runtime.js';
 import { observeTimedtext, fetchTimedtext, fetchGMCrossHostTrack } from '../content/subtitles/observe.js';
 import { isYouTube, originalTrackURL } from '../content/subtitles/track.js';
-import { createUserscriptMediaPanel } from '../sidepanel/userscript-panel.js';
-import { createSettingsFormLoader } from '../userscript/settings-resource.js';
+import { createSettingsFormLoader, SETTINGS_RESOURCE_ERROR } from '../userscript/settings-resource.js';
+import { toast } from '../content/overlay.js';
 
 // Capture the sandbox's native prompt before any awaits; never use host-page prompt.
 const sandboxPrompt = typeof prompt === 'function' ? prompt.bind(globalThis) : null;
@@ -82,12 +82,17 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
   };
   const store = platform.settingsStore = createSettingsStore({ syncArea, localArea });
   const loadSettingsForm = createSettingsFormLoader(gm.getResourceText);
+  platform.loadSettingsForm = loadSettingsForm;
+  platform.showResourceError = () => toast(SETTINGS_RESOURCE_ERROR);
   let mediaPanel;
-  const openPanel = tab => {
-    mediaPanel ||= createUserscriptMediaPanel(platform, { loadSettingsForm });
-    return mediaPanel.open(tab);
+  const openPanel = async tab => {
+    try {
+      const mount = await loadSettingsForm();
+      mediaPanel ||= mount.createMediaPanel(platform, { loadSettingsForm });
+      return await mediaPanel.open(tab);
+    } catch { platform.showResourceError(); }
   };
-  platform.openSettings = () => { void openPanel('settings'); };
+  platform.openSettings = group => { platform.settingsGroup = group || 'common'; void openPanel('settings'); };
   platform.openTextTranslation = () => { void openPanel('text'); };
   // The transitional userscript kept public v1 settings in another GM namespace.
   // Move them once without overwriting existing v2 settings or local secrets.

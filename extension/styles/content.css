@@ -3,7 +3,8 @@ dl-t{--dl-fg:currentColor;--dl-line:color-mix(in srgb,currentColor 48%,transpare
 dl-w{display:block;text-indent:inherit;}
 dl-t.dl-block{display:block;margin-block-start:.3em;max-inline-size:100%;overflow-wrap:anywhere;font-style:normal;}
 dl-t.dl-inline{display:inline;margin-inline-start:.35em;font-size:.92em;}
-dl-t.dl-s-muted{color:var(--dl-fg);}
+/* --dl-fg is measured at 78% and falls back to source color below 4.5:1. */
+dl-t.dl-s-muted{color:var(--dl-fg,currentColor);}
 dl-t.dl-s-plain{color:inherit;}
 dl-t.dl-s-dashed{text-decoration-line:underline;text-decoration-style:dashed;text-decoration-color:var(--dl-line);text-underline-offset:.22em;text-decoration-thickness:1px;}
 dl-t.dl-s-highlight{background:var(--dl-hl);box-decoration-break:clone;-webkit-box-decoration-break:clone;}

@@ -103,9 +103,9 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
-    // Soft target below the 360 KB hard budget in the builder; v0.6 (HTML5 subtitles + input modes) lands at ~333 KB.
-    assert.ok(Buffer.byteLength(content)<=340000,'startup bundle exceeds the 340 KB slimming target');
-    for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js']) {
+    // Integration target leaves room below the unchanged 340000-byte release budget.
+    assert.ok(Buffer.byteLength(content)<=330000,'startup bundle exceeds the 330 KB integration target');
+    for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js', 'ui/popup-view.js', 'ui/popup-theme.js', 'userscript/panel.js', 'sidepanel/text-form.js', 'sidepanel/subtitle-form.js', 'sidepanel/userscript-panel.js']) {
       assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
     }
     assert.ok(content.includes('@grant        GM_getResourceText'));

@@ -312,7 +312,7 @@ ${resources.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).joi
 
 export async function buildUserscript({ project = PROJECT, output = path.join(project, 'dist', 'duallens.user.js') } = {}) {
   const manifest = JSON.parse((await fs.readFile(path.join(project, 'extension', 'manifest.json'), 'utf8')).replace(/^\uFEFF/, ''));
-  const settings = await buildBundle(path.join(project, 'extension', 'ui', 'forms', 'index.js'), {
+  const settings = await buildBundle(path.join(project, 'extension', 'userscript', 'ui-resource.js'), {
     root: path.join(project, 'extension'), entryExports: ['mountSettingsForm'],
   });
   const resource = { name: 'duallens-settings', file: 'duallens-settings.js', bytes: Buffer.byteLength(settings),

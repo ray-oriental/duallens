@@ -3,6 +3,24 @@ import assert from 'node:assert/strict';
 import {withSendConfirmation,requestDestinations} from '../../extension/content/confirmation.js';
 import {DEFAULT_SETTINGS,mergeSettings} from '../../extension/shared/settings.js';
 import {loadDeviceState} from '../../extension/shared/device-state.js';
+import {frameMayTranslate} from '../../extension/content/frame-agent.js';
+
+test('child agents need pushed top consent and never prompt or trust device-local consent alone',async()=>{
+  const f=fixture();let confirmed=[];
+  await f.platform.localArea.set({'ui.device':{acked:['llm:https://fixture.example']}});
+  const p=withSendConfirmation({...f.platform,frameAgent:true,confirmedDestinations:()=>confirmed},f.settings,
+    {prompt:()=>assert.fail('frame must never show UI')});
+  assert.equal((await p.translator().translateText({text:'child'})).ok,false);
+  assert.equal(f.calls.length,0);
+  const state={active:true,settings:f.settings(),confirmedDestinations:[]};
+  assert.equal(frameMayTranslate(state),false);
+  confirmed=['llm:https://fixture.example'];state.confirmedDestinations=confirmed;
+  assert.equal(frameMayTranslate(state),true);
+  assert.equal((await p.translator().translateText({text:'child'})).ok,true);
+  assert.equal(frameMayTranslate({...state,active:false}),false);
+  f.set(mergeSettings(f.settings(),{provider:{profiles:[{id:'openai',kind:'openai',baseUrl:'https://changed.example/v1',model:'test'}]}}));
+  assert.equal((await p.translator().translateText({text:'new destination'})).ok,false);
+});
 
 function fixture(patch={},prompt=async()=>true){
   const state={};let settings=mergeSettings(DEFAULT_SETTINGS,{translation:{mode:'llm'},provider:{active:'openai',profiles:[

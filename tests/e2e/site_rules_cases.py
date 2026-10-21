@@ -20,10 +20,16 @@ def exercise(page, toggle, input_command):
     page.locator('#p-plain').click(click_count=3)
     page.locator('#ta').focus()
     before = page.locator('#ta').input_value()
-    input_command()
+    page.keyboard.press('Space');page.keyboard.press('Space');page.keyboard.press('Space')
     page.wait_for_timeout(400)
     assert page.locator('dl-t,dl-ui').count() == 0, 'disabled feature produced UI or translation'
-    assert page.locator('#ta').input_value() == before, 'disabled input translated'
+    assert not page.locator('#ta').input_value().startswith('【译】'), 'disabled passive input translated'
+    page.locator('#ta').fill('An explicit input command remains available.')
+    input_command()
+    page.wait_for_function("document.querySelector('#ta').value.startsWith('【译】')")
+    page.keyboard.press('Escape')
+    # Restore the editable and its value attribute before checking full document restoration.
+    page.locator('#ta').fill(before)
     toggle()
     page.wait_for_function("document.querySelector('#p-plain dl-t[data-dl-state=done]')")
     toggle(); page.wait_for_function("!document.querySelector('dl-t')")

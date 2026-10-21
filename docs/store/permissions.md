@@ -24,7 +24,7 @@
 | 跨域 iframe | 不注入 | 常驻脚本使用现有无 UI frame agent |
 | YouTube 字幕 | 当前来源匿名读轨道；跨 www/m 来源先授权轨道来源 | 自动字幕启用时注册 document_start 观察器 |
 | 漫画 / canvas / CDN | 开启图片文字时请求广泛权限；单来源授权须包含图片 CDN | 本地 OCR；canvas 与 Referer 规则仍检查对应主机 |
-| PDF | 独立扩展阅读页需要来源网络权限；缺少时应由 UI 在打开文件前申请，或选择本地文件 | 已授予来源可匿名读取；登录 / 重定向文件先自行下载 |
+| PDF | 弹出页点击时，后台借 activeTab 匿名取回并以一次性令牌交给阅读器；其他来源在阅读器按钮手势申请来源权限，或选择本地文件 | 已授予来源可匿名读取；登录 / 重定向文件先自行下载 |
 
 权限撤销后，后台取消常驻注册并保存关闭相关开关、自动语言与自动规则，保留「从不」规则及其他偏好。本机 `ui.permissionsRevoked` 保存受影响字段列表，供下次 popup 说明；不会自动重新申请。浏览器不能卸载已运行脚本；已有控制器通过设置变化关闭被动 UI，新文档不再自动注入。
 
@@ -47,7 +47,7 @@ Required HTTPS hosts are limited to `edge.microsoft.com`, `api-edge.cognitive.mi
 
 Optional `<all_urls>` is a requestable scope, not an installation grant. UI must request it in the user's switch/rule gesture before enabling passive features or automatic translation; denial keeps them disabled. Automatic subtitles and language rules also need resident injection. Custom/local API configurations request their specific origin before testing or saving. Host patterns do not isolate ports.
 
-Without broad access, manual actions inject only the top document, whose controller handles same-origin frames. Resident registration covers cross-origin frames only after broad access and a passive feature/rule opt-in. Same-origin YouTube captions use anonymous page fetch; cross-www/m tracks require the track host's permission. Comic CDNs/canvas hooks each need corresponding host grants. PDF is an independent extension page: UI must request missing source access before fetching; local selection is also available, and file URLs require the browser's separate opt-in. Authenticated/redirected PDFs can be downloaded by the user and selected locally.
+Without broad access, manual actions inject only the top document, whose controller handles same-origin frames. Resident registration covers cross-origin frames only after broad access and a passive feature/rule opt-in. Same-origin YouTube captions use anonymous page fetch; cross-www/m tracks require the track host's permission. Comic CDNs/canvas hooks each need corresponding host grants. PDF toolbar clicks capture bytes in the background using activeTab and pass a one-use extension-local token to the reader. Other reader sources request missing origin access in a button gesture; local selection is also available, and file URLs require the browser's separate opt-in. Authenticated/redirected PDFs can be downloaded by the user and selected locally.
 
 Revocation unregisters resident scripts and saves dependent switches/automatic rules as off, preserving never-rules and unrelated settings. Local `ui.permissionsRevoked` field names allow popup UI to explain this later. Already-running scripts cannot be unloaded; passive UI follows saved settings, and new documents receive no automatic injection. No permissions are automatically re-requested.
 

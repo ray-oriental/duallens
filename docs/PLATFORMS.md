@@ -32,7 +32,7 @@ export interface Platform {
                             // extension 用 fetch（在 service worker 里，无 CORS 限制）；userscript 用 GM_xmlhttpRequest
   translator(): TranslatorService;  // extension：经端口连 service worker；userscript：在页面内直接实例化
   detectLanguage(text): Promise<{ lang, reliable } | null>;  // extension 用 chrome.i18n；其余回落到 shared/lang.js 启发式
-  openSettings(): void;     // extension：打开 options 页；userscript：打开页内设置面板
+  openSettings(group?: 'common'|'ai'|'enhance'|'sites'|'glossary'|'data'|'about'): void;     // extension：打开 options 页；userscript：打开页内设置面板
   promptSecret(label: string): string | null; // userscript：隔离沙箱原生 prompt，默认空值；取消返回 null
                             // extension：返回 null；其独立 options 页面保留 password 输入框
   registerCommand(id, label, handler): void;  // userscript：GM_registerMenuCommand；extension：commands 已在 manifest
@@ -58,7 +58,7 @@ export interface TranslatorService {
 常见英文短 UI 在简体中文目标且用户术语表为空时命中内置小词表，直接在本地生成；其余情况沿用翻译链，保留目标文字变体与自定义术语的处理。HN 元信息追加一条紧凑译文，保留作者和数值，以“2 小时前”等完整短语呈现时间；放不下时译文另起一行。
 placeholder、无可见正文的图标按钮 title、原生 option label 及按钮型 input value 独立翻译；不翻译 alt、密码框或用户输入值。
 动态属性与展开状态会失效重扫；`translation` 模式/引擎变化会取消旧请求、恢复并重翻。
-译文颜色按原文字色与祖先纯色背景调和，计算对比度至少 4.5；背景图、渐变与祖先 opacity/filter 的最终像素对比度仍需真实页面检查。
+muted 译文色按 78% 原文字色与 22% 祖先合成的纯色背景调和；结果对比度低于 4.5:1 或偏好更高对比度时回退原文色。原文本身低对比度时保留它的配色；背景图、渐变与祖先 opacity/filter 的最终像素对比度仍需真实页面检查。
 Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/span，穿透手机版 `p > span > span` 行内包装；正文之外的可见导航和标签也参与普通扫描。
 覆盖率与首段 ≤3 秒属于真实网页验收指标；标识符及 MT 原样返回的专名计入例外，不进覆盖率分母，也不冒充已生成中文译文；站点拒绝访问须单列失败。
 `aria-hidden` 单独不作为视觉排除条件；实际可见文本仍翻译，display/visibility、透明度及裁切隐藏的克隆不翻译。
@@ -125,6 +125,8 @@ Range 按祖先 frame 的视口裁切并映射至控制器视口；隐藏或小�
 跨域 frame 隐藏（含 display:none）时保留已有译文，不再发起新请求；顶层恢复和显示模式推送不受可见性影响，立即应用。
 重新可见且顶层仍在翻译时，依靠 IntersectionObserver/ResizeObserver 事件在 1 秒内继续新可见内容；不增加父子可见性提示通道或定时补查。
 顶层通过 frame-publish 广播 frame-state；后台只接受 frameId:0 发布者，顶层忽略广播、子 frame 消费推送。
+快照与推送均带 `confirmedDestinations:string[]`；顶层确认当前页面的全部候选去向后才发布可激活状态。
+子代理只允许该列表覆盖的去向，不读取本机确认状态来抢先翻译，也不创建确认 UI。
 空闲且未翻译时没有周期定时器或周期消息；顶层进度统计包含同源文档，不汇总独立跨域代理计数。
 不新增 permissions/host_permissions，不通过网页 postMessage 传递状态或配置。
 用户脚本仍保留 @noframes，仅由顶层访问同源文档，**不支持跨域 iframe**。
@@ -147,6 +149,7 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 页面 UI 使用 closed shadow root 内的设计令牌。悬浮球为桌面 36px / 触屏 44px，
 `floatBall.autoHide !== false` 时空闲 2.5 秒只露出 24px；长按、菜单键和 Shift+F10
 可打开菜单。划词临时服务选择收进「更多」，关闭功能会立即卸下其被动监听和界面。
+侧边栏及用户脚本文本/字幕文件工具使用同一门禁，在工具内显示相同文案；取消或关闭不会发送等待中的内容。
 专项离线验收入口为 `tests/e2e/run_page_ui_e2e.py`；真实设备验收仍按移动清单执行。
 
 ## 2. 打包
@@ -162,10 +165,10 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 - v0.5 用户脚本将共享设置表单（`ui/forms/**`、`ui/validation.js` 及面板专用依赖）拆为
   `dist/duallens-settings.js`，随 Release 发布并进入 `SHA256SUMS`。启动脚本以 `@resource duallens-settings`
   引用当前 manifest 版本的 `releases/download/v{version}/duallens-settings.js#sha256=…`；
-  首次打开设置页签才读取 `GM_getResourceText`，按启动脚本内嵌的字节数和 SHA-256 校验后在隔离沙箱执行。
+  首次从菜单打开底部弹出页、设置或文本/字幕工具时才读取 `GM_getResourceText`，按启动脚本内嵌的字节数和 SHA-256 校验后在隔离沙箱执行。
   打开面板不联网；缺失、校验或执行失败时显示中文错误与重新安装说明。HTTP 页同样在本地校验。
   已加载表单在当前文档内复用，关闭时仍销毁实例；扩展 options 继续直接导入原生模块。
-  启动包硬预算 ≤340000 字节。
+  启动包硬预算 ≤340000 字节；v1 集成目标 ≤330000 字节。
 
 ## 3. 设置 v3：可同步设置与机密分离
 
@@ -190,7 +193,7 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
   按上下文长度和是否支持 `response_format` 排序供用户挑选；请求头带 `X-Title: DualLens`。免费档有每分钟和每日上限，
   所以默认链里放 2 到 3 个不同厂商的免费模型。
 - **首次上手**：第一次打开弹出页时显示语言、翻译方式/去向、完成三步，可跳过；完成不触发翻译。确认免费翻译时记录微软和谷歌两个去向，跳过不确认。AI 服务在设置中主动保存并获得来源权限后确认实际来源。
-- 设置按 `common/ai/enhance/sites/glossary/data/about` 七组显示，即时字段自动保存，AI、网站规则和术语表使用分组保存/取消。用户脚本设置仍从校验后的独立资源按需挂载；该资源额外提供 `mountSettingsForm.mountPopup`，供手机底部面板复用日常弹出页。
+- 设置按 `common/ai/enhance/sites/glossary/data/about` 七组显示，即时字段自动保存，AI、网站规则和术语表使用分组保存/取消。资源入口为 `userscript/ui-resource.js`，提供 `mountSettingsForm.mountPopup`、`createPopupPanel` 与 `createMediaPanel`；手机底部面板、上手/升级卡片、设置及文本/字幕工具均按需加载，启动图只保留页面功能和轻量菜单注册。
 - 用户脚本的 key 与备份口令只能通过 `platform.promptSecret` 输入。API key 区只显示「已设置 / 未设置」及设置、清除按钮，
   不创建 key/password 输入框；原生对话框不得预填旧值，也不得调用网页的 `window.prompt`。页面的 composed 输入事件可穿过 closed shadow root，不能依赖圆点编辑器隔离密钥。
   真机验收必须确认 Tampermonkey 启用了隔离世界；[官方 sandbox 文档](https://www.tampermonkey.net/documentation.php?q=sandbox)说明 DOM 模式在隔离上下文未启用时可能使用其他已启用上下文，不能将页面世界运行作为安全配置。
@@ -269,3 +272,10 @@ never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页�
 | 真实服务 | OpenRouter 免费模型一条链路（key 由用户放进环境变量 `DUALLENS_OPENROUTER_KEY`，测试从环境变量读取，不落盘） |
 
 配置导入可调用 `store.save(settings, {preserveProvider:true})` 保留服务默认模型与 chain 的独立值；日常保存仍对齐链首项。
+
+## v1 PDF 显式入口
+
+扩展弹出页先 `pdf-status` 检查实际标签页；点「用 DualLens 打开此 PDF」后，`pdf-open` 在后台借当前标签页的 activeTab 权限匿名取回字节。
+沿用 30 秒、64 MiB 和签名检查；不向网页申请常驻权限。字节暂存扩展来源 IndexedDB（不进 sync），以随机一次性令牌打开阅读器；
+阅读器原子读取并删除，随即从地址栏移除令牌。未读取记录最多保留三份，五分钟后拒绝读取，下次写入清除过期记录。
+`pdf-status` / `pdf-open` 仅接受扩展自有页面发送者，忽略消息自带文件 URL。其他 `?file=` 来源先检查授权，缺少时由阅读器按钮手势调用 `requestOrigin`；本地文件仍可直接选择。

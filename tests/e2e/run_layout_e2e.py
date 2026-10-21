@@ -39,7 +39,9 @@ def quiet_typography(h):
       return b.fontSize===a.fontSize&&b.lineHeight===a.lineHeight&&b.textIndent===a.textIndent&&b.fontFamily.startsWith(a.fontFamily)&&b.fontFamily.includes('PingFang SC')&&b.fontStyle==='normal'&&b.borderLeftWidth==='0px'&&b.backgroundColor==='rgba(0, 0, 0, 0)'&&Math.abs(parseFloat(b.marginBlockStart)/parseFloat(b.fontSize)-.3)<.01;
     })"""), 'block inherits font, line height, indent; normal style, no decoration'
     assert h.js("""() => {const u=typeUnits.at(-1),cs=getComputedStyle(u.tEl);return Math.abs(parseFloat(cs.fontSize)/16-.92)<.01&&Math.abs(parseFloat(cs.marginInlineStart)/parseFloat(cs.fontSize)-.35)<.01&&getComputedStyle(u.tEl,'::before').content==='none'&&u.host.getBoundingClientRect().height===28} """), 'inline has thin spacing without separator or control growth'
-    assert h.js("""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');return contrastRatio(getComputedStyle(document.querySelector('#dark dl-t')).color.match(/[\\d.]+/g).map(Number),[18,24,32])>=4.5}""",f'chrome-extension://{h.ext_id}')
+    assert h.js("""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');
+      const c=document.createElement('canvas').getContext('2d');c.fillStyle=getComputedStyle(document.querySelector('#dark dl-t')).color;c.fillRect(0,0,1,1);
+      return contrastRatio([...c.getImageData(0,0,1,1).data].slice(0,3),[18,24,32])>=4.5}""",f'chrome-extension://{h.ext_id}')
     h.js("""() => {window.typeDraft=typeUnits.map(u=>({node:u.tEl,height:u.tEl.getBoundingClientRect().height,opacity:getComputedStyle(u.tEl).opacity}));for(const u of typeUnits){const f=document.createDocumentFragment();f.append(document.createTextNode(u.host.id==='short'?'查找':'这是同一节点中的中文终稿。'));typeInj.showTranslation(u,f,{mode:'bilingual',style:'muted',inlineMaxChars:24,stage:'final'})}}""")
     assert h.js("() => typeUnits.every((u,i)=>u.tEl===typeDraft[i].node&&getComputedStyle(u.tEl).opacity===typeDraft[i].opacity&&u.tEl.getBoundingClientRect().height===typeDraft[i].height)"), 'same node; no opacity or equal-line-height jump'
     out=e.E2E_ROOT/'v1'/'type'/'layout'
@@ -204,7 +206,7 @@ def visible_controls(h):
     assert h.js("() => document.querySelector('#icon').title.startsWith('【译】') && !document.querySelector('#button').hasAttribute('title') && document.querySelector('#button dl-t').textContent==='前往'"), 'icon attribute and inline control'
     assert h.js("() => document.querySelectorAll('#prose dl-t').length===1 && document.querySelector('#select').value==='eng'")
     assert h.js("() => getComputedStyle(document.querySelector('#label dl-t'),'::before').content==='none'")
-    assert h.js("() => document.querySelector('#label dl-t').style.getPropertyValue('--dl-fg')==='rgb(0,0,0)'"), 'accessible inherited colour'
+    assert h.js("() => document.querySelector('#label dl-t').style.getPropertyValue('--dl-fg')==='rgb(204,204,204)'"), 'low contrast source falls back to its original colour'
     h.js("() => {document.querySelector('#search').placeholder='Find books';document.querySelector('#later').hidden=false}")
     h.wait_js("() => document.querySelector('#search').placeholder==='【译】Find books' && document.querySelector('#later dl-t[data-dl-state=done]')")
     h.settings({'translation':{'mode':'mt','mt':{'engine':'mock'}}})
@@ -377,8 +379,13 @@ def coverage_round3(h):
     dark_before=h.js('() => document.body.outerHTML')
     h.js('() => round3.start()')
     h.wait_js("() => document.querySelector('.titleline dl-t[data-dl-state=done]')")
-    contrasts=h.js(r"""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');return [...document.querySelectorAll('dl-t')].filter(t=>t.dataset.dlState==='done').map(t=>({text:t.textContent,color:getComputedStyle(t).color,variable:t.style.getPropertyValue('--dl-fg'),ratio:contrastRatio(getComputedStyle(t).color.match(/[\d.]+/g).slice(0,3).map(Number),[13,17,23])}))}""",f'chrome-extension://{h.ext_id}')
-    assert all(c['ratio']>=4.5 for c in contrasts), 'actual dark translated text contrast >=4.5: '+str(contrasts)
+    contrasts=h.js(r"""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');
+      const c=document.createElement('canvas').getContext('2d'),rgb=color=>{c.fillStyle=color;c.fillRect(0,0,1,1);return [...c.getImageData(0,0,1,1).data].slice(0,3);};
+      return [...document.querySelectorAll('dl-t')].filter(t=>t.dataset.dlState==='done').map(t=>{
+        const color=rgb(getComputedStyle(t).color),source=rgb(getComputedStyle(t.parentElement).color);
+        return {text:t.textContent,color,source,ratio:contrastRatio(color,[13,17,23]),sourceRatio:contrastRatio(source,[13,17,23]),same:JSON.stringify(color)===JSON.stringify(source)};
+      });}""",f'chrome-extension://{h.ext_id}')
+    assert all(c['ratio']>=4.5 or c['sourceRatio']<4.5 and c['same'] for c in contrasts), 'accessible translation or exact low-contrast source fallback: '+str(contrasts)
     h.js('() => round3.stop()')
     restored=h.js('() => document.body.outerHTML')
     assert restored==dark_before, 'restore retains site-authored dark theme exactly'

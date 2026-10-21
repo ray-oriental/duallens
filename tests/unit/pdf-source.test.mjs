@@ -31,16 +31,23 @@ test('PDF explicit probes and opens validate the actual tab, not supplied docume
   const noop={addListener(){}}; const opened=[]; const updates=[];
   let tab={id:7,url:'https://example.org/a.pdf'};
   const api={runtime:{getURL:p=>'chrome-extension://test/'+p},tabs:{get:async()=>tab,query:async()=>[tab],create:async x=>opened.push(x),onRemoved:noop,onActivated:noop,onUpdated:noop},contextMenus:{update:async(...x)=>updates.push(x)}};
-  let count=0;
-  const entries=createPDFEntries(api,async(u,o)=>{count++;assert.equal(o.method,'HEAD');assert.equal(o.credentials,'omit');return new Response('',{headers:{'Content-Type':'application/pdf'}});});
-  assert.ok((await entries.handlers['pdf-status']({tabId:7})).available); assert.equal(count,0);
-  assert.ok((await entries.handlers['pdf-open']({tabId:7,url:'https://evil.org/'})).ok);
-  assert.equal(opened[0].url,'chrome-extension://test/pdf/viewer.html?file=https%3A%2F%2Fexample.org%2Fa.pdf');
+  let count=0, stored;
+  const sender={url:'chrome-extension://test/ui/popup.html'};
+  const entries=createPDFEntries(api,async(u,o)=>{
+    assert.equal(u,tab.url);assert.equal(o.credentials,'omit');assert.equal(o.redirect,'error');
+    if(o.method==='HEAD'){count++;return new Response(null,{headers:{'Content-Type':'application/pdf'}});}
+    return new Response(bytes);
+  },{async put(data){stored=data;return 'test-token';}});
+  assert.ok((await entries.handlers['pdf-status']({tabId:7},sender)).available); assert.equal(count,0);
+  assert.ok((await entries.handlers['pdf-open']({tabId:7,url:'https://evil.org/'},sender)).ok);
+  assert.deepEqual(stored,bytes);
+  assert.equal(opened[0].url,'chrome-extension://test/pdf/viewer.html?token=test-token');
+  assert.equal((await entries.handlers['pdf-open']({tabId:7},{url:'https://page.example/'})).ok,false);
   tab={id:7,url:'https://example.org/download'};
-  assert.ok((await entries.handlers['pdf-status']({tabId:7})).available); assert.equal(count,1);
-  assert.ok((await entries.handlers['pdf-status']({tabId:7})).available); assert.equal(count,2);
+  assert.ok((await entries.handlers['pdf-status']({tabId:7},sender)).available); assert.equal(count,1);
+  assert.ok((await entries.handlers['pdf-status']({tabId:7},sender)).available); assert.equal(count,2);
   tab={id:7,url:'chrome://settings/'};
-  assert.equal((await entries.handlers['pdf-open']({tabId:7})).ok,false);
+  assert.equal((await entries.handlers['pdf-open']({tabId:7},sender)).ok,false);
 });
 test('PDF entry installs no observation listeners and creates no startup requests', async () => {
   let calls=0; const opened=[];

@@ -19,6 +19,7 @@ import { VideoSubtitles } from './subtitles/controller.js';
 import { subtitleOptions } from './subtitles/track.js';
 import { clearToast } from './overlay.js';
 import { withSendConfirmation } from './confirmation.js';
+import { loadDeviceState } from '../shared/device-state.js';
 
 
 class App {
@@ -35,6 +36,7 @@ class App {
       return this.effectiveSettings;
     };
     this.platform = platform = withSendConfirmation(platform, this.getSettings);
+    platform.onDestinationConfirmed = () => this.#pushFrames();
     this.comics = new ComicTranslator({ platform, getSettings: this.getSettings });
     this.subtitles = new VideoSubtitles({ platform, getSettings: this.getSettings });
 
@@ -93,15 +95,19 @@ class App {
     this.#pushFrames();
   }
 
-  #frameState() {
-    return {active:this.translator.isActive(),settings:this.settings,
+  async #frameState() {
+    const signal=this.translator.activation?.signal;
+    if(this.translator.isActive() && !await this.platform.confirmSend({purpose:'page'},signal) && !signal?.aborted)this.translator.stop();
+    const {acked} = await loadDeviceState(this.platform.localArea);
+    return {active:this.translator.isActive(),settings:this.settings,confirmedDestinations:acked,
       context:{host:location.hostname,url:location.href,title:document.title}};
   }
 
   #pushFrames() {
     if(!this.platform.pushFrameState || this.pushing)return;
     this.pushing=true;
-    queueMicrotask(()=>{this.pushing=false;void this.platform.pushFrameState(this.#frameState());});
+    queueMicrotask(async()=>{this.pushing=false;const version=this.frameRevision=(this.frameRevision||0)+1;
+      const state=await this.#frameState();if(version===this.frameRevision)void this.platform.pushFrameState(state);});
   }
 
   // Attach every interaction module. `initial` runs the auto-translate decision as well.
@@ -201,12 +207,16 @@ class App {
     };
   }
 
+  pageMessage(msg) {
+    return new Promise(resolve => { if (!this.#onMessage(msg, resolve)) resolve(null); });
+  }
+
   #onMessage(msg, sendResponse) {
     if (!msg || typeof msg.type !== 'string') return false;
     switch (msg.type) {
       case 'frame-top-state':
-        sendResponse(this.#frameState());
-        return false;
+        this.#frameState().then(sendResponse);
+        return true;
       case P.MSG_GET_STATE:
         sendResponse(this.state());
         return false;
@@ -264,7 +274,7 @@ class App {
         this.store.save({ displayMode: s.displayMode === 'translation-only' ? 'bilingual' : 'translation-only' });
         break;
       case P.COMMANDS.TRANSLATE_INPUT:
-        if (s.input.enabled) this.input.translateFocused();
+        this.input.translateFocused();
         break;
       case P.COMMANDS.TOGGLE_HOVER:
         this.store.save({ hover: { enabled: !s.hover.enabled } });

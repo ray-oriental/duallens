@@ -28,7 +28,8 @@ test('replacement requires a measured failure of an eligible short interactive c
 test('translation colours soften only while contrast remains at least 4.5 on light and dark backgrounds', () => {
   for (const [fg,bg] of [[[20,20,20],[255,255,255]],[[230,230,230],[20,20,20]],[[150,150,150],[255,255,255]],[[90,90,90],[100,100,100]]]) {
     const rgb=translationColor(fg,bg).match(/\d+/g).map(Number);
-    assert.ok(contrastRatio(rgb,bg)>=4.5);
+    if(contrastRatio(fg,bg)>=4.5)assert.ok(contrastRatio(rgb,bg)>=4.5);
+    else assert.deepEqual(rgb,fg);
   }
 });
 test('six explicit styles resolve every former id including site-rule preferences', () => {
@@ -42,14 +43,15 @@ test('six explicit styles resolve every former id including site-rule preference
   assert.equal(normalizeStyle('unknown'),'muted');
   assert.equal(normalizeStyle(undefined),'muted');
 });
-test('high contrast preserves accessible source colour and repairs inaccessible colours', () => {
+test('high contrast preserves source colour; low contrast source falls back without changing its colour', () => {
   assert.equal(translationColor([30,60,90],[255,255,255],{moreContrast:true}),'rgb(30,60,90)');
   assert.equal(translationColor([230,220,210],[18,18,18],{moreContrast:true}),'rgb(230,220,210)');
   for(let n=0;n<=255;n+=15) for(const bg of [[255,255,255],[18,18,18],[100,120,140]]) {
     const fg=[n,Math.min(n+12,255),n];
     for(const moreContrast of [true,false]) {
       const rgb=translationColor(fg,bg,{moreContrast}).match(/\d+/g).map(Number);
-      assert.ok(contrastRatio(rgb,bg)>=4.5,`${fg} on ${bg}`);
+      if(contrastRatio(fg,bg)>=4.5)assert.ok(contrastRatio(rgb,bg)>=4.5,`${fg} on ${bg}`);
+      else assert.deepEqual(rgb,fg);
     }
   }
 });
@@ -76,4 +78,11 @@ test('PDF local byline preservation requires a nearby header affiliation', () =>
   preserveIdentities(prose,792);assert.ok(prose.every(x=>x.kind==='text'));
   const google=[b('Attention Is All You Need',40),b('Ashish Vaswani∗\nGoogle Brain\navaswani@google.com',100),b('Noam Shazeer∗',95),b('Google Brain',110),b('Illia Polosukhin∗ ‡ illia.polosukhin@gmail.com',380),b('Abstract',410)];
   preserveIdentities(google,792);assert.deepEqual(google.map(x=>x.kind),['text','identity','identity','identity','identity','text']);
+});
+
+test('muted uses 78 percent foreground, a measured background and source fallback',()=>{
+  assert.equal(translationColor([0,0,0],[255,255,255]),'rgb(56,56,56)');
+  assert.equal(translationColor([255,255,255],[0,0,0]),'rgb(199,199,199)');
+  assert.equal(translationColor([110,110,110],[255,255,255]),'rgb(110,110,110)');
+  assert.equal(translationColor([0,0,0],[255,255,255],{supportsMix:true}),'color-mix(in srgb, rgb(0,0,0) 78%, rgb(255,255,255))');
 });

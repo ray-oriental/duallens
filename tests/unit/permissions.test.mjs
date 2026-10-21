@@ -76,14 +76,17 @@ test('extension-owned PDF viewer is already a controller; other extension pages 
   url='chrome-extension://own/ui/options.html';
   assert.deepEqual(await injector.ensure(1),{ok:false,reason:'restricted'});
 });
-test('PDF missing origin permission declines without probing or opening and returns a requestable origin', async () => {
-  let calls=0;
-  const entries=createPDFEntries({permissions:{contains:async()=>false},tabs:{create:async()=>{calls++;}},
-    runtime:{getURL:path=>path}},async()=>{calls++;throw Error('must not fetch');});
-  const result=await entries.open({url:'https://files.example/read.pdf'});
-  assert.equal(result.ok,false);assert.equal(result.permissionRequired,'https://files.example/*');
-  assert.equal(result.error.code,'permission');assert.equal(calls,0);
+test('PDF toolbar fetch uses activeTab despite absent permanent origin access, and failed reads never open', async () => {
+  let reads=0,opened=0;
+  const api={runtime:{getURL:p=>'chrome-extension://test/'+p},permissions:{contains:async()=>false},
+    tabs:{get:async()=>({id:7,url:'https://files.example/a.pdf'}),create:async()=>{opened++;}}};
+  const sender={url:'chrome-extension://test/ui/popup.html'};
+  const handlers=createPDFEntries(api,async()=>{reads++;throw new Error('no activeTab');}).handlers;
+  assert.equal((await handlers['pdf-status']({tabId:7},sender)).available,true);
+  const result=await handlers['pdf-open']({tabId:7},sender);
+  assert.equal(result.ok,false);assert.equal(reads,1);assert.equal(opened,0);
 });
+
 test('cross-host captions fail with an actionable permission error before any network call', async () => {
   let calls=0;
   const handlers=createSubtitleHandlers({api:{permissions:{contains:async()=>false}},fetchImpl:async()=>{calls++;}});

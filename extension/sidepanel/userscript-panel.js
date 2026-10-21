@@ -33,7 +33,11 @@ export function createUserscriptMediaPanel(platform, { loadSettingsForm }) {
         entry.page.hidden = entry.id !== id; entry.button.setAttribute('aria-selected', String(entry.id === id));
       }
       const entry = pages.find(p => p.id === id);
-      if (!entry || mounted.has(id)) return;
+      if (!entry) return;
+      if (mounted.has(id)) {
+        if(id==='settings')await mounted.get(id)?.navigateGroup?.(platform.settingsGroup||'common');
+        return;
+      }
       mounted.set(id, null);
       try {
         const result = await entry.mount(entry.page, { store: platform.settingsStore, platform });
