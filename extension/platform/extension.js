@@ -31,7 +31,7 @@ export function createExtensionPlatform(api = globalThis.chrome) {
         try {
           const result = await one({ type: 'subtitle-track', id, url });
           if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-          if (!result.ok) throw new Error('字幕轨道读取失败');
+          if (!result.ok) throw new Error(result.error?.message || '字幕轨道读取失败');
           return result.data;
         } finally { signal?.removeEventListener('abort', cancel); }
       },

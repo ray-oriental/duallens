@@ -44,6 +44,24 @@ v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的�
 
 ## 2. 文件归属（并行开发时谁写哪里）
 
+### 按需注入与可选网站权限（v1 增量）
+
+扩展没有静态 `content_scripts`；固定主机权限仅覆盖内置翻译服务，网页访问以 `activeTab` 或可选 `<all_urls>` 为依据。
+扩展自有页面发送 `{type:'tab-ensure',tabId}`，后台返回 `{ok:true,injected:true}`，保证顶层内容控制器已经完成初始化；
+失败返回 `{ok:false,reason:'restricted'|'no-access'}`。网页内容脚本不能通过该消息注入其他标签页。
+同一标签页并发确保操作合并；loader 在隔离世界以 Promise 防重入。快捷键、右键路由同样先确保注入再发命令。
+
+后台在设置和 permissions.onAdded/onRemoved 后串行重算：拥有 `<all_urls>` 且至少一项常驻功能 / 自动规则开启时，注册
+`duallens-pages`，否则注销。自动字幕另有 `duallens-subtitles` MAIN/document_start 注册。动态脚本使用 `allFrames:true`
+与 `matchOriginAsFallback:true`（Chrome scripting API 没有静态 manifest 的 `match_about_blank` 字段），覆盖同源空白派生文档；
+同源子文档仍由现有顶层控制器处理。手动无广泛权限时只注入顶层，不注入跨域 frame。
+
+失去广泛授权时保存关闭 floatBall/selection/hover/input/frames/comics/subtitles，清空 autoTranslateLangs 与 always 列表，
+custom 中 page:always 改 default、交互 on 改 off；保留 never、路径、样式和服务设置。新增本机键
+`ui.permissionsRevoked: {features:string[]}` 供 UI 下次提示，显示后由 UI 清除。授权恢复不会自动恢复这些开关。
+漫画 canvas 注册与 CDN Referer 会话规则另行检查各匹配主机的权限。PDF 权限不足返回 `permissionRequired` 来源模式，
+UI 应在明确用户手势中请求该来源后重试；跨来源字幕同样返回 permission 错误，不从内容脚本自动弹权限提示。
+
 | 归属 | 路径 |
 | --- | --- |
 | interface maintainer | `docs/SPEC.md`、`extension/manifest.json`、`extension/shared/settings.js`、`extension/shared/protocol.js` |

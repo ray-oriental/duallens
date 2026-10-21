@@ -106,6 +106,12 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 
 ### iframe 增量（v0.5 开发中）
 
+v1 按需权限增量：扩展移除静态内容脚本和必需 `<all_urls>`。手动入口先使用 `activeTab` + `scripting` 确保顶层注入；
+跨域 frame 只由拥有可选广泛权限、且存在常驻功能 / 自动规则时的动态注册覆盖。注册使用 `allFrames:true` 与
+`matchOriginAsFallback:true`，后者是 Chrome 动态 API 中覆盖 about:blank/srcdoc 等派生文档的字段。
+`tab-ensure`、撤销设置回退及 UI 通知键见 [SPEC 按需注入](SPEC.md#按需注入与可选网站权限v1-增量)。
+用户脚本权限和启动包保持原契约，不引入扩展权限 API。下文旧静态 all_frames / 不新增主机声明由本段取代。
+
 扩展与用户脚本由顶层控制器递归发现同源 iframe（含无 src、about:blank、srcdoc），
 复用扫描、变更观察、Range 懒加载与恢复；frame 内临时注入内容 CSS，停止时移除。
 监听 load、DOM 变更和 frame 尺寸事件发现 Document/body 替换，以覆盖 document.open/write/close 的邮箱正文；扫描根不使用周期定时器。

@@ -18,7 +18,16 @@ export async function fetchImage(url, pageUrl, fetchImpl = fetch) {
   let raw=''; for (let i=0;i<bytes.length;i+=8192) raw+=String.fromCharCode(...bytes.subarray(i,i+8192));
   return { base64:btoa(raw), mime };
 }
+const TEXT = { permission: '请在弹出页开启图片文字并允许网站访问权限；跨站图片还需要允许其图片来源。' };
 export function createComicHandlers(api) {
+  async function permittedImage(url, pageUrl) {
+    const image = new URL(url), page = new URL(pageUrl);
+    // activeTab covers the initiating page origin; other image origins require an explicit grant.
+    if (image.origin !== page.origin && !(await api.permissions.contains({origins:[image.origin+'/*']}))) {
+      throw new Error(TEXT.permission);
+    }
+    return fetchImage(url, pageUrl);
+  }
   let creating;
   let active=0;
   const waiting=[];
@@ -67,10 +76,10 @@ export function createComicHandlers(api) {
           return { args:s.args,crop:s.crop,transform:s.transform,index:urls.indexOf(s.url) };
         });
         const images=[];
-        for (const url of urls) images.push(await fetchImage(url,pageUrl));
+        for (const url of urls) images.push(await permittedImage(url,pageUrl));
         return send({ type:'comic-ocr-local',images,slices,width:msg.width,height:msg.height,lang:msg.lang });
       }
-      return send({ type:'comic-ocr-local',...await fetchImage(msg.url,pageUrl),lang:msg.lang });
+      return send({ type:'comic-ocr-local',...await permittedImage(msg.url,pageUrl),lang:msg.lang });
       });
     },
     'comic-languages-list': () => send({ type:'comic-languages-list' }),

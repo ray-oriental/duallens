@@ -116,13 +116,18 @@ def manifest_refs(m: dict) -> list[str]:
     return sorted(set(refs))
 
 
-def stage_extension(run_dir: Path, source: Path | None = None) -> tuple[Path, list[str]]:
+def stage_extension(run_dir: Path, source: Path | None = None, *, fixture_hosts: bool = True) -> tuple[Path, list[str]]:
     dst = run_dir / "ext"
     src = (source or EXT_SRC).resolve()
     if not src.is_dir():
         raise ValueError(f"extension source directory does not exist: {src}")
     shutil.copytree(src, dst)
     manifest = json.loads((dst / "manifest.json").read_text(encoding="utf-8-sig"))
+    if fixture_hosts:
+        # Legacy interaction cases explicitly exercise passive features and cross-origin frames.
+        # Grant access in this disposable fixture only; never alter the release manifest.
+        manifest.setdefault('host_permissions', []).append('<all_urls>')
+        (dst / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
     missing: list[str] = []
     for rel in manifest_refs(manifest):
         path = Path(rel)
@@ -348,6 +353,13 @@ class Session:
         raise AssertionError(f"timed out after {timeout:.0f}s waiting for {what}; last get-state: {shown}")
 
     def wait_ready(self, timeout: float = 20.0) -> None:
+        bridge = self.ctx.new_page()
+        try:
+            bridge.goto(f'chrome-extension://{self.ext_id}/ui/options.html')
+            result = bridge.evaluate("tabId => chrome.runtime.sendMessage({type:'tab-ensure',tabId})", self.tab_id)
+            check(result.get('ok'), f'tab-ensure failed: {result}')
+        finally:
+            bridge.close()
         end = time.time() + timeout
         last = None
         while time.time() < end:

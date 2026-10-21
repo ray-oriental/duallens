@@ -81,7 +81,7 @@ test('comic metadata validates CDN and same-site root Referer, and survives sett
 });
 test('image registry serializes updates and deletes only its owned session rules',async()=>{
   let settings={comics:{canvasSites:['*.pixiv.net']}},rules=[{id:1}],updates=0;
-  const api={runtime:{id:'a'.repeat(32)},declarativeNetRequest:{getSessionRules:async()=>rules,
+  const api={permissions:{contains:async()=>true},runtime:{id:'a'.repeat(32)},declarativeNetRequest:{getSessionRules:async()=>rules,
     updateSessionRules:async({removeRuleIds,addRules})=>{updates++;rules=rules.filter(r=>!removeRuleIds.includes(r.id)).concat(addRules);}}};
   const registry=createImageRegistry(api,async()=>settings);
   await Promise.all([registry.sync(),registry.sync()]);assert.equal(updates,1);assert.equal(rules[1].id,IMAGE_RULE_BASE);
@@ -136,7 +136,7 @@ test('canvas whitelist has no broad matches and disabled comics removes registra
   assert.equal(comicSiteMatches('evilpixiv.net',['*.pixiv.net']),false);
   for(const value of ['*','<all_urls>','https://pixiv.net/','pixiv.net:443','../x']) assert.throws(()=>comicSites([value]));
   let settings={comics:{enabled:true,canvasSites:['*.pixiv.net']}},current,registered=0,removed=0;
-  const api={scripting:{getRegisteredContentScripts:async()=>current?[current]:[],registerContentScripts:async scripts=>{current=scripts[0];registered++;},updateContentScripts:async scripts=>{current=scripts[0];},unregisterContentScripts:async()=>{current=null;removed++;}}};
+  const api={permissions:{contains:async()=>true},scripting:{getRegisteredContentScripts:async()=>current?[current]:[],registerContentScripts:async scripts=>{current=scripts[0];registered++;},updateContentScripts:async scripts=>{current=scripts[0];},unregisterContentScripts:async()=>{current=null;removed++;}}};
   const registry=createCanvasRegistry(api,async()=>settings);
   await registry.sync();await registry.sync();assert.equal(registered,1);assert.equal(current.world,'MAIN');assert.equal(current.runAt,'document_start');
   assert.deepEqual(current.matches,canvasMatches(settings));settings={comics:{enabled:false,canvasSites:['*.pixiv.net']}};await registry.sync();assert.equal(removed,1);
@@ -144,7 +144,7 @@ test('canvas whitelist has no broad matches and disabled comics removes registra
 test('comic transport gate bounds all-tab fetching/OCR concurrency to two and rejects subframes',async()=>{
   const originalFetch=globalThis.fetch;let active=0,peak=0;
   globalThis.fetch=async()=> {active++;peak=Math.max(active,peak);await new Promise(r=>setTimeout(r,5));active--;return new Response(new Uint8Array([1]),{headers:{'content-type':'image/png'}});};
-  const api={runtime:{getContexts:async()=>[{}],sendMessage:async()=>({ok:true,regions:[]})},offscreen:{createDocument:async()=>{}}};
+  const api={permissions:{contains:async()=>true},runtime:{getContexts:async()=>[{}],sendMessage:async()=>({ok:true,regions:[]})},offscreen:{createDocument:async()=>{}}};
   const handlers=createComicHandlers(api),sender={tab:{url:'https://page/'},url:'https://page/',frameId:0};
   try {
     await assert.rejects(handlers['comic-ocr']({lang:'eng',url:'https://image/'},{...sender,frameId:1}),/无效/);

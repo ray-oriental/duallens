@@ -210,7 +210,7 @@ def main():
     ext, missing = e2e.stage_extension(run, e2e.EXT_SRC); assert not missing
     manifest = json.loads((ext / 'manifest.json').read_text(encoding='utf-8'))
     (ext / 'input-test-instrument.js').write_text(ROOTS, encoding='utf-8')
-    manifest['content_scripts'].insert(0, {'matches': ['http://127.0.0.1/*'], 'js': ['input-test-instrument.js'], 'run_at': 'document_start'})
+    manifest.setdefault('content_scripts', []).insert(0, {'matches': ['http://127.0.0.1/*'], 'js': ['input-test-instrument.js'], 'run_at': 'document_start'})
     (ext / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
     total = failures = 0
     try:

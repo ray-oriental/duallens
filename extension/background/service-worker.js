@@ -28,6 +28,8 @@ import { createPDFEntries } from './pdf.js';
 import { registerSidePanelCommand } from './media.js';
 import { createSubtitleHandlers } from './subtitles.js';
 import { createFrameHandlers } from './frames.js';
+import { createTabInjector } from './injection.js';
+import { createPermissionRegistry } from './permissions.js';
 
 const queue = createQueue();
 const cache = createCache();
@@ -42,6 +44,10 @@ const handlers = createHandlers({
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
 Object.assign(handlers,createFrameHandlers(chrome));
+const tabInjector = createTabInjector(chrome);
+const permissionRegistry = createPermissionRegistry(chrome, getDefaultSettingsStore());
+handlers['tab-ensure'] = (msg, sender) => sender.url?.startsWith(chrome.runtime.getURL('')) ?
+  tabInjector.ensure(msg.tabId) : Promise.resolve({ ok: false, reason: 'no-access' });
 const imageRegistry=createImageRegistry(chrome,loadSettings);
 const comicHandlers=createComicHandlers(chrome);
 Object.assign(handlers,comicHandlers);
@@ -51,7 +57,7 @@ handlers['comic-ocr']=async(msg,sender)=> {
 };
 const pdfEntries = createPDFEntries(chrome);
 Object.assign(handlers, pdfEntries.handlers);
-Object.assign(handlers, createSubtitleHandlers());
+Object.assign(handlers, createSubtitleHandlers({ api: chrome }));
 const canvasRegistry=createCanvasRegistry(chrome,loadSettings);
 handlers['comic-canvas-sites-sync']=async()=> {await imageRegistry.sync();return canvasRegistry.sync();};
 handlers['open-sidepanel'] = async (_msg, sender) => {
@@ -61,9 +67,13 @@ handlers['open-sidepanel'] = async (_msg, sender) => {
     return { ok: true };
   } catch { return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } }; }
 };
-getDefaultSettingsStore().onChange(()=>{void canvasRegistry.sync().catch(()=>{});void imageRegistry.sync().catch(()=>{});});
-void canvasRegistry.sync().catch(()=>{});
-void imageRegistry.sync().catch(()=>{});
+function syncPermissions() {
+  return permissionRegistry.sync().then(() => Promise.all([canvasRegistry.sync(), imageRegistry.sync()]));
+}
+getDefaultSettingsStore().onChange(() => { void syncPermissions().catch(() => {}); });
+chrome.permissions.onAdded.addListener(() => { void syncPermissions().catch(() => {}); });
+chrome.permissions.onRemoved.addListener(() => { void syncPermissions().catch(() => {}); });
+void syncPermissions().catch(() => {});
 
 // A pending fetch alone does not stop Chrome from stopping an idle worker after ~30s; any
 // extension API call resets that timer, so poke one while work is in flight.
@@ -170,8 +180,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // ---- tab messaging, shortcuts, context menu ------------------------------------------------
 
-function sendToTab(tabId, message) {
+async function sendToTab(tabId, message) {
   if (tabId == null) return Promise.resolve(null);
+  if (!(await tabInjector.ensure(tabId)).ok) return null;
   return chrome.tabs.sendMessage(tabId, message, { frameId: 0 }).catch(() => null);
 }
 

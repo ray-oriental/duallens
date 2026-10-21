@@ -1,4 +1,5 @@
 // PDF entry points: explicit user actions, no upload or automatic redirection.
+const TEXT = { permission: '请先在弹出页允许此 PDF 来源；也可以下载后在阅读页选择本地文件。' };
 export function pdfURL(value) {
   try {
     const u = new URL(value);
@@ -40,12 +41,19 @@ export function createPDFEntries(api, fetchImpl = globalThis.fetch) {
   async function status(tab) {
     const url = pdfURL(tab?.url);
     if (!url) return { ok: true, available: false };
+    const origin = new URL(url).origin;
+    const needsPermission = new URL(url).protocol !== 'file:' && api.permissions &&
+      !(await api.permissions.contains({ origins: [origin + '/*'] }));
+    if (needsPermission) return { ok: true, available: hasPDFExtension(url), url,
+      permissionRequired: origin + '/*', message: TEXT.permission };
     if (hasPDFExtension(url)) return { ok: true, available: true, url };
     if (new URL(url).protocol === 'file:') return { ok: true, available: false };
     return { ok: true, available: await probePDFType(url, fetchImpl), url };
   }
   async function open(tab) {
     const r = await status(tab);
+    if (r.permissionRequired) return { ok: false, permissionRequired: r.permissionRequired,
+      error: { code: 'permission', message: TEXT.permission } };
     if (!r.available) return { ok: false, error: { message: '当前页面未确认是 PDF，请先打开 PDF 文件。' } };
     const path = 'pdf/viewer.html?file=' + encodeURIComponent(r.url);
     await api.tabs.create({ url: api.runtime.getURL(path) });

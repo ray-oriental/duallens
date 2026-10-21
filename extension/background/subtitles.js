@@ -3,7 +3,8 @@ import { readTimedtextResponse } from '../content/subtitles/observe.js';
 
 // Only cross-www/m caption GETs use worker transport to avoid content CORS.
 // This is deliberately not a general HTTP message endpoint.
-export function createSubtitleHandlers({ fetchImpl = (...args) => globalThis.fetch(...args) } = {}) {
+const TEXT = { permission: '跨站字幕需要来源权限；请在弹出页授权网站访问，或使用当前站点字幕。' };
+export function createSubtitleHandlers({ fetchImpl = (...args) => globalThis.fetch(...args), api } = {}) {
   const active = new Map();
   const keyFor = (msg, sender) => {
     if (sender?.tab?.id == null || sender.frameId !== 0 || typeof msg.id !== 'string' || !/^[\w-]{1,64}$/.test(msg.id)) return null;
@@ -16,6 +17,9 @@ export function createSubtitleHandlers({ fetchImpl = (...args) => globalThis.fet
       // same-document SPA navigation; tab.url describes the current video.
       const url = originalTrackURL(msg.url, sender?.tab?.url || sender?.url || '');
       if (!key || !url || active.size >= 16) return { ok: false, error: { code: 'config', message: '字幕轨道请求无效或过多' } };
+      if (api && !(await api.permissions.contains({ origins: [new URL(url).origin + '/*'] }))) {
+        return { ok: false, error: { code: 'permission', message: TEXT.permission } };
+      }
       active.get(key)?.abort();
       const controller = new AbortController(); active.set(key, controller);
       const timer = setTimeout(() => controller.abort(), 20000);

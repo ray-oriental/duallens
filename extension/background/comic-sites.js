@@ -22,7 +22,12 @@ export function createImageRegistry(api,getSettings) {
   let pending=Promise.resolve();
   return {sync() {
     const task=pending.then(async()=> {
-      const addRules=imageRefererRules(await getSettings(),api.runtime.id);
+      const candidates=imageRefererRules(await getSettings(),api.runtime.id);
+      const addRules=[];
+      for(const rule of candidates) {
+        const host=rule.condition.requestDomains[0];
+        if(await api.permissions.contains({origins:[`https://${host}/*`]})) addRules.push(rule);
+      }
       const dnr=api.declarativeNetRequest;
       if(!dnr) return {ok:false,error:{code:'unsupported',message:'此浏览器无法设置图片 Referer'}};
       const current=(await dnr.getSessionRules()).filter(rule=>rule.id>=IMAGE_RULE_BASE && rule.id<IMAGE_RULE_BASE+IMAGE_RULE_LIMIT);
@@ -36,7 +41,9 @@ export function createCanvasRegistry(api,getSettings) {
   let pending=Promise.resolve();
   return { sync() {
     const task=pending.then(async()=> {
-      const matches=canvasMatches(await getSettings());
+      const candidates=canvasMatches(await getSettings());
+      const matches=[];
+      for(const pattern of candidates) if(await api.permissions.contains({origins:[pattern]})) matches.push(pattern);
       const [current]=await api.scripting.getRegisteredContentScripts({ids:[CANVAS_SCRIPT_ID]});
       if(!matches.length) {
         if(current) await api.scripting.unregisterContentScripts({ids:[CANVAS_SCRIPT_ID]});

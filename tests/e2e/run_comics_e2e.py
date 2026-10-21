@@ -216,9 +216,9 @@ def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
     h.js("() => document.querySelectorAll('figure').forEach(f=>{if(f.firstElementChild.id!=='eng')f.style.display='none'})")
     before=h.js('() => document.body.outerHTML')
     h.js("""() => {
-      const settings={version:2,provider:{active:'mock',chain:[]},comics:{language:'eng'},floatBall:{enabled:false}};
-      // The platform owner still has a v1 compatibility seam in this integration baseline.
-      const values={'duallens:sync':{settings,'settings.core':settings}};
+      const settings={version:3,provider:{active:'mock',chain:[]},translation:{mode:'llm',mt:{engine:'mock'}},comics:{enabled:true,language:'eng'},floatBall:{enabled:false}};
+      // Current v3 fixture opts into OCR explicitly and uses manager-private storage.
+      const values={'duallens:local':{settings,'settings.core':settings}};
       window.fixtureStorage=values;
       const commands={};window.fixtureCommands=commands;window.fixtureRoots=[];window.fixtureRequests=[];
       window.fixtureResourceReads=[];
@@ -241,7 +241,7 @@ def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
         }).catch(()=>req.onerror());return {abort:()=>ctrl.abort()};
       };
     }""")
-    if allow_sites: h.js("() => {window.fixtureStorage['duallens:sync'].settings.comics.canvasSites=['127.0.0.1']}")
+    if allow_sites: h.js("() => {window.fixtureStorage['duallens:local'].settings.comics.canvasSites=['127.0.0.1']}")
     if fallback: h.js("() => {window.GM_getResourceText=()=>{throw Error('Resource API unavailable')}}")
     h.page.add_script_tag(url=h.base+'/comics-bundle.js')
     wait_csp_safe(h,"() => !!window.fixtureCommands['翻译此页漫画']")
@@ -289,7 +289,7 @@ def comics_userscript_sites(h):
 def comics_sites(h):
     setup(h,'eng');h.open('comics/index.html')
     runner.check(h.js("() => CanvasRenderingContext2D.prototype.drawImage.toString().includes('[native code]')"),'ordinary extension page has a canvas hook')
-    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")
+    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")
     runner.check(len(scripts)==1 and set(scripts[0]['matches'])=={'http://*.pixiv.net/*','https://*.pixiv.net/*'},str(scripts))
     options=h.ctx.new_page();options.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
     options.locator('#save:enabled').wait_for()
@@ -298,14 +298,14 @@ def comics_sites(h):
         if options.locator('#status').inner_text()=='设置已保存': break
         time.sleep(.05)
     runner.check(options.locator('#status').inner_text()=='设置已保存','comic settings save failed: '+options.locator('#status').inner_text())
-    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")
+    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")
     runner.check(set(scripts[0]['matches'])=={'http://127.0.0.1/*','https://127.0.0.1/*'},str(scripts))
     options.locator('#comicsEnabled').uncheck();options.locator('#save').click()
     for _ in range(100):
         if options.locator('#status').inner_text()=='设置已保存': break
         time.sleep(.05)
     runner.check(options.locator('#status').inner_text()=='设置已保存','comic disable save failed: '+options.locator('#status').inner_text())
-    runner.check(h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")==[],'disabled comics kept registration')
+    runner.check(h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")==[],'disabled comics kept registration')
     options.close()
 
 @runner.case('comics_popup','Popup comic button sends the command and renders local bilingual results')
@@ -327,7 +327,7 @@ def comics_canvas(h):
     options=h.ctx.new_page();options.goto('chrome-extension://'+h.ext_id+'/ui/options.html')
     registration=options.evaluate("() => chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'})")
     runner.check(registration['ok'],'canvas registration failed');options.close()
-    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts()")
+    scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")
     runner.check(len(scripts)==1 and 'http://127.0.0.1/*' in scripts[0]['matches'],'registered site mismatch: '+str(scripts))
     h.open('comics/index.html')
     h.js("""async()=>{
