@@ -1,11 +1,14 @@
+import { BASE_CSS } from '../overlay.js';
+// Captions keep the video-caption convention (white text on translucent dark) but share the page UI's
+// typeface and radius tokens. The root also carries .dl-root so those tokens resolve inside this shadow root.
 const CSS = `
 :host { all:initial; pointer-events:none; }
 .captions { position:absolute; inset-inline:4%; bottom:12%; text-align:center; color:#fff;
-  font-family:"Segoe UI","Microsoft YaHei",sans-serif; line-height:1.35; font-weight:500; white-space:pre-wrap;
-  overflow-wrap:anywhere; text-shadow:0 1px 3px #000; pointer-events:none; }
+  font-family:var(--dl-font); line-height:1.4; font-weight:500; white-space:pre-wrap;
+  overflow-wrap:anywhere; text-shadow:0 1px 2px rgba(0,0,0,.6); pointer-events:none; }
 .captions.top { bottom:auto; top:8%; }
-.line { display:table; margin:2px auto; padding:3px 8px; background:rgba(8,8,8,.75); border-radius:3px; max-width:100%; }
-.source { opacity:.88; }
+.line { display:table; margin:4px auto; padding:4px 10px; background:rgba(0,0,0,.72); border-radius:6px; max-width:100%; }
+.source { color:rgba(255,255,255,.78); }
 `;
 
 export class SubtitleOverlay {
@@ -15,8 +18,8 @@ export class SubtitleOverlay {
     this.host.setAttribute('data-dl-subtitles', '');
     this.host.style.cssText = 'all:initial!important;position:absolute!important;inset:0!important;pointer-events:none!important;z-index:60!important;display:block!important;';
     const root = this.host.attachShadow({ mode: 'closed' });
-    const style = document.createElement('style'); style.textContent = CSS;
-    this.box = document.createElement('div'); this.box.className = 'captions';
+    const style = document.createElement('style'); style.textContent = BASE_CSS + CSS;
+    this.box = document.createElement('div'); this.box.className = 'captions dl-root';
     this.source = document.createElement('div'); this.source.className = 'line source'; this.source.dir = 'auto';
     this.target = document.createElement('div'); this.target.className = 'line target'; this.target.dir = 'auto';
     this.box.append(this.source, this.target); root.append(style, this.box);

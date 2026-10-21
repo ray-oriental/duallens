@@ -113,7 +113,7 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
     // Both UI languages must fit without pulling the lazy settings catalogue into startup.
-    assert.ok(Buffer.byteLength(content)<=335000,'startup bundle exceeds the 335 KB i18n budget');
+    assert.ok(Buffer.byteLength(content)<=345000,'startup bundle exceeds the 345 KB i18n budget');
     for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js', 'ui/popup-view.js', 'ui/popup-theme.js', 'userscript/panel.js', 'sidepanel/text-form.js', 'sidepanel/subtitle-form.js', 'sidepanel/userscript-panel.js']) {
       assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
     }

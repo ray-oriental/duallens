@@ -497,7 +497,7 @@
     "message": "Confirm sending"
   },
   "m42": {
-    "message": "Continue translating"
+    "message": "Continue"
   },
   "m43": {
     "message": "Change service"
@@ -535,7 +535,7 @@
     "message": "Translate / Show original"
   },
   "m4c": {
-    "message": "Translate this page"
+    "message": "Translate page"
   },
   "m4d": {
     "message": "Show original"
@@ -544,7 +544,7 @@
     "message": "More"
   },
   "m4f": {
-    "message": "Translation only"
+    "message": "Translation"
   },
   "m4g": {
     "message": "This site"
@@ -574,7 +574,7 @@
     "message": "Translate focused input"
   },
   "m4p": {
-    "message": "Floating button is off. You can enable it in the popup"
+    "message": "Floating button is off. Turn it on again in the popup"
   },
   "m4q": {
     "message": "Turn off hover translation"
@@ -1290,7 +1290,7 @@
     "message": "Floating button"
   },
   "mav": {
-    "message": "Edge shortcut button"
+    "message": "A translate button at the page edge"
   },
   "maw": {
     "message": "Selection translation"
@@ -1308,16 +1308,16 @@
     "message": "Input box translation"
   },
   "mb1": {
-    "message": "Press Space 3 times"
+    "message": "Press Space three times in a text field"
   },
   "mb2": {
-    "message": "Bilingual video subtitles"
+    "message": "Bilingual subtitles in the video player"
   },
   "mb3": {
     "message": "Image text"
   },
   "mb4": {
-    "message": "Read and translate images"
+    "message": "Recognize text in images on this device, then translate it"
   },
   "mb5": {
     "message": "Site access was not granted. The feature stays off."
@@ -1376,7 +1376,7 @@
     "message": "Failures are reported directly, without forwarding to free endpoints."
   },
   "mbh": {
-    "message": "Page text goes to $p1$$p2$.$p3$",
+    "message": "Page text is sent to $p1$$p2$.$p3$",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1471,9 +1471,6 @@
   },
   "mc0": {
     "message": "Could not register the comic site hook"
-  },
-  "mc1": {
-    "message": "Settings saved"
   },
   "mc2": {
     "message": "Language packs cannot be viewed on this platform"
@@ -1592,9 +1589,6 @@
   "md4": {
     "message": "Translation cache cleared"
   },
-  "md5": {
-    "message": "Most changes save automatically. AI services, site rules and the glossary use Save."
-  },
   "md6": {
     "message": "Could not read updated settings"
   },
@@ -1703,7 +1697,7 @@
     "message": "Getting started"
   },
   "mdw": {
-    "message": "Translate now with free Microsoft machine translation. No key required."
+    "message": "Free Microsoft machine translation works without a key."
   },
   "mdx": {
     "message": "Optionally add an AI service to refine machine translations in place. You can use OpenRouter free models or your own service."
@@ -1895,7 +1889,7 @@
     "message": "Page settings use the page method and fallback order. A specified service uses its AI model for this interaction only. Bilingual input uses a newline, or a space in single-line fields."
   },
   "mfo": {
-    "message": "Floating button side"
+    "message": "Floating button position"
   },
   "mfp": {
     "message": "Right"
@@ -2051,7 +2045,7 @@
     "message": "General"
   },
   "mh4": {
-    "message": "Enhancements"
+    "message": "More"
   },
   "mh5": {
     "message": "Site rules"
@@ -2159,19 +2153,13 @@
     "message": "Invalid site pattern or rules JSON. Example: example.com/docs/*"
   },
   "mi4": {
-    "message": "Site access was revoked. Related enhancements and automatic translation are off. You can enable them again when needed."
+    "message": "Site access was revoked, so related features and automatic translation are off. Turn them on again when needed."
   },
   "mi5": {
     "message": "Translate images on this page"
   },
-  "mi6": {
-    "message": "Not translated yet"
-  },
   "mi7": {
     "message": "This page cannot be translated"
-  },
-  "mi8": {
-    "message": "Connecting to this page…"
   },
   "mi9": {
     "message": "Translate into"
@@ -2179,20 +2167,8 @@
   "mia": {
     "message": "To"
   },
-  "mib": {
-    "message": "Engine"
-  },
   "mic": {
     "message": "Change"
-  },
-  "mid": {
-    "message": "This path only"
-  },
-  "mie": {
-    "message": "Rule saved. Never still allows manual translation."
-  },
-  "mif": {
-    "message": "All off by default"
   },
   "mig": {
     "message": "Skip"
@@ -2225,7 +2201,7 @@
     "message": "Free machine translation"
   },
   "miq": {
-    "message": "No account or key needed. Webpage text goes to Microsoft, then Google if Microsoft fails."
+    "message": "No account or key needed. Page text is sent to Microsoft, or Google if it fails."
   },
   "mir": {
     "message": "My own AI service"
@@ -2237,19 +2213,19 @@
     "message": "Ready"
   },
   "miu": {
-    "message": "Click \"Translate this page\", or press Alt+A."
+    "message": "Click Translate page, or press Alt+A."
   },
   "miv": {
     "message": "No site is translated automatically."
   },
   "miw": {
-    "message": "Other features are off by default. Turn them on in \"Enhancements\"."
+    "message": "Floating button, selection translation and the rest start off. Turn them on under More."
   },
   "mix": {
-    "message": "Phones have no toolbar button. Open DualLens from the Tampermonkey menu, or enable the floating button under Enhancements."
+    "message": "Phones have no toolbar button. Open DualLens from the Tampermonkey menu, or turn on the floating button under More."
   },
   "miy": {
-    "message": "Starting with 1.0, enhancements are off by default. Previously enabled features have been turned off. Enable them below when needed."
+    "message": "From 1.0 these features start off, so the ones you had on are now off. Turn them on below when needed."
   },
   "miz": {
     "message": "Got it"
@@ -2258,7 +2234,7 @@
     "message": "The operation did not finish. Try again later."
   },
   "mj1": {
-    "message": "Step $p1$ of 3",
+    "message": "$p1$/3",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -2710,7 +2686,7 @@
     "message": "Input box"
   },
   "polishSubtitlesShort": {
-    "message": "Subtitles"
+    "message": "Video subtitles"
   },
   "polishSelectionShort": {
     "message": "Selection"
@@ -2814,5 +2790,68 @@
   },
   "consentMicrosoftFallback": {
     "message": "DualLens will use Microsoft's free translator. Text on this page will be sent to Microsoft, and to Google if Microsoft fails."
+  },
+  "lookShortcut": {
+    "message": "$p1$ ($p2$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "lookHoverRow": {
+    "message": "Hover ($p1$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "lookLongPress": {
+    "message": "Long-press"
+  },
+  "lookSentTo": {
+    "message": "sent to $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "lookNoAI": {
+    "message": "No AI service added"
+  },
+  "lookLocal": {
+    "message": "text stays on this device"
+  },
+  "lookFreeMT": {
+    "message": "$p1$ (free)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "lookSentFallback": {
+    "message": "sent to $p1$, or $p2$ if it fails",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "lookFallbackShort": {
+    "message": "$p1$ as fallback",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
   }
 }

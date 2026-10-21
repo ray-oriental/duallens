@@ -13,13 +13,11 @@ dl-t.dl-s-blur{filter:blur(4px);}
 dl-t.dl-s-blur:hover,dl-t.dl-s-blur:focus-within{filter:none;}
 @media (hover:none){dl-t.dl-s-blur:active{filter:none;}}
 @media (prefers-contrast:more){dl-t{color:inherit!important;}}
-dl-t[data-dl-state="pending"]::after{content:"";display:inline-block;width:0.7em;height:0.7em;margin-left:0.35em;vertical-align:-0.08em;border-radius:50%;border:2px solid var(--dl-line);border-top-color:transparent;animation:dl-spin 0.8s linear infinite;}
-@keyframes dl-spin{to{transform:rotate(360deg);}
-}
-@media (prefers-reduced-motion:reduce){dl-t[data-dl-state="pending"]::after{animation:none;border-top-color:var(--dl-line);opacity:0.6;}
-}
-dl-r{display:inline-block;box-sizing:border-box;width:1.4em;height:1.4em;line-height:1.2em;text-align:center;font:normal normal 0.8em/1.2em system-ui,sans-serif;color:inherit;border:1px solid currentColor;border-radius:50%;cursor:pointer;user-select:none;text-decoration:none;}
-dl-r:hover{background:var(--dl-soft);}
+/* No per-paragraph spinner. A paragraph still waiting after 1.5 s (data-dl-wait, set by injector.markPending)
+   gets a quiet zero-width "…" after its text: it takes no space, so line breaks and height never change. */
+dl-t[data-dl-state="pending"][data-dl-wait]::after{content:"…";display:inline-block;width:0;overflow:visible;white-space:nowrap;text-indent:.25em;font-size:.85em;font-weight:400;opacity:.55;}
+dl-r{display:inline-block;box-sizing:border-box;width:1.4em;height:1.4em;line-height:1.4em;text-align:center;font:normal normal 0.9em/1.4em system-ui,sans-serif;color:inherit;opacity:.55;border-radius:4px;cursor:pointer;user-select:none;text-decoration:none;}
+dl-r:hover{opacity:1;background:var(--dl-soft);}
 dl-r:focus-visible{outline:2px solid currentColor;outline-offset:1px;}
 dl-o.dl-hide{display:none !important;}
 dl-o.dl-hide.dl-peek{display:inline !important;}

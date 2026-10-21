@@ -1,1 +1,3 @@
-body{margin:0;padding:16px;background:var(--dl-bg);color:var(--dl-text);font:14px/1.5 var(--dl-font)}h1{font-size:20px;margin:0 0 12px}summary{cursor:pointer;min-height:44px;padding:12px 0}
+body{margin:0;padding:16px 16px 32px;background:var(--dl-bg);color:var(--dl-text);font:400 14px/1.6 var(--dl-font)}
+h1{margin:0 0 12px;font-size:13px;font-weight:600;line-height:20px}
+#tools>.dl-segment{display:flex}

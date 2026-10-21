@@ -63,7 +63,8 @@ def main():
 
             h.ctx.route('https://**/*', provider)
             page.goto(f'chrome-extension://{h.ext_id}/ui/options.html')
-            page.locator('#status').filter(has_text='修改后').wait_for()
+            page.locator('[data-group="common"]').wait_for()
+            assert page.locator('#status').inner_text() == '', 'settings must not open with a self-describing autosave notice'
             assert page.locator('nav a').count() == 7
             assert calls == []
             for feature in ['floatEnabled','selectionEnabled','hoverEnabled','inputEnabled','subtitlesEnabled','comicsEnabled']:
@@ -94,6 +95,7 @@ def main():
             print('PASS instant_settings: language, style tile, enhancement and autoHide persisted without Save')
             page.locator('nav a[href="#ai"]').click()
             page.locator('[data-preset="openrouter"]').click()
+            page.locator('#provider-card #provider-hint').filter(has_text='填写密钥').wait_for()
             page.locator('#apiKey').fill('sk-test-not-real')
             page.click('#show-key')
             assert page.locator('#apiKey').get_attribute('type') == 'text'
@@ -106,8 +108,11 @@ def main():
             page.click('#test')
             page.locator('#status').filter(has_text='连接正常').wait_for()
             assert not h.sw_eval("async()=> (await chrome.storage.local.get('secrets')).secrets")
+            saves = page.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")
             page.click('#save')
-            page.locator('#status').filter(has_text='已保存').wait_for()
+            page.locator(f'#saved-toast[data-count]:not([data-count="{saves}"])').wait_for(state='attached')
+            assert page.locator('#saved-toast').inner_text() == '已保存' and '已保存' not in page.locator('#status').inner_text(), 'save feedback must be the title-row note only'
+            assert page.locator('#provider-hint').is_hidden(), 'in-form setup hint must clear after saving'
             result = h.sw_eval("async()=>({local:await chrome.storage.local.get(null),sync:await chrome.storage.sync.get(null)})")
             assert result['local']['secrets']['openrouter']['apiKey'] == 'sk-test-not-real'
             assert 'sk-test-not-real' not in json.dumps(result['sync'])
@@ -185,7 +190,7 @@ def main():
                 popup.wait_for_function("uiData.settings?.subtitles?.enabled===true")
                 popup.wait_for_timeout(100)
                 assert popup.locator('#feature-subtitles').is_checked()
-                popup.locator('input[name="本站"][value="always"]').check()
+                popup.select_option('#site-mode','always')
                 popup.locator('#site-path').wait_for()
                 assert popup.locator('.dl-popup').bounding_box()['height'] <= 600
                 popup.screenshot(path=str(artifact/f'popup-path-{theme}.png'))
@@ -244,11 +249,15 @@ def main():
             page.locator('nav a[href="#ai"]').click()
             page.locator('[data-preset=ollama]').click()
             page.locator('#localOnly').wait_for()
+            page.locator('#provider-card #provider-hint').filter(has_text='选择模型').wait_for()
             assert page.locator('#localOnly').is_checked()
             assert page.locator('#translationMode').input_value()=='llm'
             page.locator('#model').fill('fixture-local')
+            saves = page.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")
             page.click('#save')
-            page.locator('#status').filter(has_text='已保存').wait_for()
+            page.locator(f'#saved-toast[data-count]:not([data-count="{saves}"])').wait_for(state='attached')
+            assert page.locator('#saved-toast').inner_text() == '已保存' and '已保存' not in page.locator('#status').inner_text(), 'save feedback must be the title-row note only'
+            assert page.locator('#provider-hint').is_hidden(), 'in-form setup hint must clear after saving'
             assert h.sw_eval("async()=> (await chrome.storage.local.get('settings')).settings.translation.mode")=='llm'
             assert '只发送到你本机' in page.locator('#ai-destination').inner_text()
             page.screenshot(path=str(artifact/'settings-local-only.png'),full_page=True)

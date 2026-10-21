@@ -4,23 +4,31 @@ import { deepActiveElement } from '../content/util.js';
 const TEXT={settings:l10n('mh9'),popup:'DualLens',close:l10n('m44'),failed:l10n('mka')};
 
 const CSS = `
-.backdrop { position: fixed; inset: 0; background: #0006; pointer-events: auto; }
-.panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(960px,calc(100vw - 24px));
-  max-height: calc(100dvh - 24px); overflow: auto; padding: 20px; border: 1px solid var(--line);
-  border-radius: 14px; background: var(--bg); color: var(--fg); pointer-events: auto; box-shadow: var(--shadow); }
-.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-h2 { font-size: 18px; margin: 0; }
-button { min-height:44px; min-width:44px; font:inherit; cursor:pointer; }
-.panel { --bg:var(--dl-bg,#f6f6f7); --fg:var(--dl-text,#1c1c21); --fg2:var(--dl-text-2,#575762); --bg2:var(--dl-inset,#efeff1); --line:var(--dl-border,#e3e3e8); --shadow:var(--dl-shadow-3); background:var(--bg); }
-.backdrop { background:var(--dl-scrim,rgba(16,18,27,.48)); }
-.popup-panel { width:360px;padding:0; }
-.popup-panel>.head { padding:8px 12px 0; }
-.panel .settings-heading,.popup-panel .dl-popup>header strong,.popup-panel .dl-popup>header .dl-mark { display:none; }
-.popup-panel .dl-popup>header { justify-content:space-between; }
+.backdrop { position: fixed; inset: 0; background: var(--dl-scrim, rgba(0,0,0,.32)); pointer-events: auto; }
+.panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(960px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px); overflow: auto; padding: 0; border: 1px solid var(--dl-border, rgba(0,0,0,.08));
+  border-radius: 12px; background: var(--dl-bg, #fafaf9); color: var(--dl-text, #1c1c1e); pointer-events: auto;
+  box-shadow: var(--dl-shadow-3, 0 8px 24px rgba(0,0,0,.12)); font-family: var(--dl-font, system-ui, sans-serif); }
+.head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 8px 0 20px; background: var(--dl-bg, #fafaf9); }
+h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.head button { min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent;
+  color: var(--dl-text-3, #6e6f75); font: 400 20px/1 var(--dl-font, system-ui, sans-serif); cursor: pointer; }
+.head button:hover { color: var(--dl-text, #1c1c1e); }
+.head button:focus-visible { outline: 2px solid var(--dl-text, #1c1c1e); outline-offset: -4px; }
+.panel:not([data-keyboard]) :focus-visible { outline: none; }
+.panel .settings-heading, .popup-panel .dl-popup .dl-brand { display: none; }
+.panel .dl-settings { padding-top: 12px; }
+.popup-panel { width: 360px; }
+.popup-panel > .head { padding: 4px 4px 0 16px; }
+.popup-panel .dl-popup > .dl-head { justify-content: flex-end; }
 @media (max-width: 599px) {
- .panel { inset: 0; transform: none; width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0;
-   padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); }
- .popup-panel { inset:auto 0 0; width:100%;height:auto;max-height:90dvh;border-radius:16px 16px 0 0;padding:8px 0 calc(8px + env(safe-area-inset-bottom)); }
+ .panel { inset: 0; transform: none; width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0;
+   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+ .head { padding: 4px 4px 0 16px; }
+ .panel .dl-settings { padding-top: 4px; }
+ .popup-panel { inset: auto 0 0; width: 100%; height: auto; max-height: 90dvh; border-top: 1px solid var(--dl-border, rgba(0,0,0,.08));
+   border-radius: 12px 12px 0 0; }
 }
 `;
 
@@ -60,6 +68,8 @@ export function createSettingsPanel({ store, platform, mountForm, kind='settings
       const backdrop = node('div'); backdrop.className = 'backdrop'; backdrop.addEventListener('click', close);
       const panel = node('section'); panel.className = 'panel'; panel.setAttribute('role', 'dialog');
       panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', kind==='popup'?TEXT.popup:TEXT.settings);
+      // Rings mark keyboard focus only; the initial programmatic focus stays quiet until a key is pressed.
+      panel.addEventListener('keydown', () => { panel.dataset.keyboard = ''; }); panel.addEventListener('pointerdown', () => { delete panel.dataset.keyboard; });
       if(kind==='popup') panel.classList.add('popup-panel');
       const head = node('div'); head.className = 'head';
       const exit = node('button', '×'); exit.type = 'button'; exit.setAttribute('aria-label',TEXT.close); exit.addEventListener('click', close);

@@ -319,19 +319,21 @@ def comics_sites(h):
     options.locator('#save:enabled').wait_for()
     options.locator('a[href="#enhance"]').click()
     options.locator('#comicsSites').fill('127.0.0.1')
+    saves=options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")
     options.evaluate("document.querySelector('#settings-form').requestSubmit()")
     for _ in range(100):
-        if options.locator('#status').inner_text()=='设置已保存': break
+        if options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")>saves: break
         time.sleep(.05)
-    runner.check(options.locator('#status').inner_text()=='设置已保存','comic settings save failed: '+options.locator('#status').inner_text())
+    runner.check(options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")>saves and options.locator('#status').inner_text()=='','comic settings save failed: '+options.locator('#status').inner_text())
     scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")
     runner.check(set(scripts[0]['matches'])=={'http://127.0.0.1/*','https://127.0.0.1/*'},str(scripts))
     options.locator('#comicsEnabled').uncheck()
+    saves=options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")
     options.evaluate("document.querySelector('#settings-form').requestSubmit()")
     for _ in range(100):
-        if options.locator('#status').inner_text()=='设置已保存': break
+        if options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")>saves: break
         time.sleep(.05)
-    runner.check(options.locator('#status').inner_text()=='设置已保存','comic disable save failed: '+options.locator('#status').inner_text())
+    runner.check(options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")>saves and options.locator('#status').inner_text()=='','comic disable save failed: '+options.locator('#status').inner_text())
     runner.check(h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")==[],'disabled comics kept registration')
     options.close()
 

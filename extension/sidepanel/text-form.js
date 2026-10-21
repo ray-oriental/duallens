@@ -5,24 +5,41 @@ import { SHARED_CSS } from '../ui/theme.js';
 import { withSendConfirmation, confirmationCard } from '../content/confirmation.js';
 
 export const MEDIA_CSS = SHARED_CSS + `
-.dl-text,.dl-subtitle-settings { color:var(--dl-text,#1f2328); font:16px/1.5 var(--dl-font,system-ui); }
-.dl-text *, .dl-subtitle-settings * { box-sizing:border-box; }
-.dl-text label,.dl-subtitle-settings label { display:flex;flex-direction:column;gap:6px;margin:12px 0; }
-.dl-text input,.dl-text select,.dl-text textarea,.dl-subtitle-settings select,.dl-subtitle-settings input {
-  width:100%;min-height:44px;padding:8px;font:inherit;color:var(--dl-text,#1f2328);background:var(--dl-inset,#f6f8fa);
-  border:1px solid var(--dl-border-strong,#d1d9e0);border-radius:8px; }
-.dl-text .language-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dl-text .service-choices{margin:8px 0}.dl-text .engine-row{display:flex;align-items:center;gap:8px;font-size:13px;border-top:1px solid var(--dl-border);padding-top:12px}.dl-text .engine-row strong{flex:1;font-weight:400}.dl-text .privacy{font-size:12px;color:var(--dl-text-2)}.dl-text .engine-row button{padding:0 4px;border:0;background:none;font-size:13px;min-height:32px}.dl-text h2{font-size:16px}.dl-text .language-pair label{min-width:0}.dl-text select{max-width:100%;min-width:0}
-@media(pointer:coarse){.dl-text .engine-row button{min-height:44px}}
-.dl-text textarea { min-height:160px;resize:vertical; }
-.dl-text button,.dl-subtitle-settings button,.dl-media-tabs button { min-height:44px;min-width:44px;padding:8px 12px;
-  font:inherit;border:1px solid var(--dl-border-strong,#d1d9e0);border-radius:8px;color:var(--dl-text,#1f2328);background:var(--dl-inset,#f6f8fa);cursor:pointer; }
-.dl-text .actions,.dl-media-tabs { display:flex;gap:8px;flex-wrap:wrap; }
-.dl-text output { display:block;white-space:pre-wrap;overflow-wrap:anywhere;min-height:100px;padding:12px 0; }
-.dl-text .text-status,.dl-subtitle-settings p { color:var(--dl-text-2,#59636e);overflow-wrap:anywhere; }
-.dl-text h2,.dl-subtitle-settings h2 { font-size:18px;margin:14px 0; }
-.dl-text button[type=submit],.dl-media-tabs button[aria-selected=true] { background:var(--dl-accent,#4263eb);color:var(--dl-on-accent,#fff); }
-.dl-media-tabs { margin:12px 0;border-bottom:1px solid var(--dl-border-strong,#d1d9e0);padding-bottom:12px; }
-.dl-media-page[hidden] { display:none!important; }
+.dl-text,.dl-subtitle-settings{color:var(--dl-text);font:400 14px/1.6 var(--dl-font)}
+.dl-text *,.dl-subtitle-settings *{box-sizing:border-box}
+.dl-media-page{margin-top:16px}
+.dl-text h2,.dl-subtitle-settings h2{margin:0 0 12px;font-size:13px;font-weight:600;line-height:20px}
+.dl-text h2:first-child{display:none}
+.dl-text label,.dl-subtitle-settings label{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;color:var(--dl-text-2);font-size:12.5px}
+.dl-text :is(input,select,textarea),.dl-subtitle-settings :is(input,select){width:100%;min-width:0;max-width:100%;color:var(--dl-text);font-size:14px}
+.dl-text .language-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dl-text .language-pair label{min-width:0}
+.dl-text textarea{min-height:160px;resize:vertical;line-height:1.6}
+.dl-text button[type=submit]{min-width:96px;background:var(--dl-accent);border-color:var(--dl-accent);color:var(--dl-on-accent)}
+.dl-text button[type=submit]:hover:not(:disabled){background:var(--dl-accent);opacity:.9}
+.dl-text .text-status,.dl-subtitle-settings p{margin:8px 0 0;color:var(--dl-text-3);font-size:12.5px;overflow-wrap:anywhere}
+.dl-text .text-status:empty{display:none}
+.dl-text h2:not(:first-child){margin-top:24px;padding-top:16px;border-top:1px solid var(--dl-border);color:var(--dl-text-2);font-weight:500;font-size:12.5px}
+.dl-text output{display:block;min-height:72px;padding:0 0 4px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.7}
+.dl-text .actions{display:flex;gap:4px;margin:4px 0 0 -4px}
+.dl-text .actions button{min-height:28px;padding:0 4px;border-color:transparent;background:transparent;color:var(--dl-text-2);font-weight:400}
+.dl-text .actions button:hover:not(:disabled){background:transparent;color:var(--dl-text);text-decoration:underline;text-underline-offset:3px}
+.dl-text .service-choices{margin:0 0 12px}
+.dl-text .service-choices>summary{color:var(--dl-text-2);font-size:13px}
+.dl-text .service-choices label{margin-top:8px}
+.dl-text .service-choices .actions{margin:0 0 4px}
+.dl-text .engine-disclosure{margin-top:20px;padding-top:12px;border-top:1px solid var(--dl-border)}
+.dl-text .engine-line{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0;color:var(--dl-text-3);font-size:12px}
+.dl-text .engine-line .dl-text-button{flex:none;margin-right:-4px;font-size:12px}
+.dl-subtitle-settings>button{margin:12px 8px 0 0}
+.dl-subtitle-settings>button:first-of-type{background:var(--dl-accent);border-color:var(--dl-accent);color:var(--dl-on-accent)}
+.dl-subtitle-settings>button:first-of-type:hover:not(:disabled){background:var(--dl-accent);opacity:.9}
+.dl-subtitle-settings .subtitle-file-status{margin-top:12px;color:var(--dl-text-2)}
+.dl-subtitle-settings .subtitle-file-status:empty,.dl-subtitle-settings .subtitle-preview:empty{display:none}
+.dl-subtitle-settings .subtitle-preview{max-height:320px;overflow:auto;margin:12px 0 0;padding:12px 14px;border:1px solid var(--dl-border);border-radius:var(--dl-r-sm);font:12px/1.6 var(--dl-font-mono)}
+.dl-media-page[hidden]{display:none!important}
+@media(pointer:fine){.dl-text :is(input,select,textarea),.dl-subtitle-settings :is(input,select){font-size:13px}.dl-text :is(input,select),.dl-subtitle-settings :is(input,select){min-height:32px}.dl-text :where(button),.dl-subtitle-settings :where(button){min-height:32px}.dl-segment span{min-height:26px}}
+@media(pointer:coarse){.dl-text .engine-line .dl-text-button,.dl-text .actions button{min-height:44px}}
 `;
 
 export function element(tag, text) {

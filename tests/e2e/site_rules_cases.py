@@ -64,15 +64,15 @@ def extension_case(h):
     # A tab-opened popup is otherwise its own active tab. Resolve the actual fixture tab.
     popup.add_init_script(f"chrome.tabs.query = async () => [await chrome.tabs.get({h.tab_id})]")
     popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
-    popup.locator('#onboard-skip, input[name="本站"]').first.wait_for(state='attached')
+    popup.locator('#onboard-skip, #site-mode').first.wait_for(state='attached')
     if popup.locator('#onboard-skip').count():
         popup.click('#onboard-skip')
-    popup.locator('input[name="本站"][value="always"]').wait_for(state='attached')
-    popup.locator('input[name="本站"][value="always"]:checked').wait_for(state='attached')
+    popup.locator('#site-mode').wait_for(state='attached')
+    popup.wait_for_function("document.querySelector('#site-mode')?.value==='always'")
     popup.locator('#site-path').check()
-    popup.locator('input[name="本站"][value="never"]').check()
+    popup.select_option('#site-mode', 'never')
     h.wait_state(lambda s: s['dormant'], 10, 'popup path rule applied')
-    assert popup.locator('input[name="本站"][value="never"]').is_checked()
+    assert popup.locator('#site-mode').input_value() == 'never'
     assert popup.locator('#toggle').is_enabled(), 'never popup blocked manual translation'
     popup.click('#toggle'); h.wait_units(['#p-plain'])
     popup.close()
@@ -95,8 +95,10 @@ def userscript_case(page, base):
         input.value=value; input.dispatchEvent(new Event('input',{bubbles:true}));
       }
     }""")
+    saves = page.evaluate("Number(__platformFixture.elements('#saved-toast')[0].dataset.count||0)")
     click_shadow(page, '#site-rule-add')
-    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent==='设置已保存')")
+    page.wait_for_function(f"Number(__platformFixture.elements('#saved-toast')[0].dataset.count||0)>{saves}")
+    assert page.evaluate("__platformFixture.elements('#status').every(e=>e.textContent==='')"), 'site rule save reported an error'
     saved=page.evaluate("__platformFixture.data('duallens:local')['settings.sites'].siteRules")
     assert saved == rules(), 'mobile editor changed path or feature fields'
     page.keyboard.press('Escape')

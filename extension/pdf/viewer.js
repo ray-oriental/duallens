@@ -126,7 +126,7 @@ function initialView() {
 }
 
 // ---- floating ball -------------------------------------------------------------------------
-const floating = createOverlay(`.pdf-ball{position:fixed;right:max(6px,env(safe-area-inset-right));top:60vh;width:44px;height:44px;border:0;border-radius:50%;background:linear-gradient(135deg,#4263eb,#20c997);box-shadow:0 2px 10px #0004;cursor:pointer;pointer-events:auto;touch-action:none}.pdf-ball svg{width:22px;height:22px}.pdf-ball:disabled{opacity:.4}.pdf-ball[aria-pressed=true]{outline:2px solid #20c997;outline-offset:3px}`);
+const floating = createOverlay(`.pdf-ball{position:fixed;right:max(6px,env(safe-area-inset-right));top:60vh;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--bg);color:var(--fg2);box-shadow:var(--dl-pop);cursor:pointer;pointer-events:auto;touch-action:none}.pdf-ball svg{width:18px;height:18px}.pdf-ball:hover{color:var(--fg)}.pdf-ball:disabled{opacity:.4}.pdf-ball[aria-pressed=true]{color:var(--fg)}.pdf-ball[aria-pressed=true]::after{content:"";position:absolute;top:8px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--fg)}`);
 const ball = document.createElement('button'); ball.className = 'pdf-ball'; ball.type = 'button';
 ball.setAttribute('aria-label', l10n('m6s')); ball.title = l10n('m6t');
 ball.append(lensIcon(true)); floating.el.append(ball);

@@ -1,53 +1,93 @@
 /* Shared controls. Keep surface-specific layout in its owning module. */
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-.dl-theme { color:var(--dl-text); background:var(--dl-bg); font:var(--dl-fs-md)/1.5 var(--dl-font); }
-button,input,select,textarea { font:inherit; color:inherit; }
-button { cursor:pointer; }
-button:disabled { opacity:.55; cursor:default; }
-button,.dl-button { min-height:36px; padding:6px 12px; border:1px solid var(--dl-border-strong); border-radius:var(--dl-r-sm); background:var(--dl-surface); color:var(--dl-text); }
-button:hover:not(:disabled) { background:var(--dl-inset); }
-button.primary,.dl-primary { background:var(--dl-accent); border-color:var(--dl-accent); color:var(--dl-on-accent); font-weight:600; }
-button.primary:hover:not(:disabled),.dl-primary:hover:not(:disabled) { background:var(--dl-accent-hover); }
-.dl-hero { min-height:40px; width:100%; font-weight:600; }
-button.dl-text-button { border-color:transparent; background:transparent; color:var(--dl-text-2); padding:4px 8px; }
-button.dl-danger { color:var(--dl-danger); border-color:var(--dl-danger); }
-input:not([type=checkbox]):not([type=radio]),select,textarea { min-height:36px; max-width:100%; padding:6px 10px; border:1px solid var(--dl-border-strong); border-radius:var(--dl-r-sm); background:var(--dl-surface); color:var(--dl-text); }
-select { cursor:pointer; }
-textarea { resize:vertical; min-height:100px; }
-input::placeholder,textarea::placeholder { color:var(--dl-text-3); }
-:is(button,input,select,textarea,a,summary,[tabindex]):focus-visible { outline:2px solid var(--dl-accent); outline-offset:2px; }
-input[type=checkbox][role=switch] { appearance:none; flex:none; width:34px; height:20px; min-height:20px; border:1.5px solid var(--dl-border-strong); border-radius:var(--dl-r-pill); background:transparent; position:relative; cursor:pointer; margin:0; }
-input[type=checkbox][role=switch]::before { content:''; position:absolute; width:12px; height:12px; top:2.5px; left:3px; border-radius:50%; background:var(--dl-border-strong); transition:transform var(--dl-dur-1) var(--dl-ease); }
-input[type=checkbox][role=switch]:checked { background:var(--dl-accent); border-color:var(--dl-accent); }
-input[type=checkbox][role=switch]:checked::before { background:var(--dl-on-accent); transform:translateX(13px); }
-.dl-segment { display:flex; gap:2px; padding:2px; margin:0; border:0; border-radius:10px; background:var(--dl-inset); }
-.dl-segment label { position:relative; display:flex; flex:1; min-width:0; cursor:pointer; }
-.dl-segment input { position:absolute; opacity:0; width:1px; height:1px; }
-.dl-segment span { display:flex; align-items:center; justify-content:center; min-height:28px; width:100%; padding:2px 8px; border-radius:var(--dl-r-sm); white-space:nowrap; font-size:13px; }
-.dl-segment input:checked + span { background:var(--dl-raised); box-shadow:var(--dl-shadow-1); outline:1px solid var(--dl-accent); font-weight:600; }
-.dl-segment input:focus-visible + span { outline:2px solid var(--dl-accent); outline-offset:2px; }
-.dl-card { background:var(--dl-surface); border:1px solid var(--dl-border); border-radius:var(--dl-r-md); padding:16px; }
-.dl-row { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--dl-border); }
-.dl-row:last-child { border-bottom:0; }
-.dl-row small,.dl-hint,.hint { color:var(--dl-text-2); font-size:13px; }
-.dl-radio-card { position:relative; display:flex; gap:8px; padding:12px; border:1px solid var(--dl-border-strong); border-radius:var(--dl-r-md); cursor:pointer; background:var(--dl-surface); }
-.dl-radio-card:has(input:checked) { border:2px solid var(--dl-accent); background:var(--dl-accent-soft); padding:11px; }
-.dl-radio-card input[type=radio] { accent-color:var(--dl-accent); width:16px; height:16px; min-width:16px; min-height:16px; margin:2px 0; flex:none; }
-.dl-radio-card small { display:block; color:var(--dl-text-2); }
-.dl-actions,.actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-.dl-notice { padding:12px; background:var(--dl-surface); border-radius:var(--dl-r-md); box-shadow:var(--dl-shadow-2); color:var(--dl-text-2); }
-.dl-status { color:var(--dl-text-2); font-size:13px; overflow-wrap:anywhere; }
-.dl-warn { color:var(--dl-warn); }
-.dl-ok { color:var(--dl-ok); }
-details > summary { cursor:pointer; padding:8px 0; color:var(--dl-text-2); min-height:36px; }
-kbd { color:var(--dl-text); background:var(--dl-inset); border:1px solid var(--dl-border); border-radius:var(--dl-r-xs); padding:0 4px; font:12px/1.4 var(--dl-font); }
-a { color:var(--dl-accent); }
-@media (max-width:719px), (pointer:coarse) {
-  button,input:not([type=checkbox]):not([type=radio]),select,textarea,summary { min-height:44px; }
-  input:not([type=checkbox]):not([type=radio]),select,textarea { font-size:16px; }
-  .dl-segment span { min-height:40px; }
-  .dl-row { min-height:56px; }
+.dl-theme { color: var(--dl-text); background: var(--dl-bg); font: 400 14px/1.6 var(--dl-font); font-variant-numeric: tabular-nums; }
+:where(button, input, select, textarea) { font: inherit; color: inherit; letter-spacing: inherit; }
+button { cursor: pointer; }
+button, .dl-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 12px; border: 1px solid var(--dl-border-strong); border-radius: var(--dl-r-sm); background: transparent; color: var(--dl-text); font-size: 13px; font-weight: 500; line-height: 1.25; text-align: center; transition: opacity var(--dl-dur-1) var(--dl-ease); }
+button:hover:not(:disabled), .dl-button:hover { background: var(--dl-inset); }
+button:active:not(:disabled), .dl-button:active { background: var(--dl-fill-2); }
+button:disabled { opacity: .4; cursor: default; }
+button.primary, .dl-primary { background: var(--dl-accent); border-color: var(--dl-accent); color: var(--dl-on-accent); }
+button.primary:hover:not(:disabled), .dl-primary:hover { background: var(--dl-accent); opacity: .9; }
+button.primary:active:not(:disabled), .dl-primary:active { background: var(--dl-accent); opacity: .82; }
+.dl-hero { width: 100%; min-height: 34px; }
+button.dl-text-button { min-height: 0; padding: 2px 4px; border-color: transparent; background: transparent; color: var(--dl-text-2); font-weight: 400; }
+button.dl-text-button:is(:hover, :active):not(:disabled) { background: transparent; color: var(--dl-text); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+button.dl-danger { color: var(--dl-danger); }
+input:where(:not([type=checkbox], [type=radio], [type=range], [type=file])), select, textarea { min-height: 32px; max-width: 100%; padding: 5px 10px; border: 1px solid var(--dl-border-strong); border-radius: var(--dl-r-xs); background: var(--dl-surface); color: var(--dl-text); font-size: 13px; line-height: 20px; }
+select { cursor: pointer; }
+/* ▾ drawn with two hard-edged triangles: no image request, so page CSP cannot strip it from the userscript UI. */
+select:not([multiple]) { appearance: none; padding-right: 28px; background-image: linear-gradient(45deg, transparent 50%, var(--dl-text-3) 50%), linear-gradient(135deg, var(--dl-text-3) 50%, transparent 50%); background-position: right 15px center, right 11px center; background-size: 4px 4px, 4px 4px; background-repeat: no-repeat; }
+select[multiple] { padding: 4px; }
+textarea { resize: vertical; min-height: 96px; line-height: 1.55; }
+input::placeholder, textarea::placeholder { color: var(--dl-text-3); opacity: 1; }
+input[type=file] { max-width: 100%; color: var(--dl-text-2); font-size: 13px; }
+input[type=file]::file-selector-button { margin-right: 10px; min-height: 32px; padding: 0 12px; border: 1px solid var(--dl-border-strong); border-radius: var(--dl-r-sm); background: transparent; color: var(--dl-text); font: inherit; font-weight: 500; cursor: pointer; }
+input[type=range] { accent-color: var(--dl-accent); }
+input[type=checkbox]:not([role=switch]) { width: 16px; height: 16px; margin: 0; accent-color: var(--dl-accent); }
+:focus:not(:focus-visible) { outline: none; }
+:is(button, a, summary, [tabindex], input[type=checkbox], input[type=radio], input[type=file]):focus-visible { outline: 2px solid var(--dl-text); outline-offset: 2px; }
+:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea):focus-visible { outline: none; border-color: var(--dl-text-2); box-shadow: inset 0 0 0 1px var(--dl-text-2); }
+input[type=checkbox][role=switch] { appearance: none; flex: none; position: relative; width: 28px; height: 16px; min-height: 16px; margin: 0; padding: 0; border: 0; border-radius: 8px; background: var(--dl-fill-2); cursor: pointer; }
+input[type=checkbox][role=switch]::before { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--dl-knob); box-shadow: var(--dl-knob-shadow); transition: transform var(--dl-dur-1) var(--dl-ease); }
+input[type=checkbox][role=switch]:checked { background: var(--dl-accent); }
+input[type=checkbox][role=switch]:checked::before { background: var(--dl-on-accent); box-shadow: none; transform: translateX(12px); }
+input[type=checkbox][role=switch]:disabled { opacity: .4; cursor: default; }
+input[type=radio] { appearance: none; flex: none; width: 16px; height: 16px; min-width: 16px; min-height: 16px; margin: 0; padding: 0; border: 1.5px solid var(--dl-text-3); border-radius: 50%; background: transparent; cursor: pointer; transition: border-width var(--dl-dur-1) var(--dl-ease); }
+input[type=radio]:checked { border: 5px solid var(--dl-text); }
+input[type=radio]:disabled { opacity: .4; cursor: default; }
+.dl-segment { display: inline-flex; gap: 2px; min-inline-size: 0; margin: 0; padding: 2px; border: 0; border-radius: var(--dl-r-sm); background: var(--dl-inset); }
+.dl-segment label { position: relative; display: flex; flex: 1 1 auto; min-width: 0; cursor: pointer; }
+.dl-segment input[type=radio] { position: absolute; width: 1px; height: 1px; min-width: 0; min-height: 0; margin: 0; border: 0; opacity: 0; }
+.dl-segment span { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 26px; padding: 0 10px; border-radius: var(--dl-r-xs); color: var(--dl-text-2); font-size: 13px; line-height: 1.2; white-space: nowrap; }
+.dl-segment label:hover span { color: var(--dl-text); }
+.dl-segment input:checked + span { background: var(--dl-selected); box-shadow: 0 0 0 1px var(--dl-border); color: var(--dl-text); font-weight: 500; }
+.dl-segment input:focus-visible + span { outline: 2px solid var(--dl-text); outline-offset: 1px; }
+.dl-segment input:disabled + span { opacity: .4; cursor: default; }
+.dl-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; }
+.dl-row + .dl-row { border-top: 1px solid var(--dl-border); }
+.dl-row small, .dl-hint, .hint { color: var(--dl-text-3); font-size: 12px; line-height: 1.5; }
+.dl-choice, .dl-radio-card { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: var(--dl-r-sm); cursor: pointer; }
+.dl-choice:has(input:checked), .dl-radio-card:has(input:checked) { background: var(--dl-inset); }
+.dl-choice input[type=radio], .dl-radio-card input[type=radio] { margin-top: 2px; }
+.dl-choice small, .dl-radio-card small { display: block; margin-top: 2px; color: var(--dl-text-3); font-size: 12px; line-height: 1.5; }
+.dl-actions, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dl-notice { margin: 0; color: var(--dl-text-2); font-size: 12px; line-height: 1.5; }
+.dl-notice.dl-confirmation { position: fixed; z-index: 10; right: 12px; bottom: 12px; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 14px 16px; border: 1px solid var(--dl-border); border-radius: var(--dl-r-md); background: var(--dl-surface); box-shadow: var(--dl-shadow-2); color: var(--dl-text); font-size: 13px; line-height: 1.5; text-align: left; }
+.dl-notice.dl-confirmation > p { margin: 0 24px 10px 0; overflow-wrap: anywhere; white-space: pre-line; }
+.dl-confirmation details { margin: 0 0 12px; }
+.dl-confirmation details > summary { min-height: 0; padding: 0; color: var(--dl-text-2); font-size: 12px; }
+.dl-notice.dl-confirmation details p { margin: 6px 0 0; color: var(--dl-text-2); font-size: 12px; overflow-wrap: anywhere; white-space: pre-line; }
+.dl-confirmation .actions { justify-content: flex-end; gap: 12px; }
+.dl-confirmation .actions button:not(.primary) { min-height: 30px; padding: 0 4px; border-color: transparent; background: transparent; color: var(--dl-text-2); font-weight: 400; }
+.dl-confirmation .actions button:not(.primary):hover { color: var(--dl-text); text-decoration: underline; text-underline-offset: 3px; }
+.dl-confirmation .actions .primary { min-height: 30px; }
+.dl-confirmation .close { position: absolute; top: 8px; right: 8px; width: 24px; min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--dl-text-3); font-size: 16px; font-weight: 400; line-height: 1; }
+.dl-confirmation .close:hover { background: transparent; color: var(--dl-text); }
+.dl-status { color: var(--dl-text-2); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.dl-warn { color: var(--dl-warn); }
+.dl-ok { color: var(--dl-ok); }
+details > summary { width: fit-content; padding: 6px 0; color: var(--dl-text-2); font-size: 13px; cursor: pointer; }
+details > summary::marker { color: var(--dl-text-3); font-size: 10px; }
+details > summary:hover { color: var(--dl-text); }
+kbd { padding: 0 4px; border: 1px solid var(--dl-border-strong); border-radius: 4px; color: var(--dl-text-2); font: 12px/1.4 var(--dl-font); }
+a { color: var(--dl-text); text-decoration: underline; text-decoration-color: var(--dl-border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-color: currentColor; }
+@media (max-width: 719px), (pointer: coarse) {
+  button, input:where(:not([type=checkbox], [type=radio], [type=range], [type=file])), select, textarea, summary { min-height: 44px; }
+  input:where(:not([type=checkbox], [type=radio], [type=range])), select, textarea { font-size: 16px; }
+  input[type=file]::file-selector-button { min-height: 44px; }
+  details > summary { padding: 11px 0; }
+  .dl-segment span { min-height: 36px; }
+  .dl-row { min-height: 44px; }
 }
-@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
-@media (forced-colors:active) { button,input,select,textarea,.dl-card,.dl-radio-card { border-color:CanvasText; } input[role=switch]:checked { background:Highlight; } :focus-visible { outline-color:Highlight; } .dl-segment input:checked+span { outline:2px solid Highlight; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+@media (forced-colors: active) {
+  button, input, select, textarea, .dl-confirmation { border-color: CanvasText; }
+  input[type=checkbox][role=switch] { border: 1px solid CanvasText; }
+  input[type=checkbox][role=switch]:checked { background: Highlight; }
+  input[type=radio]:checked { border-color: Highlight; }
+  :focus-visible { outline-color: Highlight; }
+  .dl-segment input:checked + span, .dl-choice:has(input:checked) { outline: 2px solid Highlight; }
+}

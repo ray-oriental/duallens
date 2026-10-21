@@ -64,8 +64,8 @@ export class HoverTranslate{
 
   #mark(target){
     if(!this.outline){
-      this.outline=createOverlay('.mark{position:fixed;border:1px dashed var(--accent);border-radius:4px;pointer-events:none}.mark button{position:absolute;right:0;top:0;border:0;border-radius:8px;background:var(--bg);pointer-events:auto}');
-      this.mark=document.createElement('div');this.mark.className='mark';const b=document.createElement('button');b.textContent='×';b.setAttribute('aria-label',UI.close);
+      this.outline=createOverlay('.mark{position:fixed;border:1px solid rgba(128,128,128,.7);border-radius:4px;pointer-events:none}.mark button{position:absolute;right:4px;top:4px;width:20px;min-width:20px;height:20px;min-height:20px;border-radius:6px;font-size:14px;line-height:1;color:var(--dl-text-3)}.mark button:hover{color:var(--fg);background:var(--bg2)}');
+      this.mark=document.createElement('div');this.mark.className='mark';const b=document.createElement('button');b.className='pop';b.textContent='×';b.setAttribute('aria-label',UI.close);
       b.onclick=()=>{this.disable();this.p.settingsStore.save({hover:{enabled:false}});};this.mark.append(b);this.outline.el.append(this.mark);
     }
     const r=blockContainerOf(target).getBoundingClientRect();this.mark.style.cssText=`left:${r.left-2}px;top:${r.top-2}px;width:${r.width+4}px;height:${r.height+4}px`;this.outline.attach();

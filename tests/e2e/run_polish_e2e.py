@@ -123,18 +123,23 @@ def extension(pw,ext,base,locale):
         check('Fixture B' in sidebar.locator('.engine-disclosure').inner_text(),'sidebar destination does not follow its selected service')
         for theme in ['light','dark']:
             sidebar.emulate_media(color_scheme=theme);shot(sidebar,f'{locale}-{theme}-sidebar-services')
-        # Consent remains a blocking alertdialog and receives focus before any marker is inserted.
+        # Consent is a blocking dialog labelled by its message. Focus rests on the card itself, so Enter or Space
+        # cannot consent until the user tabs to a button; no marker is inserted before consent.
         remote={'id':'remote','kind':'openai','name':'Fixture AI','baseUrl':'https://consent.duallens.invalid/v1','model':'test','maxItems':20,'maxChars':4000,'concurrency':2,'timeoutMs':5000,'fallbackModels':[]}
         h.settings({'provider':{'active':'remote','chain':[],'profiles':[remote]},'translation':{'mode':'llm'},**{f:{'enabled':False} for f in FEATURES}})
         h.page.bring_to_front();original=h.page.locator('#p-plain').inner_html();h.command('toggle-page')
         cdp=h.ctx.new_cdp_session(h.page)
         for _ in range(80):
             tree=cdp.send('Accessibility.getFullAXTree')['nodes']
-            if any(n.get('role',{}).get('value')=='alertdialog' for n in tree):break
+            if any(n.get('role',{}).get('value')=='dialog' for n in tree):break
             h.page.wait_for_timeout(50)
-        else:raise AssertionError('consent is not an alertdialog')
-        focused=[n for n in tree if any(p['name']=='focused' and p['value'].get('value') for p in n.get('properties',[]))]
-        check(any(n.get('role',{}).get('value')=='button' for n in focused),'consent primary has no focus')
+        else:raise AssertionError('consent is not a dialog')
+        focused=lambda nodes:[n for n in nodes if any(p['name']=='focused' and p['value'].get('value') for p in n.get('properties',[]))]
+        check(any(n.get('role',{}).get('value')=='dialog' for n in focused(tree)) and not any(n.get('role',{}).get('value')=='button' for n in focused(tree)),'consent card must hold focus, not a button')
+        h.page.keyboard.press('Enter');h.page.keyboard.press('Space');h.page.wait_for_timeout(150)
+        check(any(n.get('role',{}).get('value')=='dialog' for n in cdp.send('Accessibility.getFullAXTree')['nodes']),'Enter/Space on the card must not consent')
+        h.page.keyboard.press('Tab')
+        check(any(n.get('role',{}).get('value') in ('button','DisclosureTriangle') for n in focused(cdp.send('Accessibility.getFullAXTree')['nodes'])),'Tab does not reach a consent control')
         check(h.page.locator('dl-t,dl-o,dl-w,dl-r').count()==0,'progress before consent')
         for theme in ['light','dark']:
             h.page.emulate_media(color_scheme=theme);shot(h.page,f'{locale}-{theme}-confirmation')

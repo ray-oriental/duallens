@@ -30,7 +30,6 @@ const COPY=Object.freeze({
   s9:l10n('mby'),
   s10:l10n('mbz'),
   s11:l10n('mc0'),
-  s12:l10n('mc1'),
   s13:l10n('mc2'),
   s14:l10n('m3b'),
   s15:l10n('m3c'),
@@ -73,7 +72,6 @@ const COPY=Object.freeze({
   s52:l10n('md2'),
   s53:l10n('md3'),
   s54:l10n('md4'),
-  s55:l10n('md5'),
   s56:l10n('md6')
 });
 
@@ -250,7 +248,7 @@ export async function mountSettingsForm(root, { store, platform }) {
       for (const id of edited) await store.setSecret(id, drafts.get(id));
       if(chosen?.baseUrl && platform.localArea) await acknowledge(platform.localArea,llmDestination(chosen.baseUrl));
       edited.clear();
-      dirty = false;siteRules.close();siteRules.draw(); showSync(); await showWizard(); interactions?.draw(); notice(COPY.s12);
+      dirty = false;siteRules.close();siteRules.draw(); showSync(); await showWizard(); interactions?.draw(); notice(''); interactions?.flash();
     } finally { saving = false; }
     return s;
   }
@@ -339,7 +337,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     choices($('profile'), [{ id: '', name: COPY.s8 }, ...s.provider.profiles], id);
     for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: COPY.s7 }, ...s.provider.profiles], read(name + 'Profile'));
     if(['ollama','lmstudio'].includes(preset)){s.translation.mode='llm';fill('translationMode','llm');}
-    await drawProfile(); setSelectedChain(); notice(['ollama','lmstudio'].includes(preset)?l10n('polishLocalReady'):COPY.s26);
+    await drawProfile(); setSelectedChain(); notice(''); $('provider-hint').textContent = ['ollama','lmstudio'].includes(preset) ? l10n('polishLocalReady') : COPY.s26; interactions?.draw();
   });
   action('load-models', async () => {
     captureProfile(); const p = profile(); notice(COPY.s27);
@@ -456,7 +454,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   let interactions;
   s = await store.load();
   interactions = installSettingsInteractions(ui,{store,platform,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,captureProfile,onSaved:showSync,notice,bind,simple,nums});
-  await draw(); notice(['common','ai','sites','glossary'].includes(platform.settingsGroup||globalThis.location?.hash.slice(1)||'common')?COPY.s55:'');$('save').disabled=false;
+  await draw(); $('save').disabled=false;
   const off = store.onChange?.(async () => {
     if (saving || closed) return;
     if (dirty) { showSync(); return; }

@@ -13,7 +13,7 @@ const TEXT_TYPES=new Set(['text','search','url','email','tel']);
 const PREFIX=/^\s*\/([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)[ \t ]+/;
 const WINDOW_MS=500;
 
-const CHIP_CSS=`.chip{position:fixed;display:none;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--bg);color:var(--fg2);border:1px solid var(--line);box-shadow:var(--shadow);font-size:12px;pointer-events:auto}.chip.show{display:inline-flex}.chip button{color:var(--fg2);padding:0 4px}.spin{width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}`;
+const CHIP_CSS=`.chip{position:fixed;display:none;align-items:center;gap:6px;height:28px;padding:0 4px 0 10px;color:var(--fg2)}.chip.show{display:inline-flex}.chip button{width:20px;min-width:20px;height:20px;min-height:20px;font-size:14px;line-height:1;color:var(--dl-text-3)}.chip button:hover{color:var(--fg);background:var(--bg2)}.spin{width:6px;height:6px;border-radius:50%;background:var(--dl-text-3);animation:dl-pulse 1.2s ease-in-out infinite}`;
 
 // The editable element a key event or focus belongs to, or null. Password fields never qualify.
 export function editableOf(node){
@@ -228,7 +228,7 @@ export class InputBox{
 
   #show(el){
     if(!this.chip){
-      const ui=createOverlay(CHIP_CSS),n=node('div','chip'),close=node('button','','×');
+      const ui=createOverlay(CHIP_CSS),n=node('div','chip pop'),close=node('button','','×');
       close.setAttribute('aria-label',UI.s2);close.onclick=()=>{this.rev++;this.abort?.abort();this.#hide();this.p.settingsStore.save({input:{enabled:false}});};
       n.append(node('i','spin'),document.createTextNode(UI.s3),close);ui.el.append(n);this.chip={ui,node:n};
     }
@@ -294,10 +294,10 @@ export class InputBox{
   }
 
   #fallback(text){
-    this.failure?.detach();const ui=createOverlay('.failure{position:fixed;bottom:calc(16px + var(--safe-bottom));left:calc(16px + var(--safe-left));width:min(360px,calc(100vw - 32px - var(--safe-left) - var(--safe-right)));padding:12px;background:var(--bg);border:1px solid var(--line);border-radius:12px;pointer-events:auto}.failure textarea{display:block;max-width:100%;width:100%}');
-    const box=node('div','failure'),value=node('textarea'),copy=node('button','',UI.s10),close=node('button','',UI.s12);
+    this.failure?.detach();const ui=createOverlay('.failure{position:fixed;bottom:calc(16px + var(--safe-bottom));left:calc(16px + var(--safe-left));width:min(360px,calc(100% - 32px - var(--safe-left) - var(--safe-right)));max-height:calc(100% - 32px);overflow:auto;padding:14px 16px}.failure p{margin:0 0 8px}.failure textarea{display:block;width:100%;min-height:72px;margin:0 0 10px;padding:8px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--dl-border-strong);border-radius:6px;resize:vertical}.failure .actions{display:flex;justify-content:flex-end;gap:4px}');
+    const box=node('div','failure pop'),value=node('textarea'),actions=node('div','actions'),copy=node('button','pb',UI.s10),close=node('button','tb',UI.s12);
     box.setAttribute('role','alert');value.readOnly=true;value.value=text;value.setAttribute('aria-label',UI.s9);
     copy.onclick=async()=>{try{await navigator.clipboard.writeText(text);copy.textContent=UI.s11;}catch{value.select();}};
-    close.onclick=()=>ui.detach();box.append(node('p','',UI.s8),value,copy,close);ui.el.append(box);ui.attach();this.failure=ui;
+    close.onclick=()=>ui.detach();actions.append(close,copy);box.append(node('p','',UI.s8),value,actions);ui.el.append(box);ui.attach();this.failure=ui;
   }
 }

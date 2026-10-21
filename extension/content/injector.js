@@ -196,6 +196,9 @@ function cleanHostClass(u) {
   if(!u.hadClass && h.getAttribute('class')==='') h.removeAttribute('class');
 }
 
+// A paragraph still pending after WAIT_MS gets data-dl-wait; content.css then draws a quiet "…".
+// Nothing is shown earlier, so fast results never flash and no placeholder ever changes layout.
+const WAIT_MS=1500;
 export function markPending(u) {
   if(u.attribute) return;
   if(!u.layoutGroup) prepareLayout(u);
@@ -203,8 +206,13 @@ export function markPending(u) {
     const t=ensureT(u);
     t.className='dl-t dl-inline';
     t.setAttribute('data-dl-state','pending');
+    t.removeAttribute('data-dl-wait');
     t.replaceChildren();
     setHostState(u,'pending');
+    clearTimeout(u.waitTimer);
+    u.waitTimer=setTimeout(()=> {
+      if(u.tEl===t && t.getAttribute('data-dl-state')==='pending') write(()=>t.setAttribute('data-dl-wait',''));
+    },WAIT_MS);
   });
 }
 

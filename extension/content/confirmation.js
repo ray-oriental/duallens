@@ -4,20 +4,21 @@ import { t as l10n } from '../shared/i18n.js';
 import{requestDestinations,destinationNotice}from '../shared/destinations.js';
 export {requestDestinations};
 import{loadDeviceState,needsConfirmation,acknowledge}from '../shared/device-state.js';
-import{createOverlay}from './overlay.js';
+import{createOverlay,spaced}from './overlay.js';
 
 const UI={
   title:l10n('m41'),continue:l10n('m42'),change:l10n('m43'),close:l10n('m44'),stopped:l10n('m45'),
   download:l10n('m46'),ocr:l10n('m47'),
 };
-const CSS=`.confirm{position:fixed;right:calc(16px + var(--safe-right));bottom:calc(16px + var(--safe-bottom));width:min(360px,calc(100vw - 32px - var(--safe-left) - var(--safe-right)));max-height:calc(100dvh - 32px - var(--safe-top) - var(--safe-bottom));overflow:auto;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);box-shadow:var(--shadow);pointer-events:auto}.confirm.left{right:auto;left:calc(16px + var(--safe-left))}.confirm p{margin:4px 24px 12px 0;overflow-wrap:anywhere;white-space:pre-line}.confirm details{margin-bottom:12px}.confirm summary{cursor:pointer;color:var(--fg2)}.actions{position:sticky;bottom:0;background:var(--bg);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.confirm button{padding:6px 10px;color:var(--accent);background:transparent}.confirm .primary{background:var(--accent);color:var(--accent-fg)}.confirm .close{position:absolute;right:6px;top:6px;padding:2px 8px;color:var(--fg2)}`;
+const CSS=`.confirm{position:fixed;right:calc(16px + var(--safe-right));bottom:calc(16px + var(--safe-bottom));width:min(360px,calc(100% - 32px - var(--safe-left) - var(--safe-right)));max-height:calc(100% - 32px - var(--safe-top) - var(--safe-bottom));overflow:auto;padding:14px 16px}.confirm.left{right:auto;left:calc(16px + var(--safe-left))}.confirm p{margin:0 24px 10px 0;overflow-wrap:anywhere;white-space:pre-line}.confirm details{margin:0 0 10px}.confirm summary{display:inline-block;padding:2px 0;list-style:none;cursor:pointer;color:var(--fg2);border-radius:4px}.confirm summary::-webkit-details-marker{display:none}.confirm summary:hover{color:var(--fg);text-decoration:underline;text-underline-offset:2px}.confirm details p{margin:4px 0 0;color:var(--fg2)}.actions{position:sticky;bottom:-14px;display:flex;justify-content:flex-end;align-items:center;gap:4px;margin:0 -16px -14px;padding:2px 16px 14px;background:var(--bg)}.confirm .close{position:absolute;right:8px;top:8px;width:24px;min-width:24px;height:24px;font-size:16px;line-height:1;color:var(--dl-text-3)}.confirm .close:hover{color:var(--fg);background:var(--bg2)}@media(pointer:coarse){.confirm .close{right:0;top:0;width:44px;height:44px}.confirm p{margin-right:36px}.confirm summary{padding:8px 0}}`;
 
+let serial=0;
 export function confirmationCard({message,details,platform,label=UI.continue,signal,left=false,root,group='common'}){
   if(signal?.aborted)return Promise.resolve(false);
   return new Promise(resolve=>{
-    const ui=root?null:createOverlay(CSS),box=document.createElement('section');box.className=root?'dl-notice dl-confirmation':'confirm'+(left?' left':'');
-    box.setAttribute('role','alertdialog');box.setAttribute('aria-label',UI.title);
-    const p=document.createElement('p');p.textContent=message;
+    const ui=root?null:createOverlay(CSS),box=document.createElement('section');box.className=root?'dl-notice dl-confirmation':'confirm pop'+(left?' left':'');
+    box.setAttribute('role','dialog');box.setAttribute('aria-label',UI.title);
+    const p=document.createElement('p');p.id='dl-consent-'+(++serial);p.textContent=spaced(message);box.setAttribute('aria-labelledby',p.id);
     const disclosure=document.createElement('details'),summary=document.createElement('summary'),hosts=document.createElement('p');
     summary.textContent=l10n('polishDetails');hosts.textContent=details;disclosure.append(summary,hosts);
     const actions=document.createElement('div');actions.className='actions';
@@ -26,9 +27,10 @@ export function confirmationCard({message,details,platform,label=UI.continue,sig
     const abort=()=>finish(false);
     const button=(text,fn,cls='')=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.className=cls;b.onclick=fn;return b;};
     const close=button('×',()=>finish(false),'close');close.setAttribute('aria-label',l10n('polishCancelSend'));
-    actions.append(button(UI.change,()=>{finish(false);platform.openSettings(group);}),button(label,()=>finish(true),'primary'));
-    box.append(p,close);if(details)box.append(disclosure);box.append(actions);if(root)root.append(box);else{ui.el.append(box);ui.attach();}
-    actions.lastChild.focus();document.addEventListener('keydown',key,true);signal?.addEventListener('abort',abort,{once:true});
+    actions.append(button(UI.change,()=>{finish(false);platform.openSettings(group);},'tb'),button(label,()=>finish(true),'primary pb'));
+    if(details)box.append(disclosure);box.append(actions,close);box.prepend(p);if(root)root.append(box);else{ui.el.append(box);ui.attach();}
+    // Focus rests on the card, never on a button: Enter or Space must not consent unless the user tabbed to one.
+    box.tabIndex=-1;box.style.outline='0';box.focus({preventScroll:true});document.addEventListener('keydown',key,true);signal?.addEventListener('abort',abort,{once:true});
   });
 }
 

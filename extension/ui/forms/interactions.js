@@ -20,7 +20,7 @@ export function installSettingsInteractions(ui,ctx){
   const immediate=n=>n.id==='freeModels'||!!n.closest?.('#display-segments')||!!fieldPath(n.id)&&!['hoverModel','inputModel','customPrompt'].includes(n.id);
   const val=n=>n.type==='checkbox'?n.checked:nums.has(n.id)?Number(n.value):n.value;
   const patchFor=(path,value)=>path.split('.').reverse().reduce((v,key)=>({[key]:v}),value);
-  const flash=()=>{const node=$('saved-toast');node.classList.add('show');clearTimeout(savedTimer);savedTimer=setTimeout(()=>node.classList.remove('show'),1600);};
+  const flash=()=>{const node=$('saved-toast');node.dataset.count=String((Number(node.dataset.count)||0)+1);node.classList.add('show');clearTimeout(savedTimer);savedTimer=setTimeout(()=>node.classList.remove('show'),1600);};
   async function ask(message){
     if(confirming)return false;
     return new Promise(resolve=>{const box=el('div',null,{class:'confirmation',role:'alertdialog','aria-label':message}),a=el('div',null,{class:'actions'});box.append(el('p',message),a);ui.querySelector('.settings-content').prepend(box);const done=answer=>{confirming=null;box.remove();resolve(answer);};confirming=done;for(const [title,result]of[[T.cancel,false],[T.confirm,true]]){const b=el('button',title,{type:'button'});b.addEventListener('click',()=>done(result));a.append(b);}a.firstChild.focus();});
@@ -29,7 +29,7 @@ export function installSettingsInteractions(ui,ctx){
     if(!GROUPS.some(([id])=>id===next))next='common';if(next===group&&!force)return;
     if(group&&getDirty()&&!force){if(!await ask(T.discard)){if(platform.kind==='extension')win.history.replaceState(null,'','#'+group);return;}setDirty(false);setSettings(await store.load());await draw();}
     $('saved-toast').classList.remove('show');$('status').textContent='';$('status').classList.remove('error');for(const id of ['result-test','result-load-models','result-mt-test'])$(id)?.remove();if(group&&group!==next){$('backupText').value='';$('backup-qr').hidden=true;if($('backupPassword'))$('backupPassword').value='';}
-    group=next;const title=ui.querySelector(`[data-group="${group}"] .group-title`);title.append($('saved-toast'));if(['common','ai','sites','glossary'].includes(group))notice(l10n('md5'));for(const page of ui.querySelectorAll('[data-group]'))page.hidden=page.dataset.group!==group;
+    group=next;const title=ui.querySelector(`[data-group="${group}"] .group-title`);title.append($('saved-toast'));for(const page of ui.querySelectorAll('[data-group]'))page.hidden=page.dataset.group!==group;
     for(const link of ui.querySelectorAll('[data-group-link]')){if(link.dataset.groupLink===group){link.setAttribute('aria-current','page');link.scrollIntoView({block:'nearest',inline:'nearest'});}else link.removeAttribute('aria-current');}
     if(platform.kind==='extension'&&win.location.hash!=='#'+group)win.history.replaceState(null,'','#'+group);
   }
@@ -84,6 +84,9 @@ export function installSettingsInteractions(ui,ctx){
     const address=$('baseUrl').parentElement,advanced=$('provider-card details .grid');if(p?.preset==='custom'||local)$('model').closest('.frow').before(address);else advanced.prepend(address);
 
     for(const tile of ui.querySelectorAll('[data-preset]'))tile.setAttribute('aria-pressed',String(tile.dataset.preset===(local?'ollama':p?.preset)));
+    // The chosen service expands in place, directly under its row.
+    const hint=$('provider-hint');if(!getDirty())hint.textContent='';hint.hidden=!hint.textContent;
+    const pressed=ui.querySelector('[data-preset][aria-pressed=true]');if(pressed&&configured&&pressed.nextElementSibling!==$('provider-card'))pressed.after($('provider-card'));
     $('chain-profile').replaceChildren(...s.provider.profiles.filter(p=>p.kind!=='mock').map(p=>el('option',p.name,{value:p.id})));drawChain();
     $('delete-profile').disabled=!p;
     const version=ctx.version||platform.version||'—';$('app-version').textContent=`${T.version} ${version}`;

@@ -155,11 +155,12 @@ export function drawLayout(root, { secretDialog = false } = {}) {
     const grid = el('div', '', { class: 'grid' }); box.append(grid); form.append(box); return { box, grid };
   };
   const field = (parent, id, title, type = 'text', choices = [], attrs = {}) => {
-    const label = el('label', '', { class: ['textarea', 'url', 'password'].includes(type) ? 'wide' : type === 'checkbox' ? 'check' : '' });
+    const label = el('label', '', { class: ['textarea', 'url', 'password'].includes(type) ? 'field wide' : type === 'checkbox' ? 'field check' : 'field' });
     const input = el(type === 'textarea' ? 'textarea' : type === 'select' ? 'select' : 'input', '', { id, ...attrs });
     if (!['textarea', 'select'].includes(type)) input.type = type;
-    if (type === 'checkbox') label.append(input, doc.createTextNode(title));
-    else { label.append(doc.createTextNode(title), input); }
+    const text = el('span', title, { class: 'field-label' });
+    if (type === 'checkbox') label.append(input, text);
+    else { label.append(text, input); }
     for (const c of choices) {const option=el('option', c.name || c.label || c.id || c.code, { value: c.id ?? c.code });option.hidden=c.id==='mock';input.append(option);}
     parent.append(label); return input;
   };
@@ -218,7 +219,7 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   } else {
     const key = field(p.grid, 'apiKey', COPY.s37, 'password', [], { autocomplete: 'off', spellcheck: 'false' });
     key.parentElement.id = 'key-row';
-    const title = el('span', COPY.s37, { id: 'credential-label' });
+    const title = el('span', COPY.s37, { id: 'credential-label', class: 'field-label' });
     key.parentElement.firstChild.replaceWith(title);
   }
   field(p.grid, 'model', COPY.s39, 'text', [], { list: 'models', autocomplete: 'off' });

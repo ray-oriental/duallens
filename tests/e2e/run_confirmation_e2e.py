@@ -49,6 +49,12 @@ def main():
                             command(page, menu_label)
                             page.wait_for_function("__platformFixture.elements('.confirm').length===1")
                             result=bounds(page,baseline);check(not result['details'],'details start expanded')
+                            # Privacy: focus rests on the dialog, so Enter/Space cannot consent until a button is tabbed to.
+                            check(page.evaluate("()=>{const c=__platformFixture.elements('.confirm')[0];return c.matches(':focus')&&c.getAttribute('role')==='dialog'&&c.querySelector('#'+c.getAttribute('aria-labelledby'))===c.firstElementChild}"),'focus is not on the labelled dialog')
+                            page.keyboard.press('Enter');page.keyboard.press('Space');page.wait_for_timeout(150)
+                            check(page.evaluate('__platformFixture.calls.length')==0 and page.evaluate("__platformFixture.elements('.confirm').length")==1,'Enter/Space consented without a focused button')
+                            page.keyboard.press('Tab')
+                            check(page.evaluate("__platformFixture.elements('.confirm summary:focus,.confirm button:focus').length")==1,'Tab did not reach a control inside the dialog')
                             text=page.evaluate("__platformFixture.elements('.confirm>p')[0].textContent")
                             expected=("DualLens will use Microsoft's free translator. Text on this page will be sent to Microsoft, and to Google if Microsoft fails." if locale=='en-US' else '将使用微软免费翻译，本页文字会发送给微软；失败时改用谷歌。')
                             check(text==expected, 'unexpected consent copy: '+text)

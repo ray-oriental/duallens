@@ -565,7 +565,7 @@
     "message": "移到右侧"
   },
   "m4m": {
-    "message": "关闭悬浮球"
+    "message": "关闭悬浮按钮"
   },
   "m4n": {
     "message": "设置"
@@ -574,7 +574,7 @@
     "message": "翻译当前输入框"
   },
   "m4p": {
-    "message": "悬浮球已关闭，可在弹出页重新打开"
+    "message": "悬浮按钮已关闭，可在弹出页重新打开"
   },
   "m4q": {
     "message": "关闭悬停"
@@ -1110,7 +1110,7 @@
     "message": "划词、悬停和输入框规则须为开、关或默认"
   },
   "m9e": {
-    "message": "悬浮球自动隐藏开关无效"
+    "message": "悬浮按钮自动隐藏开关无效"
   },
   "m9f": {
     "message": "输入框双语模式或顺序无效"
@@ -1269,7 +1269,7 @@
     "message": "正在加载设置…"
   },
   "mao": {
-    "message": "视频字幕"
+    "message": "视频双语字幕"
   },
   "map": {
     "message": "页面加载失败，请关闭后重试"
@@ -1287,10 +1287,10 @@
     "message": "有未保存的修改，要放弃这些修改吗？"
   },
   "mau": {
-    "message": "悬浮球"
+    "message": "悬浮按钮"
   },
   "mav": {
-    "message": "页面边缘的快捷按钮"
+    "message": "页面边缘的翻译按钮"
   },
   "maw": {
     "message": "划词翻译"
@@ -1308,16 +1308,16 @@
     "message": "输入框翻译"
   },
   "mb1": {
-    "message": "连按三次空格翻译"
+    "message": "在输入框里连按三次空格翻译"
   },
   "mb2": {
-    "message": "给视频加双语字幕"
+    "message": "在播放器里显示双语字幕"
   },
   "mb3": {
-    "message": "图片文字"
+    "message": "图片文字翻译"
   },
   "mb4": {
-    "message": "识别图片文字再翻译"
+    "message": "在本机识别图片中的文字并翻译"
   },
   "mb5": {
     "message": "未获得网站访问权限，功能保持关闭。"
@@ -1365,7 +1365,7 @@
     }
   },
   "mbf": {
-    "message": "，失败时改用$p1$",
+    "message": "，失败时发给$p1$",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1376,7 +1376,7 @@
     "message": "失败时直接报错，不转发到免费端点。"
   },
   "mbh": {
-    "message": "网页文字会发送给$p1$$p2$。$p3$",
+    "message": "网页文字发给$p1$$p2$。$p3$",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -1471,9 +1471,6 @@
   },
   "mc0": {
     "message": "漫画站点钩子注册失败"
-  },
-  "mc1": {
-    "message": "设置已保存"
   },
   "mc2": {
     "message": "此平台不能查看语言包"
@@ -1592,9 +1589,6 @@
   "md4": {
     "message": "译文缓存已清空"
   },
-  "md5": {
-    "message": "修改后自动保存；AI 服务、网站规则和术语表需保存。"
-  },
   "md6": {
     "message": "读取更新后的配置失败"
   },
@@ -1703,10 +1697,10 @@
     "message": "首次使用向导"
   },
   "mdw": {
-    "message": "现在就能翻译：默认用机器翻译（Microsoft 免费接口，无需密钥），译文秒出。"
+    "message": "默认使用微软免费机器翻译，无需密钥。"
   },
   "mdx": {
-    "message": "想要更好的译文？再添加一个大模型服务，它会在后台把机翻结果无感替换成精修译文。推荐 OpenRouter 免费模型，也可选择你自己的服务。"
+    "message": "可以再添加一个 AI 服务，在后台把机器翻译替换成精修译文。可用 OpenRouter 的免费模型，也可以用你自己的服务。"
   },
   "mdy": {
     "message": "1 选预设 → 2 填密钥 → 3 获取模型 → 4 测试连接 → 5 保存"
@@ -1844,7 +1838,7 @@
     "message": "允许 /ja 等语言前缀"
   },
   "mf7": {
-    "message": "显示悬浮球"
+    "message": "显示悬浮按钮"
   },
   "mf8": {
     "message": "悬停修饰键"
@@ -1895,7 +1889,7 @@
     "message": "继承网页翻译时沿用网页翻译方式与备选链；指定服务时使用其大模型，仅影响该交互。双语输入以换行分隔，单行输入框以空格分隔。"
   },
   "mfo": {
-    "message": "悬浮球侧边"
+    "message": "悬浮按钮位置"
   },
   "mfp": {
     "message": "右侧"
@@ -1964,7 +1958,7 @@
     "message": "这些源语言自动翻译"
   },
   "mgb": {
-    "message": "* 匹配任意路径字符，区分大小写；忽略查询串/片段。最具体规则优先。「从不」允许手动，但隐藏悬浮球；功能默认沿用全局。"
+    "message": "* 匹配任意路径字符，区分大小写；忽略查询串和片段。最具体的规则优先。「从不」仍允许手动翻译，但会隐藏悬浮按钮；各功能默认沿用全局设置。"
   },
   "mgc": {
     "message": "新增 / 编辑路径模式"
@@ -2051,7 +2045,7 @@
     "message": "常用"
   },
   "mh4": {
-    "message": "增强功能"
+    "message": "更多功能"
   },
   "mh5": {
     "message": "网站规则"
@@ -2159,19 +2153,13 @@
     "message": "站点模式或规则 JSON 无效，例如 example.com/docs/*"
   },
   "mi4": {
-    "message": "网站访问权限已撤销，相关增强功能与自动翻译已关闭。需要时可重新打开。"
+    "message": "网站访问权限已撤销，相关功能和自动翻译已关闭，需要时可重新打开。"
   },
   "mi5": {
     "message": "翻译此页图片"
   },
-  "mi6": {
-    "message": "尚未翻译"
-  },
   "mi7": {
     "message": "此页面无法翻译"
-  },
-  "mi8": {
-    "message": "正在连接当前页面…"
   },
   "mi9": {
     "message": "翻译成"
@@ -2179,20 +2167,8 @@
   "mia": {
     "message": "译为"
   },
-  "mib": {
-    "message": "引擎"
-  },
   "mic": {
     "message": "更改"
-  },
-  "mid": {
-    "message": "仅当前路径"
-  },
-  "mie": {
-    "message": "规则已保存；从不仍允许手动翻译。"
-  },
-  "mif": {
-    "message": "全部默认关闭"
   },
   "mig": {
     "message": "跳过"
@@ -2225,7 +2201,7 @@
     "message": "免费机器翻译"
   },
   "miq": {
-    "message": "无需账号和密钥。网页文字会发送给微软，失败时改用谷歌。"
+    "message": "无需账号和密钥。网页文字发给微软，失败时发给谷歌。"
   },
   "mir": {
     "message": "我自己的 AI 服务"
@@ -2243,13 +2219,13 @@
     "message": "不会自动翻译任何网站。"
   },
   "miw": {
-    "message": "悬浮球、划词翻译等默认关闭，可在「增强功能」里打开。"
+    "message": "悬浮按钮、划词翻译等默认关闭，可在「更多功能」里打开。"
   },
   "mix": {
-    "message": "手机没有工具栏按钮。从 Tampermonkey 菜单打开 DualLens，或在增强功能里打开悬浮球。"
+    "message": "手机没有工具栏按钮。从 Tampermonkey 菜单打开 DualLens，或在「更多功能」里打开悬浮按钮。"
   },
   "miy": {
-    "message": "1.0 版起，增强功能默认关闭，已替你关闭了原来开启的几项。需要时在下方重新打开。"
+    "message": "从 1.0 起，更多功能默认关闭，原来开启的几项已关闭。需要时在下方重新打开。"
   },
   "miz": {
     "message": "知道了"
@@ -2258,7 +2234,7 @@
     "message": "操作没有完成，请稍后重试。"
   },
   "mj1": {
-    "message": "第 $p1$ 步，共 3 步",
+    "message": "$p1$/3",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -2364,7 +2340,7 @@
     "message": "输入框设置无效"
   },
   "mjp": {
-    "message": "悬浮球位置无效"
+    "message": "悬浮按钮位置无效"
   },
   "mjq": {
     "message": "开关设置无效"
@@ -2710,7 +2686,7 @@
     "message": "输入框翻译"
   },
   "polishSubtitlesShort": {
-    "message": "视频字幕"
+    "message": "视频双语字幕"
   },
   "polishSelectionShort": {
     "message": "划词翻译"
@@ -2814,5 +2790,68 @@
   },
   "consentMicrosoftFallback": {
     "message": "将使用微软免费翻译，本页文字会发送给微软；失败时改用谷歌。"
+  },
+  "lookShortcut": {
+    "message": "$p1$（$p2$）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "lookHoverRow": {
+    "message": "悬停翻译（$p1$）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "lookLongPress": {
+    "message": "长按翻译"
+  },
+  "lookSentTo": {
+    "message": "文字发给$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "lookNoAI": {
+    "message": "尚未添加 AI 服务"
+  },
+  "lookLocal": {
+    "message": "文字只在本机处理"
+  },
+  "lookFreeMT": {
+    "message": "$p1$免费翻译",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "lookSentFallback": {
+    "message": "文字发给$p1$，失败时发给$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "lookFallbackShort": {
+    "message": "失败时发给$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
   }
 }
