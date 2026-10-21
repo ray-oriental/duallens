@@ -33,7 +33,7 @@ class Handler(runner._QuietHandler):
             name=self.path.rsplit('/',1)[1]
             if name not in ['worker.min.js','tesseract-core-simd-lstm.wasm.js']:
                 self.send_response(404);self.end_headers();return
-            data=(Path(os.environ['USERPROFILE'])/'.cache/duallens-e2e/comics-runtime'/name).read_bytes()
+            data=(runner.E2E_ROOT/'comics-runtime'/name).read_bytes()
             self.send_response(200);self.send_header('Content-Type','application/javascript');self.end_headers();self.wfile.write(data);return
         if self.path=='/comics-bundle.js':
             data=(runner.REPO/'dist/duallens.user.js').read_bytes()
@@ -45,7 +45,7 @@ class Handler(runner._QuietHandler):
             name=self.path.rsplit('/',1)[1]
             if name not in ['eng.traineddata','jpn.traineddata','jpn_vert.traineddata','kor.traineddata']:
                 self.send_response(404);self.end_headers();return
-            data=(Path(os.environ['USERPROFILE'])/'.cache/duallens-e2e/comics-data'/name).read_bytes()
+            data=(runner.E2E_ROOT/'comics-data'/name).read_bytes()
             self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.end_headers();self.wfile.write(data);return
         if self.path=='/comics/403.html':
             body=b'<!doctype html><body><img style="width:340px;height:420px" src="/comics/guarded.png"></body>'
@@ -82,7 +82,7 @@ def settings_v2(h,patch):
     finally:page.close()
 
 def setup(h,lang):
-    data=Path(os.environ['USERPROFILE'])/'.cache/duallens-e2e/comics-data'
+    data=runner.E2E_ROOT/'comics-data'
     # Offline controlled data response; production still pins the upstream URL and checks its hash.
     h.ctx.route('https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/**',lambda route:route.fulfill(path=str(data/route.request.url.rsplit('/',1)[1]),content_type='application/octet-stream'))
     settings_v2(h,{'comics':{'language':lang},'provider':{'active':'comic-test','chain':[], 'profiles':[{

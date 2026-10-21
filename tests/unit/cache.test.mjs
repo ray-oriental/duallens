@@ -10,7 +10,7 @@ test('sha256Hex matches known vectors', async () => {
 });
 
 test('makeKeyer: every input dimension changes the key; identical inputs agree', async () => {
-  const base = { profileId: 'gateway', model: 'm', to: 'zh-CN', preset: 'general', custom: '', glossary: [] };
+  const base = { profileId: 'compatible', model: 'm', to: 'zh-CN', preset: 'general', custom: '', glossary: [] };
   const key = async (over = {}, text = 'Hello') => (await makeKeyer({ ...base, ...over }))(text);
   const k0 = await key();
   assert.equal(k0.length, 64);

@@ -9,13 +9,15 @@ const fixture = JSON.parse(await readFile(new URL('./fixtures/openrouter-models.
 const response = body => ({ status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body) });
 
 test('all required presets have key instructions, conservative JSON defaults and batch parameters', () => {
-  for (const id of ['openrouter', 'deepseek', 'siliconflow', 'zhipu', 'moonshot', 'openai', 'gemini', 'groq', 'sjtu', 'ollama', 'gateway', 'custom']) {
+  for (const id of ['openrouter', 'deepseek', 'openai', 'ollama', 'lmstudio', 'custom']) {
     const p = PROVIDER_PRESETS.find(p => p.id === id); assert.ok(p);
     assert.equal(typeof p.requiresKey, 'boolean'); assert.equal(typeof p.jsonMode, 'boolean'); assert.ok(p.maxItems <= 12 && p.concurrency <= 2);
     if (p.requiresKey) { assert.ok(p.baseUrl.startsWith('https://')); assert.ok(p.keyUrl.startsWith('https://')); }
   }
-  assert.equal(profileFromPreset('gemini').baseUrl, 'https://generativelanguage.googleapis.com/v1beta/openai');
-  assert.equal(profileFromPreset('sjtu').baseUrl, 'https://models.sjtu.edu.cn/api/v1');
+  assert.equal(PROVIDER_PRESETS.length, 6);
+  assert.equal(profileFromPreset('ollama').baseUrl, 'http://localhost:11434/v1');
+  assert.equal(profileFromPreset('lmstudio').baseUrl, 'http://localhost:1234/v1');
+  assert.match(PROVIDER_PRESETS.find(p => p.id === 'ollama').description, /OLLAMA_ORIGINS/);
   assert.throws(() => profileFromPreset('unknown'));
 });
 test('OpenRouter filters only zero input AND output prices, sorts JSON support/context, and recommends diverse vendors', () => {

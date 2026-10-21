@@ -1,11 +1,11 @@
 // Settings schema, defaults and storage helpers.
-// v2 contract: docs/PLATFORMS.md §3. Credentials stay in localArea only.
+// v3 contract: docs/PLATFORMS.md §3. Credentials stay in localArea only.
 import { chromeStorageArea } from './storage-areas.js';
 import { sha256Hex } from './hash.js';
 import { parsePattern, patternMatches, comparePatterns } from './site-pattern.js';
 
 export const SETTINGS_KEY = 'settings';
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 export const SETTINGS_KEYS = ['settings.core', 'settings.glossary', 'settings.sites'];
 export const SECRETS_KEY = 'secrets';
 const STORAGE_KEY = 'settings.storage';
@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   translateShortText: true,
   inlineMaxChars: 24, // units shorter than this get the inline layout
   lazy: { rootMarginPx: 600, batchDelayMs: 80 },
-  comics: { enabled:true, language: 'jpn', canvasSites:['*.pixiv.net'], visionEnabled: false },
+  comics: { enabled:false, language: 'jpn', canvasSites:['*.pixiv.net'], visionEnabled: false },
   subtitles: { enabled: false, mode: 'bilingual', fontSize: 22, position: 'bottom' },
   // Double-engine translation: machine translation (MT) shows a draft at once, the LLM refines it.
   // mt.engine: microsoft | google (free, unofficial) | microsoft-api | deepl (keyed) | mock (tests).
@@ -77,19 +77,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
     active: '',
     chain: [],
     profiles: [
-      {
-        id: 'gateway',
-        kind: 'gateway', // Optional pairing credential uses the local secrets slot, like API keys.
-        name: '本机网关',
-        baseUrl: 'http://127.0.0.1:18790/v1',
-        model: 'auto', // Subscription models remain explicit-only.
-        fallbackModels: [],
-        jsonMode: true,
-        maxItems: 20, // SJTU: keep one batch's output under ~900 tokens so a call stays < 1 min
-        maxChars: 3000,
-        concurrency: 2,
-        timeoutMs: 130000,
-      },
       {
         id: 'openai',
         kind: 'openai', // any OpenAI-compatible endpoint the user supplies
@@ -120,12 +107,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   prompt: { preset: 'general', custom: '' },
   glossary: [], // [{ src, dst }]
 
-  hover: { enabled: true, modifier: 'Shift', profileId: '', model: '' }, // empty = inherit page
-  selection: { enabled: true, showIcon: true },
+  hover: { enabled: false, modifier: 'Shift', profileId: '', model: '' }, // empty = inherit page
+  selection: { enabled: false, showIcon: true },
   // A leading "/xx " (e.g. "/ja ") overrides targetLang for that one translation.
-  input: { enabled: true, trigger: 'triple-space', targetLang: 'en', prefixOverride: true,
+  input: { enabled: false, trigger: 'triple-space', targetLang: 'en', prefixOverride: true,
     mode: 'replace', order: 'source-first', profileId: '', model: '' },
-  floatBall: { enabled: true, side: 'right', topRatio: 0.6 },
+  floatBall: { enabled: false, side: 'right', topRatio: 0.6 },
 
   siteRules: {
     always: [], // host patterns to auto-translate on load
@@ -152,6 +139,17 @@ export function mergeSettings(base, patch) {
   return out;
 }
 
+// Shared by extension storage, GM storage and configuration import. Never mutate input.
+export function migrateSettings(input) {
+  const s = mergeSettings(DEFAULT_SETTINGS, input);
+  for (const p of s.provider.profiles) if (p.kind === 'gateway') p.kind = 'openai';
+  if ((input?.version ?? 1) < 3) {
+    for (const feature of ['floatBall', 'selection', 'hover', 'input', 'comics']) s[feature].enabled = false;
+  }
+  s.version = SETTINGS_VERSION;
+  return s;
+}
+
 // Also used for plaintext exports. Never mutate a caller's settings.
 export function publicSettings(value) {
   if (Array.isArray(value)) return value.map(publicSettings);
@@ -176,9 +174,6 @@ export function providerChain(s) {
     const model = entry.model;
     const key = JSON.stringify([entry.profileId, model]);
     if (!profile || typeof model !== 'string' || !model.trim() || seen.has(key)) return [];
-    // Subscription tools are explicit-only, including when settings came from an older caller.
-    if (/^(claude|codex)\//.test(selected[0]?.model || '') && entry !== selected[0]) return [];
-    if (entry !== selected[0] && /^(claude|codex)\//.test(model)) return [];
     seen.add(key);
     return [{ profile, model }];
   });
@@ -191,6 +186,7 @@ function splitSettings(s) {
 }
 function combine(items) {
   return mergeSettings(DEFAULT_SETTINGS, { ...items['settings.core'],
+    version: items['settings.core']?.version ?? 1,
     glossary: items['settings.glossary'] || [], ...items['settings.sites'] });
 }
 function fitsSync(items) {
@@ -217,8 +213,9 @@ export function createSettingsStore({ syncArea, localArea }) {
     serial = next.catch(() => {});
     return next;
   };
-  async function persist(input, legacySecrets = {}) {
-    const s = publicSettings(mergeSettings(DEFAULT_SETTINGS, input));
+  async function persist(input, legacySecrets = {}, preserveProvider = false) {
+    preserveProvider ||= (input?.version ?? 1) < SETTINGS_VERSION;
+    const s = publicSettings(migrateSettings(input));
     s.version = SETTINGS_VERSION;
     validateSiteRules(s.siteRules);
     validateInteractionSettings(s);
@@ -233,8 +230,10 @@ export function createSettingsStore({ syncArea, localArea }) {
       const head = s.provider.chain[0];
       const primary = s.provider.profiles.find(p => p.id === head.profileId);
       if (!primary || typeof head.model !== 'string' || !head.model.trim()) throw new Error('备选链的首个接口或模型无效');
-      s.provider.active = primary.id;
-      primary.model = head.model;
+      if (!preserveProvider) {
+        s.provider.active = primary.id;
+        primary.model = head.model;
+      }
     }
     if (Object.keys(legacySecrets).length) {
       const got = await localArea.get(SECRETS_KEY);
@@ -268,16 +267,18 @@ export function createSettingsStore({ syncArea, localArea }) {
         const synced = await syncArea.get(SETTINGS_KEYS);
         if (synced['settings.core']) {
           status = { synced: true, reason: null };
-          return publicSettings(combine(synced));
+          const combined = combine(synced);
+          return combined.version < SETTINGS_VERSION ? persist(combined) : publicSettings(combined);
         }
         status = { synced: false, reason: 'unavailable' };
       } catch { status = { synced: false, reason: 'unavailable' }; }
     }
-    return publicSettings(got['settings.core'] ? combine(got) : structuredClone(DEFAULT_SETTINGS));
+    const combined = got['settings.core'] ? combine(got) : structuredClone(DEFAULT_SETTINGS);
+    return combined.version < SETTINGS_VERSION ? persist(combined) : publicSettings(combined);
   }
   const store = {
     load: () => exclusive(read),
-    save: patch => exclusive(async () => {
+    save: (patch, { preserveProvider = false } = {}) => exclusive(async () => {
       const current = await read();
       const next = mergeSettings(current, publicSettings(patch));
       // Preserve legacy profile switching semantics when no explicit v2 chain was supplied.
@@ -289,7 +290,7 @@ export function createSettingsStore({ syncArea, localArea }) {
         secrets[safeId(p.id)] = { apiKey: String(p.apiKey || '') };
         await localArea.set({ [SECRETS_KEY]: { ...(got[SECRETS_KEY] || {}), ...secrets } });
       }
-      return persist(next);
+      return persist(next, {}, preserveProvider);
     }),
     getSecret: id => exclusive(async () => {
       safeId(id);

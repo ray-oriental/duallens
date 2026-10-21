@@ -1,5 +1,5 @@
 name: Bug report / 问题反馈
-description: 可复现的扩展、网关或安装问题
+description: 可复现的扩展、用户脚本或安装问题
 title: "[Bug] "
 labels: [bug]
 body:
@@ -30,9 +30,8 @@ body:
         - 演示 mock（不联网）
         - 自定义 OpenAI 兼容接口
         - 本机 Ollama
-        - SJTU
-        - Hermes 零价模型
-        - 手动选择的 Claude/Codex 订阅
+        - 自定义 OpenAI 兼容服务
+        - 其它兼容模型
         - 与模型无关的安装/页面问题
     validations:
       required: true

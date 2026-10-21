@@ -4,13 +4,12 @@ Report suspected vulnerabilities privately using this repository's GitHub Securi
 
 ## Data flow
 
-The extension sends extracted text to the provider selected in settings. The gateway forwards to an explicitly enabled local service or official subscription CLI. The selected remote provider may receive webpage text. There is no telemetry, account backend or remote configuration service in DualLens.
+The extension sends extracted text to the provider selected in settings. The selected remote provider may receive webpage text. There is no telemetry, account backend or remote configuration service in DualLens.
 
-User-entered API keys remain in chrome.storage.local and are excluded from settings exports. They are not encrypted storage; protect your browser profile. The gateway does not copy CLI or campus credentials and logs only request metadata.
+User-entered API keys remain in device-local extension or manager storage and are excluded from plaintext exports; passphrase-encrypted exports may include them. They are not encrypted storage; protect your browser profile.
 
 ## Boundaries
 
-- The gateway binds only to 127.0.0.1, validates Host, and defaults to a single allowed DualLens extension Origin.
 - It accepts bounded, non-streaming plain-text requests. Non-loopback upstream URLs are refused.
 - Translation output is inserted as text and validated original-element clones, never innerHTML.
 - Optional subscription CLIs use empty temporary working directories, no project instructions and disabled tools. Only enable them for accounts you are authorized to use.

@@ -29,8 +29,6 @@ jobs:
           python-version: '3.12'
       - name: JavaScript unit tests
         run: npm test
-      - name: Gateway unit tests (mock transports only)
-        run: python -B -m unittest discover -s gateway/tests
       - name: Release safety and reproducibility tests
         run: python -B -m unittest discover -s scripts -p "test_*.py"
       - name: Manifest, imports and syntax

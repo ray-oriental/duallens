@@ -49,7 +49,7 @@ def build_release(project_root: Path, output_dir: Path | None = None, target: st
         require(not is_link(asset) and asset.is_file(), f'unsafe existing release asset: {asset.name}')
     for name in [*named, *USERSCRIPT_ASSETS, 'SHA256SUMS']:
         require(not is_link(output / name), f'linked existing output: {name}')
-    cache = Path.home() / '.cache' / 'duallens-build'
+    cache = Path(tempfile.gettempdir()) / 'duallens-build'
     check_output_path(cache)
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='duallens-release-', dir=cache) as temporary:

@@ -121,7 +121,7 @@ def novel_range_lazy(h):
 
 @e.case('live_navigation_reads','Real document replacement retries read, and missing line cannot borrow next line translation')
 def live_navigation_reads(h):
-    from run_v031_live import read,reader_snapshot
+    from browser_reads import read,reader_snapshot
     html='<p><span class="text-count">今日はいい天気です。</span><br><span class="text-count">明日も晴れるでしょう。</span><br><dl-t data-dl-state="done">明天也会晴。</dl-t></p>'
     h.ctx.route(h.base+'/nav-start',lambda route:route.fulfill(body=html+"<script>setTimeout(()=>location.replace('/nav-stable'),150)</script>",content_type='text/html'))
     h.ctx.route(h.base+'/nav-stable',lambda route:route.fulfill(body=html,content_type='text/html'))
@@ -156,9 +156,9 @@ def visible_controls(h):
     h.js("() => {document.querySelector('#search').placeholder='Find books';document.querySelector('#later').hidden=false}")
     h.wait_js("() => document.querySelector('#search').placeholder==='【译】Find books' && document.querySelector('#later dl-t[data-dl-state=done]')")
     h.settings({'translation':{'mode':'mt','mt':{'engine':'mock'}}})
-    h.wait_js("() => document.querySelector('#prose dl-t').getAttribute('data-dl-engine')==='mock' && document.querySelector('#search').placeholder.startsWith('【机翻】')")
+    h.wait_js("() => document.querySelector('#prose dl-t')?.getAttribute('data-dl-engine')==='mock' && document.querySelector('#search').placeholder.startsWith('【机翻】')")
     h.settings({'glossary':[{'src':'Search','dst':'检索'}]})
-    h.wait_js("() => document.querySelector('#label dl-t').dataset.dlEngine==='mock'")
+    h.wait_js("() => document.querySelector('#label dl-t')?.dataset.dlEngine==='mock'")
     h.command('toggle-page')
     expected=before.replace('Search articles','Find books').replace('id="later" hidden=""','id="later"')
     assert h.js('() => document.body.outerHTML')==expected

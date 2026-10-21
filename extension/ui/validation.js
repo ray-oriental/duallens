@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION, validateSiteRules, validateInteractionSettings } from '../shared/settings.js';
+import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION, migrateSettings, validateSiteRules, validateInteractionSettings } from '../shared/settings.js';
 import { isMtEngine } from '../background/mt.js';
 import { comicSites } from '../content/comics/sites.js';
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
@@ -50,23 +50,20 @@ export function validateSettings(s) {
     (s.provider.active === '' || s.provider.profiles.some(p=>p.id===s.provider.active)), '活动接口无效');
   const seen = new Set();
   for (const p of s.provider.profiles) {
-    requireThat(p && typeof p.id==='string' && !badKeys.has(p.id) && !seen.has(p.id) && ['gateway','openai','mock'].includes(p.kind), '接口标识重复或类型无效'); seen.add(p.id);
+    requireThat(p && typeof p.id==='string' && !badKeys.has(p.id) && !seen.has(p.id) && ['openai','mock'].includes(p.kind), '接口标识重复或类型无效'); seen.add(p.id);
     requireThat(typeof p.name==='string' && typeof p.model==='string', '接口名称或模型无效');
     if (p.kind !== 'mock') {
       requireThat(typeof p.baseUrl==='string', '接口地址无效');
       if (p.baseUrl) { const u = new URL(p.baseUrl); requireThat(['http:','https:'].includes(u.protocol) && !u.username && !u.password && !u.search && !u.hash, '接口须使用不含凭据或查询参数的HTTP(S)地址'); }
-      if (p.kind==='gateway') { const u=new URL(p.baseUrl); requireThat(['127.0.0.1','localhost'].includes(u.hostname), '本机网关只允许127.0.0.1或localhost'); }
       requireThat(p.jsonMode == null || typeof p.jsonMode==='boolean', 'JSON模式无效');
     }
-    requireThat(Array.isArray(p.fallbackModels) && p.fallbackModels.every(m=>typeof m==='string' && m.trim() && !/^(claude|codex)\//.test(m)), 'Claude/Codex订阅模型只能手动选择，不能作为自动备选');
+    requireThat(Array.isArray(p.fallbackModels) && p.fallbackModels.every(m=>typeof m==='string' && m.trim()), '备选模型须为非空字符串');
     for (const [v, lo, hi, name] of [[p.maxItems,1,50,'批量段数'],[p.maxChars,100,12000,'批量字符'],[p.concurrency,1,6,'并发数'],[p.timeoutMs,1000,300000,'超时']]) requireThat(Number.isInteger(v) && v>=lo && v<=hi, `${name}设置无效`);
   }
   requireThat(Array.isArray(s.provider.chain), '备选链须为数组');
   for (const [i, c] of s.provider.chain.entries()) {
     requireThat(c && seen.has(c.profileId) && typeof c.model === 'string' && c.model.trim(), '备选链的接口或模型无效');
-    requireThat(i === 0 || !/^(claude|codex)\//.test(c.model), 'Claude/Codex订阅模型只能手动选择，不能作为自动备选');
   }
-  if (/^(claude|codex)\//.test(s.provider.chain[0]?.model || '')) requireThat(s.provider.chain.length === 1, '订阅模型只能手动选择，不能自动回退');
   return s;
 }
 function cleanLike(value, shape) {
@@ -80,10 +77,11 @@ function cleanLike(value, shape) {
 }
 export function importSettings(data, current) {
   requireThat(data && typeof data==='object' && !Array.isArray(data), '设置文件须是JSON对象');
-  const next=cleanLike(safeExport(data), DEFAULT_SETTINGS);
-  const incoming = Array.isArray(data.provider?.profiles) ? data.provider.profiles : current.provider.profiles;
+  const migrated = migrateSettings(safeExport(data));
+  const next=cleanLike(migrated, DEFAULT_SETTINGS);
+  const incoming = Array.isArray(data.provider?.profiles) ? migrated.provider.profiles : current.provider.profiles;
   next.provider.profiles = incoming.map(imported => {
-    const shape = { ...DEFAULT_SETTINGS.provider.profiles[1], preset: '', requiresKey: false };
+    const shape = { ...DEFAULT_SETTINGS.provider.profiles.find(p => p.kind === 'openai'), preset: '', requiresKey: false };
     return cleanLike(safeExport(imported), shape);
   });
   next.version = SETTINGS_VERSION;

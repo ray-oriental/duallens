@@ -7,7 +7,7 @@
 
 | 阶段 | 功能 |
 | --- | --- |
-| **P0（本轮）** | 网页段落级双语对照；仅译文 / 恢复原文；视口懒翻译；动态内容（MutationObserver、SPA 路由）；译文样式；悬停翻译；划词翻译；输入框翻译；悬浮球；弹出页；设置页；站点规则（总是/从不/自定义选择器）；快捷键与右键菜单；翻译缓存；术语表；提示词预设与自定义；本机网关（交大 / Ollama / Claude CLI / Codex CLI / Hermes）；直连任意 OpenAI 兼容端点；测试用 mock 后端 |
+| **P0（本轮）** | 网页段落级双语对照；仅译文 / 恢复原文；视口懒翻译；动态内容（MutationObserver、SPA 路由）；译文样式；悬停翻译；划词翻译；输入框翻译；悬浮球；弹出页；设置页；站点规则（总是/从不/自定义选择器）；快捷键与右键菜单；翻译缓存；术语表；提示词预设与自定义；直连任意 OpenAI 兼容端点；测试用 mock 后端 |
 | P1 已实现 | YouTube 已有轨道双语字幕；桌面 PDF 文本层双语阅读（pdf.js）；桌面侧边栏 / 用户脚本页签文本翻译 |
 | P1 计划 | EPUB；Android Chrome 书签脚本 |
 | P2 | 已实现第一阶段本地漫画 OCR 旁列翻译；视觉模型、文档翻译仍计划中；iframe 增量边界见 PLATFORMS.md |
@@ -31,16 +31,8 @@ Android Edge + Tampermonkey                         │
         └───────────┬─────────────────────────────────────────┘
           queue（优先级 + 并发）→ cache → providers
                     │
-        ┌───────────┼──────────────┬─────────────┐
-     gateway      openai          mock
-  （本机网关）   （直连兼容端点） （测试，不联网）
-        │
-  gateway/duallens_gateway.py  127.0.0.1:18790
-   ├─ sjtu/*   → 127.0.0.1:18765 交大中转（ddl-hub，共用额度账）
-   ├─ ollama/* → 127.0.0.1:11434
-   ├─ claude/* → claude -p（订阅）
-   ├─ codex/*  → codex exec（订阅）
-   └─ hermes/* → 127.0.0.1:8645（Nous免费代理）
+             openai             mock
+         （直连兼容端点）     （测试，不联网）
 ```
 
 扩展零构建：原生 ES 模块，没有运行时依赖。content script 不能直接作为模块加载，
@@ -57,16 +49,15 @@ v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的�
 | interface maintainer | `docs/SPEC.md`、`extension/manifest.json`、`extension/shared/settings.js`、`extension/shared/protocol.js` |
 | background maintainer | `extension/shared/*`（除上面两个）、`extension/background/*`、`tests/unit/*` |
 | content maintainer | `extension/content/*`、`extension/styles/*`、`extension/ui/*`、`extension/icons/*` |
-| gateway maintainer | `gateway/*` |
 | test maintainer | `tests/e2e/*`、`tests/fixtures/*` |
 
 需要改别人的文件时，联系文件维护者，不要自己改。契约文件改动需要接口维护者复审。
 
-## 3. 设置 v2 与 secrets（`extension/shared/settings.js`）
+## 3. 设置 v3 与 secrets（`extension/shared/settings.js`）
 
 统一入口 `createSettingsStore({ syncArea, localArea })`，返回 `load()`、`save(patch)`、`getSecret(id)`、
 `setSecret(id, key)`、`onChange(cb)` 与 `syncStatus`。`loadSettings/saveSettings` 是默认扩展存储的薄包装。
-扩展的 popup、options、内容脚本、后台均用同一 v2 工厂与 `shared/storage-areas.js` 的 Chrome 适配。
+扩展的 popup、options、内容脚本、后台均用同一设置工厂与 `shared/storage-areas.js` 的 Chrome 适配。
 用户脚本的两个 area 指向同一个 GM 私有记录 `duallens:local`，不使用网页 localStorage / IndexedDB，也不声称跨设备自动同步。
 
 - 非机密配置拆为 `settings.core`（阅读、交互、translation、provider、prompt、cache）、`settings.glossary`、
@@ -74,8 +65,8 @@ v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的�
   单键超过 8 KB、总量超过 100 KB 或同步不可用时，整体回退本机区；设置页提示「此设备未同步」。
 - API key 只写本机区 `secrets: { [profileId]: { apiKey } }`。公共配置与兼容镜像 `settings` 均不含 key。
   `settings.storage` 保存本机同步状态及兼容镜像摘要；`settings` 只用于旧调用兼容，不是内容脚本的数据源。
-- v1 迁移幂等：将 profiles 内的 apiKey 移到 secrets，保留较新的本机 key 与清除标记，将版本改为 2。
-  过渡用户脚本的 `duallens:sync.settings` 一次性迁入 v2，已有 v2 配置不会被旧记录覆盖。
+- v1 迁移幂等：将 profiles 内的 apiKey 移到 secrets，保留较新的本机 key 与清除标记，随后执行 v3 迁移。
+  过渡用户脚本的 `duallens:sync.settings` 一次性迁入当前版本，已有配置不会被旧记录覆盖。
 - `onChange` 是失效通知，不携带配置对象。内容脚本收到通知后重新 `load()`，忽略过期重载，
   比较设置时忽略对象键顺序、保留数组顺序；无实际变化时保留悬停译文。
 - `provider.chain = [{ profileId, model }, …]` 表示跨 profile 备选链；其首项与兼容 active/model 对齐。
@@ -86,6 +77,10 @@ v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的�
   点击保存才写入 GM secrets。扩展平台该方法返回 null，其独立 options 页面保留原有 password 表单。
   明文导出递归去掉机密；带口令时使用 PBKDF2-SHA256（310,000 次）与 AES-GCM，
   格式 `duallens-config:v1:<base64url(salt|iv|密文)>`。密钥与口令不进日志。
+
+v2 → v3 一次性迁移：所有旧 `kind:'gateway'` profile 仅将 kind 改为 `openai`，保留 id、name、地址、模型、备选模型、JSON/批量/并发/超时参数与 chain 引用；同 id 的 secrets 槽继续作为 Bearer key。floatBall/selection/hover/input/comics 的 enabled 一次性设为 false，其余偏好保留。新安装同样默认关闭，用户在 v3 重新开启后不再重置；旧版明文与加密配置导入也经过此迁移。
+
+右键菜单仅保留 page「翻译此页 / 显示原文」、selection「翻译选中文字」、video「视频双语字幕」，以及 comics 开启时的 image「翻译图片文字」。显式右键翻译选中内容不受被动划词开关影响。
 
 字段与默认值仍以设置模块为准。触屏运行时将 rootMargin 限至 400px、每批至多 12 段、并发至多 2；
 不把性能限值回写用户配置。
@@ -106,7 +101,7 @@ siteRules: {
 ```
 
 - `match` 支持精确域名、`*.example.com`（含根域）、可选 `http://` / `https://`、可选端口与路径。
-  如 `mail.sjtu.edu.cn/zimbra/*`、`*.example.com/checkout/*`、`example.com/docs/*/api`；路径中的 `*` 匹配任意字符（含 `/`）。
+  如 `mail.example.com/inbox/*`、`*.example.com/checkout/*`、`example.com/docs/*/api`；路径中的 `*` 匹配任意字符（含 `/`）。
   协议和域名不区分大小写；路径区分大小写。查询串、片段不参与匹配。无路径表示全部路径，显式 `/` 只匹配根路径；
   `/docs/*` 匹配 `/docs/` 及其子路径，不匹配 `/docs`。省略端口匹配任意端口，显式端口匹配有效端口（HTTPS 默认 443、HTTP 默认 80）。
   非 HTTP(S) 协议、凭据、查询串、片段、空白、非法域名/端口或超过 2048 字符的模式在保存/导入时以中文提示拒绝。
@@ -118,7 +113,7 @@ siteRules: {
   **现状修正**：v0.4 实际代码的 never 曾连手动命令及所有交互一起禁用；v0.5 按本轮要求仅禁止自动网页翻译并隐藏悬浮球，
   弹出页、快捷键和用户脚本菜单仍可手动翻译/恢复。进入 never 路由时取消并恢复已有网页译文。
 - `selection` / `hover` / `input` 为 `on` / `off` / `default`，缺省等同 default，沿用相应全局开关。
-  off 时卸下对应事件/UI，并阻止显式入口；触屏 hover 同样控制长按。运行时覆盖不回写全局偏好。
+  off 时卸下对应被动事件/UI；右键翻译选中文字仍可显式使用；触屏 hover 同样控制长按。运行时覆盖不回写全局偏好。
 - `pushState` / `replaceState`、`popstate`、hash/navigation 事件重新判定；独立规则 RouteWatcher 在未翻译/never 时也运行，
   与翻译共用同一窗口/隔离世界的检测器。Navigation API 可用时不轮询；仅不可用时以可见页面 1 秒轮询兜底，
   隐藏暂停、重新可见立即检查。异步语言检测不能把上一条路由的自动决定带入下一页。
@@ -263,8 +258,7 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
   `<gN>` / `</gN>` / `<xN/>` 标记；不翻译代码、URL；只输出 JSON、不加解释、不加代码围栏；必须含 "JSON" 字样
   （json_object 模式的要求）。页面标题作为上下文一行；术语表以「原词 → 译词」列出；预设（通用、技术文档、
   学术、新闻、社交口语）各附一段风格要求；用户自定义提示词只替换风格部分，格式约束保留。
-- 请求一律写 `max_tokens`，按原文字符数估算（约为原文字符数的 2 倍加 256，上限 4096）。交大中转在缺少这个字段时
-  会按 2048 预占额度。
+- 请求一律写 `max_tokens`，按原文字符数估算（约为原文字符数的 2 倍加 256，上限 4096）。
 - 解析：去掉 ```` ``` ```` 围栏 → `JSON.parse` → 失败时取第一个 `{` 到最后一个 `}` 再解析 → 取 `t`（顶层就是数组时也接受）。
   长度不等时先半批重试，仍不等则降为单项；每个初始批次最多八个追加请求（内部 `retryBatchMax`），预算耗尽或单段仍失败标记 `error`，绝不按错误数组位置猜测对应关系。译文与原文**完全相同**且含拉丁字母（目标是
   非拉丁语言时），或非日语目标的日文正文被原样返回，视为漏翻：按链尝试尚未跳过的备选模型，全部失败后显示错误。
@@ -273,10 +267,10 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
 ## 8. 队列、限流、缓存（background）
 
 - 流式接口：`platform.http({…,onText?})` 的 `onText(delta,status,headers)` 提供新增文本，最终返回完整 `text`；GM 无 progress 时在 onload 解析。provider `chat({…,onDelta?})` 返回最终字符串，`onDelta(text)` 只发脱敏内容。请求 `stream:true`，不支持时回退 JSON。完整单项提前通过 `partial` 渲染，整批验证前不写缓存；错误、取消和恢复不留下迟到译文。首个视口批次最多六段、2000 字符，日译中首批最多两段；后续沿用 profile 上限。
-- 404 立即换下一个模型并冷却 30 分钟。网关取 Hermes proxy 目录与本地免费 allowlist 交集，实际 404 后从目录隐藏，避免一键接入再次选入。目录声明不是可用性保证，模型发现不发送翻译探测。
+- 404 立即换下一个模型并冷却 30 分钟；目录声明不是可用性保证，模型发现不发送翻译探测。
 - 非流式完整 JSON 批次中，某项人名/漏翻时，已正确翻译的其他项先确认并缓存，不因单项漏翻一起丢弃；漏翻项仍走备用模型与失败提示。日语正文原样返回也识别为漏翻。内容漏翻仅为当前任务跳过该模型，不给整个模型加网络故障冷却。JSON 长度不符时不提前确认缓存。
 - 去除格式占位符后仍相同的原文也按漏翻判定；日译中输出含至少四个平假名且占字母数超过 20% 时，作为疑似日文正文拦截（含流式单项），短人名不因此拒绝。该启发式不保证语义质量；显式 `mock` profile 的演示回显不参与语言质量检查，真实 HTTP profile 仍检查。多项漏翻耗尽备用模型后，仅对尚未完成项缩批重试，与 JSON 长度恢复共用每初始批次八个追加请求的预算，不重新翻译已确认邻段。
-- SJTU 客户端无进展等待最多 12 秒（更短 profile 超时仍优先），避免超过首屏目标后才换备用模型；SSE 内容/推理进展仍重置空闲计时器，并非截断正在输出的长响应。其它端点沿用用户超时。显示模式和译文插入造成布局变化时，也重新检查未提交范围。
+- 请求与流式空闲超时沿用用户配置；内容进展可重置空闲计时器。显示模式和译文插入造成布局变化时，重新检查未提交范围。
 
 - 队列按 `priority` 排序，每个 provider 配置自己的并发上限。冷却以 **profile + 模型**为单位：429 按 `Retry-After`
   冷却该 profile + 模型（没有这个头就指数退避，从 2s 起，上限 60s），并把这一批**立刻**交给 `provider.chain` 里下一个
@@ -309,62 +303,19 @@ MT 请求仅包含序列化文本与占位符、语言，不携带标题/URL/HTM
 两层缓存分离：MT 键为 `sha256('mt' | engine | from | to | text)`，LLM 沿用 §8 的完整提示词维度，
 LLM 缓存命中直接返回终稿，不为这些项目请求 MT。官方 MT key 存在本机 secrets，标识为 `mt-microsoft-api` / `mt-deepl`。
 
-## 9. 本机网关（`gateway/`）
-
-- `python gateway/duallens_gateway.py serve [--port 18790]`，用 Python 3 标准库 `ThreadingHTTPServer`。
-- 端点：`GET /health`、`GET /v1/models`、`POST /v1/chat/completions`（支持 JSON 与 `stream:true` OpenAI SSE；
-  错误体为 `{error:{message,type,code}}`，429 时带 `Retry-After`）。
-- **安全边界**：只绑定 `127.0.0.1`；`Host` 必须是 `127.0.0.1:<port>` 或 `localhost:<port>`（防 DNS 重绑定）；
-  请求带 `Origin` 时只接受 `chrome-extension://` 白名单；默认名单从 manifest 公开 key 派生，
-  缺少有效固定身份则拒绝浏览器请求。`gateway.json` 可显式配置 `allowed_origins`；CORS 预检只对放行的来源回应；请求体上限 1 MB；日志只记录元数据（后端、模型、字符数、耗时、
-  状态码），**不记录正文**。
-- 凭据：从既有本机存储按需读取，不落盘、不打印。CLI 后端用子进程运行，参数固定，提示词经 **stdin** 传入，
-  不拼进命令行（避免 Windows `.cmd` 参数注入）；工作目录是 `%USERPROFILE%\.duallens\cli-*\` 这样的空目录，
-  让 CLI 读不到任何项目指令文件。
-- 每个后端各有并发信号量、超时和**冷却表**（不可用到何时）。后端不可用时立刻返回 503 加
-  `{"error":{"code":"backend_unavailable"}}`，扩展据此马上换下一个模型；限流返回 429 加 `Retry-After`。
-- **网络卫生**：访问本机地址一律绕过代理（`urllib.request.build_opener(ProxyHandler({}))`）；不缓存全局 opener
-  （避免长驻进程保留旧代理配置）。子进程需要的 `HTTPS_PROXY`/`HTTP_PROXY` 每次启动前从注册表
-  `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings` 现读（`ProxyEnable` 为 1 时取 `ProxyServer`），
-  已有环境变量时优先用环境变量。
-- 配置文件 `%USERPROFILE%\.duallens\gateway.json` 可选，用于覆盖端口、`allowed_origins`、各后端开关、模型名单、
-  每日上限、hermes 地址。用量计数存放在 `%USERPROFILE%\.duallens\usage.json`。
-- 登录自启是可选的Windows操作；Install-Startup.ps1只注册网关，-WithHermes增加独立代理，-Remove移除DualLens自有项。不会在安装扩展时自动注册。
-
-### 9.1 各后端（依据 `docs/ARCHITECTURE.md`）
-
-| 前缀 | 调用 | 要点 |
-| --- | --- | --- |
-| `sjtu/` | `POST http://127.0.0.1:18765/v1/chat/completions` | 可选已有DDL Hub中转；读机器本地令牌并检查/ledger，后台窗口接近上限时返回429；不附带凭据、不运行凭据工具。超时120s，模型名单由本机配置列出 |
-| `hermes/` | `POST {hermes_url}/v1/chat/completions`，`hermes_url` 默认 `http://127.0.0.1:8645` | 对接 `hermes proxy start --provider nous`（纯转发，不经 agent）。**网关不负责启动它**，没在监听就算不可用。只放行 `gateway.json` 里 `hermes.models` 白名单中的模型，默认仅保留零价模型 `upstage/solar-mini4:free`；其余模型需本机显式配置与手动选择。`401 upstream_auth_failed` 冷却 10 分钟 |
-| `ollama/` | `POST http://127.0.0.1:11434/v1/chat/completions` | qwen3 系列加 `reasoning_effort: "none"`，gpt-oss 加 `"low"`；`keep_alive: "10m"`；temperature 0。加载 ≥ 20B 的模型前检查提交内存（沿用 ddl-hub 规则：提交占用 < 90% 且剩余 ≥ 8 GiB，用 ctypes `GetPerformanceInfo`），不满足就回 503。并发：4B 为 2，≥ 20B 为 1 |
-| `claude/` | 子进程 `claude.exe -p --model <haiku\|sonnet> --tools "" --restricted --strict-mcp-config --no-session-persistence --disable-slash-commands --system-prompt-file <tmp> --output-format json` | exe 用 `%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe`，不走 `.cmd` 垫片；user 消息经 stdin；工作目录是空沙箱；环境去掉所有 `ANTHROPIC_*`、`CLAUDE_*`（否则会被 settings.json 里指向交大的地址带走，`--restricted` 也是为此）；`CREATE_NO_WINDOW`，超时 `taskkill /T /F`；从 `result` 取文本并去掉围栏。**每日上限按用户选择默认不限（0）**，超出回 429。并发 1 |
-| `codex/` | 子进程 `node <codex.js> exec -s read-only --skip-git-repo-check --ephemeral --ignore-user-config --json -o <tmp> -` | system 和 user 合并成一段经 stdin 传入，开头写明「不要使用任何工具或技能，只输出结果」；从 `-o` 文件取答案。每日上限按用户选择默认不限（0），并发 1 |
-
-全新安装没有选中的 LLM 服务，设置页显示可选模型向导；用户可直接触发免费 MT 翻译，无需本机服务或 key。
-配置精修模型时推荐 OpenRouter 免费模型；安装/打开设置不自动联网。
-gateway profile默认`ollama/qwen3:4b`，无自动fallback，本机网关完全可选。
-`ollama/gpt-oss:20b`、`claude/*`、`codex/*` 只在用户手动选择时使用：订阅后端仅手动选择，且SJTU/Hermes/订阅默认disabled，需机器本地配置显式启用。
-
-SSE 使用 `data: {choices:[{delta:{content}}]}` 与 `data: [DONE]`。上游不支持流式时包装最终 JSON；发头前保留 HTTP 错误码，发头后出错发错误事件，不发送 `[DONE]`。客户端断开关闭上游，Host、Origin、配对与工具禁用边界与 JSON 相同。
-
-漫画名单元数据及扩展专属会话规则见 [PLATFORMS.md](PLATFORMS.md) 与 [COMICS.md](COMICS.md)。
-
 ## 10. 测试与验收
 
 - `node --test tests/unit/`：占位符序列化与还原、JSON 批量解析（围栏、长度不等、漏翻）、批量切分、缓存键、设置合并、站点规则匹配。
   不依赖 DOM 的逻辑都必须有单测；依赖 DOM 的由 E2E 覆盖。
-- `python -m unittest discover -s gateway/tests`：路由、Host/Origin 校验、错误映射、CLI 后端（打桩）。
 - mock 后端约定：解析 user 消息里 `<input>` 中的 `{"t":[...]}`，每项原样保留标记并在前面加「【译】」，回 `{"t":[...]}`，延迟 30–120ms。E2E 断言依赖这一点。
-- E2E：Playwright Chromium + `--load-extension`，使用临时 profile，依赖放在 `%USERPROFILE%\.cache\duallens-e2e\`。
-  本地夹具页面加 mock 后端，断言译文插入、样式、切换、恢复、悬停、输入框翻译和动态内容；再用一个真实后端翻译公开文章夹具。每轮结构化结果保留，失败用例另留截图；成功证据不引用旧失败截图。
-- 验收由发布维护者做：单测与 E2E 通过，reviewer 无未关闭的高危问题，安全边界（§5.8、§9）逐条核对。
+- E2E：Playwright Chromium + `--load-extension`，使用临时 profile，依赖安装在工作区外，输出用 `DUALLENS_E2E_OUT` 指定，默认系统临时目录下的 `duallens-e2e`。
+  本地夹具页面加 mock 后端，断言译文插入、样式、切换、恢复、悬停、输入框翻译和动态内容；真实服务统一经 `run_acceptance.py --llm <base URL>` 独立验收。每轮结构化结果保留，失败用例另留截图；成功证据不引用旧失败截图。
+- 验收由发布维护者做：单测与 E2E 通过，reviewer 无未关闭的高危问题，安全边界（§5.8 与机密存储）逐条核对。
 
-## 11. 实现收敛（2026-10-13）
+## 11. 实现约束
 
-- 固定公开扩展key；网关默认Origin名单只允许DualLens，本机客户端可不带Origin。
-- SJTU模型名单当前由本机配置列出，避免查询模型列表占共享额度；默认deepseek-chat。
-- Hermes格式参数400则去掉重试一次；模型白名单与服务可用性由本机配置及提供方决定。
-- 订阅CLI仅手选daily_limit=0；Codex默认用CLI/本机配置模型，禁WebSearch、命令、JS/app/多agent及项目文档加载。
-- JSON长度错误不得回退扫描其内部seg；纯解释文本不回填。源语言和标题参与缓存。
-- P0验收流程见VALIDATION.md，P1/P2缺项见ROADMAP.md。
+- manifest 的公开 key 只固定开发版扩展身份，不含签名私钥。
+- JSON 长度错误不得回退扫描其内部 seg；纯解释文本不回填。源语言和标题参与缓存。
+- 验证流程见 VALIDATION.md，平台与待办边界见 PLATFORMS.md 和 ROADMAP.md。
+
+配置导入可调用 `store.save(settings, {preserveProvider:true})` 保留服务默认模型与 chain 的独立值；日常保存仍对齐链首项。

@@ -213,8 +213,8 @@ class App {
         sendResponse({ ok: true, dormant: this.dormant });
         return false;
       case P.MSG_TRANSLATE_SELECTION:
-        if (this.getSettings().selection.enabled) this.selection.openCard(msg.text, this.#selectionRect());
-        sendResponse({ ok: this.getSettings().selection.enabled });
+        this.selection.openCard(msg.text, this.#selectionRect());
+        sendResponse({ ok: true });
         return false;
       default:
         return false;

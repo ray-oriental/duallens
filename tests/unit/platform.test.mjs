@@ -107,7 +107,7 @@ test('userscript migrates the transitional GM namespace once and retains newer l
   await platform.settingsStore.save({ targetLang: 'en' });
   const second = createUserscriptPlatform(gm); await second.ready;
   assert.equal((await second.settingsStore.load()).targetLang, 'en');
-  assert.equal(gm.values.get('duallens:local')['settings.core'].version, 2);
+  assert.equal(gm.values.get('duallens:local')['settings.core'].version, 3);
 });
 
 test('extension platform follows sync-only v2 updates and uses the shared whole-store local fallback', async () => {

@@ -17,11 +17,10 @@ fresh-install wizard with no automatic network, mocked OpenRouter discovery and 
 encrypted backup/import plus key-free plaintext, popup service switching, and the shared form with
 injected storage/http on a loopback page where extension APIs are forbidden. It verifies local-only
 secrets, 44px controls and no horizontal overflow at 375x812, and writes light/dark screenshots to
-`%USERPROFILE%\.cache\duallens-e2e\providers-settings\`.
+`DUALLENS_E2E_OUT/providers-settings`.
 
 ```powershell
-$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
-$testPython = "$env:USERPROFILE\.venvs\duallens-e2e\Scripts\python.exe"
+$testPython = "<external-venv>/Scripts/python.exe"
 & $testPython -B -u tests/e2e/run_e2e.py --mock-only
 node scripts/build_userscript.mjs
 & $testPython -B -u tests/e2e/run_userscript_e2e.py
@@ -30,4 +29,4 @@ node scripts/build_userscript.mjs
 
 Provider HTTP requests are intercepted with a small original fixture; no real service or account is used.
 
-The environment is outside the checkout (`%USERPROFILE%\.venvs\duallens-e2e`, Playwright 1.48). The optional browser-cache environment variable points at the parent of `chromium-1140`; omit it to use Playwright's default cache. All profiles and browser evidence stay in `%USERPROFILE%\.cache\duallens-e2e\`; they are not release inputs. A passing synthetic run does not replace acceptance on the two physical Windows computers or Android Edge/Tampermonkey devices.
+The environment is outside the checkout (an external virtual environment, Playwright 1.48). The optional browser-cache environment variable points at the parent of `chromium-1140`; omit it to use Playwright's default cache. All profiles and browser evidence stay in `DUALLENS_E2E_OUT`; they are not release inputs. A passing synthetic run does not replace acceptance on the two physical Windows computers or Android Edge/Tampermonkey devices.

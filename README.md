@@ -3,7 +3,7 @@
 [![CI](https://github.com/ray-oriental/duallens/actions/workflows/ci.yml/badge.svg)](https://github.com/ray-oriental/duallens/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-独立实现的通用网页双语翻译插件：桌面 Chrome / Edge 用 Manifest V3 扩展，Android Edge 手机与平板用 Tampermonkey 用户脚本。v0.4 工作区默认免费机器翻译，无需 key；可填入自己的模型服务后台精修。本机网关是可选增强，没有账户体系、遥测或付费墙。
+独立实现的通用网页双语翻译插件：桌面 Chrome / Edge 用 Manifest V3 扩展，Android Edge 手机与平板用 Tampermonkey 用户脚本。v0.4 工作区默认免费机器翻译，无需 key；可填入自己的模型服务后台精修。没有账户体系、遥测或付费墙。
 
 **第一版 v0.1.0：网页核心功能。** PDF、EPUB、视频字幕、OCR、文档和 iframe 翻译尚未实现，见 [路线图](docs/ROADMAP.md)。这不是任何第三方翻译扩展的官方版本或代码分支。
 
@@ -11,16 +11,16 @@
 
 ## 下载与安装
 
-电脑 Chrome/Edge、第二台电脑、Android Edge + Tampermonkey、直连模型和可选网关配对，请看[全设备设置指南](docs/SETUP-ALL-DEVICES.md)。
+电脑 Chrome/Edge、Android Edge + Tampermonkey 和加密配置迁移，请看[使用指南](docs/USAGE.md)。
 
-仅浏览器使用下载扩展包；需要本机网关或离线开发时下载 portable 完整源码包，或克隆本仓库。
+仅浏览器使用下载扩展包；需要离线开发时下载 portable 完整源码包，或克隆本仓库。
 
 从 [Releases](https://github.com/ray-oriental/duallens/releases) 下载 `duallens-extension-v0.1.0.zip`，解压后：
 
 1. 打开 `chrome://extensions` 或 `edge://extensions`，开启「开发者模式」。
 2. 点击「加载已解压的扩展程序」，选择包含 `manifest.json` 的解压目录。
 3. 从源码安装时，选择本仓库的 `extension/` 目录。无需 npm install 或构建。
-4. 新安装无需模型配置，用户点击翻译即可使用默认 Microsoft 免费非官方 MT（失败可转 Google）。想精修时再打开设置添加模型。安装/打开设置不请求翻译，不借用本机账户或校园服务。
+4. 新安装无需模型配置，用户点击翻译即可使用默认 Microsoft 免费非官方 MT（失败可转 Google）。想精修时再打开设置添加模型。安装/打开设置不请求翻译，不借用本机账户。
 5. 打开普通网页，点击扩展按钮「翻译页面」。
 
 扩展固定 ID 为 `noodgdnebcnfkgipoabjjlgaebocgnkj`。manifest 的 key 是公开身份信息，无私钥。当前没有上架扩展商店；不支持 Firefox / Safari。
@@ -33,8 +33,8 @@ Android 手机与平板：
 
 1. 在 Edge 的「扩展」目录安装并启用 Tampermonkey，入口随 Edge 版本可能变化；也可参考 [Tampermonkey 官方 Edge 安装页](https://www.tampermonkey.net/index.php?browser=edge)。
 2. 打开 [最新 Release 的 duallens.user.js](https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js)，确认 Tampermonkey 安装提示，启用脚本。若对应 Release 尚未包含该资产，可从源码运行 `node scripts/build_userscript.mjs` 后安装 `dist/duallens.user.js`。
-3. 打开普通网页，点悬浮球即可机器翻译，无需 key。想精修时从 Tampermonkey 菜单或悬浮球打开设置，按下方 OpenRouter 示例配置并保存。
-4. 长按段落 500ms 翻译；移动手指或滚动会取消长按。划词按钮位于选区下方。输入法不方便打三连空格时，用悬浮球菜单的「翻译当前输入框」。
+3. 打开普通网页，从 Tampermonkey 菜单选择「翻译 / 恢复当前页面」即可机器翻译，无需 key。需要精修时在设置中添加自己的服务。
+4. 悬浮球、划词、悬停/长按、输入框翻译和漫画 OCR 默认关闭，可在设置中显式开启。
 5. 手机、平板与两台电脑之间，用带口令的加密配置导出/导入迁移服务和 key。GM 存储不会自动跟随桌面扩展同步；真机验收步骤见 [移动端清单](tests/e2e/MOBILE_ACCEPTANCE.md)。
 
 Android Chrome 当前没有本项目可安装的扩展或用户脚本版本。书签脚本是 P1 计划，尚未交付；使用移动版请打开 Android Edge。桌面 Tampermonkey 也可安装同一用户脚本，避免与 DualLens 扩展在同一网页同时启用。
@@ -43,7 +43,7 @@ Android Chrome 当前没有本项目可安装的扩展或用户脚本版本。�
 
 - 段落级双语对照、仅译文和恢复原文；保留链接、加粗和行内代码。
 - 视口懒翻译、动态内容、SPA 页面；翻译缓存、模型限流与备用模型冷却。
-- Shift + 悬停、划词翻译、输入框三连空格翻译、悬浮球。
+- 可选 Shift + 悬停、划词翻译、输入框三连空格翻译、悬浮球（默认关闭）。
 - 15 种译文样式、术语表、提示词预设、总是／从不翻译站点规则。
 - `Alt+A` 翻译／恢复，`Alt+W` 双语／仅译文，`Alt+I` 翻译当前输入框。若有快捷键冲突，在浏览器扩展快捷键页调整。
 
@@ -60,32 +60,9 @@ Android Chrome 当前没有本项目可安装的扩展或用户脚本版本。�
 
 ### 其他服务与自定义接口
 
-可添加 DeepSeek、硅基流动、智谱、月之暗面、OpenAI、Google Gemini、Groq、交大、Ollama 或自定义预设。填写你有权使用的服务的 base URL（通常以 `/v1` 结尾）、模型名和 API key。交大预设直接使用你自己的 key，不依赖本机中转。接口需支持非流式 `/chat/completions` 和纯文本 messages。不支持 JSON mode 的端点可关闭该选项；400 格式错误也会去掉格式参数重试一次。备选链可跨服务配置。
+可添加 OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 或自定义 OpenAI 兼容服务。填写自己的 base URL（通常以 `/v1` 结尾）、模型名和 API key。本地模型需自行启动服务；Ollama 需设置 `OLLAMA_ORIGINS` 允许扩展来源。JSON mode 可按模型能力开启；备选链可跨服务配置。
 
 扩展 API key 只保存在当前浏览器的 `chrome.storage.local`；用户脚本只保存在 Tampermonkey 的 GM 私有存储。非机密扩展配置使用 `chrome.storage.sync`，超限时整组回退本机并显示「此设备未同步」。明文导出不含 key；只有主动填写口令的加密导出包含 key，可在设备之间搬配置。用户脚本只显示 key 的已设置/未设置状态及设置、清除按钮；key 与备份口令均在原生对话框中输入，默认不回填旧值，取消保留原值，密钥修改点击保存后生效。网页文本将发送给你选择的服务；在私密页面使用前应明确该服务的数据处理方式。
-
-### 本机网关与 Ollama（桌面端可选）
-
-直连模型服务无需启动 Python、Ollama 或任何本机进程。手机上的 `127.0.0.1` 指向手机自己，不能用作桌面电脑网关地址。
-
-可使用 Python 3.10+ 标准库网关（无需 pip 依赖）：
-
-```sh
-python -B gateway/duallens_gateway.py serve --port 18790
-```
-
-默认仅启用 Ollama，地址 `http://127.0.0.1:11434`，模型名单为 `qwen3:4b`、`gpt-oss:20b`；需要自行准备模型。设置中选择「本机网关」、base URL `http://127.0.0.1:18790/v1`、模型 `ollama/qwen3:4b`。也可按下方配置添加已有的其他 Ollama 模型。
-
-网关健康检查：`http://127.0.0.1:18790/health`。浏览器 Origin 默认仅允许上述固定 DualLens 身份，本机程序也可通过回环接口调用。商店版要把商店分配的扩展 ID 加入 `~/.duallens/gateway.json` 的 `allowed_origins` 白名单；只接受用户显式填写的精确 `chrome-extension://<id>`，不接受通配或网页来源。
-
-### 可选集成：SJTU、Hermes、Claude、Codex
-
-这些后端默认关闭，需在机器本地 `~/.duallens/gateway.json` 显式启用。参考 [网关配置示例](gateway/gateway.example.json) 与 [架构说明](docs/ARCHITECTURE.md)。配置、登录态、令牌与模型都不放入仓库。
-
-- SJTU：适配已有的本机 DDL Hub 中转和共享额度账；不附带中转或校园登录凭据。
-- Hermes：适配独立的 `hermes proxy` 回环进程，并限制模型白名单；不向聊天 agent 发送请求或改它的配置。服务与模型的可用性、免费规则由提供方决定。
-- Claude / Codex：当前订阅 CLI 适配面向 Windows npm 安装。需要你已有的官方 CLI 登录态；仅手动选用，不加入自动备用链。默认不设每日调用上限，仍受订阅本身额度限制。CLI 会关闭工具和项目指令读取。
-- Linux / macOS 可使用直接兼容端点或网关 Ollama；此版本不承诺订阅 CLI、自启脚本或 Hermes 启动包装器在这些平台可用。
 
 ### 离线演示
 
@@ -97,27 +74,12 @@ python -B gateway/duallens_gateway.py serve --port 18790
 
 默认 Microsoft 与备选 Google 都是**免费非官方接口**，可能随时限流、变动或失效；用户触发翻译会将待译文字发送给它们。可关闭 MT 备用、更换官方 Microsoft Translator / DeepL（key 仅存本机），或选「只大模型」禁用 MT。打开设置不会发翻译请求。详见[隐私说明](docs/PRIVACY.md)和[双引擎契约](docs/PLATFORMS.md)。网络耗时不能保证每次 ≤1 秒，较长精修译文也可能改变段落高度；不承诺任意网页零位移。
 
-## Windows 登录自启（可选）
-
-在仓库目录或完整源码包目录的 PowerShell 中执行：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File gateway\Install-Startup.ps1
-# 只有已安装并配置 Hermes 时才增加其独立代理启动项
-powershell -ExecutionPolicy Bypass -File gateway\Install-Startup.ps1 -WithHermes
-# 停止并移除两个 DualLens 自有启动项
-powershell -ExecutionPolicy Bypass -File gateway\Install-Startup.ps1 -Remove
-```
-
-运行态在 `~/.duallens`。脚本不会自动支付、注册第三方账号或安装模型，也不会修改其他应用的启动项。
-
 ## 开发与协作
 
 见 [贡献指南](CONTRIBUTING.md)。GitHub `main` 是协作基线；用 fork／feature branch 和 PR 开发，不同步运行态或直接覆盖其他人的改动。CI 在 Windows 与 Ubuntu 跑离线单测，Ubuntu 另跑 mock 浏览器验收。
 
 ```sh
 npm test
-python -B -m unittest discover -s gateway/tests
 python -B -m unittest discover -s scripts -p "test_*.py"
 python -B scripts/check_project.py
 python -B scripts/build_release.py

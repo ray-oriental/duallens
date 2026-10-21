@@ -1,4 +1,4 @@
-import { publicSettings } from './settings.js';
+import { publicSettings, DEFAULT_SETTINGS } from './settings.js';
 
 export const CONFIG_PREFIX = 'duallens-config:v1:';
 export const PBKDF2_ITERATIONS = 310000;
@@ -62,4 +62,24 @@ export async function importConfig(text, password = '') {
     if (!data?.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) throw new Error('配置格式无效');
     return { settings: publicSettings(data.settings), secrets: checkedSecrets(data.secrets) };
   } catch { throw new Error('口令错误或加密配置已损坏'); }
+}
+
+// Compact device-transfer backups; import restores omitted defaults.
+export function compactConfig(settings) {
+  const diff = (value, base) => {
+    if (JSON.stringify(value) === JSON.stringify(base)) return undefined;
+    if (value && typeof value === 'object' && !Array.isArray(value) && base && typeof base === 'object' && !Array.isArray(base)) {
+      return Object.fromEntries(Object.entries(value).flatMap(([key, v]) => {
+        const changed = diff(v, base[key]); return changed === undefined ? [] : [[key, changed]];
+      }));
+    }
+    return structuredClone(value);
+  };
+  const result = diff(settings, DEFAULT_SETTINGS) || {};
+  // A compact v3 backup must not be mistaken for a legacy backup and reset opt-ins.
+  result.version = settings.version;
+  result.provider ||= {};
+  const shape = { ...DEFAULT_SETTINGS.provider.profiles.find(p => p.kind === 'openai'), preset: '', requiresKey: false };
+  result.provider.profiles = settings.provider.profiles.map(p => diff(p, shape) || {});
+  return result;
 }

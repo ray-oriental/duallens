@@ -63,6 +63,9 @@ def main():
             page.locator("#status").filter(has_text="修改后").wait_for()
             assert page.locator("#wizard").is_visible()
             assert page.locator("#profile").input_value() == ""
+            for feature in ("#floatEnabled", "#selectionEnabled", "#hoverEnabled", "#inputEnabled", "#comicsEnabled"):
+                assert not page.locator(feature).is_checked(), feature + " must start disabled"
+            assert page.locator('#connect-gateway, #import-pairing, #pairingText').count() == 0
             assert calls == [], "Fresh installation requested a remote service"
             page.screenshot(path=str(artifact / "wizard-375.png"))
             print("PASS fresh_wizard: no selected provider and no automatic network")
@@ -247,8 +250,13 @@ def main():
                   window.fixtureStore = store;
                   window.fixtureForm = await mountSettingsForm(document.querySelector('#form-root'), {store, platform:{kind:'userscript', async http() { throw new Error('Unexpected network'); }}});
                 }""")
-                independent.select_option("#providerPreset", "mock")
-                independent.click("#add-profile")
+                # Mock stays an internal test profile, outside the public preset list.
+                independent.evaluate("""async () => {
+                  const settings = await fixtureStore.load();
+                  settings.provider.profiles.push({...settings.provider.profiles.find(p=>p.id==='mock'),id:'mock-2'});
+                  settings.provider.active='mock-2';
+                  await fixtureStore.save(settings); await fixtureForm.refresh();
+                }""")
                 independent.click("#load-models")
                 independent.locator("#status").filter(has_text="获取到 3").wait_for()
                 independent.click("#test")

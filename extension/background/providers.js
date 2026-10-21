@@ -8,7 +8,6 @@ import { profileFromPreset } from '../shared/presets.js';
 
 const TEMPERATURE = 0.2;
 const MODELS_TIMEOUT_MS = 15000;
-const STREAM_IDLE_MS = 12000;
 
 export function parseRetryAfter(value, nowMs = Date.now()) {
   if (value == null) return undefined;
@@ -19,7 +18,7 @@ export function parseRetryAfter(value, nowMs = Date.now()) {
   return Number.isNaN(when) ? undefined : Math.max(0, when - nowMs);
 }
 
-// Loopback, RFC1918, link-local, .local and bare hostnames: places where plain http is acceptable.
+// Loopback, RFC1918, shared address space, link-local, .local and bare hostnames: places where plain http is acceptable.
 export function isLocalHost(hostname) {
   const h = String(hostname).toLowerCase().replace(/^\[|\]$/g, '');
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h === '::1') return true;
@@ -28,21 +27,14 @@ export function isLocalHost(hostname) {
   if (!m) return false;
   const a = Number(m[1]);
   const b = Number(m[2]);
-  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
-}
-
-export function isPairingHost(hostname) {
-  const h = String(hostname).toLowerCase();
-  if (h === '127.0.0.1' || h === 'localhost') return true;
-  const m = /^100\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
-  return !!m && Number(m[1]) >= 64 && Number(m[1]) <= 127 && Number(m[2]) <= 255 && Number(m[3]) <= 255;
+  return a === 127 || a === 10 || (a === 100 && b >= 64 && b <= 127) || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
 }
 
 // Returns a human-readable problem string, or null when the profile can be used.
 export function profileProblem(profile) {
   if (!profile || typeof profile !== 'object') return '没有可用的模型配置';
   if (profile.kind === 'mock') return null;
-  if (profile.kind !== 'gateway' && profile.kind !== 'openai') return `未知的接口类型：${profile.kind}`;
+  if (profile.kind !== 'openai') return `未知的接口类型：${profile.kind}`;
   let url;
   try {
     url = new URL(String(profile.baseUrl || ''));
@@ -52,10 +44,6 @@ export function profileProblem(profile) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return '接口地址必须以 http:// 或 https:// 开头';
   if (url.username || url.password || url.search || url.hash) return '接口地址不能包含凭据或查询参数';
   if (!profile.model) return '尚未选择模型';
-  if (profile.kind === 'gateway' && profile.apiKey) {
-    if (!/^[A-Za-z0-9_-]{43}$/.test(profile.apiKey)) return '配对令牌格式无效';
-    if (url.protocol !== 'http:' || !isPairingHost(url.hostname)) return '配对令牌仅发送至回环或 Tailscale IPv4 网关';
-  }
   if (profile.kind === 'openai') {
     const key = String(profile.apiKey || '');
     if (/[^\x20-\x7e]/.test(key)) return 'API key 含有非法字符';
@@ -70,7 +58,7 @@ function endpoint(profile, path) {
 
 function headersFor(profile) {
   const h = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (['openai', 'gateway'].includes(profile.kind) && profile.apiKey) h.Authorization = `Bearer ${String(profile.apiKey).trim()}`;
+  if (profile.kind === 'openai' && profile.apiKey) h.Authorization = `Bearer ${String(profile.apiKey).trim()}`;
   if (isOpenRouter(profile)) h['X-Title'] = 'DualLens';
   return h;
 }
@@ -153,8 +141,8 @@ export function createProviders({ fetchImpl, getSecret = async id => {
   const noStream = new Set();
   async function withSecret(profile) {
     // apiKey is accepted only as a transient legacy adapter input, never stored here.
-    if (!['openai', 'gateway'].includes(profile?.kind)) return profile;
-    return { ...profile, apiKey: await getSecret(profile.id) || (profile.kind === 'openai' ? profile.apiKey : '') || '' };
+    if (profile?.kind !== 'openai') return profile;
+    return { ...profile, apiKey: await getSecret(profile.id) || profile.apiKey || '' };
   }
 
   async function request(profile, { url, method, body, timeoutMs, idleMs = timeoutMs, signal, onDelta }) {
@@ -238,8 +226,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       if (signal && signal.aborted) throw cancelledError();
       if (e instanceof DLError) throw e;
       if (timedOut) throw new DLError(ERR.NETWORK, `请求超时（${Math.round(limit / 1000)} 秒）`);
-      const hint = profile.kind === 'gateway' ? '，请确认本机网关已启动' : '';
-      throw new DLError(ERR.NETWORK, `无法连接 ${hostOf(profile)}${hint}`);
+      throw new DLError(ERR.NETWORK, `无法连接 ${hostOf(profile)}`);
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
@@ -255,7 +242,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     if (res.status === 429) {
       return new DLError(ERR.RATE_LIMITED, `被限流（429）${suffix}`, extra);
     }
-    if ((res.status === 401 || res.status === 403) && profile.kind !== 'gateway') {
+    if ((res.status === 401 || res.status === 403)) {
       return new DLError(ERR.CONFIG, `认证失败（${res.status}），请检查 API key${suffix}`, extra);
     }
     return new DLError(ERR.PROVIDER, `接口返回 ${res.status}${suffix}`, extra);
@@ -288,13 +275,11 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     const jsonKey=profile.id+'|'+profile.baseUrl+'|'+(model||profile.model);
     if (noStream.has(jsonKey)) payload.stream = false;
     if(profile.jsonMode!==false&&!noJson.has(jsonKey)) payload.response_format={type:'json_object'};
-    const sjtuDirect = profile.kind !== 'gateway' && (/^sjtu\//.test(payload.model) || /models\.sjtu\.edu\.cn/.test(profile.baseUrl));
     const send=()=>request(profile, {
       url: endpoint(profile, '/chat/completions'),
       method: 'POST',
       body: JSON.stringify(payload),
-        timeoutMs: sjtuDirect ? Math.min(profile.timeoutMs || 50000, 50000) : profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
-        idleMs: sjtuDirect || profile.kind === 'gateway' ? STREAM_IDLE_MS : undefined,
+        timeoutMs: profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
       signal, onDelta: onDelta || (() => {}),
     });
     let res=await send();

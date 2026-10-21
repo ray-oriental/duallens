@@ -1,8 +1,7 @@
 """PDF browser checks using the canonical staging/session helper.
 
 Default run is mock-only: no account or model server; original fixtures are regenerated in the
-E2E cache. `--live MODEL` is a separate, explicitly requested real-provider run against the local
-gateway (direct network, no login) that saves screenshots; it is never part of the offline result.
+E2E cache. Real-provider runs use run_acceptance.py and are reported separately.
 """
 from pathlib import Path
 import argparse
@@ -413,140 +412,10 @@ def pdf_probe(h):
     return 'no webRequest/startup probes; HEAD success/non-PDF; HEAD 405 -> anonymous Range GET; viewer/notice outcomes'
 
 
-LIVE_SAMPLES = {
-    'lecture': ('https://math.berkeley.edu/~andrewshi/teaching/math1560j-fa26/lecture-notes/lecture-notes.pdf', [1, 2, 3, 11]),
-    'resnet': ('https://arxiv.org/pdf/1512.03385v1', [1, 3]),
-}
-# Free or local backends only; subscription models never run in tests.
-LIVE_MODELS = ('ollama/qwen3:4b', 'hermes/upstage/solar-mini4:free')
-
-
-def live(model, out, samples, wait_seconds):
-    """Explicit real-provider screenshots; never part of the mock-only result."""
-    out.mkdir(parents=True, exist_ok=True)
-    run = e2e.E2E_ROOT / ('run-pdf-live-' + uuid.uuid4().hex[:8])
-    run.mkdir(parents=True)
-    ext, missing = e2e.stage_extension(run)
-    assert not missing, missing
-    report = {'model': model, 'samples': {}}
-    try:
-        with e2e.sync_playwright() as p:
-            h = e2e.Session(p, ext, '', 'pdf-live')
-            h.profile.mkdir(parents=True, exist_ok=True)
-            try:
-                h.ctx = p.chromium.launch_persistent_context(str(h.profile), headless=False,
-                    args=['--headless=new', f'--disable-extensions-except={ext}', f'--load-extension={ext}', '--no-first-run', '--no-proxy-server'],
-                    ignore_default_args=['--disable-extensions'], viewport=e2e.VIEWPORT)
-                h.ext_id = e2e.get_sw(h.ctx).url.split('/')[2]
-                h.sw_eval('''models => { const original = globalThis.fetch; globalThis.fetch = async (url, init) => {
-                  if (String(url).startsWith('http://127.0.0.1:18790/') && init?.body) {
-                    const model = JSON.parse(init.body).model;
-                    if (!models.includes(model)) throw new Error('Forbidden test model ' + model);
-                  }
-                  return original(url, init); }; }''', list(LIVE_MODELS))
-                bridge = h.ctx.new_page()
-                bridge.goto(f'chrome-extension://{h.ext_id}/ui/options.html')
-                bridge.evaluate('''async model => { const {saveSettings} = await import('../shared/settings.js');
-                  await saveSettings({ targetLang: 'zh-CN', sourceLang: 'auto', cache: { enabled: false }, provider: { active: 'gateway',
-                    chain: [{ profileId: 'gateway', model }],
-                    profiles: [{ id: 'gateway', kind: 'gateway', name: 'Local gateway', baseUrl: 'http://127.0.0.1:18790/v1', model,
-                      jsonMode: true, maxItems: 12, maxChars: 2000, concurrency: 2, timeoutMs: 120000, fallbackModels: [] }] } }); }''', model)
-                bridge.close()
-                for name, (url, numbers) in samples.items():
-                    page, errors = viewer(h, url, 'side')
-                    result = {'url': url, 'pages': {}}
-                    started = time.monotonic()
-                    for number in numbers:
-                        page.fill('#page-number', str(number))
-                        page.click('#jump')
-                        wait_for(page, rendered(number), 60)
-                        sel = f'.pdf-page[data-page="{number}"]'
-                        page.locator(sel + ' .sheet.orig').screenshot(path=str(out / f'{name}-p{number}-original.png'))
-                        if not page.evaluate("document.body.classList.contains('translating')"):
-                            page.click('#translate')
-                        t0 = time.monotonic()
-                        first_text = None
-                        deadline = t0 + wait_seconds
-                        while time.monotonic() < deadline:
-                            state = page.evaluate(f"() => ({{ text: document.querySelectorAll('{sel} .tb').length, wait: document.querySelectorAll('{sel} .tb-wait').length }})")
-                            if state['text'] and first_text is None:
-                                first_text = round(time.monotonic() - t0, 1)
-                                if state['wait']:
-                                    page.screenshot(path=str(out / f'{name}-p{number}-progress.png'))
-                            if state['text'] and not state['wait']:
-                                break
-                            page.wait_for_timeout(250)
-                        page.evaluate(f"() => document.querySelector('{sel}').scrollIntoView({{ block: 'start' }})")
-                        page.wait_for_timeout(500)
-                        shot = out / f'{name}-p{number}-side.png'
-                        page.screenshot(path=str(shot))
-                        blocks = page.evaluate(f'() => globalThis.__duallensPdfBlocks({number})')
-                        text = [b for b in blocks if b['kind'] == 'text']
-                        result['pages'][number] = {
-                            'firstTextSeconds': first_text, 'settledSeconds': round(time.monotonic() - t0, 1),
-                            'blocks': len(text), 'final': sum(b.get('state') == 'final' for b in text),
-                            'draft': sum(b.get('state') == 'draft' for b in text), 'errors': [b.get('error') for b in text if b.get('state') == 'error'],
-                            'skipped': sum(b.get('state') == 'skip' for b in text),
-                            'pending': sum(b.get('state') in (None, 'pending') for b in text),
-                            'overflow': sum(bool(b.get('overflow')) for b in text), 'layout': page.evaluate(LAYOUT_OK, sel), 'screenshot': str(shot)}
-                    number = numbers[-1]
-                    target = page.locator(f'.pdf-page[data-page="{number}"] .tb').nth(2)
-                    if target.count():
-                        target.hover()
-                        page.wait_for_timeout(200)
-                        page.screenshot(path=str(out / f'{name}-p{number}-hover.png'))
-                    for view in ('translated', 'reflow'):
-                        page.select_option('#mode', view)
-                        page.wait_for_timeout(1200)
-                        page.evaluate(f"() => document.querySelector('.pdf-page[data-page=\"{number}\"]').scrollIntoView({{ block: 'start' }})")
-                        page.wait_for_timeout(400)
-                        page.screenshot(path=str(out / f'{name}-p{number}-{view}.png'))
-                    page.select_option('#mode', 'side')
-                    result['seconds'] = round(time.monotonic() - started, 1)
-                    result['metrics'] = page.evaluate('() => globalThis.__duallensPdfMetrics')
-                    result['longTasks'] = page.evaluate('() => window.__pdfLong || []')
-                    result['pageErrors'] = errors
-                    report['samples'][name] = result
-                    page.close()
-            finally:
-                h.close()
-    finally:
-        e2e.remove_runtime_dir(run)
-    (out / 'live-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-    failures = []
-    for name, sample in report['samples'].items():
-        if sample['pageErrors']:
-            failures.append(name + ': browser error')
-        for number, result in sample['pages'].items():
-            if (result['firstTextSeconds'] is None or result['errors'] or result['pending'] or result['draft'] or
-                    not result['layout']['inside'] or result['layout']['overlap'] or result['overflow']):
-                failures.append(f'{name} p{number}: incomplete translation or layout failure')
-    report['failures'] = failures
-    (out / 'live-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-    pages = sum(len(s['pages']) for s in report['samples'].values())
-    print(f'PDF LIVE: {pages - len(failures)} PASS, {len(failures)} FAIL (real provider, separate from offline)')
-    return report
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--live', choices=LIVE_MODELS, help='explicit real run through the local gateway (not mock-only)')
-    parser.add_argument('--sample', choices=list(LIVE_SAMPLES), action='append', help='live sample(s); default all')
-    parser.add_argument('--page', type=int, action='append', help='live: restrict each selected sample to these page numbers')
-    parser.add_argument('--out', type=Path, default=e2e.E2E_ROOT / 'v04' / 'dev-pdf' / 'live')
-    parser.add_argument('--wait', type=float, default=120, help='live: seconds to wait per page')
     parser.add_argument('--only', action='append', default=[], help='mock case name filter')
     args = parser.parse_args()
-    if args.live:
-        samples = {k: v for k, v in LIVE_SAMPLES.items() if not args.sample or k in args.sample}
-        if args.page:
-            samples = {k: (url, [n for n in numbers if n in args.page]) for k, (url, numbers) in samples.items()}
-            samples = {k: v for k, v in samples.items() if v[1]}
-            if not samples:
-                parser.error('--page does not match a selected sample page')
-        report = live(args.live, args.out, samples, args.wait)
-        return int(bool(report['failures']))
     fixtures = e2e.E2E_ROOT / 'pdf-fixture'
     fixtures.mkdir(parents=True, exist_ok=True)
     (fixtures / 'pdf-field-notebook.pdf').write_bytes(fixture.make_pdf())

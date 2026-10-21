@@ -69,16 +69,12 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(p.grid, 'profile', '编辑 / 切换服务', 'select');
   field(p.grid, 'providerPreset', '新增服务预设', 'select', [{ id: '', name: '请选择（推荐 OpenRouter）' }, ...PROVIDER_PRESETS]);
   button(p.grid, 'add-profile', '添加所选服务');
-  button(p.grid, 'connect-gateway', '一键接入本机网关');
-  if (!secretDialog) field(p.grid, 'pairingText', '导入配对串（视同密钥，导入后立即清空）', 'password', [], { autocomplete: 'off' });
-  button(p.grid, 'import-pairing', '导入配对串');
-  p.grid.append(el('p', '手机可导入电脑终端 pair 生成的配对串；Tailscale 远程监听须在电脑显式启用，USB 需 adb reverse。', { class: 'hint wide' }));
   p.grid.append(el('p', '', { id: 'provider-description', class: 'hint wide' }), el('a', '服务商说明 / 获取 key', { id: 'key-link', class: 'wide', target: '_blank', rel: 'noopener noreferrer' }));
   field(p.grid, 'profileName', '服务名称');
   field(p.grid, 'baseUrl', '兼容 API 基础地址', 'url');
   if (secretDialog) {
     const row = el('div', '', { id: 'key-row', class: 'wide' });
-    row.append(el('p', 'API key / 网关配对令牌（仅存本机）', { id: 'credential-label' }), el('p', '未设置', { id: 'key-status', role: 'status' }));
+    row.append(el('p', 'API key（仅存本机）', { id: 'credential-label' }), el('p', '未设置', { id: 'key-status', role: 'status' }));
     const controls = el('div', '', { class: 'actions' }); row.append(controls);
     button(controls, 'set-key', '设置 key'); button(controls, 'clear-key', '清除 key');
     row.append(el('p', '在浏览器原生对话框中输入；修改后点击保存。', { class: 'hint' }));
@@ -97,7 +93,7 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   for (const [id, title] of [['maxItems', '每批段落上限'], ['maxChars', '每批字符上限'], ['concurrency', '并发数'], ['timeoutMs', '超时（ms）']]) field(p.grid, id, title, 'number');
   field(p.grid, 'jsonMode', '使用 JSON 响应模式', 'checkbox');
   field(p.grid, 'providerChain', '跨服务备选链（JSON：profileId + model，按顺序）', 'textarea');
-  p.box.append(el('p', '选择 OpenRouter 免费模型后会建议 2–3 家厂商的备选链，可自行修改。网页正文只发送到这条链中的服务。订阅模型只能手动选择。', { class: 'hint' }));
+  p.box.append(el('p', '选择 OpenRouter 免费模型后会建议 2–3 家厂商的备选链，可自行修改。网页正文只发送到这条链中的服务。', { class: 'hint' }));
 
   const i = section('交互');
   for (const [id, title] of [['hoverEnabled', '悬停 / 触屏长按翻译'], ['selectionEnabled', '划词翻译'], ['showIcon', '显示划词按钮'], ['inputEnabled', '输入框翻译'], ['prefixOverride', '允许 /ja 等语言前缀'], ['floatEnabled', '显示悬浮球']]) field(i.grid, id, title, 'checkbox');

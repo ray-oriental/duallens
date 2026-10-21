@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Authorized public-page acceptance; real free MT, optional isolated free gateway.
+"""Authorized public-page acceptance; free MT and an optional user-supplied OpenAI-compatible URL.
 
-No login, challenge bypass, real browser profile, paid LLM, or production gateway.
+No login, challenge bypass, real browser profile, implicit model-service configuration.
 See README.md for the independent coverage definition and limits of geometry checks.
 """
 from __future__ import annotations
@@ -11,16 +11,13 @@ import asyncio
 import base64
 import contextlib
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
 import re
-import socket
 import subprocess
 import sys
 import time
-import threading
 import urllib.error
 import urllib.request
 import uuid
@@ -28,7 +25,8 @@ from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-CACHE = Path.home() / '.cache' / 'duallens-e2e'
+import tempfile
+CACHE = Path(os.environ.get('DUALLENS_E2E_OUT') or Path(tempfile.gettempdir()) / 'duallens-e2e').expanduser().resolve()
 PROBE = (HERE / 'acceptance_probe.js').read_text(encoding='utf-8')
 MOBILE_UA = ('Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 '
              '(KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36')
@@ -37,7 +35,6 @@ MT_HOSTS = {'edge.microsoft.com', 'api-edge.cognitive.microsofttranslator.com', 
             'translate.googleapis.com', 'translate.google.com'}
 DESKTOP_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
               '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')
-SJTU_BUDGET = CACHE / 'v04' / 'acceptance' / 'sjtu-budget.json'
 
 
 def apply_restore_control(result, control):
@@ -62,59 +59,6 @@ def pdf_restore_verdict(result):
     return (result.get('pdf_source_dom_identical') is True and
             result.get('pdf_original_pixels_identical') is True and
             not result.get('restore_residue'))
-
-
-def gateway_policy(config):
-    """Mutate only the freshly loaded, in-memory test configuration."""
-    for backend in ('claude', 'codex'):
-        config[backend]['enabled'] = False
-    config['remote']['enabled'] = False
-    config['port'] = 18799
-    # The proxy's configured allowlist is authoritative; never add a paid model.
-    config['hermes']['models'] = [m for m in config['hermes'].get('models', []) if m.endswith(':free')]
-    if not config['hermes']['models']:
-        config['hermes']['enabled'] = False
-    config['sjtu']['daily_limit'] = min(15, config['sjtu'].get('daily_limit') or 15)
-    safe = []
-    for model in config['auto'].get('prefer', []):
-        backend, _, name = model.partition('/')
-        if backend in ('ollama', 'sjtu', 'hermes') and config[backend].get('enabled') and (
-                name in config[backend].get('models', []) or backend == 'hermes' and name == '*'):
-            safe.append(model)
-    for backend in ('hermes', 'sjtu', 'ollama'):
-        if config[backend].get('enabled'):
-            safe.extend(backend+'/'+m for m in config[backend].get('models', []) if backend+'/'+m not in safe)
-    config['auto']['prefer'] = safe
-    if not safe:
-        raise RuntimeError('No permitted configured free gateway candidates')
-    return config
-
-
-class SjtuBudget:
-    """Persistent attempt budget: count before upstream send, including failed retries.
-
-    Exclusive file lock prevents separate test processes from resetting/racing the
-    15-attempt allowance. Corrupt state or lock contention fails closed.
-    Nothing in this ledger contains source text or credentials.
-    """
-    def __init__(self, path, limit=15):
-        self.path, self.limit, self.lock = Path(path), min(15, limit), threading.Lock()
-
-    def take(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        lockfile = self.path.with_suffix('.lock')
-        with self.lock:
-            fd = os.open(lockfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            try:
-                count = json.loads(self.path.read_text(encoding='utf-8'))['attempts'] if self.path.exists() else 0
-                if not isinstance(count, int) or count < 0 or count >= self.limit:
-                    raise RuntimeError('SJTU acceptance attempt budget exhausted or invalid')
-                temp = self.path.with_suffix('.tmp')
-                temp.write_text(json.dumps({'attempts': count+1, 'limit': self.limit}), encoding='utf-8')
-                temp.replace(self.path)
-            finally:
-                os.close(fd)
-                lockfile.unlink()
 
 
 def load_sites(path=HERE / 'acceptance_sites.json'):
@@ -166,13 +110,34 @@ def write_reports(out, metadata, rows):
     return counts
 
 
-def direct_request(req):
+def validate_llm_url(value):
+    from urllib.parse import urlsplit
+    from ipaddress import ip_address, ip_network
+    if value == 'none':
+        return value
+    url = urlsplit(value)
+    local = url.hostname == 'localhost'
+    try:
+        address = ip_address(url.hostname or '')
+        local = local or address.is_loopback or address in ip_network('10.0.0.0/8') or address in ip_network('172.16.0.0/12') or address in ip_network('192.168.0.0/16') or address in ip_network('100.64.0.0/10')
+    except ValueError:
+        pass
+    if not url.hostname or url.username or url.password or url.query or url.fragment or url.scheme not in ('http', 'https') or (url.scheme == 'http' and not local):
+        raise ValueError('LLM base URL must use HTTPS (or a local HTTP address), without credentials, query or fragment')
+    return value.rstrip('/')
+
+
+def direct_request(req, llm='none'):
     """GM-equivalent anonymous HTTP, on a worker thread. Never forward page cookies."""
     from urllib.parse import urlsplit
     url = urlsplit(req['url'])
-    if url.scheme != 'https' or url.hostname not in MT_HOSTS or url.username or url.password:
-        raise ValueError('Userscript test transport only permits free MT hosts')
+    llm = validate_llm_url(llm)
+    model_request = llm != 'none' and req['url'] in (llm + '/models', llm + '/chat/completions')
+    if not model_request and (url.scheme != 'https' or url.hostname not in MT_HOSTS or url.username or url.password):
+        raise ValueError('Test transport permits only free MT hosts or the explicit model endpoint')
     headers = {k: v for k, v in req.get('headers', {}).items() if k.lower() not in ('cookie', 'authorization', 'proxy-authorization')}
+    if model_request and os.environ.get('DUALLENS_API_KEY'):
+        headers['Authorization'] = 'Bearer ' + os.environ['DUALLENS_API_KEY']
     data = req.get('data')
     request = urllib.request.Request(req['url'], data=data.encode('utf-8') if isinstance(data, str) else None,
                                      headers=headers, method=req.get('method', 'GET'))
@@ -181,7 +146,7 @@ def direct_request(req):
     class Redirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, request, fp, code, msg, headers, newurl):
             target = urlsplit(newurl)
-            if target.scheme != 'https' or target.hostname not in MT_HOSTS:
+            if model_request or target.scheme != 'https' or target.hostname not in MT_HOSTS:
                 raise ValueError('MT redirect rejected')
             return super().redirect_request(request, fp, code, msg, headers, newurl)
     opener.add_handler(Redirect())
@@ -197,8 +162,8 @@ def direct_request(req):
         return {'status': response.code, 'responseText': body.decode('utf-8'), 'responseHeaders': str(response.headers)}
 
 
-GM_STUB = r"""(settings) => {
-  const data=new Map([['duallens:local', {'settings.core':settings}]]), listeners=new Map(), commands=new Map(), roots=[];
+GM_STUB = r"""({settings,secrets}) => {
+  const data=new Map([['duallens:local', {'settings.core':settings,secrets}]]), listeners=new Map(), commands=new Map(), roots=[];
   const attach=Element.prototype.attachShadow;
   Element.prototype.attachShadow=function(init) {const root=attach.call(this,init);if(this.localName==='dl-ui')roots.push({host:this,root});return root;};
   window.GM_getValue=(k,d)=>structuredClone(data.get(k)??d);
@@ -226,59 +191,6 @@ PDF_SAMPLE = r"""({n,ids})=>{
     blocks:blocks.filter(b=>!except.has(b.id)),
     painted:[...document.querySelectorAll(`.pdf-page[data-page="${n}"] .tb`)].filter(e=>!except.has(+e.dataset.block)).map(e=>({id:+e.dataset.block,stage:e.dataset.stage,
       text:e.textContent,unrefined:e.title.includes('显示的是机器翻译'),visible:e.getBoundingClientRect().top<innerHeight&&e.getBoundingClientRect().bottom>0}))};}"""
-
-
-def gateway_child(repo, home):
-    """Read existing configuration in memory; all writes go to the private test home.
-
-    The serve CLI has no backend restriction flags. Instantiate its identical server
-    with an in-memory free-only policy instead of rewriting user's gateway.json.
-    """
-    if home.name != 'gateway' or not home.parent.name.startswith('run-acceptance-') or home.parent.parent != CACHE.resolve():
-        raise ValueError('Test gateway state must be inside its owned acceptance cache directory')
-    spec = importlib.util.spec_from_file_location('acceptance_gateway', repo / 'gateway' / 'duallens_gateway.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    config = module.config_load()  # never print/copy the user's configuration
-    gateway_policy(config)
-    home.mkdir(parents=True, exist_ok=True)
-    gateway = module.Gateway(home=home, config=config)
-    budget = SjtuBudget(SJTU_BUDGET)
-    count_usage = gateway.count_usage
-    def bounded_count(backend):
-        if backend == 'sjtu':
-            try:
-                budget.take()
-            except (OSError, ValueError, KeyError, RuntimeError):
-                raise module.GatewayError(429, 'daily_limit', 'Acceptance SJTU budget unavailable/exhausted', 600, local=True) from None
-        return count_usage(backend)
-    gateway.count_usage = bounded_count
-    server = module.make_server(port=18799, gateway=gateway)
-    print('ACCEPTANCE gateway ready: port=18799 policy=configured-free-only sjtu<=15', flush=True)
-    try:
-        server.serve_forever()
-    finally:
-        server.server_close()
-
-
-async def start_gateway(repo, run):
-    # Do not connect to or kill a pre-existing process occupying the test port.
-    with socket.socket() as sock:
-        if sock.connect_ex(('127.0.0.1', 18799)) == 0:
-            raise RuntimeError('Port 18799 already in use; refusing to reuse or stop it')
-    child = await asyncio.create_subprocess_exec(sys.executable, '-B', str(Path(__file__).resolve()),
-        '--gateway-child', '--repo', str(repo), '--out', str(run / 'gateway'),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
-    try:
-        line = await asyncio.wait_for(child.stdout.readline(), 15)
-        if not line.startswith(b'ACCEPTANCE gateway ready:'):
-            raise RuntimeError('Temporary gateway failed to start (configuration details withheld)')
-    except BaseException:
-        if child.returncode is None:
-            child.terminate()
-            await child.wait()
-        raise
-    return child
 
 
 class Browser:
@@ -312,7 +224,7 @@ class Browser:
                 pending = self.http_tasks.setdefault(source['page'], set())
                 pending.add(asyncio.current_task())
                 try:
-                    result = await asyncio.to_thread(direct_request, req)
+                    result = await asyncio.to_thread(direct_request, req, self.llm)
                     record['status'] = result['status']
                     return result
                 except Exception as exc:
@@ -330,7 +242,7 @@ class Browser:
             self.ext_id = self.sw.url.split('/')[2]
             bridge = await self.ctx.new_page()
             await bridge.goto(f'chrome-extension://{self.ext_id}/ui/options.html')
-            await bridge.evaluate("""async patch=>{const {saveSettings}=await import('../shared/settings.js');await saveSettings(patch);}""", settings(self.llm))
+            await bridge.evaluate("""async ({patch,key})=>{const {saveSettings,getDefaultSettingsStore}=await import('../shared/settings.js');await saveSettings(patch);if(key)await getDefaultSettingsStore().setSecret('acceptance',key);}""", {'patch':settings(self.llm),'key':os.environ.get('DUALLENS_API_KEY','') if self.llm != 'none' else ''})
             await bridge.close()
 
     async def attach(self, page):
@@ -338,7 +250,7 @@ class Browser:
             # Match the canonical userscript runner: GM storage is private to this page
             # instance, real anonymous HTTP is supplied by the test host. Security of
             # Tampermonkey's isolated world is deliberately NOT claimed by this harness.
-            await page.evaluate(GM_STUB, settings(self.llm))
+            await page.evaluate(GM_STUB, {'settings':settings(self.llm),'secrets':{'acceptance':{'apiKey':os.environ.get('DUALLENS_API_KEY','')}} if self.llm != 'none' else {}})
             await page.evaluate(self.bundle.read_text(encoding='utf-8'))
             await page.wait_for_function('window.__acceptanceGM?.ready()', timeout=20000)
             return None
@@ -378,13 +290,13 @@ class Browser:
 
 
 def settings(llm):
-    patch = {'version': 2, 'targetLang': 'zh-CN', 'sourceLang': 'auto', 'cache': {'enabled': False},
+    patch = {'version': 3, 'targetLang': 'zh-CN', 'sourceLang': 'auto', 'cache': {'enabled': False},
              'translation': {'mode': 'mt+llm', 'refineTimeoutMs': 90000, 'mt': {'engine': 'microsoft', 'fallback': True}},
              'provider': {'active': '', 'chain': []}}
-    if llm == 'gateway':
-        patch['provider'] = {'active': 'acceptance', 'chain': [{'profileId': 'acceptance', 'model': 'auto'}],
-            'profiles': [{'id': 'acceptance', 'name': 'Temporary acceptance gateway', 'kind': 'gateway',
-                'baseUrl': 'http://127.0.0.1:18799/v1', 'model': 'auto', 'jsonMode': True,
+    if llm != 'none':
+        patch['provider'] = {'active': 'acceptance', 'chain': [{'profileId': 'acceptance', 'model': os.environ.get('DUALLENS_MODEL', '')}],
+            'profiles': [{'id': 'acceptance', 'name': 'Acceptance model service', 'kind': 'openai',
+                'baseUrl': validate_llm_url(llm), 'model': os.environ.get('DUALLENS_MODEL', ''), 'jsonMode': True,
                 'maxItems': 12, 'maxChars': 2000, 'concurrency': 2, 'timeoutMs': 95000, 'fallbackModels': []}]}
     return patch
 
@@ -723,8 +635,6 @@ async def run(args):
         raise ValueError('Unknown --only: ' + ', '.join(sorted(unknown)))
     if args.only:
         sites = [s for s in sites if s['id'] in args.only]
-    if args.llm == 'gateway' and args.device != 'desktop':
-        raise ValueError('--llm gateway requires --device desktop (never expose loopback config to mobile)')
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:6]
     if args.resume and args.out:
         raise ValueError('--resume cannot be combined with --out')
@@ -739,13 +649,13 @@ async def run(args):
     out.mkdir(parents=True, exist_ok=True)
     run_dir = CACHE / ('run-acceptance-' + uuid.uuid4().hex[:10])
     run_dir.mkdir(parents=True)
-    rows, child = previous['rows'] if previous else [], None
+    rows = previous['rows'] if previous else []
     reports_allowed = previous is None
     completed = {(r['id'], r['device']) for r in rows}
     metadata = {'run_id': stamp, 'started_utc': datetime.now(timezone.utc).isoformat(), 'repo': str(repo),
-        'llm': args.llm, 'policy': 'real-free-MT; configured Hermes :free + Ollama + SJTU<=15 persistent attempts; no Claude/Codex',
+        'llm': args.llm, 'policy': 'free MT; optional explicit OpenAI-compatible endpoint; key read only from environment',
         'emulation_only': True, 'coverage_version': 3, 'restore_version': 2, 'headed': args.headed,
-        'timeout_seconds': args.timeout or (95 if args.llm == 'gateway' else 25),
+        'timeout_seconds': args.timeout or (95 if args.llm != 'none' else 25),
         'probe_sha256': hashlib.sha256(PROBE.encode('utf-8')).hexdigest(),
         'limits': ['Desktop Chromium only, not actual Chrome/Edge or physical Android',
                    'Structural Chinese-output coverage, not semantic translation quality',
@@ -787,8 +697,6 @@ async def run(args):
         if previous and previous['metadata']['userscript_sha256'] != metadata['userscript_sha256']:
             raise ValueError('Userscript changed since checkpoint; run into a fresh output directory')
         reports_allowed = True
-        if args.llm == 'gateway':
-            child = await start_gateway(repo, run_dir)
         async with async_playwright() as pw:
             devices = list(DEVICES) if args.device == 'all' else [args.device]
             for device in devices:
@@ -813,23 +721,6 @@ async def run(args):
                     await browser.close()
         metadata['complete'] = True
     finally:
-        if child and child.returncode is None:
-            child.terminate()
-            await child.wait()
-        if args.llm == 'gateway':
-            metadata['gateway_stopped'] = child is not None and child.returncode is not None
-            usage = run_dir / 'gateway' / 'usage.json'
-            counts = json.loads(usage.read_text(encoding='utf-8')) if usage.exists() else {}
-            metadata['sjtu_calls'] = sum(v for k,v in counts.items() if k.endswith('/sjtu'))
-            metadata['sjtu_attempt_budget_file'] = str(SJTU_BUDGET)
-            log = run_dir / 'gateway' / 'gateway.log'
-            if log.exists():
-                # Gateway log is source-free numeric metadata, but retain only a safe
-                # aggregation, never arbitrary user configuration or response payloads.
-                events = [json.loads(x) for x in log.read_text(encoding='utf-8').splitlines()]
-                metadata['gateway_requests'] = len(events)
-                metadata['gateway_served'] = sorted({e.get('served', '') for e in events})
-                metadata['gateway_status_counts'] = {str(status): sum(e.get('status') == status for e in events) for status in sorted({e.get('status', 0) for e in events})}
         counts = write_reports(out, metadata, rows) if reports_allowed else {}
         canonical.remove_runtime_dir(run_dir)
     print('SUMMARY acceptance total=' + str(len(rows)) + ' ' + ' '.join(f'{k}={v}' for k,v in counts.items()) + ' out=' + str(out), flush=True)
@@ -841,19 +732,18 @@ def main():
     parser.add_argument('--repo', type=Path, default=REPO)
     parser.add_argument('--only', action='append', default=[])
     parser.add_argument('--device', choices=['desktop', 'phone', 'tablet', 'all'], default='all')
-    parser.add_argument('--llm', choices=['none', 'gateway'], default='none')
+    parser.add_argument('--llm', default='none', metavar='BASE_URL', help='Explicit OpenAI-compatible base URL; default none. Key: DUALLENS_API_KEY; model: DUALLENS_MODEL')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--resume', type=Path, help='Resume a checkpoint directory; extension/userscript hashes must match')
-    parser.add_argument('--timeout', type=float, help='Observation deadline in seconds (default MT=25/gateway=95)')
+    parser.add_argument('--timeout', type=float, help='Observation deadline in seconds (default MT=25/LLM=95)')
     parser.add_argument('--headed', action='store_true', help='Visible Chromium; no headless flag; ordinary desktop UA')
-    parser.add_argument('--gateway-child', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.gateway_child:
-        gateway_child(args.repo.resolve(), args.out.resolve())
-        return 0
     if args.timeout is not None and not 3 <= args.timeout <= 180:
         parser.error('--timeout must be 3..180 seconds')
     try:
+        args.llm = validate_llm_url(args.llm)
+        if args.llm != 'none' and not os.environ.get('DUALLENS_MODEL'):
+            raise ValueError('Set DUALLENS_MODEL when using --llm')
         return asyncio.run(run(args))
     except (ValueError, RuntimeError) as exc:
         print('ERROR acceptance: ' + str(exc), file=sys.stderr)

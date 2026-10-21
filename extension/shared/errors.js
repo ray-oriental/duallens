@@ -11,7 +11,7 @@ export class DLError extends Error {
     this.code = code;
     if (extra.status != null) this.status = extra.status;
     if (extra.retryAfterMs != null) this.retryAfterMs = extra.retryAfterMs;
-    if (extra.serverCode != null) this.serverCode = extra.serverCode; // e.g. gateway 'backend_unavailable'
+    if (extra.serverCode != null) this.serverCode = extra.serverCode; // provider machine-readable code
   }
 }
 

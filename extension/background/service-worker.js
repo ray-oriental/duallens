@@ -15,7 +15,7 @@ import {
   COMMANDS,
   PRIORITY,
 } from '../shared/protocol.js';
-import { loadSettings, saveSettings, getDefaultSettingsStore } from '../shared/settings.js';
+import { loadSettings, getDefaultSettingsStore } from '../shared/settings.js';
 import { toErrorInfo } from '../shared/errors.js';
 import { createProviders } from './providers.js';
 import { createQueue } from './queue.js';
@@ -188,68 +188,41 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 });
 
 const MENU = {
-  TEXT: 'dl-open-text',
-  SUBTITLES: 'dl-toggle-subtitles',
   VIDEO_SUBTITLES: 'dl-toggle-video-subtitles',
   COMICS: 'dl-translate-comics',
   TOGGLE: 'dl-toggle-page',
   SELECTION: 'dl-translate-selection',
-  ALWAYS: 'dl-site-always',
-  NEVER: 'dl-site-never',
 };
 
+let menuUpdate = Promise.resolve();
 function setupMenus() {
-  chrome.contextMenus.removeAll(() => {
-    void chrome.runtime.lastError;
-    const add = (props) => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
-    add({ id: MENU.TOGGLE, title: '翻译此页 / 恢复原文', contexts: ['page', 'link', 'image'] });
-    add(pdfEntries.menu);
-    add({ id: MENU.TEXT, title: 'DualLens 文本翻译', contexts: ['page', 'selection'] });
-    // YouTube's player swallows the video context menu, so it keeps a page-level entry; other sites expose <video>.
-    add({ id: MENU.SUBTITLES, title: '启用 / 恢复视频双语字幕', contexts: ['page'], documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*'] });
-    add({ id: MENU.VIDEO_SUBTITLES, title: '启用 / 恢复视频双语字幕', contexts: ['video'] });
-    add({ id: MENU.COMICS, title: '翻译此页漫画', contexts: ['page', 'image'] });
-    add({ id: MENU.SELECTION, title: '翻译选中文字', contexts: ['selection'] });
-    add({ id: MENU.ALWAYS, title: '总是翻译此网站', contexts: ['page'] });
-    add({ id: MENU.NEVER, title: '从不翻译此网站', contexts: ['page'] });
+  menuUpdate = menuUpdate.catch(() => {}).then(async () => {
+    const settings = await loadSettings();
+    await new Promise(resolve => chrome.contextMenus.removeAll(() => {
+      void chrome.runtime.lastError;
+      const add = props => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
+      add({ id: MENU.TOGGLE, title: '翻译此页 / 显示原文', contexts: ['page'] });
+      add({ id: MENU.SELECTION, title: '翻译选中文字', contexts: ['selection'] });
+      add({ id: MENU.VIDEO_SUBTITLES, title: '视频双语字幕', contexts: ['video'] });
+      if (settings.comics.enabled) add({ id: MENU.COMICS, title: '翻译图片文字', contexts: ['image'] });
+      resolve();
+    }));
   });
+  return menuUpdate;
 }
-chrome.runtime.onInstalled.addListener(setupMenus);
-chrome.runtime.onStartup.addListener(setupMenus);
-
-function hostnameOf(url) {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'http:' || u.protocol === 'https:' ? u.hostname.toLowerCase() : '';
-  } catch {
-    return '';
-  }
-}
-
-// Moves `host` into the `mode` list ('always' | 'never') and out of the other one.
-async function setSiteRule(host, mode) {
-  const { siteRules } = await loadSettings();
-  const always = siteRules.always.filter((p) => p !== host);
-  const never = siteRules.never.filter((p) => p !== host);
-  (mode === 'always' ? always : never).push(host);
-  await saveSettings({ siteRules: { always, never } });
-}
+chrome.runtime.onInstalled.addListener(() => { void setupMenus(); });
+chrome.runtime.onStartup.addListener(() => { void setupMenus(); });
+getDefaultSettingsStore().onChange(() => { void setupMenus(); });
+void setupMenus();
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const tabId = tab && tab.id;
   switch (info.menuItemId) {
-    case pdfEntries.menu.id:
-      await pdfEntries.openFromMenu(tab);
-      break;
-    case MENU.TEXT:
-      await chrome.sidePanel.open({ tabId }).catch(() => {});
-      break;
-    case MENU.SUBTITLES:
     case MENU.VIDEO_SUBTITLES:
       await sendToTab(tabId, { type: MSG_COMMAND, name: 'toggle-subtitles' });
       break;
     case MENU.COMICS:
-      await sendToTab(tabId, { type: MSG_COMMAND, name: 'translate-comics' });
+      if ((await loadSettings()).comics.enabled) await sendToTab(tabId, { type: MSG_COMMAND, name: 'translate-comics' });
       break;
     case MENU.TOGGLE:
       await sendToTab(tabId, { type: MSG_COMMAND, name: COMMANDS.TOGGLE_PAGE });
@@ -257,16 +230,5 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     case MENU.SELECTION:
       if (info.selectionText) await sendToTab(tabId, { type: MSG_TRANSLATE_SELECTION, text: info.selectionText });
       break;
-    case MENU.ALWAYS:
-    case MENU.NEVER: {
-      const host = hostnameOf(info.pageUrl || (tab && tab.url));
-      if (!host) break;
-      const always = info.menuItemId === MENU.ALWAYS;
-      await setSiteRule(host, always ? 'always' : 'never');
-      // act on the current page right away so the choice is visible
-      const state = await sendToTab(tabId, { type: MSG_GET_STATE });
-      if (state && state.translated !== always) await sendToTab(tabId, { type: MSG_COMMAND, name: COMMANDS.TOGGLE_PAGE });
-      break;
-    }
   }
 });

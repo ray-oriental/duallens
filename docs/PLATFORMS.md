@@ -5,11 +5,11 @@
 ## 目标
 
 DualLens 是**通用浏览器插件**，不是某台电脑上的服务。任何人填入自己的模型服务配置即可使用；
-本机网关只是桌面端的可选增强。同一份核心代码必须在下列环境里正确、流畅地运行：
+同一份核心代码必须在下列环境里正确、流畅地运行：
 
 | 目标 | 设备与浏览器 | 形态 | 安装 |
 | --- | --- | --- | --- |
-| `extension` | Windows / macOS / Linux 上的 Chrome、Edge（两台电脑） | MV3 扩展（现有） | Edge Add-ons 商店；GitHub Release zip 作为备用 |
+| `extension` | Windows / macOS / Linux 上的 Chrome、Edge | MV3 扩展（现有） | Edge Add-ons 商店；GitHub Release zip 作为备用 |
 | `userscript` | Android 上的 Edge + Tampermonkey（主力移动端）；桌面端 Tampermonkey 也可用 | 单文件 `duallens.user.js` | 在 Tampermonkey 中打开 Release 里的安装链接 |
 | `bookmarklet` | Android 上的 Chrome（不支持扩展和用户脚本） | `javascript:` 书签 + 同一个打包产物 | 配置页生成书签（P1，尽力而为，见下文风险） |
 
@@ -100,7 +100,7 @@ Pixiv 的 reader 提示兼容直接包含 `span.text-count` 的 p/div/section/sp
 
 `http.onText(delta,status,headers)` 提供新增文本片段，最终仍返回完整 `text`。扩展用流式 fetch，用户脚本用 GM progress/readystatechange；无增量回调时在 onload 解析。provider `chat({profile,messages,signal,onDelta?})` 的 `onDelta(text)` 只提供脱敏内容，不显示推理字段。请求 `stream:true`，不支持时回退非流式；完整 JSON 验证后才写缓存，恢复/取消后不插入迟到片段。
 
-两种平台按每个正文单元的源节点 Range 判断可见性，避免小说共用高 `<p>` 时触发整篇请求；滚动、模式切换和译文布局变化仍发现该宿主内较远段落。日译中疑似回显在流式显示前检查；漏翻缩批与 JSON 错项恢复共用有限重试预算。SJTU 请求的空闲等待上限为 12 秒，输出进展会重置，其它端点保留用户配置。
+两种平台按每个正文单元的源节点 Range 判断可见性，避免小说共用高 `<p>` 时触发整篇请求；滚动、模式切换和译文布局变化仍发现该宿主内较远段落。日译中疑似回显在流式显示前检查；漏翻缩批与 JSON 错项恢复共用有限重试预算。请求的等待与流式空闲超时沿用用户配置，输出进展会重置空闲计时器。
 
 漫画名单 `comics.canvasSites` 兼容域名字符串与 `{host,imageHosts?,referer?}`；CDN 最多八个具体域名，Referer 限该站点 HTTP(S) 根地址。旧 Pixiv 字符串项使用 `i.pximg.net` / `https://www.pixiv.net/` 兼容元数据。扩展会话 DNR 规则必须含 `initiatorDomains:[chrome.runtime.id]` 与 `resourceTypes:['xmlhttprequest','other']`，关闭漫画或移出名单即删除，不新增 host 权限。用户脚本匿名 GM 取图按匹配站点设置 Referer，不支持请求头或本地 OCR 时保留原图并明确降级。
 
@@ -122,7 +122,7 @@ Range 按祖先 frame 的视口裁切并映射至控制器视口；隐藏或小�
 空闲且未翻译时没有周期定时器或周期消息；顶层进度统计包含同源文档，不汇总独立跨域代理计数。
 不新增 permissions/host_permissions，不通过网页 postMessage 传递状态或配置。
 用户脚本仍保留 @noframes，仅由顶层访问同源文档，**不支持跨域 iframe**。
-浏览器禁止注入的特殊页面、非 HTML 文档仍不处理；这不代表 Zimbra 登录页面或物理设备已验收。
+浏览器禁止注入的特殊页面、非 HTML 文档仍不处理；这不代表真实邮箱页面或物理设备已验收。
 
 开放 ShadowRoot 与同源 iframe 文档共用 FrameRoots 的额外扫描根生命周期，递归发现、注入/移除样式并观察变化。
 slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫描 slot fallback。动态新增的开放组件也会被发现。
@@ -144,24 +144,23 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
   首次打开设置页签才读取 `GM_getResourceText`，按启动脚本内嵌的字节数和 SHA-256 校验后在隔离沙箱执行。
   打开面板不联网；缺失、校验或执行失败时显示中文错误与重新安装说明。HTTP 页同样在本地校验。
   已加载表单在当前文档内复用，关闭时仍销毁实例；扩展 options 继续直接导入原生模块。
-  启动包目标 ≤330000 字节，构建硬预算保持 360000 字节。
+  启动包硬预算 ≤340000 字节。
 
-## 3. 设置 v2：可同步设置与机密分离
+## 3. 设置 v3：可同步设置与机密分离
 
 - `syncArea` 存非机密设置，`localArea` 存 `secrets`：`{ [profileId]: { apiKey } }`。API key **永远**不进同步区、
   不进导出（除非走加密导出）、不进日志、不进页面上下文以外的任何地方。
 - `chrome.storage.sync` 单项上限 8 KB、总量 100 KB：设置拆成 `settings.core`、`settings.glossary`、`settings.sites`
   三个键；任何一项超限就整体退回 `localArea`，并在设置页提示「此设备未同步」。
-- v1 → v2 迁移：把 `provider.profiles[].apiKey` 移入 `secrets`，`version` 改为 2，迁移幂等。
+- v1 旧配置先把 `provider.profiles[].apiKey` 移入 `secrets`，已有本机密钥及清除标记优先。
+- v2 → v3：旧 `kind:'gateway'` 仅转为 `kind:'openai'`，保留 id/name/baseUrl/model/fallbackModels/jsonMode/maxItems/maxChars/concurrency/timeoutMs 与 chain 引用；同一 secrets 槽中的令牌继续作为 Bearer key。一次性把 floatBall/selection/hover/input/comics 的 enabled 设为 false；其它设置保留。扩展、GM 私有存储及旧版加密导入共用迁移，新版重新开启的功能不再重置。
+- 新安装默认不自动翻译网站，floatBall/selection/hover/input/comics/subtitles 默认关闭。用户可在设置中显式开启增强功能。右键仅 page 翻译/显示原文、selection 翻译选中文字、video 视频双语字幕、comics 开启后的 image 翻译图片文字；显式选中文字入口始终可用。
 - 统一入口 `createSettingsStore({ syncArea, localArea })`，返回
   `{ load(), save(patch), getSecret(id), setSecret(id, key), onChange(cb) }`。旧的 `loadSettings/saveSettings`
   改为基于默认平台的薄包装，保持现有调用不坏。
 - **跨 profile 的备选链**：`provider.chain = [{ profileId, model }, …]`。冷却仍以「profile + 模型」为单位，429/502/503/
   连接失败时立刻换下一项（SPEC §8 的规则不变，只是范围从一个 profile 扩大到整条链）。
-- **服务商预设** `extension/shared/presets.js`：OpenRouter（默认推荐，`https://openrouter.ai/api/v1`，可获取免费模型）、
-  DeepSeek、硅基流动、智谱、月之暗面、OpenAI、Google Gemini（OpenAI 兼容端点）、Groq、交大
-  （`https://models.sjtu.edu.cn/api/v1`，填你自己的 key）、Ollama（可填局域网地址）、DualLens 本机网关、自定义。
-  每个预设给出 `baseUrl`、是否需要 key、获取 key 的说明链接、`jsonMode` 默认值和推荐批量参数。
+- **服务商预设** `extension/shared/presets.js`：OpenAI、DeepSeek、OpenRouter（免费模型发现）、Ollama（`http://localhost:11434/v1`）、LM Studio（`http://localhost:1234/v1`）及自定义。Ollama 需配置 `OLLAMA_ORIGINS` 允许扩展来源。其它设备须使用它们可以访问的服务地址；无需任何固定本机服务。
 - **OpenRouter 免费模型**：`GET https://openrouter.ai/api/v1/models`（公开、无需 key），筛出输入输出单价都为 0 的模型，
   按上下文长度和是否支持 `response_format` 排序供用户挑选；请求头带 `X-Title: DualLens`。免费档有每分钟和每日上限，
   所以默认链里放 2 到 3 个不同厂商的免费模型。
@@ -173,7 +172,7 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 - **加密导出/导入**（在两台电脑和手机之间搬配置）：PBKDF2-SHA256（≥ 310,000 次迭代）派生密钥，AES-GCM 加密，
   格式 `duallens-config:v1:<base64url(salt|iv|密文)>`。不填口令时导出的明文 JSON **不含**任何 key。
 - 共享表单通过可选 `platform.renderQr` 显示加密导出二维码；不静态导入二维码模块。缺少该能力时显示可复制的加密文本，导出/导入功能保持可用。
-  用户脚本启动产物硬上限仍为 400000 字节，本轮构建目标及检查收紧到不超过 360000 字节；不包含二维码编码器、PDF.js / PDF 阅读页或扩展侧栏入口；共用的文本/字幕页签仍保留。
+  用户脚本启动产物硬上限收紧到 340000 字节；不包含二维码编码器、PDF.js / PDF 阅读页或扩展侧栏入口；共用的文本/字幕页签仍保留。
 - 非机密字幕偏好 `subtitles = { enabled:false, mode:'bilingual', fontSize:22, position:'bottom' }` 随公共设置同步与备份。
   `mode` 为 `bilingual` / `translation-only`，字号为 16–48 的整数，位置为 `top` / `bottom`；旧备份缺少该字段时恢复默认值。
 
@@ -187,7 +186,7 @@ page 使用 `always/never/default`，其余使用 `on/off/default`，缺省继�
 match 可含 HTTP(S) 协议、端口和任意 `*` 路径通配，忽略网页查询串/片段；域名不分大小写，路径区分大小写和末尾斜杠。
 最长非通配路径、最少通配符的规则优先，完整排序、旧格式继承和校验约束见 [SPEC §3.1](SPEC.md#31-站点与路径规则v05-增量)。
 never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页、快捷键或用户脚本菜单手动翻译；
-这修正了 v0.4 实际代码连手动入口一起禁用的行为。selection/hover/input 关闭时对应 UI、事件与手动功能入口均禁用，
+这修正了 v0.4 实际代码连手动入口一起禁用的行为。selection/hover/input 关闭时对应被动 UI 与事件禁用；右键选中文字始终可用，
 触屏长按受 hover 控制。SPA 路由变化重新判定，独立监听在未翻译状态仍有效。
 规则与翻译共用同一窗口/隔离世界的路由检测器：支持 Navigation API 时监听 `navigatesuccess` / `currententrychange`，
 并保留 `popstate` / `hashchange`，不轮询；仅不支持时以 1 秒轮询兜底，页面隐藏时暂停，重新可见时立即检查。
@@ -229,8 +228,7 @@ never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页�
 
 ## 6. Edge Add-ons 上架
 
-- 商店包去掉 `key`，商店分配的扩展 ID 与开发版不同：网关默认的 Origin 白名单要同时允许商店 ID（写进
-  `gateway.example.json` 的说明，用户在本机配置里加）。
+- 商店包去掉 manifest 的 `key` 字段，由商店分配扩展 ID；不分发签名私钥。
 - 上架材料放 `docs/store/`：中英文简介与详细说明、每项权限（尤其 `<all_urls>`）的用途说明、截图（1280×800，由 mock E2E
   生成）、小宣传图 440×280。隐私政策 `docs/PRIVACY.md`：不收集任何数据；网页文本只发往用户自己选的模型服务。
 - **提交由用户本人用自己的开发者账号完成**；我们只准备材料。
@@ -245,4 +243,4 @@ never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页�
 | 真机 Android Edge + Tampermonkey | 用户手动验收（我们提供逐步清单） |
 | 真实服务 | OpenRouter 免费模型一条链路（key 由用户放进环境变量 `DUALLENS_OPENROUTER_KEY`，测试从环境变量读取，不落盘） |
 
-2026-10-14 授权探测中，Hermes ling-3.1-flash 与 longcat-2.0:free 返回 404，solar-mini4:free 返回中文成功。因此默认 allowlist 与一键接入仅自动选入 Solar，仍须出现在实时目录中；其它模型可由用户显式配置并手选，不更改现有设备配置。
+配置导入可调用 `store.save(settings, {preserveProvider:true})` 保留服务默认模型与 chain 的独立值；日常保存仍对齐链首项。

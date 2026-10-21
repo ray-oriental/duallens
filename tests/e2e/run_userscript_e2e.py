@@ -3,7 +3,7 @@
 
 Build first: node scripts/build_userscript.mjs
 Run with the same Python/browser environment as run_e2e.py. Profiles and evidence remain
-in ~/.cache/duallens-e2e. GM/shadow instrumentation is test-only, outside the product bundle.
+under DUALLENS_E2E_OUT (system temporary directory by default). GM/shadow instrumentation is test-only, outside the product bundle.
 """
 from __future__ import annotations
 import argparse
@@ -40,7 +40,7 @@ STUB = r"""(() => {
     return root;
   };
   // Legacy cases exercise the LLM path; the machine-translation cases choose their own mode.
-  data.set('duallens:sync', {settings:{provider:{active:'mock'},translation:{mode:'llm'}}});
+  data.set('duallens:sync', {settings:{version:3,provider:{active:'mock'},translation:{mode:'llm'},selection:{enabled:true},hover:{enabled:true},input:{enabled:true},floatBall:{enabled:true},comics:{enabled:true}}});
   window.GM_getValue = (key, fallback) => structuredClone(data.get(key) ?? fallback);
   window.GM_setValue = (key, value) => {
     const old = data.get(key); data.set(key,structuredClone(value));

@@ -19,10 +19,9 @@ import zipfile
 PROJECT = Path(__file__).resolve().parent.parent
 ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.woff2', '.ttf', '.ico', '.txt', '.wasm'}
 BLOCKED = {'.git', '.cache', '.duallens', 'private', 'runtime', 'reference', 'duallens-ref', 'node_modules', '__pycache__', 'venv', '.venv', 'credentials', 'secrets', 'backups'}
-GATEWAY_FILES = ('gateway/__init__.py', 'gateway/duallens_gateway.py', 'gateway/qrcodegen.py', 'gateway/QR-LICENSE.txt', 'gateway/run_hermes_proxy.py', 'gateway/Install-Startup.ps1')
 PUBLIC_FILES = ('README.md', 'LICENSE', 'SECURITY.md', 'AGENTS.md', 'CONTRIBUTING.md', 'requirements-dev.txt', 'package.json', '.gitignore', '.gitattributes', 'CHANGELOG.md')
 # Add user documentation only through an explicit reviewed list; private research is never included.
-PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/SETUP-ALL-DEVICES.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md', 'docs/releases/v0.2.0.md', 'docs/releases/v0.3.0.md', 'docs/releases/v0.3.1.md', 'docs/releases/v0.4.0.md', 'docs/releases/v0.5.0.md', 'docs/releases/v0.6.0.md', 'docs/COMICS.md', 'docs/PDF.md', 'docs/SUBTITLES.md', 'docs/PRIVACY.md', 'docs/store/permissions.md')
+PUBLIC_DOCS = ('docs/SPEC.md', 'docs/PLATFORMS.md', 'docs/USAGE.md', 'docs/ARCHITECTURE.md', 'docs/ROADMAP.md', 'docs/VALIDATION.md', 'docs/releases/v0.1.0.md', 'docs/releases/v0.2.0.md', 'docs/releases/v0.3.0.md', 'docs/releases/v0.3.1.md', 'docs/releases/v0.4.0.md', 'docs/releases/v0.5.0.md', 'docs/releases/v0.6.0.md', 'docs/COMICS.md', 'docs/PDF.md', 'docs/SUBTITLES.md', 'docs/PRIVACY.md', 'docs/store/permissions.md')
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
 VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store)-v\d+(?:\.\d+){0,3}\.zip')
@@ -30,6 +29,52 @@ USERSCRIPT_ASSETS = {'duallens.user.js', 'duallens-settings.js'}
 
 class CheckError(ValueError):
     pass
+
+# Split literals keep the gate itself free of the private identifiers it rejects.
+# Equivalent to the maintainer's case-insensitive public-source grep policy.
+PRIVACY_TERMS = (
+    'sj' + 'tu', '\u4ea4\u5927', 'ddl' + '-hub', 'her' + 'mes',
+    'ray_' + 'oriental', 'D:' + '\\' + 'Workspace', 'C:' + '\\' + 'Users',
+    'codex' + '_project', 'Sj' + 'tuGym', '187' + '65', '86' + '45',
+    '187' + '90', '78' + '97', 'tail' + 'scale', 'zim' + 'bra',
+    'mail.' + 'sj' + 'tu', 'cla' + 'ude/', 'co' + 'dex/',
+)
+PRIVACY_RE = re.compile('|'.join(re.escape(term) for term in PRIVACY_TERMS), re.I)
+
+def check_privacy(project: Path) -> int:
+    """Check tracked and new public files, or an unpacked source tree without Git.
+
+    Diagnostics contain only a relative filename and line, never matched content.
+    Vendored third-party code is excluded; public project code and docs are not.
+    """
+    if (project / '.git').exists():
+        result = subprocess.run(['git', '-C', str(project), 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], capture_output=True)
+        require(result.returncode == 0, 'cannot inventory public files for privacy check')
+        names = set(result.stdout.decode('utf-8').split('\0')) - {''}
+    else:
+        names = set()
+        def visit(folder):
+            for path in folder.iterdir():
+                rel = path.relative_to(project)
+                if path.name in BLOCKED | {'dist', '.agents', '.codex', '.aws'} or rel.as_posix().startswith('extension/vendor/'):
+                    continue
+                require(not is_link(path), f'linked public source entry: {rel.as_posix()}')
+                if path.is_dir(): visit(path)
+                elif path.is_file(): names.add(rel.as_posix())
+        visit(project)
+    count = 0
+    for name in sorted(names):
+        if name.startswith('extension/vendor/') or not (project / name).exists():
+            continue
+        source = safe_file(project, name)
+        require(not PRIVACY_RE.search(name), f'private identifier in public filename: {name}')
+        # Decode binary as well: embedded ASCII metadata must not escape inspection.
+        content = source.read_bytes().decode('utf-8-sig', errors='replace')
+        match = PRIVACY_RE.search(content)
+        line = content.count('\n', 0, match.start()) + 1 if match else 0
+        require(match is None, f'private identifier in public file: {name}:{line}')
+        count += 1
+    return count
 
 def require(ok: bool, message: str) -> None:
     if not ok:
@@ -183,18 +228,19 @@ def public_source_files(project: Path, directory: str, suffixes: set[str]) -> di
                 continue
             if path.is_dir():
                 visit(path)
-            elif path.suffix.casefold() in suffixes or (directory == 'gateway' and path.name.endswith('.example.json')):
+            elif path.suffix.casefold() in suffixes:
                 files[rel] = safe_file(project, rel)
     visit(base)
     return files
 
 def release_members(project: Path) -> tuple[dict, dict[str, Path], dict[str, Path]]:
+    check_privacy(project)
     m, assets = validate_extension(project / 'extension')
     extension = {**assets, 'LICENSE': safe_file(project, 'LICENSE')}
     portable = {'extension/' + name: path for name, path in assets.items()}
-    for name in PUBLIC_FILES + PUBLIC_DOCS + GATEWAY_FILES:
+    for name in PUBLIC_FILES + PUBLIC_DOCS:
         portable[name] = safe_file(project, name)
-    for directory, suffixes in [('gateway', {'.py', '.ps1'}), ('scripts', {'.py', '.mjs'}), ('tests', {'.py', '.mjs', '.html', '.md', '.png'}), ('.github', {'.yml', '.yaml', '.md'})]:
+    for directory, suffixes in [('scripts', {'.py', '.mjs'}), ('tests', {'.py', '.mjs', '.html', '.md', '.png'}), ('.github', {'.yml', '.yaml', '.md'})]:
         portable.update(public_source_files(project, directory, suffixes))
     # The portable bundle must retain all locally linked Markdown documentation from README.
     readme = portable['README.md'].read_text(encoding='utf-8-sig')
@@ -300,8 +346,10 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         project = args.project_dir.absolute()
+        checked = check_privacy(project)
+        print(f'PASS privacy: {checked} public files; 0 matches (vendor excluded)')
         m, assets = validate_extension(project / 'extension', syntax=True)
-        for directory in ('gateway', 'scripts'):
+        for directory in ('scripts', 'tests'):
             for source in (project / directory).rglob('*.py'):
                 if '__pycache__' not in source.parts:
                     safe_file(project, source.relative_to(project).as_posix())

@@ -8,7 +8,7 @@ import { stripMarkup } from '../../shared/markup.js';
 import { validateSettings, importSettings, lines, terms } from './validation.js';
 import { drawLayout } from './layout.js';
 import { mountSiteRules } from './site-rules.js';
-import { parsePairing, gatewayProfile, gatewayChain, discoverGateway, compactConfig } from './gateway.js';
+import { compactConfig } from '../../shared/configcrypto.js';
 
 // Shared by options and the platform's page panel. No browser globals or implicit storage.
 export async function mountSettingsForm(root, { store, platform }) {
@@ -87,7 +87,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   async function showWizard() {
     const chain = providerChain(s);
     const usable = await Promise.all(chain.map(async c => {
-      const apiKey = ['openai', 'gateway'].includes(c.profile.kind) ? await store.getSecret(c.profile.id) : '';
+      const apiKey = c.profile.kind === 'openai' ? await store.getSecret(c.profile.id) : '';
       return !profileProblem({ ...c.profile, model: c.model, apiKey }) && (!c.profile.requiresKey || !!apiKey);
     }));
     if (!closed) $('wizard').hidden = usable.some(Boolean);
@@ -105,7 +105,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     if (!dialog) { fill('apiKey', ''); $('apiKey').disabled = true; }
     else { $('set-key').disabled = $('clear-key').disabled = true; $('key-status').textContent = '未设置'; }
     $('key-row').hidden = p.kind === 'mock'; $('baseUrl').disabled = p.kind === 'mock'; $('jsonMode').disabled = p.kind === 'mock';
-    $('credential-label').textContent = p.kind === 'gateway' ? '配对令牌（可选；仅存本机）' : 'API key（仅存本机）';
+    $('credential-label').textContent = 'API key（仅存本机）';
     const preset = getPreset(p.preset);
     $('provider-description').textContent = preset?.description || '使用自己的模型服务；不会自动联网。';
     $('key-link').hidden = !preset?.keyUrl;
@@ -125,7 +125,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     for (const id of ['maxItems', 'maxChars', 'concurrency', 'timeoutMs']) p[id] = read(id);
     if (p.kind !== 'mock') { p.baseUrl = read('baseUrl').trim(); p.jsonMode = read('jsonMode'); }
     if (p.kind !== 'mock' && !dialog) drafts.set(p.id, read('apiKey').trim());
-    p.fallbackModels = /^(claude|codex)\//.test(p.model) ? [] : lines(read('fallbackModels'));
+    p.fallbackModels = lines(read('fallbackModels'));
   }
   function setSelectedChain() {
     const p = profile();
@@ -162,7 +162,6 @@ export async function mountSettingsForm(root, { store, platform }) {
     Object.assign(next.translation.mt, { engine: read('mtEngine'), fallback: read('mtFallback'), region: read('mtRegion').trim() });
     next.provider.active = pid;
     next.provider.chain = JSON.parse(read('providerChain') || '[]');
-    if (/^(claude|codex)\//.test(profile()?.model || '')) next.provider.chain = [{ profileId:pid, model: profile().model }];
     next.glossary = terms(read('glossary'));
     next.siteRules.always = lines(read('always'));
     next.siteRules.never = lines(read('never'));
@@ -177,10 +176,6 @@ export async function mountSettingsForm(root, { store, platform }) {
   async function save() {
     if (loadingKey) throw new Error('正在读取本机密钥，请稍后保存');
     const next = collect();
-    for (const p of next.provider.profiles) if (p.kind === 'gateway' && edited.has(p.id)) {
-      const key = drafts.get(p.id);
-      if (key && !/^[A-Za-z0-9_-]{43}$/.test(key)) throw new Error('配对令牌格式无效；请导入完整配对串');
-    }
     saving = true;
     try {
       s = await store.save(next);
@@ -220,7 +215,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     action('set-key', async () => {
       const id = pid;
       if (!id || loadingKey) return;
-      const key = await platform.promptSecret(profile()?.kind === 'gateway' ? '输入网关配对令牌（留空清除；取消保留原值）' : '输入此服务的 API key（留空清除；取消保留原值）');
+      const key = await platform.promptSecret('输入此服务的 API key（留空清除；取消保留原值）');
       if (key === null || closed || pid !== id) return;
       if (typeof key !== 'string' || /[^\x20-\x7e]/.test(key.trim())) throw new Error('API key 含有非法字符');
       drafts.set(id, key.trim()); edited.add(id); dirty = true;
@@ -276,39 +271,6 @@ export async function mountSettingsForm(root, { store, platform }) {
     choices($('profile'), [{ id: '', name: '选择一个服务' }, ...s.provider.profiles], id);
     for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: '继承网页翻译' }, ...s.provider.profiles], read(name + 'Profile'));
     await drawProfile(); setSelectedChain(); notice('填写 key，获取模型并测试；最后保存。');
-  });
-  function upsert(p) {
-    const index = s.provider.profiles.findIndex(old => old.id === p.id);
-    if (index < 0) s.provider.profiles.push(p); else s.provider.profiles[index] = p;
-  }
-  async function selectGateway(id, chain) {
-    pid = id; s.provider.active = id; s.provider.chain = chain; dirty = true;
-    choices($('profile'), [{ id: '', name: '选择一个服务' }, ...s.provider.profiles], id);
-    for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: '继承网页翻译' }, ...s.provider.profiles], read(name + 'Profile'));
-    fill('providerChain', JSON.stringify(chain, null, 2)); await drawProfile();
-  }
-  action('connect-gateway', async () => {
-    if (!platform.http) throw new Error('此平台未提供网关探测');
-    captureProfile();
-    const models = await discoverGateway(platform.http);
-    if (closed) return;
-    const p = gatewayProfile('gateway-local', '本机网关', 'http://127.0.0.1:18790/v1');
-    const chain = gatewayChain(models, p.id);
-    p.model = chain[0]?.model || ''; p.fallbackModels = chain.slice(1).map(c => c.model);
-    upsert(p); discovered.set(p.id, models); choices($('models'), models);
-    await selectGateway(p.id, chain);
-    notice(chain.length ? (chain[0].model === 'auto' ? '已选用网关 auto；点击保存。' : '已建立网关备选链；点击保存。') : '没有可用模型；请检查网关配置。');
-  });
-  action('import-pairing', async () => {
-    const text = dialog ? await platform.promptSecret('粘贴完整网关配对串（视同密钥；取消停止导入）') : read('pairingText');
-    if (!dialog) fill('pairingText', '');
-    if (text === null || closed) return;
-    const paired = parsePairing(text.trim()); captureProfile();
-    const profiles = [gatewayProfile('gateway-usb', '电脑网关（USB）', paired.usb)];
-    if (paired.tailscale) profiles.unshift(gatewayProfile('gateway-tailscale', '电脑网关（Tailscale）', paired.tailscale));
-    for (const p of profiles) { upsert(p); drafts.set(p.id, paired.token); edited.add(p.id); }
-    await selectGateway(profiles[0].id, [{ profileId: profiles[0].id, model: profiles[0].model }]);
-    notice('已导入网关地址与令牌草稿；点击保存。没有 Tailscale 地址时只建立 USB 服务。');
   });
   action('load-models', async () => {
     captureProfile(); const p = profile(); notice('正在获取模型列表…');
@@ -393,7 +355,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     const next = importSettings(parsed.settings, await store.load()); // validate everything before writes
     saving = true;
     try {
-      s = await store.save(next);
+      s = await store.save(next, { preserveProvider: true });
       for (const [id, secret] of Object.entries(parsed.secrets || {})) if (next.provider.profiles.some(p => p.id === id) || MT_SECRET_IDS.includes(id)) await store.setSecret(id, secret.apiKey);
       drafts.clear(); edited.clear(); dirty = false; if (!dialog) fill('backupPassword', ''); fill('backupText', ''); $('backup-qr').hidden = true; await draw(); notice('设置已导入');
     } finally { saving = false; }

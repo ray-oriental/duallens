@@ -322,7 +322,7 @@ export async function buildUserscript({ project = PROJECT, output = path.join(pr
   const marker = "'__DUALLENS_SETTINGS_RESOURCE__'";
   if (bundle.split(marker).length !== 2) throw new Error('Settings resource descriptor placeholder missing or duplicated');
   const content = metadata(manifest.version, [resource]) + bundle.replace(marker, JSON.stringify(resource));
-  if(Buffer.byteLength(content)>360000) throw new Error('Userscript exceeds the 360 KB startup budget');
+  if(Buffer.byteLength(content)>340000) throw new Error('Userscript exceeds the 340 KB startup budget');
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(path.join(path.dirname(output), resource.file), settings, 'utf8');
   await fs.writeFile(output, content, 'utf8');

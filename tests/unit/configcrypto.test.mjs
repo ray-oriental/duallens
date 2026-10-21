@@ -24,13 +24,13 @@ test('wrong password, altered ciphertext, IV, salt, malformed envelope and empty
   await assert.rejects(importConfig(CONFIG_PREFIX + '*', 'correct passphrase'), /损坏/);
 });
 test('plaintext export and import omit every secret field, without modifying inputs', async () => {
-  const s = structuredClone(DEFAULT_SETTINGS); s.provider.profiles[1].apiKey = 'sk-test-not-real';
+  const s = structuredClone(DEFAULT_SETTINGS); s.provider.profiles[0].apiKey = 'sk-test-not-real';
   s.secrets = { openai: { apiKey: 'sk-test-not-real' } }; s.extra = { authorization: 'sk-test-not-real' };
   const out = await exportConfig(s, { secrets: s.secrets });
   assert.equal(out.includes('sk-test-not-real'), false); assert.equal(out.includes('secrets'), false);
   const decoded = await importConfig(JSON.stringify(s));
-  assert.equal(decoded.secrets, undefined); assert.equal(decoded.settings.provider.profiles[1].apiKey, undefined);
-  assert.equal(s.provider.profiles[1].apiKey, 'sk-test-not-real');
+  assert.equal(decoded.secrets, undefined); assert.equal(decoded.settings.provider.profiles[0].apiKey, undefined);
+  assert.equal(s.provider.profiles[0].apiKey, 'sk-test-not-real');
 });
 test('reject unsafe plaintext objects, oversized input and prototype secrets', async () => {
   await assert.rejects(importConfig('[]'));

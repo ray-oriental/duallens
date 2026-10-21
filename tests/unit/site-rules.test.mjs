@@ -8,7 +8,7 @@ import { exportConfig, importConfig } from '../../extension/shared/configcrypto.
 
 test('path patterns: protocol, subdomains, arbitrary stars, query and hash ignored', () => {
   for (const [pattern, url, expected] of [
-    ['mail.sjtu.edu.cn/zimbra/*','https://mail.sjtu.edu.cn/zimbra/inbox?x=1#mail',true],
+    ['mail.example.com/inbox/*','https://mail.example.com/inbox/inbox?x=1#mail',true],
     ['*.example.com/checkout/*','https://example.com/checkout/pay',true],
     ['*.example.com/checkout/*','https://a.b.example.com/checkout/pay',true],
     ['*.example.com/checkout/*','https://badexample.com/checkout/pay',false],

@@ -110,7 +110,7 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
         for (const p of old.settings.provider?.profiles || []) {
           if (p.apiKey && !Object.hasOwn(existing, p.id)) await store.setSecret(p.id, p.apiKey);
         }
-        await store.save(publicSettings(old.settings));
+        await store.save({ ...publicSettings(old.settings), version: old.settings.version ?? 1 });
       }
     }
     await store.load();

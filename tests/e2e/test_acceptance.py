@@ -30,33 +30,6 @@ class ReportTests(unittest.TestCase):
         for change in ({'pdf_source_dom_identical':False},{'pdf_original_pixels_identical':None},{'restore_residue':[{'attribute':'class'}]}):
             self.assertFalse(runner.pdf_restore_verdict({**good,**change}))
 
-    def test_gateway_policy_preserves_enabled_flags_and_configured_free_models_only(self):
-        config = {'port':18790,'auto':{'prefer':['claude/anything','hermes/paid','hermes/*','sjtu/fast','ollama/small']},
-                  'remote':{'enabled':True},'claude':{'enabled':True},'codex':{'enabled':True},
-                  'hermes':{'enabled':True,'models':['paid','approved:free']},
-                  'ollama':{'enabled':False,'models':['small']},'sjtu':{'enabled':True,'models':['fast'],'daily_limit':30}}
-        runner.gateway_policy(config)
-        self.assertEqual(config['port'],18799)
-        self.assertEqual(config['hermes']['models'],['approved:free'])
-        self.assertEqual(config['sjtu']['daily_limit'],15)
-        self.assertEqual(config['auto']['prefer'],['hermes/*','sjtu/fast','hermes/approved:free'])
-        for key in ('claude','codex','remote','ollama'):
-            self.assertFalse(config[key]['enabled'])
-
-    def test_sjtu_budget_persists_before_attempt_and_cannot_reset_on_restart(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp)/'budget.json'
-            a,b = runner.SjtuBudget(path),runner.SjtuBudget(path)
-            for i in range(15):
-                (a if i%2 else b).take()
-            with self.assertRaises(RuntimeError):
-                runner.SjtuBudget(path).take()
-            self.assertEqual(json.loads(path.read_text())['attempts'],15)
-            path.write_text('{broken',encoding='utf-8')
-            with self.assertRaises(ValueError):
-                a.take()
-            self.assertFalse(path.with_suffix('.lock').exists())
-
     def test_fallback_relation_is_visible_in_matrix(self):
         self.assertIn('guardian (替补 ap)',runner.markdown([{'id':'guardian','device':'desktop','status':'FAIL','fallback_for':'ap'}]))
 
@@ -80,13 +53,33 @@ class ReportTests(unittest.TestCase):
         self.assertIn('| 0.000 | — | — | 0.0% | 0 | NO | FAIL |', text)
 
     def test_gm_transport_rejects_arbitrary_or_authenticated_destination(self):
-        for url in ['http://127.0.0.1:18790/v1', 'https://example.com/', 'https://user:pass@edge.microsoft.com/']:
+        for url in ['http://127.0.0.1:1234/v1', 'https://example.com/', 'https://user:pass@edge.microsoft.com/']:
             with self.assertRaises(ValueError):
                 runner.direct_request({'url': url})
 
-    def test_gateway_child_cannot_use_the_production_state_directory(self):
+    def test_model_endpoint_is_explicit_and_cannot_embed_credentials(self):
+        for value in ('gateway', 'https://user:pass@example.org/v1', 'https://example.org/v1?key=x',
+                      'https://example.org/v1#key', 'http://example.org/v1', 'file:///model'):
+            with self.assertRaises(ValueError): runner.validate_llm_url(value)
+        self.assertEqual(runner.validate_llm_url('none'), 'none')
+        for value in ('https://example.org/v1', 'http://localhost:1234/v1', 'http://100.64.1.2:1234/v1'):
+            self.assertEqual(runner.validate_llm_url(value + '/'), value)
         with self.assertRaises(ValueError):
-            runner.gateway_child(runner.REPO, Path.home()/'.duallens')
+            runner.direct_request({'url':'https://other.example.org/v1/chat/completions'}, 'https://example.org/v1')
+
+    def test_model_transport_uses_only_environment_key_and_rejects_redirects(self):
+        opener = MagicMock()
+        response = opener.open.return_value.__enter__.return_value
+        response.read.return_value = b'{}'; response.code = 200
+        with patch.dict('os.environ', {'DUALLENS_API_KEY':'sk-test-not-real'}), patch('urllib.request.build_opener', return_value=opener):
+            runner.direct_request({'url':'https://example.org/v1/chat/completions', 'method':'POST', 'data':'{}',
+                'headers':{'Cookie':'fixture-cookie', 'Authorization':'Bearer ignored-fixture-key'}}, 'https://example.org/v1')
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.get_header('Authorization'), 'Bearer sk-test-not-real')
+        self.assertIsNone(request.get_header('Cookie'))
+        redirect = opener.add_handler.call_args.args[0]
+        with self.assertRaises(ValueError):
+            redirect.redirect_request(request, None, 302, '', {}, 'https://other.example.org/v1')
 
     def test_gm_zero_timeout_uses_host_deadline_instead_of_nonblocking_socket(self):
         opener = MagicMock()

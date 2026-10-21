@@ -14,7 +14,7 @@ export function responseHeaders(raw = '') {
 export function asFetch(http) {
   return async (url, options = {}) => {
     const res = await http({ url, method: options.method || 'GET', headers: options.headers,
-      // Provider owns its timeout via AbortSignal (including longer gateway profiles).
+      // Provider owns its timeout via AbortSignal (including longer configured timeouts).
       body: options.body, signal: options.signal, timeoutMs: 0, onText: options.onText });
     return { status: res.status, headers: res.headers, text: async () => res.text };
   };

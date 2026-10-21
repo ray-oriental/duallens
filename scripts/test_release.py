@@ -7,13 +7,13 @@ import tempfile
 import unittest
 import zipfile
 from build_release import build_release
-from check_project import CheckError, GATEWAY_FILES, PUBLIC_FILES, PUBLIC_DOCS, packaged_bytes, validate_extension, verify_release
+from check_project import CheckError, PUBLIC_FILES, PUBLIC_DOCS, packaged_bytes, validate_extension, verify_release
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJX0AAAAASUVORK5CYII=')
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
-        self.cache = Path.home() / '.cache' / 'duallens-release-tests'
+        self.cache = Path(tempfile.gettempdir()) / 'duallens-release-tests'
         self.cache.mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(prefix='fixture-', dir=self.cache)
         self.project = Path(self.temp.name) / 'project'; self.project.mkdir()
@@ -26,7 +26,7 @@ class ReleaseTests(unittest.TestCase):
         self.write('extension/ui/popup.js', 'import "../shared/defs.js";\n')
         self.write('extension/ui/ui.css', 'body { color: black; }\n')
         icon = self.project / 'extension/icons/1.png'; icon.parent.mkdir(); icon.write_bytes(PNG)
-        for name in PUBLIC_FILES + PUBLIC_DOCS + GATEWAY_FILES:
+        for name in PUBLIC_FILES + PUBLIC_DOCS:
             self.write(name, '# public fixture\n')
         self.write('README.md', '# Fixture\n[Specification](docs/SPEC.md)\n')
         self.write('package.json', '{"type":"module"}\n')
@@ -67,7 +67,7 @@ await fs.writeFile(output,'// ==UserScript==\\n// @version '+version+'\\n// ==/U
         with zipfile.ZipFile(self.out/'duallens-extension-v0.1.0.zip') as z:
             self.assertIn('manifest.json',z.namelist()); self.assertNotIn('extension/manifest.json',z.namelist())
         with zipfile.ZipFile(self.out/'duallens-portable-v0.1.0.zip') as z:
-            self.assertIn('extension/manifest.json',z.namelist()); self.assertIn('gateway/duallens_gateway.py',z.namelist()); self.assertIn('tests/unit/example.test.mjs',z.namelist())
+            self.assertIn('extension/manifest.json',z.namelist()); self.assertFalse(any(n.startswith('gateway/') for n in z.namelist())); self.assertIn('tests/unit/example.test.mjs',z.namelist())
 
     def test_edge_store_target_removes_manifest_key_and_keeps_extension_members(self):
         manifest = self.project / 'extension/manifest.json'
@@ -212,10 +212,9 @@ await fs.writeFile(output,(await fs.readFile(output,'utf8')).replace('// ==/User
         second = {p.name:p.read_bytes() for p in self.build()}
         self.assertEqual(first,second)
         verify_release(self.project,self.out)
-        with zipfile.ZipFile(self.out/'duallens-portable-v0.1.0.zip') as z:
-            script=z.read('gateway/Install-Startup.ps1')
-            self.assertTrue(script.startswith(b'\xef\xbb\xbf'))
-            self.assertNotIn(b'\r',script)
+        script=self.write('scripts/fixture.ps1', 'Write-Output "fixture"\n')
+        script.write_bytes(b'\xef\xbb\xbf' + b'Write-Output "fixture"\r\n')
+        self.assertEqual(packaged_bytes(script), b'\xef\xbb\xbf' + b'Write-Output "fixture"\n')
         self.assertEqual(packaged_bytes(self.project/'extension/icons/1.png'),PNG)
     def test_runtime_private_reference_and_generator_are_excluded(self):
         for name in ['extension/private/fixture.json','extension/.env','extension/icons/generate_icons.py','gateway/state.json','gateway/__pycache__/bad.pyc','docs/research/notes.md','docs/HANDOFF.md','scripts/.cache/data.py']:

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Settings v3 keeps legacy compatible-service ids, endpoints, models and local Bearer slots; one-time migration turns off floating ball, passive selection, hover, input and comics, matching fresh-install defaults.
+- Remove personal infrastructure and pairing UI; keep generic OpenAI-compatible presets, local-model instructions and encrypted device transfer.
+- Restrained page/selection/video/opt-in-image context menus, portable browser-test paths, release privacy gate and a 340000-byte userscript startup limit.
+
 ## [0.6.0] - 2026-10-18
 
 - Bilingual subtitles for standard HTML5 tracks on any site (scheduled around playback, re-queued on seek, fullscreen overlay, native track modes restored); local .srt/.vtt import, translation and bilingual export in the side panel; subtitle entry points renamed to video subtitles, with a video context menu on all sites.
@@ -24,7 +28,7 @@
 - Translate all visible text (controls, labels, placeholders, captions, footers, comments, dynamic content) with per-container presentation: block for prose, inline for short labels, measured replace-only for tiny controls; titles always keep the original.
 - Protect identifiers (paths, users, branches, topics, licenses) and author/channel/citation names; compact metadata lines; computed translation colour for dark sites; first-screen priority scheduling; re-translate after mode/engine changes.
 - Layout-preserving bilingual PDF pages (same-size translated page over the original render, four views, author/affiliation lines kept).
-- Gateway: `auto` virtual model across SJTU / free Hermes / Ollama (never subscriptions), queueing instead of instant 503, SJTU token bucket, phased timeouts, richer `/health`; one-click gateway setup defaults to `auto`.
+- Gateway: `auto` virtual model across compatible service / free compatible proxy / Ollama (never subscriptions), queueing instead of instant 503, compatible service token bucket, phased timeouts, richer `/health`; one-click compatible adapter setup defaults to `auto`.
 - Real-site acceptance matrix tool (`tests/e2e/run_acceptance.py`); userscript startup budget lowered to 360 KB.
 
 ## [0.3.1] - 2026-10-14
@@ -33,8 +37,8 @@
 - Reject approximate Japanese prose echoes before streamed display and recover unfinished omissions with the existing bounded batch-retry budget; prompt cache version 4.
 - Make real-page read probes resilient to document navigation and run Pixiv checks without a hard-coded HTTP proxy.
 
-- Stream OpenAI-compatible responses through extension fetch, userscript GM progress and optional gateway SSE; display completed items early and use smaller first-viewport batches.
-- Cool down and hide missing models after 404; discover Hermes models from the proxy catalog intersected with the configured free allowlist.
+- Stream OpenAI-compatible responses through extension fetch, userscript GM progress and optional compatible adapter SSE; display completed items early and use smaller first-viewport batches.
+- Cool down and hide missing models after 404; discover compatible proxy models from the proxy catalog intersected with the configured free allowlist.
 - Split Pixiv novel paragraphs, place comic panels in document flow, and preserve PDF formula runs as placeholders.
 - Fix Pixiv image downloads with extension-scoped session Referer rules and anonymous GM headers; disabling comics/removing sites deletes rules.
 - Route floating-ball restore through common page/comic/subtitle commands; keep optional CDN metadata across settings edits.
@@ -67,7 +71,7 @@
 - Reuse the shared settings wizard inside the page panel, with no stored-key backfill, cache clear and teardown.
 - Fix hover translations being cleared when Chrome storage reordered provider object keys during migration; reload v2 change notifications correctly.
 - Add sync-only settings/hover and mocked OpenRouter userscript privacy regressions; document all three browser runners.
-- Document OpenRouter free models, optional desktop gateway, Android Edge/Tampermonkey setup and the remaining Android Chrome/device-acceptance boundaries.
+- Document OpenRouter free models, optional desktop compatible adapter, Android Edge/Tampermonkey setup and the remaining Android Chrome/device-acceptance boundaries.
 
 ## v0.1.0 — 2026-10-13
 
@@ -76,7 +80,7 @@ Initial open-source web translation release.
 - Bilingual, translation-only and restore; lazy/dynamic paragraphs and inline formatting.
 - Selection, hover, input shortcuts, 15 styles, glossary, prompts and site preferences.
 - JSON batching, cache, model cooldown/fallback and safe text insertion.
-- Configurable compatible endpoint, offline mock, standard-library loopback gateway and opt-in model integrations.
+- Configurable compatible endpoint, offline mock, standard-library loopback compatible adapter and opt-in model integrations.
 - Explicit provider setup for new installs; no automatic use of local accounts.
 - Reproducible release ZIPs and SHA256SUMS; Windows/Ubuntu offline CI and isolated mock browser checks.
 

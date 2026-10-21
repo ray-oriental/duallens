@@ -6,7 +6,6 @@ DualLens 不收集、不出售、不上传遥测数据，也不建立用户账�
 
 MT 只收到待翻译文字、占位符和语言，不收到页面 HTML 属性、URL、标题或 cookie；这些占位符并非原网页 HTML。服务商如何处理文字由用户与服务商的协议决定。API key（包括官方 MT key）只保存在当前浏览器的本机 secrets 中，不进入同步设置、发布包、日志或我们的服务器。用户明确选择带口令的加密导出时可以携带 key，明文导出始终不含 key。翻译缓存和偏好也保存在用户设备上。
 
-可选的本机网关只监听回环地址，并要求精确配置的扩展 Origin；它不会把本机服务公开到局域网或互联网。
 
 PDF 在本机通过随包发布的 PDF.js 解析和渲染，PDF 字节不上传、不保存到我们的服务器。只有用户点击翻译后，附近段落文本才发送给用户选择的翻译服务；不向该服务发送 PDF 文件或其 URL。本地选择的文件只在阅读页内存处理。
 
@@ -24,7 +23,6 @@ DualLens does not collect, sell, or upload telemetry and does not require an acc
 
 MT receives text, placeholder tags and languages, without page HTML attributes, URLs, titles or cookies; placeholders are not the original webpage HTML. Provider handling is governed by the user's agreement with that provider. API keys, including official MT keys, remain in local secrets, outside sync settings, release packages, logs and our servers. User-requested password-encrypted exports may include keys; plaintext exports never do. Translation cache and preferences remain on the user's device.
 
-The optional local gateway listens only on a loopback address and requires an exact, explicitly configured extension Origin. It does not expose the local service to the LAN or the public Internet.
 
 PDF files are parsed and rendered on-device using packaged PDF.js. Their bytes are not uploaded or stored on our servers. Only nearby paragraph text explicitly requested for translation is sent to the user's selected provider; the PDF file and its URL are not sent to that provider. Selected local files are processed in the viewer's memory.
 
