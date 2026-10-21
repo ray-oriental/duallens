@@ -1,3 +1,4 @@
+import { t as l10n, registerMessages } from '../shared/i18n.js';
 import { createGMStorageArea } from './storage.js';
 import { createGMHttp, asFetch } from './http.js';
 import { performanceSettings } from './settings-store.js';
@@ -34,7 +35,7 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
       observe: observeTimedtext,
       fetchTrack(raw, options) {
         const url = originalTrackURL(raw, location.href);
-        if (!url) return Promise.reject(new Error('字幕轨道地址无效'));
+        if (!url) return Promise.reject(new Error(l10n('m63')));
         return new URL(url).origin === location.origin ? fetchTimedtext(url, options) :
           fetchGMCrossHostTrack(url, options, platform.http);
       },
@@ -81,7 +82,12 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
     },
   };
   const store = platform.settingsStore = createSettingsStore({ syncArea, localArea });
-  const loadSettingsForm = createSettingsFormLoader(gm.getResourceText);
+  const loadResource = createSettingsFormLoader(gm.getResourceText);
+  const loadSettingsForm = async () => {
+    const mount = await loadResource();
+    registerMessages(mount.messages);
+    return mount;
+  };
   platform.loadSettingsForm = loadSettingsForm;
   platform.showResourceError = () => toast(SETTINGS_RESOURCE_ERROR);
   let mediaPanel;

@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Hover translation. Hold the configured modifier (Shift by default) over a paragraph to translate
 // just that paragraph; press again on a translated one to collapse it. With modifier "none" the
 // paragraph under a resting pointer is translated after 500 ms (Esc collapses it).
@@ -10,7 +11,7 @@ import{editableOf}from './inputbox.js';
 import{deepActiveElement,hoverService}from './util.js';
 import{createOverlay}from './overlay.js';
 
-const UI={close:'关闭悬停'};
+const UI={close:l10n('m4q')};
 const HOLD_MS=130;
 const REST_MS=500;
 

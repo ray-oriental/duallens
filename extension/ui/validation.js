@@ -1,9 +1,10 @@
+import { t as l10n } from '../shared/i18n.js';
 import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION, migrateSettings, validateSiteRules, validateInteractionSettings } from '../shared/settings.js';
 import { isMtEngine } from '../background/mt.js';
 import { comicSites } from '../content/comics/sites.js';
 
-// User-visible copy is centralized for the next localization pass.
-const COPY=Object.freeze({s0:"术语表每行使用 原词 → 译词",s1:"漫画开关或源语言无效",s2:"字幕设置无效",s3:"翻译方式或机器翻译设置无效",s4:"请选择有效的源语言和目标语言",s5:"显示模式无效",s6:"翻译短文本开关无效",s7:"译文样式无效",s8:"提示词设置无效",s9:"最短段落",s10:"行内阈值",s11:"预加载距离",s12:"合批等待",s13:"缓存条数",s14:"缓存天数",s15:"术语表最多500项，每项须包含原词和译词",s16:"悬停快捷键无效",s17:"输入框设置无效",s18:"悬浮球位置无效",s19:"开关设置无效",s20:"自动翻译语言无效",s21:"自定义规则须是JSON数组",s22:"include/exclude 须是选择器字符串或字符串数组",s23:"自定义规则样式无效",s24:"活动接口无效",s25:"接口标识重复或类型无效",s26:"接口名称或模型无效",s27:"接口地址无效",s28:"接口须使用不含凭据或查询参数的HTTP(S)地址",s29:"JSON模式无效",s30:"备选模型须为非空字符串",s31:"批量段数",s32:"批量字符",s33:"并发数",s34:"超时",s35:"备选链须为数组",s36:"备选链的接口或模型无效",s37:"设置文件须是JSON对象"});
+// Localized copy shared by the extension and lazy userscript UI.
+const COPY=Object.freeze({s0:l10n('mj7'),s1:l10n('mj8'),s2:l10n('mj9'),s3:l10n('mja'),s4:l10n('mjb'),s5:l10n('mjc'),s6:l10n('mjd'),s7:l10n('mje'),s8:l10n('mjf'),s9:l10n('mjg'),s10:l10n('mjh'),s11:l10n('mji'),s12:l10n('mjj'),s13:l10n('mjk'),s14:l10n('mjl'),s15:l10n('mjm'),s16:l10n('mjn'),s17:l10n('mjo'),s18:l10n('mjp'),s19:l10n('mjq'),s20:l10n('mjr'),s21:l10n('mjs'),s22:l10n('mjt'),s23:l10n('mju'),s24:l10n('mjv'),s25:l10n('mjw'),s26:l10n('mjx'),s27:l10n('mjy'),s28:l10n('mjz'),s29:l10n('mk0'),s30:l10n('mk1'),s31:l10n('mk2'),s32:l10n('mk3'),s33:l10n('mey'),s34:l10n('mk4'),s35:l10n('mk5'),s36:l10n('mk6'),s37:l10n('mk7')});
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
 export function safeExport(value) {
   return publicSettings(value);
@@ -35,7 +36,7 @@ export function validateSettings(s) {
   requireThat(STYLES.some(v => v.id === s.style), COPY.s7);
   requireThat(PROMPT_PRESETS.includes(s.prompt.preset) && typeof s.prompt.custom === 'string', COPY.s8);
   for (const [v, lo, hi, name] of [[s.minChars,2,1000,COPY.s9],[s.inlineMaxChars,0,500,COPY.s10],[s.lazy.rootMarginPx,0,3000,COPY.s11],[s.lazy.batchDelayMs,10,2000,COPY.s12],[s.cache.maxEntries,100,100000,COPY.s13],[s.cache.ttlDays,1,365,COPY.s14]]) {
-    requireThat(Number.isInteger(v) && v >= lo && v <= hi, `${name}需在 ${lo}–${hi} 范围内`);
+    requireThat(Number.isInteger(v) && v >= lo && v <= hi, l10n('mk8', [name, lo, hi]));
   }
   requireThat(Array.isArray(s.glossary) && s.glossary.length <= 500 && s.glossary.every(t => t && typeof t.src==='string' && typeof t.dst==='string' && t.src.trim() && t.dst.trim()), COPY.s15);
   requireThat(['Shift','Alt','Control','none'].includes(s.hover.modifier), COPY.s16);
@@ -61,7 +62,7 @@ export function validateSettings(s) {
       requireThat(p.jsonMode == null || typeof p.jsonMode==='boolean', COPY.s29);
     }
     requireThat(Array.isArray(p.fallbackModels) && p.fallbackModels.every(m=>typeof m==='string' && m.trim()), COPY.s30);
-    for (const [v, lo, hi, name] of [[p.maxItems,1,50,COPY.s31],[p.maxChars,100,12000,COPY.s32],[p.concurrency,1,6,COPY.s33],[p.timeoutMs,1000,300000,COPY.s34]]) requireThat(Number.isInteger(v) && v>=lo && v<=hi, `${name}设置无效`);
+    for (const [v, lo, hi, name] of [[p.maxItems,1,50,COPY.s31],[p.maxChars,100,12000,COPY.s32],[p.concurrency,1,6,COPY.s33],[p.timeoutMs,1000,300000,COPY.s34]]) requireThat(Number.isInteger(v) && v>=lo && v<=hi, l10n('mk9', [name]));
   }
   requireThat(Array.isArray(s.provider.chain), COPY.s35);
   for (const [i, c] of s.provider.chain.entries()) {

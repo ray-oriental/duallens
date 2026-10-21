@@ -1,6 +1,7 @@
 // Error type shared by providers, queue and translator. `code` is one of protocol.js ERR.
 
 import { ERR } from './protocol.js';
+import { t } from './i18n.js';
 
 const KNOWN_CODES = new Set(Object.values(ERR));
 
@@ -17,7 +18,7 @@ export class DLError extends Error {
 }
 
 export function cancelledError() {
-  return new DLError(ERR.CANCELLED, 'cancelled');
+  return new DLError(ERR.CANCELLED, t('cancelled'));
 }
 
 export function isCancelled(e) {
@@ -28,5 +29,5 @@ export function isCancelled(e) {
 export function toErrorInfo(e) {
   if (e && KNOWN_CODES.has(e.code)) return { code: e.code, message: String(e.message || e.code),
     ...(e.code === ERR.CONFIRMATION_REQUIRED && e.destination ? {destination:e.destination} : {}) };
-  return { code: ERR.PROVIDER, message: String((e && e.message) || e || 'unknown error') };
+  return { code: ERR.PROVIDER, message: String((e && e.message) || e || t('unknownError')) };
 }

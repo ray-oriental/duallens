@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 import { LANGS } from '../shared/settings.js';
 import { SHARED_CSS } from '../ui/theme.js';
 import { withSendConfirmation, confirmationCard } from '../content/confirmation.js';
@@ -38,21 +39,21 @@ export async function mountTextForm(root, { platform }) {
   const style = element('style', MEDIA_CSS); root.append(style);
   const service = platform.translator();
   const form = element('form'); form.className = 'dl-text';
-  const heading = element('h2', '文本翻译'); form.append(heading);
-  const from = field(form, '源语言', element('select')); from.name = 'text-from';
-  const to = field(form, '目标语言', element('select')); to.name = 'text-to';
-  const profiles = field(form, '服务', element('select')); profiles.name = 'text-profile';
-  const models = field(form, '模型', element('select')); models.name = 'text-model';
-  const load = element('button', '获取模型'); load.type = 'button'; load.className = 'text-load-models';
-  const configure = element('button', '配置服务'); configure.type = 'button'; configure.addEventListener('click', () => platform.openSettings());
+  const heading = element('h2', l10n('ma6')); form.append(heading);
+  const from = field(form, l10n('ma7'), element('select')); from.name = 'text-from';
+  const to = field(form, l10n('ma8'), element('select')); to.name = 'text-to';
+  const profiles = field(form, l10n('ma9'), element('select')); profiles.name = 'text-profile';
+  const models = field(form, l10n('maa'), element('select')); models.name = 'text-model';
+  const load = element('button', l10n('mab')); load.type = 'button'; load.className = 'text-load-models';
+  const configure = element('button', l10n('mac')); configure.type = 'button'; configure.addEventListener('click', () => platform.openSettings());
   const choices = element('div'); choices.className = 'actions'; choices.append(load, configure); form.append(choices);
-  const input = field(form, '待翻译文本', element('textarea')); input.name = 'text-input'; input.maxLength = 20000; input.required = true;
-  const translate = element('button', '翻译'); translate.type = 'submit'; form.append(translate);
+  const input = field(form, l10n('mad'), element('textarea')); input.name = 'text-input'; input.maxLength = 20000; input.required = true;
+  const translate = element('button', l10n('m6v')); translate.type = 'submit'; form.append(translate);
   const status = element('p'); status.className = 'text-status'; status.setAttribute('role', 'status'); form.append(status);
-  form.append(element('h2', '译文'));
+  form.append(element('h2', l10n('m53')));
   const output = element('output'); output.name = 'text-result'; output.setAttribute('aria-live', 'polite'); output.dir = 'auto'; form.append(output);
   const actions = element('div'); actions.className = 'actions';
-  const copy = element('button', '复制'), speak = element('button', '朗读');
+  const copy = element('button', l10n('m5g')), speak = element('button', l10n('m5i'));
   copy.type = speak.type = 'button'; copy.disabled = speak.disabled = true; actions.append(copy, speak); form.append(actions);
   root.append(form);
   let disposed = false, sequence = 0, modelSequence = 0, utterance = null, pending;
@@ -74,17 +75,17 @@ export async function mountTextForm(root, { platform }) {
   for (const control of [from, to, models, input]) control.addEventListener('input', reset);
   load.addEventListener('click', async () => {
     const token = ++modelSequence, profileId = profiles.value;
-    load.disabled = true; status.textContent = '正在获取模型…';
+    load.disabled = true; status.textContent = l10n('mae');
     try {
       const result = await service.listModels(profileId);
       if (disposed || token !== modelSequence || profileId !== profiles.value) return;
-      if (!result.ok) { status.textContent = result.error?.message || '模型获取失败'; return; }
+      if (!result.ok) { status.textContent = result.error?.message || l10n('maf'); return; }
       const value = models.value;
       const values = new Map([...models.options].map(o => [o.value, o.textContent]));
       for (const model of result.models || []) if (typeof model.id === 'string') values.set(model.id, model.label || model.id);
       selectOptions(models, [...values], value);
-      status.textContent = `获取到 ${result.models?.length || 0} 个模型`;
-    } catch { if (!disposed && token === modelSequence) status.textContent = '模型获取失败'; }
+      status.textContent = l10n('mag', [result.models?.length || 0]);
+    } catch { if (!disposed && token === modelSequence) status.textContent = l10n('maf'); }
     finally { if (!disposed && token === modelSequence) load.disabled = false; }
   });
   form.addEventListener('submit', async event => {
@@ -92,27 +93,27 @@ export async function mountTextForm(root, { platform }) {
     if (!input.value.trim()) return;
     reset(); const token = sequence;
     pending = new AbortController();
-    translate.disabled = true; status.textContent = '正在翻译…';
+    translate.disabled = true; status.textContent = l10n('m4x');
     try {
       const result = await service.translateText({ text: input.value, from: from.value, to: to.value, purpose: 'text', signal:pending.signal,
         ...(profiles.value ? { profileId: profiles.value, model: models.value } : {}) });
       if (disposed || token !== sequence) return;
-      if (!result.ok) { status.textContent = result.error?.message || '翻译失败'; return; }
+      if (!result.ok) { status.textContent = result.error?.message || l10n('mah'); return; }
       output.textContent = result.text || ''; copy.disabled = !output.textContent;
       speak.disabled = !output.textContent || !globalThis.speechSynthesis;
-      status.textContent = '翻译完成';
-    } catch { if (!disposed && token === sequence) status.textContent = '翻译失败，请重试'; }
+      status.textContent = l10n('mai');
+    } catch { if (!disposed && token === sequence) status.textContent = l10n('maj'); }
     finally { if (!disposed && token === sequence) translate.disabled = false; }
   });
   copy.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(output.textContent); status.textContent = '已复制'; }
-    catch { status.textContent = '无法访问剪贴板，请选中译文复制'; }
+    try { await navigator.clipboard.writeText(output.textContent); status.textContent = l10n('m55'); }
+    catch { status.textContent = l10n('mak'); }
   });
   speak.addEventListener('click', () => {
     try {
       stopSpeech(); utterance = new SpeechSynthesisUtterance(output.textContent); utterance.lang = to.value;
       globalThis.speechSynthesis.speak(utterance);
-    } catch { status.textContent = '此设备无法朗读'; }
+    } catch { status.textContent = l10n('mal'); }
   });
   let settingsSequence = 0;
   async function reload() {
@@ -120,13 +121,13 @@ export async function mountTextForm(root, { platform }) {
     const next = await platform.settingsStore.load();
     if (disposed || token !== settingsSequence) return;
     settings = next; reset();
-    selectOptions(from, [['auto', '自动检测'], ...LANGS.map(l => [l.code, l.name])], settings.sourceLang);
+    selectOptions(from, [['auto', l10n('m5e')], ...LANGS.map(l => [l.code, l.name])], settings.sourceLang);
     selectOptions(to, LANGS.map(l => [l.code, l.name]), settings.targetLang);
-    selectOptions(profiles, [['', '当前备选链（默认）'], ...settings.provider.profiles.map(p => [p.id, p.name || p.id])], profiles.value);
+    selectOptions(profiles, [['', l10n('mam')], ...settings.provider.profiles.map(p => [p.id, p.name || p.id])], profiles.value);
     profileModels();
   }
-  const off = platform.settingsStore.onChange(() => { void reload().catch(() => { status.textContent = '设置读取失败'; }); });
+  const off = platform.settingsStore.onChange(() => { void reload().catch(() => { status.textContent = l10n('ma5'); }); });
   try { await reload(); }
-  catch { status.textContent = '设置读取失败'; }
+  catch { status.textContent = l10n('ma5'); }
   return { destroy() { disposed = true; pending?.abort(); sequence++; off(); stopSpeech(); service.dispose?.(); form.remove(); style.remove(); } };
 }

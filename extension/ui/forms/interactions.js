@@ -1,3 +1,4 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { DEFAULT_SETTINGS,mergeSettings,STYLES } from '../../shared/settings.js';
 import { featureNeedsBroad,requestBroad,requestOrigin,requestMTOrigin } from '../../shared/permissions.js';
 import { acknowledge,llmDestination } from '../../shared/device-state.js';
@@ -5,7 +6,7 @@ import { element,FEATURES,TEXT as COMMON,engineSummary,featureDescription } from
 import { GROUPS } from './navigation.js';
 import { validateSettings } from '../validation.js';
 
-const T=Object.freeze({saved:'已保存',save:'保存',cancel:'取消',confirm:'继续',discard:'有未保存的修改，要放弃这些修改吗？',denied:COMMON.denied,originDenied:'未获得服务访问权限，配置没有保存。',reset:'恢复默认设置？本机密钥、上手状态与去向确认会保留。',delete:'删除此服务？同时删除它的本机密钥。',clear:'清除此密钥？',up:'上移',down:'下移',remove:'移除',model:'填写备选模型',unconfigured:'不使用 AI 服务',local:'文字只发送到你本机的服务，不会离开这台电脑。',destination:host=>`使用后，网页文字和页面标题会发送给 ${host}。`,version:'版本',copied:'命令已复制',copyFallback:'复制以下命令：',free:'只列出免费模型',missing:'先选择服务并填写模型。',failure:'操作没有完成，请检查设置。'});
+const T=Object.freeze({saved:l10n('mda'),save:l10n('mdb'),cancel:l10n('mdc'),confirm:l10n('mdd'),discard:l10n('mat'),denied:COMMON.denied,originDenied:l10n('mde'),reset:l10n('mdf'),delete:l10n('mdg'),clear:l10n('mdh'),up:l10n('m38'),down:l10n('mdi'),remove:l10n('mdj'),model:l10n('mdk'),unconfigured:l10n('mdl'),local:l10n('mdm'),destination:host=>l10n('mdn', [host]),version:l10n('mdo'),copied:l10n('mdp'),copyFallback:l10n('mdq'),free:l10n('mdr'),missing:l10n('mds'),failure:l10n('mdt')});
 
 export function installSettingsInteractions(ui,ctx){
   const {store,platform,getSettings,setSettings,getDirty,setDirty,getProfile,save,draw,notice,bind,simple,nums}=ctx;
@@ -45,7 +46,7 @@ export function installSettingsInteractions(ui,ctx){
   on($('localOnly'),'change',()=>{$('translationMode').value=$('localOnly').checked?'llm':'mt+llm';setSettings(mergeSettings(getSettings(),{translation:{mode:$('translationMode').value}}));setDirty(true);drawView();});
   on($('localEngine'),'change',()=>{const p=getProfile();if(!p)return;p.preset=$('localEngine').value;p.baseUrl=p.preset==='ollama'?'http://127.0.0.1:11434/v1':'http://127.0.0.1:1234/v1';$('baseUrl').value=p.baseUrl;setDirty(true);drawView();});
   if($('show-key'))on($('show-key'),'click',()=>{const key=$('apiKey');key.type=key.type==='password'?'text':'password';$('show-key').setAttribute('aria-pressed',String(key.type==='text'));$('show-key').textContent=key.type==='text'?COMMON.hideKey:COMMON.showKey;});
-  on($('copy-origin'),'click',async()=>{const command=`setx OLLAMA_ORIGINS "chrome-extension://${globalThis.chrome?.runtime?.id||'<扩展 ID>'}"`;try{await win.navigator.clipboard.writeText(command);notice(T.copied);}catch{notice(T.copyFallback+command);}});
+  on($('copy-origin'),'click',async()=>{const command=`setx OLLAMA_ORIGINS "chrome-extension://${globalThis.chrome?.runtime?.id||l10n('mdu')}"`;try{await win.navigator.clipboard.writeText(command);notice(T.copied);}catch{notice(T.copyFallback+command);}});
   function chain(){try{return JSON.parse($('providerChain').value||'[]');}catch{return[];}}
   function setChain(entries){$('providerChain').value=JSON.stringify(entries,null,2);setDirty(true);drawChain();}
   function drawChain(){const root=$('chain-list');root.replaceChildren();chain().forEach((entry,i)=>{const row=el('div',null,{class:'chain-row'});row.append(el('span',`${getSettings().provider.profiles.find(p=>p.id===entry.profileId)?.name||entry.profileId} / ${entry.model}`));for(const [label,delta]of[[T.up,-1],[T.down,1],[T.remove,0]]){const b=el('button',label,{type:'button','aria-label':`${label} ${entry.model}`});b.disabled=delta!==0&&(i+delta<0||i+delta>=chain().length);b.addEventListener('click',()=>{const values=chain();if(delta)[values[i],values[i+delta]]=[values[i+delta],values[i]];else values.splice(i,1);setChain(values);});row.append(b);}root.append(row);});}

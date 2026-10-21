@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Content-only gate shared by the extension and userscript. No text crosses the transport
 // until every possible destination (including fallbacks) has been acknowledged on this device.
 import{requestDestinations,destinationMessage}from '../shared/destinations.js';
@@ -6,8 +7,8 @@ import{loadDeviceState,needsConfirmation,acknowledge}from '../shared/device-stat
 import{createOverlay}from './overlay.js';
 
 const UI={
-  title:'确认发送',continue:'继续翻译',change:'更换服务',close:'关闭',stopped:'本次未翻译。',
-  download:'下载语言包',ocr:'需下载语言包，图片在本机识别。',
+  title:l10n('m41'),continue:l10n('m42'),change:l10n('m43'),close:l10n('m44'),stopped:l10n('m45'),
+  download:l10n('m46'),ocr:l10n('m47'),
 };
 const CSS=`.confirm{position:fixed;right:max(16px,var(--safe-right));bottom:max(16px,var(--safe-bottom));width:320px;max-width:calc(100vw - 32px);padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);box-shadow:var(--shadow);pointer-events:auto}.confirm.left{right:auto;left:max(16px,var(--safe-left))}.confirm p{margin:4px 24px 12px 0;overflow-wrap:anywhere}.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.confirm button{padding:6px 10px;color:var(--accent);background:transparent}.confirm .primary{background:var(--accent);color:var(--accent-fg)}.confirm .close{position:absolute;right:6px;top:6px;padding:2px 8px;color:var(--fg2)}`;
 
@@ -109,7 +110,7 @@ export function withSendConfirmation(p,getSettings,{prompt=confirmationCard}={})
     const packs=await p.comics.languages?.();
     if(!packs?.ok||!packs.languages.some(l=>l.lang===req.lang)){
       // Language keys and serialized destination-list keys cannot collide.
-      if(!waiting.has(req.lang))waiting.set(req.lang,prompt({message:`${UI.ocr} 来源：GitHub raw.githubusercontent.com；体积：${({eng:'4.11 MB',jpn:'2.47 MB',jpn_vert:'3.04 MB',kor:'1.68 MB'})[req.lang]||'约 11.3 MB'}（下载前校验固定大小与 SHA-256）。`,platform:p,label:UI.download}));
+      if(!waiting.has(req.lang))waiting.set(req.lang,prompt({message:l10n('m49', [UI.ocr, ({eng:'4.11 MB',jpn:'2.47 MB',jpn_vert:'3.04 MB',kor:'1.68 MB'})[req.lang]||l10n('m48')]),platform:p,label:UI.download}));
       let ok;try{ok=await waiting.get(req.lang);}finally{waiting.delete(req.lang);}if(!ok)return stopped();
     }
     return p.comics.recognize(req);

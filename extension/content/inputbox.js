@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Input-box translation: press space three times quickly (or Alt+I) in a text field and its
 // content is replaced or combined with the translation into settings.input.targetLang. A leading "/ja " style
 // prefix overrides the target language for that one translation.
@@ -6,7 +7,7 @@ import{LANGS}from '../shared/settings.js';
 import{createOverlay,toast}from './overlay.js';
 import{deepActiveElement,interactionRequest}from './util.js';
 
-const UI={s0:'选区结构无法安全写回',s1:'请先点进输入框',s2:'关闭输入框翻译',s3:'正在翻译…',s4:'请调整选区后重试。',s5:'输入框是空的',s6:'翻译未完成。',s7:'输入已更改，未写回译文。',s8:'未写回译文，请复制后粘贴。',s9:'译文',s10:'复制译文',s11:'已复制',s12:'关闭'};
+const UI={s0:l10n('m4u'),s1:l10n('m4v'),s2:l10n('m4w'),s3:l10n('m4x'),s4:l10n('m4y'),s5:l10n('m4z'),s6:l10n('m50'),s7:l10n('m51'),s8:l10n('m52'),s9:l10n('m53'),s10:l10n('m54'),s11:l10n('m55'),s12:l10n('m44')};
 const node=(tag,cls='',text='')=>Object.assign(document.createElement(tag),{className:cls,textContent:text});
 const TEXT_TYPES=new Set(['text','search','url','email','tel']);
 const PREFIX=/^\s*\/([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)[ \t ]+/;

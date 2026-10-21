@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 import { createSettingsPanel } from '../userscript/panel.js';
 import { SETTINGS_RESOURCE_ERROR } from '../userscript/settings-resource.js';
 import { element, MEDIA_CSS, mountTextForm } from './text-form.js';
@@ -12,13 +13,13 @@ export function createUserscriptMediaPanel(platform, { loadSettingsForm }) {
     root.append(style, tabs);
     const pages = [], mounted = new Map(); let disposed = false;
     const mountSettings = async (page, options) => {
-      page.textContent = '正在加载设置…';
+      page.textContent = l10n('man');
       const mount = await loadSettingsForm();
       if (disposed) return;
       page.replaceChildren();
       return mount(page, options);
     };
-    for (const [id, label, mount] of [['settings', '设置', mountSettings], ['text', '文本翻译', mountTextForm], ['subtitles', '视频字幕', mountSubtitleForm]]) {
+    for (const [id, label, mount] of [['settings', l10n('m4n'), mountSettings], ['text', l10n('ma6'), mountTextForm], ['subtitles', l10n('mao'), mountSubtitleForm]]) {
       const button = element('button', label); button.type = 'button'; button.setAttribute('role', 'tab'); button.dataset.tab = id;
       const page = element('section'); page.className = 'dl-media-page'; page.setAttribute('role', 'tabpanel'); page.hidden = true;
       const tabId = `dl-media-tab-${id}`, pageId = `dl-media-page-${id}`;
@@ -42,7 +43,7 @@ export function createUserscriptMediaPanel(platform, { loadSettingsForm }) {
       try {
         const result = await entry.mount(entry.page, { store: platform.settingsStore, platform });
         if (disposed) result?.destroy?.(); else mounted.set(id, result);
-      } catch { if (!disposed) entry.page.textContent = id === 'settings' ? SETTINGS_RESOURCE_ERROR : '页面加载失败，请关闭后重试'; }
+      } catch { if (!disposed) entry.page.textContent = id === 'settings' ? SETTINGS_RESOURCE_ERROR : l10n('map'); }
     }
     showTab = select; await select(selected);
     return { async canClose(){for(const result of mounted.values())if(result?.canClose&&!await result.canClose())return false;return true;},destroy() { disposed = true; showTab = null; for (const result of mounted.values()) result?.destroy?.(); root.replaceChildren(); } };

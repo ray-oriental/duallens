@@ -1,9 +1,10 @@
+import { t as l10n } from '../shared/i18n.js';
 // Closed-shadow page control. Position is device-local and scoped to the website.
 import{lensIcon}from './visual.js';
 import{createOverlay,toast}from './overlay.js';
-const UI={toggle:'翻译 / 显示原文',translate:'翻译此页',original:'显示原文',more:'更多',only:'仅译文',site:'本站',
-  modes:['按需','总是','从不'],left:'移到左侧',right:'移到右侧',close:'关闭悬浮球',settings:'设置',input:'翻译当前输入框',
-  closed:'悬浮球已关闭，可在弹出页重新打开'};
+const UI={toggle:l10n('m4b'),translate:l10n('m4c'),original:l10n('m4d'),more:l10n('m4e'),only:l10n('m4f'),site:l10n('m4g'),
+  modes:[l10n('m4h'),l10n('m4i'),l10n('m4j')],left:l10n('m4k'),right:l10n('m4l'),close:l10n('m4m'),settings:l10n('m4n'),input:l10n('m4o'),
+  closed:l10n('m4p')};
 const KEY='dl-ball-pos';
 const vw=()=>document.documentElement.clientWidth;
 const CSS=`.ball,.more,.menu{position:fixed;pointer-events:auto;background:var(--bg);border:1px solid var(--dl-border-strong);box-shadow:var(--shadow)}.ball{width:36px;height:36px;border-radius:50%;padding:0;display:grid;place-items:center;color:var(--fg2);opacity:.6;touch-action:none;transition:opacity var(--dl-dur-1),transform var(--dl-dur-2)}.ball svg{width:20px;height:20px}.ball:hover,.ball:focus-visible,.ball.open,.ball.drag{opacity:1}.ball.tucked{opacity:.45;transform:translateX(20px)}.ball.tucked.left{transform:translateX(-20px)}.ball::after{content:"";display:none;position:absolute;right:0;bottom:0;width:8px;height:8px;box-sizing:content-box;border:2px solid var(--bg);border-radius:50%;background:var(--accent)}.ball.on::after,.ball.busy::after{display:block}.ball.busy::after{background:transparent;border-color:var(--accent);border-top-color:transparent;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.more{display:none;width:28px;height:28px;padding:0;border-radius:50%}.more.show{display:block}.menu{display:none;width:224px;padding:6px;border-radius:12px;border-color:var(--line);max-height:calc(100dvh - 16px);overflow:auto}.menu.show{display:block}.row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;width:100%;padding:6px 8px;text-align:left}.row:hover{background:var(--bg2)}.row input{accent-color:var(--accent);min-height:24px}.site{display:flex;align-items:center;gap:4px;padding:6px}.site button{padding:4px}.site [aria-pressed=true]{background:var(--dl-accent-soft);color:var(--accent);font-weight:600}@media(pointer:coarse){.ball,.more{width:44px;height:44px}.ball.tucked{transform:translateX(28px)}.ball.tucked.left{transform:translateX(-28px)}.row{min-height:44px}}`;

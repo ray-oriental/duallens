@@ -10,7 +10,7 @@ python -B scripts/build_release.py
 python -B scripts/check_project.py --dist-dir dist
 ```
 
-项目检查覆盖 manifest、模块引用、JavaScript/Python 语法，以及公开文件中的私有设施标识和绝对用户目录（vendor 排除）。构建前也执行同一隐私门禁。发布校验检查归档成员、确定性字节、版本、SHA256SUMS 和用户脚本重建一致性；启动包硬预算 340000 字节。
+项目检查覆盖 manifest、模块引用、JavaScript/Python 语法，以及公开文件中的私有设施标识和绝对用户目录（vendor 排除）。构建前也执行同一隐私门禁。发布校验检查归档成员、确定性字节、版本、SHA256SUMS 和用户脚本重建一致性；启动包硬预算 335000 字节。
 
 在工作区外的虚拟环境安装 requirements-dev.txt 和 Playwright Chromium。浏览器缓存使用标准路径或 PLAYWRIGHT_BROWSERS_PATH；DUALLENS_E2E_OUT 指定 profile、截图和报告目录，默认系统临时目录下的 duallens-e2e。安装见 [E2E README](../tests/e2e/README.md)。先构建产物，再执行：
 

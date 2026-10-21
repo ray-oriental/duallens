@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Translation state for PDF text blocks, independent of rendering and zoom.
 //
 // Requests go through platform.translator().translateBatch(req, onPartial). With `draft: true`
@@ -199,7 +200,7 @@ export class PdfTranslations {
         if (raw.done?.then) {
           const finish = () => {
             const unfinished = chunk.filter(entry => current(entry) && ['pending', 'draft'].includes(entry.state));
-            deliver(unfinished.map(entry => ({ id: entry.id, error: { code: ERR.PARSE, message: '没有收到完整译文' } })));
+            deliver(unfinished.map(entry => ({ id: entry.id, error: { code: ERR.PARSE, message: l10n('m6p') } })));
             closed = true;
             this.handles.delete(handle);
           };
@@ -243,7 +244,7 @@ export class PdfTranslations {
             repair.push(entry);
           }
           else if (entry.state !== 'final') {
-            entry.state = 'error'; entry.error = { code: ERR.PARSE, message: !result.complete ? '译文缺少公式，保留原文' : '译文为空' };
+            entry.state = 'error'; entry.error = { code: ERR.PARSE, message: !result.complete ? l10n('m6q') : l10n('m4a') };
           }
           changed.push(entry.id);
         }

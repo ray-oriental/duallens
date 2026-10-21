@@ -1,3 +1,5 @@
+import { localize, t } from '../shared/i18n.js';
+localize();
 import { getDefaultSettingsStore } from '../shared/settings.js';
 import { mountSettingsForm } from './forms/index.js';
 import { MSG_CACHE_CLEAR } from '../shared/protocol.js';
@@ -19,7 +21,7 @@ const platform = {
   },
   async clearCache() {
     const res = await chrome.runtime.sendMessage({ type: MSG_CACHE_CLEAR });
-    if (!res.ok) throw new Error(res.error?.message || 'Cache clear failed');
+    if (!res.ok) throw new Error(res.error?.message || t('cacheClearFailed'));
   },
 };
 try {

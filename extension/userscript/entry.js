@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 import { createUserscriptPlatform } from '../platform/userscript.js';
 import { start } from '../content/main.js';
 import contentCSS from '../styles/content.css';
@@ -18,7 +19,7 @@ if (window.top === window.self && /html/i.test(document.contentType || 'text/htm
     });
     platform.injectStyle(contentCSS);
     platform.contentCSS=contentCSS;
-    platform.registerCommand('settings', 'DualLens 设置', platform.openSettings);
+    platform.registerCommand('settings', l10n('mh9'), platform.openSettings);
     const app = await start(platform);
     registerPopupMenu({ platform, pageMessage: msg => app.pageMessage(msg) });
   };

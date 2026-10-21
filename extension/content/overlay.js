@@ -1,3 +1,4 @@
+import { t as l10n, uiLanguage } from '../shared/i18n.js';
 // Page-level UI (selection icon/card, float ball, toasts) lives in closed shadow roots so page CSS
 // and scripts can neither restyle nor reach into it. Hosts are <dl-ui> elements on <html>, put in
 // the top layer when the browser supports popovers so they stay above modal dialogs.
@@ -26,6 +27,7 @@ export const BASE_CSS=`:host{all:initial;}*,*::before,*::after{box-sizing:border
 // `el` is the .dl-root container inside the shadow root; everything visible goes in it.
 export function createOverlay(css=''){
   const host=document.createElement('dl-ui');
+  host.lang=uiLanguage();
   host.setAttribute('style',HOST_STYLE);
   const root=host.attachShadow({mode:'closed'});
   const style=document.createElement('style');
@@ -60,7 +62,7 @@ export function createOverlay(css=''){
 
 // ---- toast ---------------------------------------------------------------------------------
 
-const UI={close:'关闭',retry:'重试'};
+const UI={close:l10n('m44'),retry:l10n('m5d')};
 let toastOverlay=null;
 let toastTimer=0;
 

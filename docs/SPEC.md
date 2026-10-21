@@ -14,6 +14,18 @@
 
 不做：账号体系、付费墙、遥测、远程配置下发。
 
+### 界面语言（v1）
+
+`shared/i18n.js` 提供 `t(key, substitutions?)`、`uiLanguage()` 与 `localize(root?)`。
+扩展使用 `_locales/en`、`_locales/zh_CN` 和 `chrome.i18n`，默认英文；所有中文浏览器环境使用简体中文，其余使用英文。
+`_locales/zh_TW` 是由简体中文词典生成的同文案别名，使繁体中文浏览器的 manifest 文案也显示简体中文。
+用户脚本根据 `navigator.language` 选择内置的同一套文案。界面语言不读取或修改已保存的翻译目标语言。
+静态 HTML 用 `data-i18n` 及 `data-i18n-title/placeholder/aria-label`，只写文本与明确列出的属性，不解析标记。
+Chrome JSON 是文案源；`node scripts/sync_i18n.mjs` 更新随源码发布的用户脚本回退词典，扩展本身仍无需构建。
+打包器按入口依赖裁剪词典，并压缩为仅含 JSON 的数据；启动包不包含上手卡片、面板和设置专用文案，预算为 335000 字节。
+共享元数据的样式名、翻译方式名和服务说明通过延迟 getter 读取；其文案只在设置资源内。
+经校验的资源通过 `registerMessages` 补充启动词典后才开放工具，不从网页或网络接收文案。
+
 ## 1. 总体结构
 
 ```
@@ -40,7 +52,7 @@ Android Edge + Tampermonkey                         │
 `web_accessible_resources` 里。`scripts/build_userscript.mjs` 仅为用户脚本将同一静态模块图与 CSS 打包成 IIFE；
 不改变可直接加载的 `extension/`。用户脚本的页内面板经 `mountForm` 复用 `mountSettingsForm`，关闭调用 `destroy()`。
 v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的版本固定 `@resource` 缓存，
-首次打开用户脚本的弹出页、设置或文本/字幕工具时本地校验并加载，错误显示中文重新安装说明；扩展 options 仍直接导入。详见 PLATFORMS §2。
+首次打开用户脚本的弹出页、设置或文本/字幕工具时本地校验并加载，错误按界面语言显示重新安装说明；扩展 options 仍直接导入。详见 PLATFORMS §2。
 
 ## 2. 文件归属（并行开发时谁写哪里）
 
@@ -122,7 +134,7 @@ siteRules: {
   如 `mail.example.com/inbox/*`、`*.example.com/checkout/*`、`example.com/docs/*/api`；路径中的 `*` 匹配任意字符（含 `/`）。
   协议和域名不区分大小写；路径区分大小写。查询串、片段不参与匹配。无路径表示全部路径，显式 `/` 只匹配根路径；
   `/docs/*` 匹配 `/docs/` 及其子路径，不匹配 `/docs`。省略端口匹配任意端口，显式端口匹配有效端口（HTTPS 默认 443、HTTP 默认 80）。
-  非 HTTP(S) 协议、凭据、查询串、片段、空白、非法域名/端口或超过 2048 字符的模式在保存/导入时以中文提示拒绝。
+  非 HTTP(S) 协议、凭据、查询串、片段、空白、非法域名/端口或超过 2048 字符的模式在保存/导入时按界面语言提示拒绝。
 - 多条命中时按路径非通配字符长度降序、通配符数量升序、域名长度降序、显式端口和协议优先排序。
   完全同分保持列表顺序；新 `custom.page` 优先于同分旧列表，旧 `never` 优先于同分 `always`。
   只有一条最具体 `custom` 提供三个功能开关及选择器/样式，不合并不同层级的功能开关。

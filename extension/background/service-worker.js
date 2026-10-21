@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // MV3 service worker. All listeners are registered synchronously at top level so Chrome can wake
 // the worker for them. Nothing here relies on in-memory state surviving: if the worker is
 // recycled the translate port disconnects and the content script re-sends unfinished items
@@ -70,10 +71,10 @@ const canvasRegistry=createCanvasRegistry(chrome,loadSettings);
 handlers['comic-canvas-sites-sync']=async()=> {await imageRegistry.sync();return canvasRegistry.sync();};
 handlers['open-sidepanel'] = async (_msg, sender) => {
   try {
-    if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } };
+    if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', message: l10n('m20') } };
     await chrome.sidePanel.open({ tabId: sender.tab.id });
     return { ok: true };
-  } catch { return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } }; }
+  } catch { return { ok: false, error: { code: 'unsupported', message: l10n('m20') } }; }
 };
 function syncPermissions() {
   return permissionRegistry.sync().then(() => Promise.all([canvasRegistry.sync(), imageRegistry.sync()]));
@@ -220,10 +221,10 @@ function setupMenus() {
     await new Promise(resolve => chrome.contextMenus.removeAll(() => {
       void chrome.runtime.lastError;
       const add = props => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
-      add({ id: MENU.TOGGLE, title: '翻译此页 / 显示原文', contexts: ['page'] });
-      add({ id: MENU.SELECTION, title: '翻译选中文字', contexts: ['selection'] });
-      add({ id: MENU.VIDEO_SUBTITLES, title: '视频双语字幕', contexts: ['video'] });
-      if (settings.comics.enabled) add({ id: MENU.COMICS, title: '翻译图片文字', contexts: ['image'] });
+      add({ id: MENU.TOGGLE, title: l10n('m21'), contexts: ['page'] });
+      add({ id: MENU.SELECTION, title: l10n('m22'), contexts: ['selection'] });
+      add({ id: MENU.VIDEO_SUBTITLES, title: l10n('m23'), contexts: ['video'] });
+      if (settings.comics.enabled) add({ id: MENU.COMICS, title: l10n('m24'), contexts: ['image'] });
       resolve();
     }));
   });

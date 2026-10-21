@@ -59,7 +59,7 @@ def html5_case(pw, extension=None, width=1280, height=800):
             session.sw_eval("() => {globalThis.fetch=()=>{throw Error('Offline worker forbids network');};}")
         else:
             profile = E2E_ROOT / ('profile-standard-gm-' + uuid.uuid4().hex[:8])
-            context = pw.chromium.launch_persistent_context(str(profile), headless=True,
+            context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN",
                 viewport={'width': width, 'height': height}, has_touch=width<1000, is_mobile=width<1000)
             context.add_init_script(script=STUB + '\n' + (REPO / 'dist' / 'duallens.user.js').read_text(encoding='utf-8'))
         local_html5(context)
@@ -130,7 +130,7 @@ def subtitle_file_case(pw, extension=None):
             page.evaluate('window.findSubtitle=s=>[...document.querySelectorAll(s)]')
         else:
             profile = E2E_ROOT / ('profile-subtitle-file-' + uuid.uuid4().hex[:8])
-            context = pw.chromium.launch_persistent_context(str(profile), headless=True, accept_downloads=True, viewport={'width':375,'height':812}, is_mobile=True, has_touch=True)
+            context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN", accept_downloads=True, viewport={'width':375,'height':812}, is_mobile=True, has_touch=True)
             local_html5(context)
             context.add_init_script(script=STUB + '\n' + (REPO / 'dist' / 'duallens.user.js').read_text(encoding='utf-8'))
             page = context.new_page(); page.goto('https://standard.test/watch')
@@ -314,7 +314,7 @@ def sidepanel_case(pw, extension):
 def userscript_case(pw, host, width, height, touch):
     profile = E2E_ROOT / ('profile-media-gm-' + uuid.uuid4().hex[:8]); context = None; requests = []
     try:
-        context = pw.chromium.launch_persistent_context(str(profile), headless=True,
+        context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN",
             viewport={'width': width, 'height': height}, has_touch=touch, is_mobile=touch)
         local_youtube(context, requests)
         # Equivalent GM transport for this fixture's cross-www/m caption GET. It

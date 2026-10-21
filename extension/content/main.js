@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Content entry point: wires the page translator and the interaction modules together and
 // answers messages from the background and the popup.
 
@@ -84,13 +85,13 @@ class App {
       }).catch(() => {});
     });
     for (const name of Object.values(P.COMMANDS)) this.platform.registerCommand(name, {
-      'toggle-page': '翻译 / 恢复当前页面', 'toggle-translation-only': '切换双语 / 仅译文',
-      'translate-input': '翻译当前输入框', 'toggle-hover': '开关悬停 / 长按翻译',
+      'toggle-page': l10n('m56'), 'toggle-translation-only': l10n('m57'),
+      'translate-input': l10n('m4o'), 'toggle-hover': l10n('m58'),
     }[name] || name, () => this.#command(name));
-    this.platform.registerCommand('translate-comics', '翻译此页漫画', () => this.#command('translate-comics'));
-    this.platform.registerCommand('restore-comics', '恢复漫画原文', () => this.#command('restore-comics'));
-    this.platform.registerCommand('open-sidepanel', 'DualLens 文本翻译', () => this.platform.openTextTranslation());
-    this.platform.registerCommand('toggle-subtitles', '启用 / 恢复视频双语字幕', () => this.#command('toggle-subtitles'));
+    this.platform.registerCommand('translate-comics', l10n('m59'), () => this.#command('translate-comics'));
+    this.platform.registerCommand('restore-comics', l10n('m5a'), () => this.#command('restore-comics'));
+    this.platform.registerCommand('open-sidepanel', l10n('m5b'), () => this.platform.openTextTranslation());
+    this.platform.registerCommand('toggle-subtitles', l10n('m5c'), () => this.#command('toggle-subtitles'));
     this.#wake(true);
     this.#pushFrames();
   }

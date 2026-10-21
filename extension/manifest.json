@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "DualLens 双语对照翻译",
+  "name": "__MSG_appName__",
   "short_name": "DualLens",
   "version": "0.6.0",
-  "description": "段落级双语网页翻译。支持自选OpenAI兼容接口、本地模型及自定义服务。",
+  "description": "__MSG_appDescription__",
   "minimum_chrome_version": "120",
   "permissions": [
     "storage",
@@ -79,7 +79,9 @@
         "shared/ui-glossary.js",
         "styles/content.css",
         "shared/destinations.js",
-        "shared/errors.js"
+        "shared/errors.js",
+        "shared/i18n.js",
+        "shared/i18n-messages.js"
       ],
       "matches": [
         "http://*/*",
@@ -93,7 +95,7 @@
   },
   "action": {
     "default_popup": "ui/popup.html",
-    "default_title": "DualLens",
+    "default_title": "__MSG_appTitle__",
     "default_icon": {
       "16": "icons/16.png",
       "32": "icons/32.png",
@@ -116,32 +118,33 @@
       "suggested_key": {
         "default": "Alt+S"
       },
-      "description": "打开 DualLens 文本翻译侧栏"
+      "description": "__MSG_commandOpenSidepanel__"
     },
     "toggle-page": {
       "suggested_key": {
         "default": "Alt+A"
       },
-      "description": "翻译 / 恢复当前页面"
+      "description": "__MSG_commandTogglePage__"
     },
     "toggle-translation-only": {
       "suggested_key": {
         "default": "Alt+W"
       },
-      "description": "切换双语对照 / 仅显示译文"
+      "description": "__MSG_commandToggleMode__"
     },
     "translate-input": {
       "suggested_key": {
         "default": "Alt+I"
       },
-      "description": "翻译当前输入框的内容"
+      "description": "__MSG_commandTranslateInput__"
     },
     "toggle-hover": {
-      "description": "开关悬停翻译"
+      "description": "__MSG_commandToggleHover__"
     }
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvqZ20TGawXFE5pQOogJC4jEpXfq0OGZC0d0z6ruwZS2ZDceVKQBEYZsmMxRUg+eThb9KOACpfisQSG4AJJnye9S1hYqQ2eAxX4MW4YujpPolsPmNbIbMWUx09vfboFlD90K5oRDIANXT7uNKvW7u3Olt1TIU0ki8OIwCh3+dgHcWIaJy8su2Dh1MfvU1qgZAneKmbEelBxydwOtajgrmWZBqen5Wf6X8yUNXAUjl0ry3BZo8VAkzuV4o/dvCxop5jMoAS/DWEYxpF5cWiZoGe5x3hez1J1Z3U4lvNPHGQp/m5huQCsLek+Sa42l29AZ2NCYGN8TwH4k2FVGLO0L1awIDAQAB",
   "optional_host_permissions": [
     "<all_urls>"
-  ]
+  ],
+  "default_locale": "en"
 }

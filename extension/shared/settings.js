@@ -1,3 +1,4 @@
+import { t as l10n } from './i18n.js';
 // Settings schema, defaults and storage helpers.
 // v3 contract: docs/PLATFORMS.md §3. Credentials stay in localArea only.
 import { chromeStorageArea } from './storage-areas.js';
@@ -11,20 +12,20 @@ export const SECRETS_KEY = 'secrets';
 const STORAGE_KEY = 'settings.storage';
 
 export const LANGS = Object.freeze([
-  { code: 'zh-CN', name: '简体中文' },
-  { code: 'zh-TW', name: '繁體中文' },
+  { code: 'zh-CN', name: l10n('m8r') },
+  { code: 'zh-TW', name: l10n('m8s') },
   { code: 'en', name: 'English' },
-  { code: 'ja', name: '日本語' },
-  { code: 'ko', name: '한국어' },
-  { code: 'fr', name: 'Français' },
-  { code: 'de', name: 'Deutsch' },
-  { code: 'es', name: 'Español' },
-  { code: 'ru', name: 'Русский' },
-  { code: 'pt', name: 'Português' },
-  { code: 'it', name: 'Italiano' },
-  { code: 'ar', name: 'العربية' },
-  { code: 'vi', name: 'Tiếng Việt' },
-  { code: 'th', name: 'ไทย' },
+  { code: 'ja', name: l10n('m8t') },
+  { code: 'ko', name: l10n('languageKo') },
+  { code: 'fr', name: l10n('languageFr') },
+  { code: 'de', name: l10n('languageDe') },
+  { code: 'es', name: l10n('languageEs') },
+  { code: 'ru', name: l10n('languageRu') },
+  { code: 'pt', name: l10n('languagePt') },
+  { code: 'it', name: l10n('languageIt') },
+  { code: 'ar', name: l10n('languageAr') },
+  { code: 'vi', name: l10n('languageVi') },
+  { code: 'th', name: l10n('languageTh') },
 ]);
 
 // Match the browser UI language once for fresh settings; persisted choices always win.
@@ -38,22 +39,22 @@ export function defaultTargetLanguage(language = globalThis.navigator?.language)
 
 // Visual styles for inserted translations; CSS lives in styles/content.css as .dl-s-<id>.
 export const STYLES = Object.freeze([
-  { id: 'muted', name: '默认（轻微弱化）', legacyIds: ['italic', 'bold'] },
-  { id: 'plain', name: '无装饰' },
-  { id: 'dashed', name: '虚线下划线', legacyIds: ['underline', 'dotted', 'wavy'] },
-  { id: 'highlight', name: '背景淡色', legacyIds: ['marker', 'card'] },
-  { id: 'blur', name: '学习（悬停显示）', legacyIds: ['mask'] },
-  { id: 'quote', name: '引用块（左细线）', legacyIds: ['divider'] },
+  { id: 'muted', get name() { return l10n('m8u'); }, legacyIds: ['italic', 'bold'] },
+  { id: 'plain', get name() { return l10n('m8v'); } },
+  { id: 'dashed', get name() { return l10n('m8w'); }, legacyIds: ['underline', 'dotted', 'wavy'] },
+  { id: 'highlight', get name() { return l10n('m8x'); }, legacyIds: ['marker', 'card'] },
+  { id: 'blur', get name() { return l10n('m8y'); }, legacyIds: ['mask'] },
+  { id: 'quote', get name() { return l10n('m8z'); }, legacyIds: ['divider'] },
 ]);
 
 export const PROMPT_PRESETS = Object.freeze(['general', 'tech', 'academic', 'news', 'social', 'custom']);
 
 // translation.mode (SPEC §8.1). The default needs no key: with no usable LLM it behaves as 'mt'.
 export const TRANSLATION_MODES = Object.freeze([
-  { id: 'mt+llm', name: '机翻先出，大模型精修（推荐）' },
-  { id: 'mt', name: '只用机器翻译（最快）' },
-  { id: 'llm', name: '只用大模型' },
-  { id: 'auto', name: '大模型优先，慢或失败时机翻兜底' },
+  { id: 'mt+llm', get name() { return l10n('m90'); } },
+  { id: 'mt', get name() { return l10n('m91'); } },
+  { id: 'llm', get name() { return l10n('m92'); } },
+  { id: 'auto', get name() { return l10n('m93'); } },
 ]);
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -80,7 +81,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
       {
         id: 'openai',
         kind: 'openai', // any OpenAI-compatible endpoint the user supplies
-        name: '自定义 OpenAI 兼容接口',
+        name: l10n('m8o'),
         baseUrl: '',
         model: '',
         fallbackModels: [],
@@ -93,7 +94,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
       {
         id: 'mock',
         kind: 'mock', // deterministic fake translation, no network; for tests and demos
-        name: '演示（不调用模型）',
+        name: l10n('m94'),
         model: 'mock',
         fallbackModels: [],
         maxItems: 50,
@@ -194,7 +195,7 @@ function fitsSync(items) {
   return bytes.every(n => n <= 8192) && bytes.reduce((a, b) => a + b, 0) <= 102400;
 }
 function safeId(id) {
-  if (typeof id !== 'string' || !id || ['__proto__', 'constructor', 'prototype'].includes(id)) throw new Error('接口标识无效');
+  if (typeof id !== 'string' || !id || ['__proto__', 'constructor', 'prototype'].includes(id)) throw new Error(l10n('m95'));
   return id;
 }
 function mirrorDigest(value) {
@@ -205,7 +206,7 @@ function mirrorDigest(value) {
 }
 
 export function createSettingsStore({ syncArea, localArea, browserLanguage }) {
-  if (!localArea) throw new Error('需要本机设置存储');
+  if (!localArea) throw new Error(l10n('m96'));
   let serial = Promise.resolve();
   let status = { synced: false, reason: 'unavailable' };
   const exclusive = fn => {
@@ -227,13 +228,13 @@ export function createSettingsStore({ syncArea, localArea, browserLanguage }) {
       safeId(p.id);
       if (p.baseUrl) {
         const u = new URL(p.baseUrl);
-        if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error('接口地址不能包含凭据或查询参数');
+        if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error(l10n('m1d'));
       }
     }
     if (s.provider.chain.length) {
       const head = s.provider.chain[0];
       const primary = s.provider.profiles.find(p => p.id === head.profileId);
-      if (!primary || typeof head.model !== 'string' || !head.model.trim()) throw new Error('备选链的首个接口或模型无效');
+      if (!primary || typeof head.model !== 'string' || !head.model.trim()) throw new Error(l10n('m97'));
       if (!preserveProvider) {
         s.provider.active = primary.id;
         primary.model = head.model;
@@ -324,7 +325,7 @@ export function createSettingsStore({ syncArea, localArea, browserLanguage }) {
 let defaultStore, defaultStorage;
 export function getDefaultSettingsStore() {
   const storage = globalThis.chrome?.storage;
-  if (!storage?.local) throw new Error('默认扩展存储不可用，请传入 SettingsStore');
+  if (!storage?.local) throw new Error(l10n('m98'));
   if (defaultStorage !== storage) {
     defaultStorage = storage;
     defaultStore = createSettingsStore({ browserLanguage:globalThis.chrome?.i18n?.getUILanguage?.(),localArea: chromeStorageArea(storage.local, 'local', storage.onChanged),
@@ -384,25 +385,25 @@ export function setSitePageRule(s, match, mode) {
 }
 
 export function validateSiteRules(rules) {
-  if (!rules || !['always', 'never', 'custom'].every(k => Array.isArray(rules[k]))) throw new Error('站点规则须使用列表');
-  const valid = p => { if (!parsePattern(p)) throw new Error('站点模式无效：如 example.com/docs/*，可加 HTTP(S) 和端口；不能含空白、查询串、片段或凭据'); };
+  if (!rules || !['always', 'never', 'custom'].every(k => Array.isArray(rules[k]))) throw new Error(l10n('m99'));
+  const valid = p => { if (!parsePattern(p)) throw new Error(l10n('m9a')); };
   rules.always.forEach(valid); rules.never.forEach(valid);
   for (const r of rules.custom) {
-    if (!r || typeof r !== 'object') throw new Error('站点规则须包含 match');
+    if (!r || typeof r !== 'object') throw new Error(l10n('m9b'));
     valid(r.match);
-    if (r.page != null && !['always', 'never', 'default'].includes(r.page)) throw new Error('网页规则须为自动、从不或默认');
-    for (const f of ['selection', 'hover', 'input']) if (r[f] != null && !['on', 'off', 'default'].includes(r[f])) throw new Error('划词、悬停和输入框规则须为开、关或默认');
+    if (r.page != null && !['always', 'never', 'default'].includes(r.page)) throw new Error(l10n('m9c'));
+    for (const f of ['selection', 'hover', 'input']) if (r[f] != null && !['on', 'off', 'default'].includes(r[f])) throw new Error(l10n('m9d'));
   }
 }
 
 export function validateInteractionSettings(s) {
-  if (typeof s.floatBall?.autoHide !== 'boolean') throw new Error('悬浮球自动隐藏开关无效');
+  if (typeof s.floatBall?.autoHide !== 'boolean') throw new Error(l10n('m9e'));
   if (!['replace', 'bilingual'].includes(s.input?.mode) ||
-      !['source-first', 'translation-first'].includes(s.input?.order)) throw new Error('输入框双语模式或顺序无效');
+      !['source-first', 'translation-first'].includes(s.input?.order)) throw new Error(l10n('m9f'));
   for (const name of ['hover', 'input']) {
     const c = s[name];
     if (typeof c?.profileId !== 'string' || typeof c.model !== 'string' ||
         c.model.length > 256 || /[\x00-\x1f\x7f]/.test(c.model) ||
-        c.profileId && !s.provider?.profiles?.some(p => p.id === c.profileId)) throw new Error('交互服务或模型选择无效');
+        c.profileId && !s.provider?.profiles?.some(p => p.id === c.profileId)) throw new Error(l10n('m9g'));
   }
 }

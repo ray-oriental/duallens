@@ -1,3 +1,4 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { mountPopup } from '../popup-view.js';
 import { installSettingsInteractions } from './interactions.js';
 import { requestOrigin, requestBroad, requestMTOrigin } from '../../shared/permissions.js';
@@ -15,65 +16,65 @@ import { mountSiteRules } from './site-rules.js';
 import { compactConfig } from '../../shared/configcrypto.js';
 import { TEXT as COMMON } from '../components.js';
 
-// User-visible copy is centralized for the next localization pass.
+// Localized copy shared by the extension and lazy userscript UI.
 const COPY=Object.freeze({
-  s0:"已设置",
-  s1:"未设置",
-  s2:"操作失败",
-  s3:"设置已同步；API 密钥 仅存此设备。",
-  s4:"此设备未同步；配置与 API 密钥 保存在本机。",
-  s5:"API 密钥（仅存本机）",
-  s6:"使用自己的模型服务；不会自动联网。",
-  s7:"继承网页翻译",
-  s8:"选择一个服务",
-  s9:"站点规则 JSON 格式无效",
-  s10:"正在读取本机密钥，请稍后保存",
-  s11:"漫画站点钩子注册失败",
-  s12:"设置已保存",
-  s13:"此平台不能查看语言包",
-  s14:"尚未下载语言包",
-  s15:"删除",
-  s16:"语言包删除失败",
-  s17:"输入此服务的 API 密钥（留空清除；取消保留原值）",
-  s18:"API 密钥 含有非法字符",
-  s19:"密钥修改尚未保存；点击保存设置。",
-  s20:"输入此机器翻译服务的 密钥（留空清除；取消保留原值）",
-  s21:"密钥 含有非法字符",
-  s22:"机器翻译 密钥 修改尚未保存；点击保存设置。",
-  s23:"机器翻译 密钥 清除尚未保存；点击保存设置。",
-  s24:"密钥清除尚未保存；点击保存设置。",
-  s25:"先选择一个服务预设",
-  s26:"填写 密钥，获取模型并测试；最后保存。",
-  s27:"正在获取模型列表…",
-  s28:"未获得服务访问权限。",
-  s29:"此平台需提供 http 才能在保存前获取模型",
-  s30:"获取失败",
-  s31:"正在翻译测试文本…",
-  s32:"接口没有返回有效的翻译 JSON",
-  s33:"此平台需提供 http 才能在保存前测试",
-  s34:"测试失败",
-  s35:"此平台不能直接测试机器翻译",
-  s36:"正在测试机器翻译…",
-  s37:"配置导出口令（留空导出不含 密钥 的明文；取消停止导出）",
-  s38:"已取消导出",
-  s39:"已导出；明文配置不含 密钥，加密配置包含 密钥。",
-  s40:"设置手机配置导出口令（至少 8 个字符；取消停止）",
-  s41:"导出到手机必须设置加密口令",
-  s42:"加密配置已生成；请复制文本并在另一设备导入。口令通过其他安全方式传递。",
-  s43:"加密配置已生成；手机扫码或复制文本，然后从电脑导入。口令通过其他安全方式传递。",
-  s44:"先生成配置文本",
-  s45:"已选中配置文本，请用系统复制。",
-  s46:"配置文本已复制",
-  s47:"浏览器未允许复制；文本已选中，请用系统复制。",
-  s48:"输入配置导入口令（取消停止导入）",
-  s49:"已取消导入",
-  s50:"设置已导入",
-  s51:"请粘贴电脑生成的加密配置串",
-  s52:"配置文件过大",
-  s53:"此平台未提供清理缓存操作",
-  s54:"译文缓存已清空",
-  s55:"修改后自动保存；AI 服务、网站规则和术语表需保存。",
-  s56:"读取更新后的配置失败"
+  s0:l10n('mbr'),
+  s1:l10n('mbs'),
+  s2:l10n('maq'),
+  s3:l10n('mbt'),
+  s4:l10n('mbu'),
+  s5:l10n('mbv'),
+  s6:l10n('mbw'),
+  s7:l10n('m5s'),
+  s8:l10n('mbx'),
+  s9:l10n('mby'),
+  s10:l10n('mbz'),
+  s11:l10n('mc0'),
+  s12:l10n('mc1'),
+  s13:l10n('mc2'),
+  s14:l10n('m3b'),
+  s15:l10n('m3c'),
+  s16:l10n('m3d'),
+  s17:l10n('mc3'),
+  s18:l10n('mc4'),
+  s19:l10n('mc5'),
+  s20:l10n('mc6'),
+  s21:l10n('mc7'),
+  s22:l10n('mc8'),
+  s23:l10n('mc9'),
+  s24:l10n('mca'),
+  s25:l10n('mcb'),
+  s26:l10n('mcc'),
+  s27:l10n('mcd'),
+  s28:l10n('mce'),
+  s29:l10n('mcf'),
+  s30:l10n('mcg'),
+  s31:l10n('mch'),
+  s32:l10n('mci'),
+  s33:l10n('mcj'),
+  s34:l10n('mck'),
+  s35:l10n('mcl'),
+  s36:l10n('mcm'),
+  s37:l10n('mcn'),
+  s38:l10n('mco'),
+  s39:l10n('mcp'),
+  s40:l10n('mcq'),
+  s41:l10n('mcr'),
+  s42:l10n('mcs'),
+  s43:l10n('mct'),
+  s44:l10n('mcu'),
+  s45:l10n('mcv'),
+  s46:l10n('mcw'),
+  s47:l10n('mcx'),
+  s48:l10n('mcy'),
+  s49:l10n('mcz'),
+  s50:l10n('md0'),
+  s51:l10n('md1'),
+  s52:l10n('md2'),
+  s53:l10n('md3'),
+  s54:l10n('md4'),
+  s55:l10n('md5'),
+  s56:l10n('md6')
 });
 
 // Shared by options and the platform's page panel. No browser globals or implicit storage.
@@ -356,7 +357,7 @@ export async function mountSettingsForm(root, { store, platform }) {
       p.jsonMode = !!models.find(m => m.id === p.model)?.jsonMode;
       fill('model', p.model); fill('jsonMode', p.jsonMode); fill('providerChain', JSON.stringify(chain, null, 2));
     }
-    notice(`获取到 ${models?.length || 0} 个模型，选择后测试连接并保存。`);
+    notice(l10n('md7', [models?.length || 0]));
   });
   action('test', async report => {
     captureProfile(); const p = profile(); report(COPY.s31);
@@ -366,11 +367,11 @@ export async function mountSettingsForm(root, { store, platform }) {
       const start = Date.now(); const content = await providers.chat({ profile: p, model: p.model, messages });
       const parsed = parseSegments(content, idMap),sample=parsed.results.get(1);
       if (parsed.results.size!==2 || parsed.missing.length || parsed.invalidJSON || !sample) throw new Error(COPY.s32);
-      report(`连接正常 · ${Date.now() - start} ms · ${stripMarkup(sample).slice(0, 200)}`);
+      report(l10n('md8', [Date.now() - start, stripMarkup(sample).slice(0, 200)]));
     } else {
       if (dirty) throw new Error(COPY.s33);
       const r = await service().testProvider(pid); if (!r.ok) throw new Error(r.error?.message || COPY.s34);
-      report(`连接正常 · ${r.latencyMs} ms · ${r.sample || ''}`);
+      report(l10n('md8', [r.latencyMs, r.sample || '']));
     }
   });
   action('mt-test', async () => {
@@ -379,7 +380,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     if(platform.kind==='extension'&&!await requestMTOrigin(engine,platform.permissionAPI))throw new Error(COPY.s28);
     notice(COPY.s36);
     const r = await mtProbe.test({ engine, region: read('mtRegion').trim() });
-    notice(`机器翻译正常 · ${engine} · ${r.latencyMs} ms · ${r.sample}`);
+    notice(l10n('md9', [engine, r.latencyMs, r.sample]));
   });
   action('export', async () => {
     const password = dialog ? await platform.promptSecret(COPY.s37) : read('backupPassword');

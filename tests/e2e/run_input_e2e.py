@@ -240,7 +240,7 @@ def main():
                 session.close()
 
             profile = e2e.E2E_ROOT / ('profile-input-userscript-' + uuid.uuid4().hex[:8])
-            ctx = pw.chromium.launch_persistent_context(str(profile), headless=True, viewport={'width': 375, 'height': 812}, is_mobile=True, has_touch=True)
+            ctx = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN", viewport={'width': 375, 'height': 812}, is_mobile=True, has_touch=True)
             # Reuse canonical GM mock and add only request identities/delay/failure control.
             stub = STUB.replace("authCorrect:req.headers.Authorization==='Bearer sk-test-not-real'", "authCorrect:req.headers.Authorization==='Bearer sk-test-not-real',model:req.data?JSON.parse(req.data).model:null")
             stub = stub.replace('},30);', '},160);')

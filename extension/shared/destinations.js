@@ -1,10 +1,11 @@
+import { t as l10n } from './i18n.js';
 // The same destination inventory drives disclosure and the worker's mandatory consent gate.
 import { providerChain } from './settings.js';
 import { llmDestination, mtDestination, loadDeviceState, needsConfirmation } from './device-state.js';
 import { DLError } from './errors.js';
 import { ERR } from './protocol.js';
 
-const NAMES = { microsoft:'微软机器翻译', google:'谷歌机器翻译', 'microsoft-api':'微软 Translator', deepl:'DeepL' };
+const NAMES = { microsoft:l10n('m7x'), google:l10n('m7y'), 'microsoft-api':l10n('m7z'), deepl:'DeepL' };
 const HOSTS = { microsoft:'edge.microsoft.com / api-edge.cognitive.microsofttranslator.com', google:'clients5.google.com',
   'microsoft-api':'api.cognitive.microsofttranslator.com', deepl:'api.deepl.com / api-free.deepl.com' };
 export function requestDestinations(s, req = {}) {
@@ -29,8 +30,8 @@ export function requestDestinations(s, req = {}) {
   return dests.filter((d,i,a) => a.findIndex(x => x.id === d.id) === i);
 }
 export function destinationMessage(d) {
-  if (d.fallback) return `微软失败时才用谷歌，本页文字会发送到 ${d.host}。`;
-  return `将使用 ${d.name} 翻译，本页文字${d.id.startsWith('llm:') ? '和标题' : ''}会发送到 ${d.host}。`;
+  if (d.fallback) return l10n('m80', [d.host]);
+  return l10n('m82', [d.name, d.id.startsWith('llm:') ? l10n('m81') : '', d.host]);
 }
 export function createConfirmationGuard(localArea) {
   return async (settings, req) => {

@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Injected providers resolve local secrets per request; keys never enter logs or errors.
 
 import { ERR } from '../shared/protocol.js';
@@ -32,22 +33,22 @@ export function isLocalHost(hostname) {
 
 // Returns a human-readable problem string, or null when the profile can be used.
 export function profileProblem(profile) {
-  if (!profile || typeof profile !== 'object') return '没有可用的模型配置';
+  if (!profile || typeof profile !== 'object') return l10n('m19');
   if (profile.kind === 'mock') return null;
-  if (profile.kind !== 'openai') return `未知的接口类型：${profile.kind}`;
+  if (profile.kind !== 'openai') return l10n('m1a', [profile.kind]);
   let url;
   try {
     url = new URL(String(profile.baseUrl || ''));
   } catch {
-    return '接口地址为空或格式不对';
+    return l10n('m1b');
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return '接口地址必须以 http:// 或 https:// 开头';
-  if (url.username || url.password || url.search || url.hash) return '接口地址不能包含凭据或查询参数';
-  if (!profile.model) return '尚未选择模型';
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return l10n('m1c');
+  if (url.username || url.password || url.search || url.hash) return l10n('m1d');
+  if (!profile.model) return l10n('m1e');
   if (profile.kind === 'openai') {
     const key = String(profile.apiKey || '');
-    if (/[^\x20-\x7e]/.test(key)) return 'API key 含有非法字符';
-    if (key && url.protocol === 'http:' && !isLocalHost(url.hostname)) return '不会通过明文 http 向远程主机发送 API key，请改用 https';
+    if (/[^\x20-\x7e]/.test(key)) return l10n('m1f');
+    if (key && url.protocol === 'http:' && !isLocalHost(url.hostname)) return l10n('m1g');
   }
   return null;
 }
@@ -87,7 +88,7 @@ function hostOf(profile) {
   try {
     return new URL(profile.baseUrl).host;
   } catch {
-    return '接口地址';
+    return l10n('m1h');
   }
 }
 
@@ -170,13 +171,13 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       if (data === '[DONE]') { done = true; if (carry) onDelta?.(carry); carry = ''; return; }
       if (done) return;
       let event;
-      try { event = JSON.parse(data); } catch { throw new DLError(ERR.PARSE, '无效的流式响应'); }
-      if (event.error) throw new DLError(ERR.PROVIDER, '流式接口返回错误', { status: 502 });
+      try { event = JSON.parse(data); } catch { throw new DLError(ERR.PARSE, l10n('m1i')); }
+      if (event.error) throw new DLError(ERR.PROVIDER, l10n('m1j'), { status: 502 });
       const delta = event.choices?.[0]?.delta;
       if (delta?.content || delta?.reasoning_content) reset(idleMs);
       if (typeof delta?.content === 'string') {
         content += delta.content;
-        if (content.length > 4 * 1024 * 1024) throw new DLError(ERR.PARSE, '流式响应过大');
+        if (content.length > 4 * 1024 * 1024) throw new DLError(ERR.PARSE, l10n('m1k'));
         emitDelta(delta.content);
       }
     });
@@ -220,15 +221,15 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       } else text = await res.text();
       if (streamed) {
         parser.end();
-        if (!done) throw new DLError(ERR.PROVIDER, '流式响应中断', { status: 502 });
+        if (!done) throw new DLError(ERR.PROVIDER, l10n('m1l'), { status: 502 });
         text = JSON.stringify({ choices: [{ message: { content } }] });
       }
       return { status: res.status, retryAfter: res.headers && res.headers.get ? res.headers.get('retry-after') : null, text };
     } catch (e) {
       if (signal && signal.aborted) throw cancelledError();
       if (e instanceof DLError) throw e;
-      if (timedOut) throw new DLError(ERR.NETWORK, `请求超时（${Math.round(limit / 1000)} 秒）`);
-      throw new DLError(ERR.NETWORK, `无法连接 ${hostOf(profile)}`);
+      if (timedOut) throw new DLError(ERR.NETWORK, l10n('m1m', [Math.round(limit / 1000)]));
+      throw new DLError(ERR.NETWORK, l10n('m1n', [hostOf(profile)]));
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
@@ -237,28 +238,28 @@ export function createProviders({ fetchImpl, getSecret = async id => {
 
   function httpError(profile, res) {
     const detail = serverMessage(res.text, profile);
-    const suffix = detail ? `：${detail}` : '';
+    const suffix = detail ? l10n('errorDetail', [detail]) : '';
     let serverCode;
     try { serverCode = JSON.parse(res.text)?.error?.code; } catch {}
     const extra = { status: res.status, serverCode, retryAfterMs: parseRetryAfter(res.retryAfter) };
     if (res.status === 429) {
-      return new DLError(ERR.RATE_LIMITED, `被限流（429）${suffix}`, extra);
+      return new DLError(ERR.RATE_LIMITED, l10n('m1o', [suffix]), extra);
     }
     if ((res.status === 401 || res.status === 403)) {
-      return new DLError(ERR.CONFIG, `认证失败（${res.status}），请检查 API key${suffix}`, extra);
+      return new DLError(ERR.CONFIG, l10n('m1p', [res.status, suffix]), extra);
     }
-    return new DLError(ERR.PROVIDER, `接口返回 ${res.status}${suffix}`, extra);
+    return new DLError(ERR.PROVIDER, l10n('m1q', [res.status, suffix]), extra);
   }
 
   async function mockChat({ model, messages, signal }) {
     await sleep(30 + Math.floor(random() * 91), signal);
     if (model === 'mock-slow') await sleep(2000, signal);
-    if (model === 'mock-error') throw new DLError(ERR.PROVIDER, '演示后端按要求返回错误');
+    if (model === 'mock-error') throw new DLError(ERR.PROVIDER, l10n('m1r'));
     const user = [...messages].reverse().find((m) => m.role === 'user');
     const text = user ? String(user.content) : '';
     if (text.includes('<input>')) {
       try { const data=JSON.parse(text.slice(text.indexOf('{'),text.lastIndexOf('}')+1));
-        return JSON.stringify({t:data.t.map(t=>'【译】'+t)}); } catch { throw new DLError(ERR.PARSE,'演示输入格式错误'); }
+        return JSON.stringify({t:data.t.map(t=>'【译】'+t)}); } catch { throw new DLError(ERR.PARSE,l10n('m1t')); }
     }
     if (!/<seg\s+id=/.test(text)) return `【译】${text}`;
     return text.replace(/<seg id="(\d+)">([\s\S]*?)<\/seg>/g, '<seg id="$1">【译】$2</seg>');
@@ -271,7 +272,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     profile = { ...profile, model: model || profile.model };
     const problem = profileProblem(profile);
     if (problem) throw new DLError(ERR.CONFIG, problem);
-    if (profile.requiresKey && !profile.apiKey) throw new DLError(ERR.CONFIG, '此设备尚未填写 API key，请打开设置');
+    if (profile.requiresKey && !profile.apiKey) throw new DLError(ERR.CONFIG, l10n('m1w'));
     const payload={ model: model || profile.model, messages, temperature:TEMPERATURE, stream:true,
       max_tokens:Math.min(4096, Math.max(256, messages.filter(m=>m.role==='user').reduce((n,m)=>n+String(m.content).length,0)*2+256)) };
     const jsonKey=profile.id+'|'+profile.baseUrl+'|'+(model||profile.model);
@@ -301,10 +302,10 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     try {
       json = JSON.parse(res.text);
     } catch {
-      throw new DLError(ERR.PARSE, '接口返回的不是 JSON');
+      throw new DLError(ERR.PARSE, l10n('m1x'));
     }
     const content = assistantText(json);
-    if (content == null) throw new DLError(ERR.PARSE, '接口返回里没有译文内容');
+    if (content == null) throw new DLError(ERR.PARSE, l10n('m1y'));
     return scrub(content, profile);
   }
 
@@ -328,10 +329,10 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     try {
       json = JSON.parse(res.text);
     } catch {
-      throw new DLError(ERR.PARSE, '接口返回的不是 JSON');
+      throw new DLError(ERR.PARSE, l10n('m1x'));
     }
     const list = Array.isArray(json) ? json : Array.isArray(json && json.data) ? json.data : json && json.models;
-    if (!Array.isArray(list)) throw new DLError(ERR.PARSE, '接口返回里没有模型列表');
+    if (!Array.isArray(list)) throw new DLError(ERR.PARSE, l10n('m1z'));
     if (isOpenRouter(profile) && freeOnly) return freeOpenRouterModels(list);
     const seen = new Set();
     const out = [];

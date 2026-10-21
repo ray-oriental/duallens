@@ -1,0 +1,2608 @@
+{
+  "m0": {
+    "message": "Invalid extension identity"
+  },
+  "m1": {
+    "message": "Conflicting image CDN Referer settings"
+  },
+  "m2": {
+    "message": "This browser cannot set the image Referer"
+  },
+  "m3": {
+    "message": "Invalid image address"
+  },
+  "m4": {
+    "message": "Image download failed (HTTP $p1$). The site blocked the extension; the original image is unchanged",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m5": {
+    "message": "Unsupported image format"
+  },
+  "m6": {
+    "message": "Image exceeds 16 MB"
+  },
+  "m7": {
+    "message": "Enable Image text in the popup and allow site access. Cross-site images also need access to their source."
+  },
+  "m8": {
+    "message": "The OCR queue is full. Try again later"
+  },
+  "m9": {
+    "message": "Local OCR is not ready"
+  },
+  "ma": {
+    "message": "Invalid OCR request"
+  },
+  "mb": {
+    "message": "Too many canvas tiles"
+  },
+  "mc": {
+    "message": "Too many canvas sources"
+  },
+  "md": {
+    "message": "Nested tiles, transparency or unsupported blending prevent reliable canvas recognition"
+  },
+  "me": {
+    "message": "Invalid canvas tile"
+  },
+  "mf": {
+    "message": "Invalid canvas transform"
+  },
+  "mg": {
+    "message": "Model configuration not found: $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mh": {
+    "message": "No text to translate"
+  },
+  "mi": {
+    "message": "Text is too long (limit: $p1$ characters)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj": {
+    "message": "The model returned non-JSON content, possibly reasoning text"
+  },
+  "mk": {
+    "message": "Microsoft (free, unofficial)"
+  },
+  "ml": {
+    "message": "Google (free, unofficial)"
+  },
+  "mm": {
+    "message": "Microsoft Translator (official, requires a key)"
+  },
+  "mn": {
+    "message": "DeepL API (official, requires a key)"
+  },
+  "mo": {
+    "message": "Mock translation (offline test)"
+  },
+  "mq": {
+    "message": "Too many translation requests"
+  },
+  "mr": {
+    "message": "The translation key is invalid or its quota is exhausted"
+  },
+  "ms": {
+    "message": "Translation service unavailable (HTTP $p1$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mt": {
+    "message": "Translation request rejected (HTTP $p1$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mu": {
+    "message": "Could not parse the translation response"
+  },
+  "mv": {
+    "message": "The translation count does not match"
+  },
+  "mw": {
+    "message": "Translation timed out ($p1$ seconds)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mx": {
+    "message": "Could not connect to the translation service"
+  },
+  "my": {
+    "message": "Set a Microsoft Translator key first"
+  },
+  "mz": {
+    "message": "Set a DeepL key first"
+  },
+  "m10": {
+    "message": "DeepL quota exhausted"
+  },
+  "m11": {
+    "message": "No translation was returned for this paragraph"
+  },
+  "m12": {
+    "message": "; the official service failed. Nothing was sent to free endpoints."
+  },
+  "m13": {
+    "message": "Machine translation is unavailable. It will retry later"
+  },
+  "m14": {
+    "message": "Unknown translation engine"
+  },
+  "m15": {
+    "message": "No translation was returned"
+  },
+  "m16": {
+    "message": "Could not read this PDF. Allow its source, or download it and select the local file in the reader."
+  },
+  "m17": {
+    "message": "This page is not confirmed as a PDF. Open a PDF file first."
+  },
+  "m18": {
+    "message": "Open this PDF with DualLens"
+  },
+  "m19": {
+    "message": "No model is configured"
+  },
+  "m1a": {
+    "message": "Unknown service type: $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1b": {
+    "message": "The service address is empty or invalid"
+  },
+  "m1c": {
+    "message": "The service address must start with http:// or https://"
+  },
+  "m1d": {
+    "message": "The service address cannot contain credentials or query parameters"
+  },
+  "m1e": {
+    "message": "Select a model first"
+  },
+  "m1f": {
+    "message": "The API key contains invalid characters"
+  },
+  "m1g": {
+    "message": "API keys cannot be sent to remote hosts over plain HTTP. Use HTTPS"
+  },
+  "m1h": {
+    "message": "Service address"
+  },
+  "m1i": {
+    "message": "Invalid streaming response"
+  },
+  "m1j": {
+    "message": "The streaming service returned an error"
+  },
+  "m1k": {
+    "message": "The streaming response is too large"
+  },
+  "m1l": {
+    "message": "The streaming response was interrupted"
+  },
+  "m1m": {
+    "message": "Request timed out ($p1$ seconds)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1n": {
+    "message": "Could not connect to $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1o": {
+    "message": "Rate limited (429)$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1p": {
+    "message": "Authentication failed ($p1$). Check the API key$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m1q": {
+    "message": "Service returned $p1$$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m1r": {
+    "message": "The mock service returned the requested error"
+  },
+  "m1t": {
+    "message": "Invalid mock input"
+  },
+  "m1w": {
+    "message": "No API key is set on this device. Open Settings"
+  },
+  "m1x": {
+    "message": "The service response is not JSON"
+  },
+  "m1y": {
+    "message": "The service returned no translation text"
+  },
+  "m1z": {
+    "message": "The service returned no model list"
+  },
+  "m20": {
+    "message": "Use Alt+S or the browser sidebar"
+  },
+  "m21": {
+    "message": "Translate this page / Show original"
+  },
+  "m22": {
+    "message": "Translate selected text"
+  },
+  "m23": {
+    "message": "Bilingual video subtitles"
+  },
+  "m24": {
+    "message": "Translate image text"
+  },
+  "m25": {
+    "message": "Cross-site subtitles need source access. Allow site access in the popup, or use subtitles from this site."
+  },
+  "m26": {
+    "message": "Invalid request or too many subtitle tracks"
+  },
+  "m27": {
+    "message": "Could not read the subtitle track. Enable subtitles again"
+  },
+  "m28": {
+    "message": "Invalid service or model selection"
+  },
+  "m29": {
+    "message": "The model returned no translation for this paragraph"
+  },
+  "m2a": {
+    "message": "The model did not return a reliable translation"
+  },
+  "m2b": {
+    "message": "Untranslated text. Trying a fallback model"
+  },
+  "m2c": {
+    "message": "Incomplete translation"
+  },
+  "m2d": {
+    "message": "The AI service timed out"
+  },
+  "m2e": {
+    "message": "No translation received"
+  },
+  "m2f": {
+    "message": "Local OCR is unavailable on this page"
+  },
+  "m2g": {
+    "message": "Local OCR is unavailable (WASM blocked by page policy)"
+  },
+  "m2h": {
+    "message": "Image download failed (HTTP $p1$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m2i": {
+    "message": "Unsupported image or image too large"
+  },
+  "m2j": {
+    "message": "Could not retrieve the image on this page"
+  },
+  "m2k": {
+    "message": "Image download timed out"
+  },
+  "m2l": {
+    "message": "Image download cancelled"
+  },
+  "m2m": {
+    "message": "Language pack management is unavailable on this platform"
+  },
+  "m2n": {
+    "message": "Downloading and recognizing locally…"
+  },
+  "m2o": {
+    "message": "Text translation failed"
+  },
+  "m2p": {
+    "message": "Bilingual comics · Local OCR"
+  },
+  "m2q": {
+    "message": "Images stay on this device. Only recognized text is sent to your translation service."
+  },
+  "m2r": {
+    "message": "Source language and reading direction"
+  },
+  "m2s": {
+    "message": "Japanese, horizontal"
+  },
+  "m2t": {
+    "message": "Japanese, vertical"
+  },
+  "m2u": {
+    "message": "Korean"
+  },
+  "m2v": {
+    "message": "English"
+  },
+  "m2w": {
+    "message": "Recognize and translate"
+  },
+  "m2x": {
+    "message": "Show original"
+  },
+  "m2y": {
+    "message": "Language packs"
+  },
+  "m2z": {
+    "message": "On first use, the selected fast language pack is downloaded and verified."
+  },
+  "m30": {
+    "message": "Enable canvas reconstruction for this site (reload required)"
+  },
+  "m31": {
+    "message": "Enabled for this site. Reload the page and try again"
+  },
+  "m32": {
+    "message": "Canvas site registration failed"
+  },
+  "m33": {
+    "message": "Reading order may be uncertain. Use Move up to adjust it."
+  },
+  "m34": {
+    "message": "Recognition complete"
+  },
+  "m35": {
+    "message": "No reliable text found. Try another language or direction."
+  },
+  "m36": {
+    "message": "Translating…"
+  },
+  "m37": {
+    "message": "Highlight region"
+  },
+  "m38": {
+    "message": "Move up"
+  },
+  "m39": {
+    "message": "Language pack unavailable"
+  },
+  "m3a": {
+    "message": "Downloaded (this device only)"
+  },
+  "m3b": {
+    "message": "No language packs downloaded"
+  },
+  "m3c": {
+    "message": "Delete"
+  },
+  "m3d": {
+    "message": "Could not delete the language pack"
+  },
+  "m3e": {
+    "message": "OCR runtime unavailable"
+  },
+  "m3f": {
+    "message": "OCR runtime size check failed"
+  },
+  "m3g": {
+    "message": "OCR runtime SHA-256 check failed"
+  },
+  "m3h": {
+    "message": "OCR runtime download failed"
+  },
+  "m3i": {
+    "message": "OCR runtime download timed out"
+  },
+  "m3j": {
+    "message": "OCR runtime download cancelled"
+  },
+  "m3k": {
+    "message": "At most 50 comic sites are allowed"
+  },
+  "m3l": {
+    "message": "Invalid comic site domain"
+  },
+  "m3m": {
+    "message": "Enter a domain or *.example.com, without protocol, port or path"
+  },
+  "m3n": {
+    "message": "Invalid comic site"
+  },
+  "m3o": {
+    "message": "At most 8 image CDN domains are allowed"
+  },
+  "m3p": {
+    "message": "Enter a specific image CDN domain"
+  },
+  "m3q": {
+    "message": "Referer must be the comic site's HTTP(S) root address"
+  },
+  "m3r": {
+    "message": "Unsupported OCR language"
+  },
+  "m3s": {
+    "message": "Language pack size check failed"
+  },
+  "m3t": {
+    "message": "Language pack download failed"
+  },
+  "m3u": {
+    "message": "Language pack download timed out"
+  },
+  "m3v": {
+    "message": "Language pack download cancelled"
+  },
+  "m3w": {
+    "message": "Local OCR failed"
+  },
+  "m3x": {
+    "message": "Local OCR is unavailable (Worker or WASM blocked by page policy)"
+  },
+  "m3y": {
+    "message": "OCR cancelled"
+  },
+  "m3z": {
+    "message": "Too many image pixels"
+  },
+  "m40": {
+    "message": "Local OCR is unavailable (20-second timeout)"
+  },
+  "m41": {
+    "message": "Confirm sending"
+  },
+  "m42": {
+    "message": "Continue translating"
+  },
+  "m43": {
+    "message": "Change service"
+  },
+  "m44": {
+    "message": "Close"
+  },
+  "m45": {
+    "message": "Nothing was translated."
+  },
+  "m46": {
+    "message": "Download language pack"
+  },
+  "m47": {
+    "message": "A language pack is required. Images are recognized on this device."
+  },
+  "m48": {
+    "message": "About 11.3 MB"
+  },
+  "m49": {
+    "message": "$p1$ Source: GitHub raw.githubusercontent.com; size: $p2$ (fixed size and SHA-256 checked before use).",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m4a": {
+    "message": "The translation is empty"
+  },
+  "m4b": {
+    "message": "Translate / Show original"
+  },
+  "m4c": {
+    "message": "Translate this page"
+  },
+  "m4d": {
+    "message": "Show original"
+  },
+  "m4e": {
+    "message": "More"
+  },
+  "m4f": {
+    "message": "Translation only"
+  },
+  "m4g": {
+    "message": "This site"
+  },
+  "m4h": {
+    "message": "On demand"
+  },
+  "m4i": {
+    "message": "Always"
+  },
+  "m4j": {
+    "message": "Never"
+  },
+  "m4k": {
+    "message": "Move to left"
+  },
+  "m4l": {
+    "message": "Move to right"
+  },
+  "m4m": {
+    "message": "Turn off floating button"
+  },
+  "m4n": {
+    "message": "Settings"
+  },
+  "m4o": {
+    "message": "Translate focused input"
+  },
+  "m4p": {
+    "message": "Floating button is off. You can enable it in the popup"
+  },
+  "m4q": {
+    "message": "Turn off hover translation"
+  },
+  "m4r": {
+    "message": "Retry translation"
+  },
+  "m4s": {
+    "message": "Unknown error"
+  },
+  "m4t": {
+    "message": "Translation failed: $p1$ (click to retry)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m4u": {
+    "message": "The selection cannot be replaced safely"
+  },
+  "m4v": {
+    "message": "Click an input field first"
+  },
+  "m4w": {
+    "message": "Turn off input translation"
+  },
+  "m4x": {
+    "message": "Translating…"
+  },
+  "m4y": {
+    "message": "Adjust the selection and try again."
+  },
+  "m4z": {
+    "message": "The input is empty"
+  },
+  "m50": {
+    "message": "Translation did not finish."
+  },
+  "m51": {
+    "message": "The input changed. The translation was not inserted."
+  },
+  "m52": {
+    "message": "The translation was not inserted. Copy and paste it instead."
+  },
+  "m53": {
+    "message": "Translation"
+  },
+  "m54": {
+    "message": "Copy translation"
+  },
+  "m55": {
+    "message": "Copied"
+  },
+  "m56": {
+    "message": "Translate / Show original page"
+  },
+  "m57": {
+    "message": "Switch bilingual / Translation only"
+  },
+  "m58": {
+    "message": "Toggle hover / Long-press translation"
+  },
+  "m59": {
+    "message": "Translate comics on this page"
+  },
+  "m5a": {
+    "message": "Show original comics"
+  },
+  "m5b": {
+    "message": "DualLens text translation"
+  },
+  "m5c": {
+    "message": "Toggle bilingual video subtitles"
+  },
+  "m5d": {
+    "message": "Retry"
+  },
+  "m5e": {
+    "message": "Detect automatically"
+  },
+  "m5f": {
+    "message": "Translation result"
+  },
+  "m5g": {
+    "message": "Copy"
+  },
+  "m5h": {
+    "message": "Selected"
+  },
+  "m5i": {
+    "message": "Read aloud"
+  },
+  "m5j": {
+    "message": "Close (Esc)"
+  },
+  "m5k": {
+    "message": "Bilingual"
+  },
+  "m5l": {
+    "message": "Refine"
+  },
+  "m5m": {
+    "message": "Refining…"
+  },
+  "m5n": {
+    "message": "Refine this translation with the AI service"
+  },
+  "m5o": {
+    "message": "Translation kept. You can retry refinement"
+  },
+  "m5p": {
+    "message": "Selection service"
+  },
+  "m5q": {
+    "message": "Selection model"
+  },
+  "m5r": {
+    "message": "Model (optional)"
+  },
+  "m5s": {
+    "message": "Use page translation settings"
+  },
+  "m5t": {
+    "message": "Translate again"
+  },
+  "m5u": {
+    "message": "Turn off selection translation"
+  },
+  "m5v": {
+    "message": "No translation yet."
+  },
+  "m5w": {
+    "message": "Machine translation"
+  },
+  "m5x": {
+    "message": "AI service"
+  },
+  "m5y": {
+    "message": "Invalid subtitle format. Use a valid SRT / VTT timeline"
+  },
+  "m5z": {
+    "message": "Subtitle files cannot exceed 2 MB"
+  },
+  "m60": {
+    "message": "Subtitle format is invalid or too large"
+  },
+  "m61": {
+    "message": "Too many subtitle segments"
+  },
+  "m62": {
+    "message": "Too many subtitle entries"
+  },
+  "m63": {
+    "message": "Invalid subtitle track address"
+  },
+  "m64": {
+    "message": "Could not read the subtitle track, or it is too large. Reopen player subtitles"
+  },
+  "m65": {
+    "message": "Subtitle track is too large"
+  },
+  "m66": {
+    "message": "Could not read the subtitle track, or it is too large"
+  },
+  "m67": {
+    "message": "Hover translation failed. Try again"
+  },
+  "m68": {
+    "message": "Detection image is too large"
+  },
+  "m69": {
+    "message": "Could not open the OCR language cache"
+  },
+  "m6a": {
+    "message": "OCR language cache operation failed"
+  },
+  "m6b": {
+    "message": "Language pack SHA-256 check failed"
+  },
+  "m6c": {
+    "message": "Language pack download failed (HTTP $p1$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6d": {
+    "message": "Image is too large"
+  },
+  "m6e": {
+    "message": "Image exceeds 24 million pixels"
+  },
+  "m6f": {
+    "message": "Invalid canvas tile parameters"
+  },
+  "m6g": {
+    "message": "Local OCR timed out (20 seconds)"
+  },
+  "m6h": {
+    "message": "$p1$; the original image is unchanged",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6i": {
+    "message": "Local recognition failed: decoding or WASM unavailable. The original image is unchanged"
+  },
+  "m6j": {
+    "message": "PDF text segmentation failed"
+  },
+  "m6k": {
+    "message": "The PDF must be smaller than 64 MiB."
+  },
+  "m6l": {
+    "message": "This is not a valid PDF file."
+  },
+  "m6m": {
+    "message": "Use HTTP(S) or a local file:// PDF. URLs containing credentials are not supported."
+  },
+  "m6n": {
+    "message": "Enable “Allow access to file URLs” in extension details, or choose a local PDF above."
+  },
+  "m6o": {
+    "message": "Could not read the PDF. Download documents requiring sign-in or redirects, then select the local file."
+  },
+  "m6p": {
+    "message": "No complete translation received"
+  },
+  "m6q": {
+    "message": "A formula is missing from the translation. The original is kept"
+  },
+  "m6r": {
+    "message": "T"
+  },
+  "m6s": {
+    "message": "Translate or show the original PDF"
+  },
+  "m6t": {
+    "message": "Translate / Show original PDF (drag to move, right-click to return to toolbar)"
+  },
+  "m6u": {
+    "message": "Retry failed"
+  },
+  "m6v": {
+    "message": "Translate"
+  },
+  "m6w": {
+    "message": "Translated $p1$/$p2$ blocks",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m6x": {
+    "message": "Drafts: $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6y": {
+    "message": "Pending: $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6z": {
+    "message": "Failed: $p1$ (click ↻ to retry)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m70": {
+    "message": "AI refinement failed for $p1$ blocks. Machine translation is shown",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m71": {
+    "message": "This page has no readable text layer, possibly a scan. OCR is not available"
+  },
+  "m72": {
+    "message": "Click Translate to see the translated page with its layout preserved"
+  },
+  "m73": {
+    "message": "Page $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m74": {
+    "message": "Loads when nearby"
+  },
+  "m75": {
+    "message": "Could not parse this page. Jump to its page number to retry."
+  },
+  "m76": {
+    "message": "Some pages could not be rendered. Other pages remain readable."
+  },
+  "m77": {
+    "message": "Original PDF page $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m78": {
+    "message": "Translation failed: $p1$. Click to retry",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m79": {
+    "message": "AI refinement failed. Machine translation is shown"
+  },
+  "m7a": {
+    "message": "This page has no readable text layer, possibly a scan. PDF OCR is not available."
+  },
+  "m7b": {
+    "message": "Original shown. Pending translations stopped."
+  },
+  "m7c": {
+    "message": "Encrypted PDFs are not supported. Decrypt the file locally, then select it again."
+  },
+  "m7d": {
+    "message": "PDFs can have at most 2,000 pages. Split the file locally first."
+  },
+  "m7e": {
+    "message": "Opened a $p1$-page PDF. Check the model settings, then click Translate.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m7f": {
+    "message": "Could not open this PDF. It may be invalid, too large, encrypted, or require sign-in or redirects. Download it and select the local file. file:// requires file URL access."
+  },
+  "m7g": {
+    "message": "Reading this PDF needs access to its source. You can also select a downloaded local file."
+  },
+  "m7h": {
+    "message": "Allow this PDF source"
+  },
+  "m7i": {
+    "message": "This page is not confirmed as a PDF, or the anonymous check failed. Open a PDF and retry, or select a local PDF."
+  },
+  "m7j": {
+    "message": "Choose a local PDF, or open one from the DualLens popup or context menu on a PDF tab."
+  },
+  "m7k": {
+    "message": "The background service did not respond"
+  },
+  "m7l": {
+    "message": "The background connection was interrupted. Reload the page"
+  },
+  "m7m": {
+    "message": "Could not read the subtitle track"
+  },
+  "m7n": {
+    "message": "The extension was updated. Reload the page"
+  },
+  "m7o": {
+    "message": "The background connection was interrupted"
+  },
+  "m7p": {
+    "message": "No translation received"
+  },
+  "m7q": {
+    "message": "Invalid key configuration"
+  },
+  "m7r": {
+    "message": "Invalid configuration format"
+  },
+  "m7s": {
+    "message": "Encrypted exports require a passphrase of at least 8 characters"
+  },
+  "m7t": {
+    "message": "Configuration files cannot exceed 1 MB"
+  },
+  "m7u": {
+    "message": "Configuration file is too large or invalid"
+  },
+  "m7v": {
+    "message": "Enter the passphrase used for export"
+  },
+  "m7w": {
+    "message": "Incorrect passphrase or damaged encrypted configuration"
+  },
+  "m7x": {
+    "message": "Microsoft machine translation"
+  },
+  "m7y": {
+    "message": "Google machine translation"
+  },
+  "m7z": {
+    "message": "Microsoft Translator"
+  },
+  "m80": {
+    "message": "Google is used only if Microsoft fails. This page's text will be sent to $p1$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m81": {
+    "message": " and title"
+  },
+  "m82": {
+    "message": "Using $p1$. This page's text$p2$ will be sent to $p3$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "m8i": {
+    "message": "OpenRouter (recommended)"
+  },
+  "m8j": {
+    "message": "Public free-model discovery. Free models have per-minute and daily limits; switching models does not bypass account limits. Provider rules apply. Enable JSON mode only for supported models."
+  },
+  "m8k": {
+    "message": "Create your own API key on the DeepSeek platform. JSON mode is off by default; enable it if the model supports it."
+  },
+  "m8l": {
+    "message": "Use your own OpenAI API key. API billing is separate from ChatGPT subscriptions. Enable JSON mode only for supported models."
+  },
+  "m8m": {
+    "message": "Run Ollama yourself and allow the extension origin with OLLAMA_ORIGINS. localhost means this device; other devices need an accessible service address."
+  },
+  "m8n": {
+    "message": "Start LM Studio's OpenAI-compatible server yourself. localhost means this device."
+  },
+  "m8o": {
+    "message": "Custom OpenAI-compatible service"
+  },
+  "m8p": {
+    "message": "Enter the full API base address. The optional API key stays on this device. JSON mode is off by default."
+  },
+  "m8q": {
+    "message": "Unknown service preset"
+  },
+  "m8r": {
+    "message": "Chinese (Simplified)"
+  },
+  "m8s": {
+    "message": "Chinese (Traditional)"
+  },
+  "m8t": {
+    "message": "Japanese"
+  },
+  "m8u": {
+    "message": "Default (muted)"
+  },
+  "m8v": {
+    "message": "Plain"
+  },
+  "m8w": {
+    "message": "Dashed underline"
+  },
+  "m8x": {
+    "message": "Light background"
+  },
+  "m8y": {
+    "message": "Learning (reveal on hover)"
+  },
+  "m8z": {
+    "message": "Quote (left border)"
+  },
+  "m90": {
+    "message": "Machine translation + AI refinement"
+  },
+  "m91": {
+    "message": "Machine translation only"
+  },
+  "m92": {
+    "message": "AI service only"
+  },
+  "m93": {
+    "message": "AI first, machine translation fallback"
+  },
+  "m94": {
+    "message": "Demo (no model calls)"
+  },
+  "m95": {
+    "message": "Invalid service identifier"
+  },
+  "m96": {
+    "message": "Device-local settings storage is required"
+  },
+  "m97": {
+    "message": "The first fallback service or model is invalid"
+  },
+  "m98": {
+    "message": "Extension storage unavailable. Supply a SettingsStore"
+  },
+  "m99": {
+    "message": "Site rules must be a list"
+  },
+  "m9a": {
+    "message": "Invalid site pattern. Use example.com/docs/* with optional HTTP(S) and port, without spaces, query, fragment or credentials"
+  },
+  "m9b": {
+    "message": "Site rules must include match"
+  },
+  "m9c": {
+    "message": "Page rules must be always, never or default"
+  },
+  "m9d": {
+    "message": "Selection, hover and input rules must be on, off or default"
+  },
+  "m9e": {
+    "message": "Invalid floating button auto-hide setting"
+  },
+  "m9f": {
+    "message": "Invalid input bilingual mode or order"
+  },
+  "m9g": {
+    "message": "Invalid interaction service or model"
+  },
+  "m9h": {
+    "message": "Subtitle translation"
+  },
+  "m9i": {
+    "message": "Close / Show original subtitles"
+  },
+  "m9j": {
+    "message": "Enable"
+  },
+  "m9k": {
+    "message": "Display mode"
+  },
+  "m9l": {
+    "message": "Original + Translation"
+  },
+  "m9m": {
+    "message": "Subtitle position"
+  },
+  "m9n": {
+    "message": "Bottom"
+  },
+  "m9o": {
+    "message": "Top"
+  },
+  "m9p": {
+    "message": "Font size (16–48 px)"
+  },
+  "m9q": {
+    "message": "Enable player subtitles and select the original track. YouTube and standard HTML5 subtitles are supported; speech recognition is not. Uses your configured translation service. Turning off restores original subtitles."
+  },
+  "m9r": {
+    "message": "Apply subtitle settings"
+  },
+  "m9s": {
+    "message": "Local subtitle file"
+  },
+  "m9t": {
+    "message": "Import SRT / VTT (up to 2 MB)"
+  },
+  "m9u": {
+    "message": "Parsing, preview and export happen on this device. Translate sends only subtitle text to the configured service; filenames and timestamps are not sent."
+  },
+  "m9v": {
+    "message": "Translate subtitle file"
+  },
+  "m9w": {
+    "message": "Cancel file translation"
+  },
+  "m9x": {
+    "message": "Export bilingual $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m9y": {
+    "message": "; some entries failed. You can translate again"
+  },
+  "m9z": {
+    "message": "$p1$ / $p2$ entries translated$p3$; previewing the first 20",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "ma0": {
+    "message": "Choose an .srt or .vtt subtitle file"
+  },
+  "ma1": {
+    "message": "Subtitle translation failed. Check the translation service settings"
+  },
+  "ma2": {
+    "message": "Cancelled. You can resume translating"
+  },
+  "ma3": {
+    "message": "Subtitle settings applied"
+  },
+  "ma4": {
+    "message": "Could not save settings. Try again"
+  },
+  "ma5": {
+    "message": "Could not load settings"
+  },
+  "ma6": {
+    "message": "Text translation"
+  },
+  "ma7": {
+    "message": "Source language"
+  },
+  "ma8": {
+    "message": "Target language"
+  },
+  "ma9": {
+    "message": "Service"
+  },
+  "maa": {
+    "message": "Model"
+  },
+  "mab": {
+    "message": "Get models"
+  },
+  "mac": {
+    "message": "Configure service"
+  },
+  "mad": {
+    "message": "Text to translate"
+  },
+  "mae": {
+    "message": "Getting models…"
+  },
+  "maf": {
+    "message": "Could not get models"
+  },
+  "mag": {
+    "message": "Found $p1$ models",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mah": {
+    "message": "Translation failed"
+  },
+  "mai": {
+    "message": "Translation complete"
+  },
+  "maj": {
+    "message": "Translation failed. Try again"
+  },
+  "mak": {
+    "message": "Clipboard unavailable. Select and copy the translation"
+  },
+  "mal": {
+    "message": "Speech is unavailable on this device"
+  },
+  "mam": {
+    "message": "Current fallback order (default)"
+  },
+  "man": {
+    "message": "Loading settings…"
+  },
+  "mao": {
+    "message": "Video subtitles"
+  },
+  "map": {
+    "message": "Could not load the page. Close it and try again"
+  },
+  "maq": {
+    "message": "Operation failed"
+  },
+  "mar": {
+    "message": "Show key"
+  },
+  "mas": {
+    "message": "Hide key"
+  },
+  "mat": {
+    "message": "You have unsaved changes. Discard them?"
+  },
+  "mau": {
+    "message": "Floating button"
+  },
+  "mav": {
+    "message": "Shortcut at the page edge"
+  },
+  "maw": {
+    "message": "Selection translation"
+  },
+  "max": {
+    "message": "Translate selected text"
+  },
+  "may": {
+    "message": "Hover translation"
+  },
+  "maz": {
+    "message": "Hold Shift to translate a paragraph"
+  },
+  "mb0": {
+    "message": "Input translation"
+  },
+  "mb1": {
+    "message": "Press Space three times to translate"
+  },
+  "mb2": {
+    "message": "Add bilingual video subtitles"
+  },
+  "mb3": {
+    "message": "Image text"
+  },
+  "mb4": {
+    "message": "Recognize image text, then translate"
+  },
+  "mb5": {
+    "message": "Site access was not granted. The feature stays off."
+  },
+  "mb6": {
+    "message": "Microsoft"
+  },
+  "mb7": {
+    "message": "Google"
+  },
+  "mb8": {
+    "message": "Microsoft official API"
+  },
+  "mb9": {
+    "message": "Offline test"
+  },
+  "mba": {
+    "message": "Text is sent only to the service on this device."
+  },
+  "mbb": {
+    "message": "No AI service selected. Add one in Settings first."
+  },
+  "mbc": {
+    "message": "Local model $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbd": {
+    "message": "Text and page titles will be sent to $p1$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbe": {
+    "message": "Webpage text and page titles will be sent to $p1$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbf": {
+    "message": ", with $p1$ on failure",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbg": {
+    "message": "Failures are reported directly, without forwarding to free endpoints."
+  },
+  "mbh": {
+    "message": "Webpage text will be sent to $p1$$p2$. $p3$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "mbi": {
+    "message": "Machine translation + AI refinement"
+  },
+  "mbj": {
+    "message": "$p1$ Text and page titles will also be sent to the selected AI service.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbk": {
+    "message": "$p1$ Webpage text and page titles will also be sent to $p2$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "mbl": {
+    "message": " (free)"
+  },
+  "mbm": {
+    "message": "$p1$ machine translation$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "mbn": {
+    "message": "Long-press a paragraph to translate"
+  },
+  "mbo": {
+    "message": "Pause over a paragraph to translate"
+  },
+  "mbp": {
+    "message": "Hold $p1$ to translate a paragraph",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbq": {
+    "message": "Press Alt+I to translate an input"
+  },
+  "mbr": {
+    "message": "Set"
+  },
+  "mbs": {
+    "message": "Not set"
+  },
+  "mbt": {
+    "message": "Settings synced. API keys stay on this device."
+  },
+  "mbu": {
+    "message": "Sync is off on this device. Settings and API keys stay here."
+  },
+  "mbv": {
+    "message": "API key (this device only)"
+  },
+  "mbw": {
+    "message": "Use your own model service. No automatic connections."
+  },
+  "mbx": {
+    "message": "Choose a service"
+  },
+  "mby": {
+    "message": "Invalid site rules JSON"
+  },
+  "mbz": {
+    "message": "Reading the local key. Wait before saving"
+  },
+  "mc0": {
+    "message": "Could not register the comic site hook"
+  },
+  "mc1": {
+    "message": "Settings saved"
+  },
+  "mc2": {
+    "message": "Language packs cannot be viewed on this platform"
+  },
+  "mc3": {
+    "message": "Enter this service's API key (blank to clear; cancel to keep)"
+  },
+  "mc4": {
+    "message": "The API key contains invalid characters"
+  },
+  "mc5": {
+    "message": "Key changes are unsaved. Click Save settings."
+  },
+  "mc6": {
+    "message": "Enter the machine translation key (blank to clear; cancel to keep)"
+  },
+  "mc7": {
+    "message": "The key contains invalid characters"
+  },
+  "mc8": {
+    "message": "The translation key change is unsaved. Click Save settings."
+  },
+  "mc9": {
+    "message": "The translation key removal is unsaved. Click Save settings."
+  },
+  "mca": {
+    "message": "The key removal is unsaved. Click Save settings."
+  },
+  "mcb": {
+    "message": "Choose a service preset first"
+  },
+  "mcc": {
+    "message": "Enter a key, get models and test, then save."
+  },
+  "mcd": {
+    "message": "Getting model list…"
+  },
+  "mce": {
+    "message": "Service access was not granted."
+  },
+  "mcf": {
+    "message": "This platform needs an HTTP transport to get models before saving"
+  },
+  "mcg": {
+    "message": "Could not retrieve data"
+  },
+  "mch": {
+    "message": "Translating test text…"
+  },
+  "mci": {
+    "message": "The service did not return valid translation JSON"
+  },
+  "mcj": {
+    "message": "This platform needs an HTTP transport to test before saving"
+  },
+  "mck": {
+    "message": "Test failed"
+  },
+  "mcl": {
+    "message": "This platform cannot test machine translation directly"
+  },
+  "mcm": {
+    "message": "Testing machine translation…"
+  },
+  "mcn": {
+    "message": "Export passphrase (blank for plaintext without keys; cancel to stop)"
+  },
+  "mco": {
+    "message": "Export cancelled"
+  },
+  "mcp": {
+    "message": "Exported. Plaintext omits keys; encrypted exports include them."
+  },
+  "mcq": {
+    "message": "Set a mobile export passphrase (at least 8 characters; cancel to stop)"
+  },
+  "mcr": {
+    "message": "Mobile export requires an encryption passphrase"
+  },
+  "mcs": {
+    "message": "Encrypted configuration ready. Copy it and import on the other device. Share the passphrase separately."
+  },
+  "mct": {
+    "message": "Encrypted configuration ready. Scan or copy it on your phone, then import. Share the passphrase separately."
+  },
+  "mcu": {
+    "message": "Generate configuration text first"
+  },
+  "mcv": {
+    "message": "Configuration selected. Use the system copy command."
+  },
+  "mcw": {
+    "message": "Configuration copied"
+  },
+  "mcx": {
+    "message": "Clipboard access denied. Text selected; use the system copy command."
+  },
+  "mcy": {
+    "message": "Enter the import passphrase (cancel to stop)"
+  },
+  "mcz": {
+    "message": "Import cancelled"
+  },
+  "md0": {
+    "message": "Settings imported"
+  },
+  "md1": {
+    "message": "Paste the encrypted configuration from your computer"
+  },
+  "md2": {
+    "message": "Configuration file is too large"
+  },
+  "md3": {
+    "message": "Cache clearing is unavailable on this platform"
+  },
+  "md4": {
+    "message": "Translation cache cleared"
+  },
+  "md5": {
+    "message": "Changes save automatically. Save AI services, site rules and glossary manually."
+  },
+  "md6": {
+    "message": "Could not read updated settings"
+  },
+  "md7": {
+    "message": "Found $p1$ models. Select one, test the connection and save.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "md8": {
+    "message": "Connected · $p1$ ms · $p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "md9": {
+    "message": "Machine translation works · $p1$ · $p2$ ms · $p3$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "mda": {
+    "message": "Saved"
+  },
+  "mdb": {
+    "message": "Save"
+  },
+  "mdc": {
+    "message": "Cancel"
+  },
+  "mdd": {
+    "message": "Continue"
+  },
+  "mde": {
+    "message": "Service access was not granted. Settings were not saved."
+  },
+  "mdf": {
+    "message": "Restore defaults? Local keys, onboarding and destination confirmations will be kept."
+  },
+  "mdg": {
+    "message": "Delete this service and its local key?"
+  },
+  "mdh": {
+    "message": "Clear this key?"
+  },
+  "mdi": {
+    "message": "Move down"
+  },
+  "mdj": {
+    "message": "Remove"
+  },
+  "mdk": {
+    "message": "Enter a fallback model"
+  },
+  "mdl": {
+    "message": "Do not use an AI service"
+  },
+  "mdm": {
+    "message": "Text goes only to your local service and stays on this device."
+  },
+  "mdn": {
+    "message": "Webpage text and page titles will be sent to $p1$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mdo": {
+    "message": "Version"
+  },
+  "mdp": {
+    "message": "Command copied"
+  },
+  "mdq": {
+    "message": "Copy this command:"
+  },
+  "mdr": {
+    "message": "Free models only"
+  },
+  "mds": {
+    "message": "Choose a service and enter a model first."
+  },
+  "mdt": {
+    "message": "The operation did not finish. Check Settings."
+  },
+  "mdu": {
+    "message": "<extension ID>"
+  },
+  "mdv": {
+    "message": "Getting started"
+  },
+  "mdw": {
+    "message": "Translate now with free Microsoft machine translation. No key required."
+  },
+  "mdx": {
+    "message": "Optionally add an AI service to refine machine translations in place. You can use OpenRouter free models or your own service."
+  },
+  "mdy": {
+    "message": "1 Choose preset → 2 Enter key → 3 Get models → 4 Test → 5 Save"
+  },
+  "mdz": {
+    "message": "Free models have per-minute and daily limits. Fallbacks do not bypass account limits. No connection is made until you get models or test."
+  },
+  "me0": {
+    "message": "Reading"
+  },
+  "me1": {
+    "message": "Display"
+  },
+  "me2": {
+    "message": "Bilingual"
+  },
+  "me3": {
+    "message": "Translation style"
+  },
+  "me4": {
+    "message": "Minimum paragraph characters"
+  },
+  "me5": {
+    "message": "Inline translation threshold"
+  },
+  "me6": {
+    "message": "Preload distance (px)"
+  },
+  "me7": {
+    "message": "Batch wait (ms)"
+  },
+  "me8": {
+    "message": "Translate short text (buttons, labels, navigation)"
+  },
+  "me9": {
+    "message": "Translation method"
+  },
+  "mea": {
+    "message": "Machine translation engine"
+  },
+  "meb": {
+    "message": "Try the other free engine on failure"
+  },
+  "mec": {
+    "message": "Microsoft Translator region (optional, e.g. eastasia)"
+  },
+  "med": {
+    "message": "Official translation key (Microsoft Translator or DeepL; this device only)"
+  },
+  "mee": {
+    "message": "Set key"
+  },
+  "mef": {
+    "message": "Clear key"
+  },
+  "meg": {
+    "message": "Test machine translation"
+  },
+  "meh": {
+    "message": "Machine translation appears first, then AI refines it in place. Failures keep the machine translation. Selection, hover and input use machine translation first; selection offers Refine."
+  },
+  "mei": {
+    "message": "Free Microsoft/Google endpoints are unofficial, have no availability guarantee, and receive text to translate. You can use AI only or official engines with your own key."
+  },
+  "mej": {
+    "message": "Model services"
+  },
+  "mek": {
+    "message": "Edit / Switch service"
+  },
+  "mel": {
+    "message": "New service preset"
+  },
+  "mem": {
+    "message": "Choose a preset (OpenRouter recommended)"
+  },
+  "men": {
+    "message": "Add selected service"
+  },
+  "meo": {
+    "message": "Provider information / Get a key"
+  },
+  "mep": {
+    "message": "Service name"
+  },
+  "meq": {
+    "message": "API base address"
+  },
+  "mer": {
+    "message": "Enter in the browser's native dialog, then save."
+  },
+  "mes": {
+    "message": "Model"
+  },
+  "met": {
+    "message": "Get model list"
+  },
+  "meu": {
+    "message": "Test connection"
+  },
+  "mev": {
+    "message": "Fallback models for this service (one per line)"
+  },
+  "mew": {
+    "message": "Paragraphs per batch"
+  },
+  "mex": {
+    "message": "Characters per batch"
+  },
+  "mey": {
+    "message": "Concurrency"
+  },
+  "mez": {
+    "message": "Timeout (ms)"
+  },
+  "mf0": {
+    "message": "Use JSON response mode"
+  },
+  "mf1": {
+    "message": "Cross-service fallback order (JSON: profileId + model)"
+  },
+  "mf2": {
+    "message": "Choosing OpenRouter free models suggests fallbacks from 2–3 providers. You can edit them. Webpage text is sent only to services in this list."
+  },
+  "mf3": {
+    "message": "Interactions"
+  },
+  "mf4": {
+    "message": "Hover / Touch long-press translation"
+  },
+  "mf5": {
+    "message": "Show selection button"
+  },
+  "mf6": {
+    "message": "Allow language prefixes such as /ja"
+  },
+  "mf7": {
+    "message": "Show floating button"
+  },
+  "mf8": {
+    "message": "Hover modifier"
+  },
+  "mf9": {
+    "message": "Pause for 500 ms"
+  },
+  "mfa": {
+    "message": "Input target language"
+  },
+  "mfb": {
+    "message": "Input trigger"
+  },
+  "mfc": {
+    "message": "Three spaces or shortcut"
+  },
+  "mfd": {
+    "message": "Shortcut only"
+  },
+  "mfe": {
+    "message": "Insert translation"
+  },
+  "mff": {
+    "message": "Replace original"
+  },
+  "mfg": {
+    "message": "Bilingual (keep original)"
+  },
+  "mfh": {
+    "message": "Bilingual order"
+  },
+  "mfi": {
+    "message": "Original first"
+  },
+  "mfj": {
+    "message": "Translation first"
+  },
+  "mfk": {
+    "message": "Hover / Long press"
+  },
+  "mfl": {
+    "message": "Input"
+  },
+  "mfm": {
+    "message": "Model (blank for service default)"
+  },
+  "mfn": {
+    "message": "Page settings use the page method and fallback order. A specified service uses its AI model for this interaction only. Bilingual input uses a newline, or a space in single-line fields."
+  },
+  "mfo": {
+    "message": "Floating button side"
+  },
+  "mfp": {
+    "message": "Right"
+  },
+  "mfq": {
+    "message": "Left"
+  },
+  "mfr": {
+    "message": "Comics"
+  },
+  "mfs": {
+    "message": "Enable local comic OCR"
+  },
+  "mft": {
+    "message": "Comic source language"
+  },
+  "mfu": {
+    "message": "Comic sites (domain, *.example.com or JSON object; one per line)"
+  },
+  "mfv": {
+    "message": "Canvas source hooks run only on listed sites. Reload after changes. Images are recognized locally; only OCR text is sent to the model."
+  },
+  "mfw": {
+    "message": "View downloaded language packs"
+  },
+  "mfx": {
+    "message": "Prompts and terms"
+  },
+  "mfy": {
+    "message": "Translation tone"
+  },
+  "mfz": {
+    "message": "General"
+  },
+  "mg0": {
+    "message": "Technical"
+  },
+  "mg1": {
+    "message": "Academic"
+  },
+  "mg2": {
+    "message": "News"
+  },
+  "mg3": {
+    "message": "Conversational"
+  },
+  "mg4": {
+    "message": "Custom"
+  },
+  "mg5": {
+    "message": "Custom style instructions"
+  },
+  "mg6": {
+    "message": "Glossary (one source → translation per line)"
+  },
+  "mg7": {
+    "message": "Site rules"
+  },
+  "mg8": {
+    "message": "Always translate patterns (one per line)"
+  },
+  "mg9": {
+    "message": "Never translate automatically (one per line)"
+  },
+  "mga": {
+    "message": "Translate these source languages automatically"
+  },
+  "mgb": {
+    "message": "* matches path characters, case-sensitive. Query and fragment are ignored. The most specific rule wins. Never still permits manual translation but hides the floating button. Features inherit global settings."
+  },
+  "mgc": {
+    "message": "Add / Edit path pattern"
+  },
+  "mgd": {
+    "message": "Page translation"
+  },
+  "mge": {
+    "message": "Default"
+  },
+  "mgf": {
+    "message": "Automatic"
+  },
+  "mgg": {
+    "message": "Never (manual allowed)"
+  },
+  "mgh": {
+    "message": "Selection"
+  },
+  "mgi": {
+    "message": "On"
+  },
+  "mgj": {
+    "message": "Off"
+  },
+  "mgk": {
+    "message": "Add / Update rule"
+  },
+  "mgl": {
+    "message": "Rule list (JSON; edit or delete)"
+  },
+  "mgm": {
+    "message": "Local cache and configuration backup"
+  },
+  "mgn": {
+    "message": "Cache translations"
+  },
+  "mgo": {
+    "message": "Maximum cache entries"
+  },
+  "mgp": {
+    "message": "Cache lifetime (days)"
+  },
+  "mgq": {
+    "message": "Clear translation cache"
+  },
+  "mgr": {
+    "message": "The browser's native dialog asks for an encryption passphrase. Exports require at least 8 characters. Leave blank for plaintext without keys."
+  },
+  "mgs": {
+    "message": "Backup passphrase (blank for plaintext without keys)"
+  },
+  "mgt": {
+    "message": "Configuration text (encrypted files can move between devices)"
+  },
+  "mgu": {
+    "message": "Export configuration"
+  },
+  "mgv": {
+    "message": "Import configuration text"
+  },
+  "mgw": {
+    "message": "Export to phone"
+  },
+  "mgx": {
+    "message": "Copy configuration text"
+  },
+  "mgy": {
+    "message": "Import from computer"
+  },
+  "mgz": {
+    "message": "Encrypted configuration QR code"
+  },
+  "mh0": {
+    "message": "Choose configuration file"
+  },
+  "mh1": {
+    "message": "Encrypted backups contain your keys. Keep them safe. The passphrase is not stored. Plaintext imports keep local keys. Translation cache is not exported."
+  },
+  "mh2": {
+    "message": "Save settings"
+  },
+  "mh3": {
+    "message": "General"
+  },
+  "mh4": {
+    "message": "Enhancements"
+  },
+  "mh5": {
+    "message": "Site rules"
+  },
+  "mh6": {
+    "message": "Glossary"
+  },
+  "mh7": {
+    "message": "Data and privacy"
+  },
+  "mh8": {
+    "message": "About"
+  },
+  "mh9": {
+    "message": "DualLens settings"
+  },
+  "mha": {
+    "message": "Advanced"
+  },
+  "mhb": {
+    "message": "Hide halfway at the page edge"
+  },
+  "mhc": {
+    "message": "Subtitle display"
+  },
+  "mhd": {
+    "message": "Subtitle font size"
+  },
+  "mhe": {
+    "message": "Delete service"
+  },
+  "mhf": {
+    "message": "Restore defaults"
+  },
+  "mhg": {
+    "message": "The quiet revolution of the library."
+  },
+  "mhh": {
+    "message": "Translations are blurred until you hover over them."
+  },
+  "mhi": {
+    "message": "Text goes only to your chosen service. AI services also receive page titles; URLs, cookies and passwords are not sent. Keys and translation cache stay on this device; keys do not sync."
+  },
+  "mhj": {
+    "message": "MIT license · Independent open-source project"
+  },
+  "mhk": {
+    "message": "View source"
+  },
+  "mhl": {
+    "message": "Fallback order"
+  },
+  "mhm": {
+    "message": "Add fallback"
+  },
+  "mhn": {
+    "message": "Local model"
+  },
+  "mho": {
+    "message": "Key required"
+  },
+  "mhp": {
+    "message": "Free models available"
+  },
+  "mhq": {
+    "message": "Ollama, LM Studio · Text stays on this device"
+  },
+  "mhr": {
+    "message": "OpenAI-compatible service"
+  },
+  "mhs": {
+    "message": "Local service"
+  },
+  "mht": {
+    "message": "Copy command"
+  },
+  "mhu": {
+    "message": "Ollama must allow the extension origin. localhost means this device."
+  },
+  "mhv": {
+    "message": "Select original-language subtitles in the player. Supports YouTube and HTML5 subtitles, without speech recognition."
+  },
+  "mhw": {
+    "message": "Translation text goes to your chosen service. Keys stay on this device and do not sync."
+  },
+  "mhx": {
+    "message": "Translation cache"
+  },
+  "mhy": {
+    "message": "Move to another device"
+  },
+  "mhz": {
+    "message": "Use local models only (no online machine translation)"
+  },
+  "mi0": {
+    "message": "Uses AI services only. Keep only local addresses in the fallback list too."
+  },
+  "mi1": {
+    "message": "Configuration exceeds one QR code. Copy the encrypted text or transfer the encrypted file"
+  },
+  "mi2": {
+    "message": "Rule added to the list. Click Save settings."
+  },
+  "mi3": {
+    "message": "Invalid site pattern or rules JSON. Example: example.com/docs/*"
+  },
+  "mi4": {
+    "message": "Site access was revoked. Related enhancements and automatic translation are off. You can enable them again when needed."
+  },
+  "mi5": {
+    "message": "Translate images on this page"
+  },
+  "mi6": {
+    "message": "This page has not been translated"
+  },
+  "mi7": {
+    "message": "This page cannot be translated"
+  },
+  "mi8": {
+    "message": "Connecting to this page…"
+  },
+  "mi9": {
+    "message": "Translate into"
+  },
+  "mia": {
+    "message": "Translate to"
+  },
+  "mib": {
+    "message": "Engine"
+  },
+  "mic": {
+    "message": "Change"
+  },
+  "mid": {
+    "message": "This path only"
+  },
+  "mie": {
+    "message": "Rule saved. Never still allows manual translation."
+  },
+  "mif": {
+    "message": "All off by default"
+  },
+  "mig": {
+    "message": "Skip"
+  },
+  "mih": {
+    "message": "Next"
+  },
+  "mii": {
+    "message": "Back"
+  },
+  "mij": {
+    "message": "Get started"
+  },
+  "mik": {
+    "message": "Which language do you want to read?"
+  },
+  "mil": {
+    "message": "Pages will be translated into this language. You can change it in the popup."
+  },
+  "mim": {
+    "message": "Selected from your browser language."
+  },
+  "min": {
+    "message": "Choose a translation method"
+  },
+  "mio": {
+    "message": "Webpage text is sent to a translation service. You can change it anytime."
+  },
+  "mip": {
+    "message": "Free machine translation"
+  },
+  "miq": {
+    "message": "No account or key needed. Webpage text goes to Microsoft, then Google if Microsoft fails."
+  },
+  "mir": {
+    "message": "My own AI service"
+  },
+  "mis": {
+    "message": "Use your own key or local model. Text goes only to your chosen service. Add it in Settings later."
+  },
+  "mit": {
+    "message": "Ready"
+  },
+  "miu": {
+    "message": "Click Translate this page, or press Alt+A."
+  },
+  "miv": {
+    "message": "No site is translated automatically."
+  },
+  "miw": {
+    "message": "Floating button, selection translation and other features are off by default. Enable them under Enhancements."
+  },
+  "mix": {
+    "message": "Phones have no toolbar button. Open DualLens from the Tampermonkey menu, or enable the floating button under Enhancements."
+  },
+  "miy": {
+    "message": "Starting with 1.0, enhancements are off by default. Previously enabled features have been turned off. Enable them below when needed."
+  },
+  "miz": {
+    "message": "Got it"
+  },
+  "mj0": {
+    "message": "The operation did not finish. Try again later."
+  },
+  "mj1": {
+    "message": "Step $p1$ of 3",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj2": {
+    "message": ", AI refining $p1$ paragraphs",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj3": {
+    "message": ", $p1$ paragraphs pending",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj4": {
+    "message": ", $p1$ paragraphs failed",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj5": {
+    "message": "Translated $p1$ paragraphs$p2$$p3$$p4$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      },
+      "p4": {
+        "content": "$4"
+      }
+    }
+  },
+  "mj6": {
+    "message": "Could not read settings. Reopen the popup."
+  },
+  "mj7": {
+    "message": "Use source → translation on each glossary line"
+  },
+  "mj8": {
+    "message": "Invalid comic setting or source language"
+  },
+  "mj9": {
+    "message": "Invalid subtitle settings"
+  },
+  "mja": {
+    "message": "Invalid translation method or machine translation settings"
+  },
+  "mjb": {
+    "message": "Choose valid source and target languages"
+  },
+  "mjc": {
+    "message": "Invalid display mode"
+  },
+  "mjd": {
+    "message": "Invalid short-text setting"
+  },
+  "mje": {
+    "message": "Invalid translation style"
+  },
+  "mjf": {
+    "message": "Invalid prompt settings"
+  },
+  "mjg": {
+    "message": "Minimum paragraph length"
+  },
+  "mjh": {
+    "message": "Inline threshold"
+  },
+  "mji": {
+    "message": "Preload distance"
+  },
+  "mjj": {
+    "message": "Batch wait"
+  },
+  "mjk": {
+    "message": "Cache entries"
+  },
+  "mjl": {
+    "message": "Cache days"
+  },
+  "mjm": {
+    "message": "The glossary allows up to 500 entries. Each needs a source and translation"
+  },
+  "mjn": {
+    "message": "Invalid hover shortcut"
+  },
+  "mjo": {
+    "message": "Invalid input settings"
+  },
+  "mjp": {
+    "message": "Invalid floating button position"
+  },
+  "mjq": {
+    "message": "Invalid toggle setting"
+  },
+  "mjr": {
+    "message": "Invalid automatic translation language"
+  },
+  "mjs": {
+    "message": "Custom rules must be a JSON array"
+  },
+  "mjt": {
+    "message": "include/exclude must be a selector string or string array"
+  },
+  "mju": {
+    "message": "Invalid custom rule style"
+  },
+  "mjv": {
+    "message": "Invalid active service"
+  },
+  "mjw": {
+    "message": "Duplicate service identifier or invalid type"
+  },
+  "mjx": {
+    "message": "Invalid service name or model"
+  },
+  "mjy": {
+    "message": "Invalid service address"
+  },
+  "mjz": {
+    "message": "Services require an HTTP(S) address without credentials or query parameters"
+  },
+  "mk0": {
+    "message": "Invalid JSON mode"
+  },
+  "mk1": {
+    "message": "Fallback models must be nonempty strings"
+  },
+  "mk2": {
+    "message": "Batch paragraphs"
+  },
+  "mk3": {
+    "message": "Batch characters"
+  },
+  "mk4": {
+    "message": "Timeout"
+  },
+  "mk5": {
+    "message": "Fallback order must be an array"
+  },
+  "mk6": {
+    "message": "Invalid fallback service or model"
+  },
+  "mk7": {
+    "message": "The settings file must be a JSON object"
+  },
+  "mk8": {
+    "message": "$p1$ must be between $p2$ and $p3$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "mk9": {
+    "message": "Invalid $p1$ setting",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mka": {
+    "message": "Could not load settings. Close and try again"
+  },
+  "mkb": {
+    "message": "Settings resource is missing or invalid. Reinstall the userscript from the official release and allow Tampermonkey to cache resources."
+  },
+  "appName": {
+    "message": "DualLens bilingual translation"
+  },
+  "appDescription": {
+    "message": "Paragraph-by-paragraph bilingual webpage translation with your choice of AI services and local models."
+  },
+  "appTitle": {
+    "message": "DualLens"
+  },
+  "pdfTitle": {
+    "message": "DualLens bilingual PDF reader"
+  },
+  "pdfView": {
+    "message": "View"
+  },
+  "pdfSide": {
+    "message": "Side by side"
+  },
+  "pdfTranslated": {
+    "message": "Translated pages"
+  },
+  "pdfOriginal": {
+    "message": "Original pages"
+  },
+  "pdfReflow": {
+    "message": "Reflow"
+  },
+  "pdfZoom": {
+    "message": "Zoom"
+  },
+  "pdfFit": {
+    "message": "Fit width"
+  },
+  "pdfPage": {
+    "message": "Page"
+  },
+  "pdfPageNumber": {
+    "message": "Page number"
+  },
+  "pdfJump": {
+    "message": "Go"
+  },
+  "pdfTheme": {
+    "message": "Theme"
+  },
+  "pdfAuto": {
+    "message": "System"
+  },
+  "pdfLight": {
+    "message": "Light"
+  },
+  "pdfDark": {
+    "message": "Dark"
+  },
+  "pdfSettings": {
+    "message": "Model settings"
+  },
+  "pdfLocal": {
+    "message": "Choose local PDF"
+  },
+  "pdfOpening": {
+    "message": "Opening PDF…"
+  },
+  "pdfPrivacy": {
+    "message": "Parsed locally. The destination is shown before translation."
+  },
+  "pdfPages": {
+    "message": "PDF pages"
+  },
+  "subtitleSettings": {
+    "message": "Video subtitle settings"
+  },
+  "startupFailure": {
+    "message": "Could not load Settings. Close and try again."
+  },
+  "cancelled": {
+    "message": "Cancelled"
+  },
+  "unknownError": {
+    "message": "Unknown error"
+  },
+  "languageKo": {
+    "message": "Korean"
+  },
+  "languageFr": {
+    "message": "French"
+  },
+  "languageDe": {
+    "message": "German"
+  },
+  "languageEs": {
+    "message": "Spanish"
+  },
+  "languageRu": {
+    "message": "Russian"
+  },
+  "languagePt": {
+    "message": "Portuguese"
+  },
+  "languageIt": {
+    "message": "Italian"
+  },
+  "languageAr": {
+    "message": "Arabic"
+  },
+  "languageVi": {
+    "message": "Vietnamese"
+  },
+  "languageTh": {
+    "message": "Thai"
+  },
+  "cacheClearFailed": {
+    "message": "Could not clear the cache"
+  },
+  "cacheOperationFailed": {
+    "message": "Cache operation failed"
+  },
+  "pdfCacheUnavailable": {
+    "message": "PDF storage is unavailable. Download the file and choose it locally."
+  },
+  "pdfTokenInvalid": {
+    "message": "Invalid PDF link. Open it again from the original PDF tab."
+  },
+  "pdfTokenExpired": {
+    "message": "The stored PDF has expired. Open it again from the original PDF tab."
+  },
+  "errorDetail": {
+    "message": ": $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "listSeparator": {
+    "message": ", "
+  },
+  "commandOpenSidepanel": {
+    "message": "Open the DualLens text translation sidebar"
+  },
+  "commandTogglePage": {
+    "message": "Translate / Show original page"
+  },
+  "commandToggleMode": {
+    "message": "Switch bilingual / Translation only"
+  },
+  "commandTranslateInput": {
+    "message": "Translate focused input"
+  },
+  "commandToggleHover": {
+    "message": "Toggle hover translation"
+  }
+}

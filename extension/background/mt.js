@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Machine translation (MT): the fast first stage of the double-engine pipeline (SPEC §8.1).
 //
 // Engines
@@ -6,7 +7,7 @@
 //                  mainland China. If it ever demands a token we fall back to the short-lived token
 //                  flow (edge.microsoft.com/translate/auth + api-edge.cognitive.microsofttranslator.com).
 //   google         free, UNOFFICIAL: a batch form endpoint
-//                  (clients5.google.com/translate_a/t?client=dict-chrome-ex). Needs a route to Google.
+//                  (clients5.google.com/translate_a/t?client=gtx). Needs a route to Google.
 //   microsoft-api  official Azure Translator (user key + optional region).
 //   deepl          official DeepL API (user key; free keys end in ":fx").
 //   mock           offline deterministic prefix for tests and demos.
@@ -27,11 +28,11 @@ import { escapeText, unescapeText, stripMarkup, parseMarkup } from '../shared/ma
 import { splitLongText, joinTranslations } from '../shared/batch.js';
 
 export const MT_ENGINES = Object.freeze([
-  Object.freeze({ id: 'microsoft', name: 'Microsoft（免费，非官方接口）', free: true, keyed: false }),
-  Object.freeze({ id: 'google', name: 'Google（免费，非官方接口）', free: true, keyed: false }),
-  Object.freeze({ id: 'microsoft-api', name: 'Microsoft Translator（官方，需 key）', free: false, keyed: true, secretId: 'mt-microsoft-api' }),
-  Object.freeze({ id: 'deepl', name: 'DeepL API（官方，需 key）', free: false, keyed: true, secretId: 'mt-deepl' }),
-  Object.freeze({ id: 'mock', name: 'Mock 机翻（不联网，测试用）', free: false, keyed: false }),
+  Object.freeze({ id: 'microsoft', get name() { return l10n('mk'); }, free: true, keyed: false }),
+  Object.freeze({ id: 'google', get name() { return l10n('ml'); }, free: true, keyed: false }),
+  Object.freeze({ id: 'microsoft-api', get name() { return l10n('mm'); }, free: false, keyed: true, secretId: 'mt-microsoft-api' }),
+  Object.freeze({ id: 'deepl', get name() { return l10n('mn'); }, free: false, keyed: true, secretId: 'mt-deepl' }),
+  Object.freeze({ id: 'mock', get name() { return l10n('mo'); }, free: false, keyed: false }),
 ]);
 export const MT_SECRET_IDS = Object.freeze(MT_ENGINES.filter(e => e.keyed).map(e => e.secretId));
 export const MT_PLACEHOLDER = '【机翻】';
@@ -131,21 +132,21 @@ function parseRetryAfter(value) {
 
 function statusError(status, retryAfter, keyed) {
   if (status === 429) {
-    return new DLError(ERR.RATE_LIMITED, '机器翻译请求过于频繁', { status, retryAfterMs: parseRetryAfter(retryAfter) });
+    return new DLError(ERR.RATE_LIMITED, l10n('mq'), { status, retryAfterMs: parseRetryAfter(retryAfter) });
   }
-  if ((status === 401 || status === 403) && keyed) return new DLError(ERR.CONFIG, '机器翻译 key 无效或额度不足', { status });
+  if ((status === 401 || status === 403) && keyed) return new DLError(ERR.CONFIG, l10n('mr'), { status });
   if (status >= 500 || status === 401 || status === 403 || status === 404) {
-    return new DLError(ERR.PROVIDER, `机器翻译服务暂不可用（HTTP ${status}）`, { status: status === 404 ? 502 : status });
+    return new DLError(ERR.PROVIDER, l10n('ms', [status]), { status: status === 404 ? 502 : status });
   }
-  return new DLError(ERR.PROVIDER, `机器翻译请求被拒绝（HTTP ${status}）`, { status });
+  return new DLError(ERR.PROVIDER, l10n('mt', [status]), { status });
 }
 
 function parseJson(text) {
-  try { return JSON.parse(text); } catch { throw new DLError(ERR.PARSE, '机器翻译返回了无法解析的内容'); }
+  try { return JSON.parse(text); } catch { throw new DLError(ERR.PARSE, l10n('mu')); }
 }
 
 function expectCount(list, n) {
-  if (!Array.isArray(list) || list.length !== n) throw new DLError(ERR.PARSE, '机器翻译返回的条数不符');
+  if (!Array.isArray(list) || list.length !== n) throw new DLError(ERR.PARSE, l10n('mv'));
   return list;
 }
 
@@ -209,8 +210,8 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
     } catch (e) {
       if(e?.code===ERR.CONFIRMATION_REQUIRED)throw e;
       if (job.signal?.aborted) throw cancelledError();
-      if (timedOut) throw new DLError(ERR.NETWORK, `机器翻译请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
-      throw new DLError(ERR.NETWORK, '无法连接机器翻译服务');
+      if (timedOut) throw new DLError(ERR.NETWORK, l10n('mw', [Math.round(timeoutMs / 1000)]));
+      throw new DLError(ERR.NETWORK, l10n('mx'));
     } finally {
       clearTimeout(timer);
       job.signal?.removeEventListener('abort', onAbort);
@@ -254,7 +255,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
 
     async 'microsoft-api'(job) {
       const key = String(await getSecret('mt-microsoft-api') || '').trim();
-      if (!key) throw new DLError(ERR.CONFIG, '尚未设置 Microsoft Translator key');
+      if (!key) throw new DLError(ERR.CONFIG, l10n('my'));
       const headers = { 'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': key };
       if (job.region) headers['Ocp-Apim-Subscription-Region'] = job.region;
       const params = { 'api-version': '3.0', from: msLang(job.from), to: msLang(job.to), ...(job.html ? { textType: 'html' } : {}) };
@@ -276,14 +277,14 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
 
     async deepl(job) {
       const key = String(await getSecret('mt-deepl') || '').trim();
-      if (!key) throw new DLError(ERR.CONFIG, '尚未设置 DeepL key');
+      if (!key) throw new DLError(ERR.CONFIG, l10n('mz'));
       const host = key.endsWith(':fx') ? 'https://api-free.deepl.com' : 'https://api.deepl.com';
       const payload = { text: textsOf(job), target_lang: deeplTarget(job.to) };
       const source = deeplSource(job.from);
       if (source) payload.source_lang = source;
       if (job.html) payload.tag_handling = 'xml';
       const res = await http(job, { url: `${host}/v2/translate`, headers: { 'Content-Type': 'application/json', Authorization: `DeepL-Auth-Key ${key}` }, body: JSON.stringify(payload) });
-      if (res.status === 456) throw new DLError(ERR.CONFIG, 'DeepL 额度已用完', { status: 456 });
+      if (res.status === 456) throw new DLError(ERR.CONFIG, l10n('m10'), { status: 456 });
       if (res.status !== 200) throw statusError(res.status, res.retryAfter, true);
       return expectCount(parseJson(res.text)?.translations, job.items.length).map(e => e?.text);
     },
@@ -324,7 +325,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
         });
         pending = missing;
         if (!pending.length) { succeeded(engine); return job.items.map(it => results.get(it.id)); }
-        lastError = new DLError(ERR.PARSE, '机器翻译没有返回这一段的译文');
+        lastError = new DLError(ERR.PARSE, l10n('m11'));
         failed(engine, lastError);
       } catch (e) {
         if (isCancelled(e)||e?.code===ERR.CONFIRMATION_REQUIRED) throw e;
@@ -332,8 +333,8 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
         failed(engine, e);
       }
     }
-    if(chain.some(id=>['deepl','microsoft-api'].includes(id))&&lastError)lastError.message+='；官方引擎失败，未转发到免费端点。';
-    const error = lastError ? toErrorInfo(lastError) : { code: ERR.NETWORK, message: '机器翻译暂时不可用，稍后自动重试' };
+    if(chain.some(id=>['deepl','microsoft-api'].includes(id))&&lastError)lastError.message+=l10n('m12');
+    const error = lastError ? toErrorInfo(lastError) : { code: ERR.NETWORK, message: l10n('m13') };
     return job.items.map(it => results.get(it.id) || { id: it.id, error });
   }
 
@@ -399,13 +400,13 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
 
   // Settings-page probe: one engine, no fallback, ignores cooldown.
   async function test({ engine, to = 'zh-CN', from = 'en', region = '', signal } = {}) {
-    if (!isMtEngine(engine)) throw new DLError(ERR.CONFIG, '未知的机器翻译引擎');
+    if (!isMtEngine(engine)) throw new DLError(ERR.CONFIG, l10n('m14'));
     cooldowns.delete(engine);
     const started = now();
     let result;
     await translate({ items: [{ id: 1, text: 'Hello, world.' }], to, from, chain: [engine], region, signal, onResults: list => { result = list[0]; } });
     cooldowns.delete(engine);
-    if (!result || result.error) throw new DLError(result?.error?.code || ERR.PROVIDER, result?.error?.message || '机器翻译没有返回结果');
+    if (!result || result.error) throw new DLError(result?.error?.code || ERR.PROVIDER, result?.error?.message || l10n('m15'));
     return { engine, latencyMs: Math.max(0, now() - started), sample: stripMarkup(result.text).slice(0, 200) };
   }
 

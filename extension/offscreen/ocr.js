@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 import { ensureLanguage, languageRecord } from './language-store.js';
 import { detectTextRegions } from './detector.js';
 const manifestReady = fetch('./languages.json').then((res) => res.json());
@@ -24,7 +25,7 @@ function drain() {
   }
 }
 function imageBlob(base64, type) {
-  if (typeof base64 !== 'string' || base64.length > 24*1024*1024) throw new Error('图片过大');
+  if (typeof base64 !== 'string' || base64.length > 24*1024*1024) throw new Error(l10n('m6d'));
   const raw = atob(base64), bytes = new Uint8Array(raw.length);
   for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
   return new Blob([bytes], { type });
@@ -43,26 +44,26 @@ async function recognize(msg) {
       const sources = msg.images || [{ base64: msg.base64, mime: msg.mime }];
       for (const image of sources) {
         const bitmap = await createImageBitmap(imageBlob(image.base64,image.mime));
-        if (cancelled) { bitmap.close(); throw new Error('OCR 已取消'); }
+        if (cancelled) { bitmap.close(); throw new Error(l10n('m3y')); }
         bitmaps.push(bitmap);
       }
       const width = msg.slices?.length ? msg.width : bitmaps[0].width;
       const height = msg.slices?.length ? msg.height : bitmaps[0].height;
-      if (!(width > 0 && height > 0) || width*height > 24e6 || bitmaps.some((b) => b.width*b.height>24e6)) throw new Error('图片像素过大（上限 2400 万）');
+      if (!(width > 0 && height > 0) || width*height > 24e6 || bitmaps.some((b) => b.width*b.height>24e6)) throw new Error(l10n('m6e'));
       const scale = Math.min(1, Math.sqrt(6e6/(width*height)), 3200/Math.max(width,height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(width*scale); canvas.height = Math.round(height*scale);
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.scale(scale,scale);
       if (msg.slices?.length) {
         for (const slice of msg.slices) {
-          const bitmap = bitmaps[slice.index]; if (!bitmap) throw new Error('画布切片无效');
+          const bitmap = bitmaps[slice.index]; if (!bitmap) throw new Error(l10n('me'));
           const crop = slice.crop || [0,0,bitmap.width,bitmap.height];
           const a = slice.args;
           ctx.save();if(slice.transform) ctx.transform(...slice.transform);
           if (a.length === 8) ctx.drawImage(bitmap, crop[0]+a[0],crop[1]+a[1],a[2],a[3],a[4],a[5],a[6],a[7]);
           else if (a.length === 4) ctx.drawImage(bitmap,...crop,...a);
           else if (a.length === 2) ctx.drawImage(bitmap,...crop,a[0],a[1],crop[2],crop[3]);
-          else throw new Error('画布切片参数无效');
+          else throw new Error(l10n('m6f'));
           ctx.restore();
         }
       } else ctx.drawImage(bitmaps[0],0,0);
@@ -72,7 +73,7 @@ async function recognize(msg) {
         langPath: new URL('./languages',location.href).href,
         workerBlobURL: false, cacheMethod: 'none', gzip: false, logger() {}, errorHandler() {},
       });
-      if (cancelled) { await worker.terminate(); throw new Error('OCR 已取消'); }
+      if (cancelled) { await worker.terminate(); throw new Error(l10n('m3y')); }
       const detection=document.createElement('canvas');
       const detectionScale=Math.min(1,800/Math.max(canvas.width,canvas.height));
       detection.width=Math.round(canvas.width*detectionScale);detection.height=Math.round(canvas.height*detectionScale);
@@ -83,7 +84,7 @@ async function recognize(msg) {
       await worker.setParameters({ tessedit_pageseg_mode: lang === 'jpn_vert' ? '5' : boxes.length ? '7' : '11', user_defined_dpi: '150' });
       if(boxes.length) {
         for(const bbox of boxes) {
-          if(cancelled) throw new Error('OCR 已取消');
+          if(cancelled) throw new Error(l10n('m3y'));
           const rectangle={left:Math.floor(bbox.x0*canvas.width),top:Math.floor(bbox.y0*canvas.height),
             width:Math.ceil((bbox.x1-bbox.x0)*canvas.width),height:Math.ceil((bbox.y1-bbox.y0)*canvas.height)};
           rectangle.width=Math.min(rectangle.width,canvas.width-rectangle.left);rectangle.height=Math.min(rectangle.height,canvas.height-rectangle.top);
@@ -101,7 +102,7 @@ async function recognize(msg) {
         heapBytes: performance.memory?.usedJSHeapSize ?? null,peakHeapBytes } };
     })();
     return await Promise.race([work,new Promise((_,reject) => {
-      timer = setTimeout(() => { cancelled=true; workers.get(job)?.terminate(); reject(new Error('本地 OCR 超时（20 秒）')); },20000);
+      timer = setTimeout(() => { cancelled=true; workers.get(job)?.terminate(); reject(new Error(l10n('m6g'))); },20000);
     })]);
   } finally {
     clearTimeout(timer); cancelled=true;
@@ -117,13 +118,13 @@ chrome.runtime.onMessage.addListener((msg,sender,reply) => {
   const task = msg.type === 'comic-ocr-local' ? () => recognize(msg) : async () => {
     const manifest = await manifestReady;
     if (msg.type === 'comic-languages-delete') {
-      if (!manifest[msg.lang]) throw new Error('不支持的 OCR 语言');
+      if (!manifest[msg.lang]) throw new Error(l10n('m3r'));
       await languageRecord(msg.lang,'delete');
     }
     const all = await languageRecord(null,'getAll');
     return { ok: true, languages: all.map(({ lang,bytes }) => ({ lang,bytes })) };
   };
   schedule(task).then(reply).catch((e) => reply({ ok:false,error:{ code:'ocr_failed',message:
-    /^(语言包|本地 OCR|图片|画布|不支持|无法打开|OCR 语言)/.test(e?.message) ? `${e.message}；原图已保留` : '本地识别失败：解码或 WASM 不可用；原图已保留' } }));
+    /^(语言包|本地 OCR|图片|画布|不支持|无法打开|OCR 语言|Language pack|Local OCR|Image|Canvas|Invalid canvas|Unsupported|Could not open|OCR language)/.test(e?.message) ? l10n('m6h', [e.message]) : l10n('m6i') } }));
   return true;
 });

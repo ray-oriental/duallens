@@ -1,3 +1,6 @@
+import { localize } from '../shared/i18n.js';
+localize();
+import { t as l10n } from '../shared/i18n.js';
 // Layout-preserving bilingual PDF reader (docs/PDF.md).
 //
 // Every page keeps its original rendering (canvas + selectable text layer). When translation is
@@ -97,7 +100,7 @@ function localSegments(items, options) {
       if (data.error) job.reject(new Error(data.error)); else job.resolve(data.result);
     };
     segmentWorker.onerror = () => {
-      for (const job of segmentJobs.values()) job.reject(new Error('PDF 文本块识别失败'));
+      for (const job of segmentJobs.values()) job.reject(new Error(l10n('m6j')));
       segmentJobs.clear(); segmentWorker.terminate(); segmentWorker = null;
     };
   }
@@ -111,7 +114,7 @@ function localSegments(items, options) {
 // Ascent/descent of the translation font as actually resolved (YaHei, PingFang, Noto Sans CJK...).
 const fontMetrics = (() => {
   measureContext.font = `400 100px ${fontStack}`;
-  const m = measureContext.measureText('中');
+  const m = measureContext.measureText(l10n('m6r'));
   const ascent = m.fontBoundingBoxAscent / 100, descent = m.fontBoundingBoxDescent / 100;
   return ascent > .5 && ascent < 1.5 && descent >= 0 && descent < .6 ? { ascent, descent } : { ascent: 1.06, descent: .26 };
 })();
@@ -125,7 +128,7 @@ function initialView() {
 // ---- floating ball -------------------------------------------------------------------------
 const floating = createOverlay(`.pdf-ball{position:fixed;right:max(6px,env(safe-area-inset-right));top:60vh;width:44px;height:44px;border:0;border-radius:50%;background:linear-gradient(135deg,#4263eb,#20c997);box-shadow:0 2px 10px #0004;cursor:pointer;pointer-events:auto;touch-action:none}.pdf-ball svg{width:22px;height:22px}.pdf-ball:disabled{opacity:.4}.pdf-ball[aria-pressed=true]{outline:2px solid #20c997;outline-offset:3px}`);
 const ball = document.createElement('button'); ball.className = 'pdf-ball'; ball.type = 'button';
-ball.setAttribute('aria-label', '翻译或恢复当前 PDF'); ball.title = '翻译 / 恢复 PDF（拖动可移动，右键返回工具栏）';
+ball.setAttribute('aria-label', l10n('m6s')); ball.title = l10n('m6t');
 ball.append(lensIcon(true)); floating.el.append(ball);
 if (settings.floatBall.enabled) floating.attach();
 ball.disabled = true;
@@ -160,15 +163,15 @@ function updateTranslating(active) {
 function stateChanged() {
   const stats = session.stats();
   ball.disabled = !pdf; ball.setAttribute('aria-pressed', String(session.active));
-  $('translate').textContent = session.active ? (stats.failed ? '重试失败' : '继续翻译') : '翻译';
+  $('translate').textContent = session.active ? (stats.failed ? l10n('m6u') : l10n('m42')) : l10n('m6v');
   $('restore').disabled = !session.active;
   updateTranslating(session.active);
   if (!session.active) return;
-  const parts = [`已翻译 ${stats.done}/${stats.total} 块`];
-  if (stats.draft) parts.push(`草稿 ${stats.draft}`);
-  if (stats.pending) parts.push(`待处理 ${stats.pending}`);
-  if (stats.failed) parts.push(`失败 ${stats.failed}（点 ↻ 重试）`);
-  if (stats.unrefined) parts.push(`${stats.unrefined} 块精修失败，显示机器翻译`);
+  const parts = [l10n('m6w', [stats.done, stats.total])];
+  if (stats.draft) parts.push(l10n('m6x', [stats.draft]));
+  if (stats.pending) parts.push(l10n('m6y', [stats.pending]));
+  if (stats.failed) parts.push(l10n('m6z', [stats.failed]));
+  if (stats.unrefined) parts.push(l10n('m70', [stats.unrefined]));
   message(parts.join(' · '));
 }
 
@@ -213,11 +216,11 @@ function currentPage() {
 function placeholder(text) { const node = el('div', 'placeholder'); node.textContent = text; return node; }
 function transPlaceholder(page) {
   return placeholder(page.segments && !page.segments.blocks.some(block => block.kind === 'text')
-    ? '此页没有可读取的文本层（可能为扫描件），不提供 OCR' : '点击「翻译」后，此处显示保持原版式的译文页');
+    ? l10n('m71') : l10n('m72'));
 }
 function createPage(number, size) {
   const shell = el('section', 'pdf-page'); shell.dataset.page = number;
-  const label = el('div', 'page-label'); label.textContent = `第 ${number} 页`; label.setAttribute('translate', 'no');
+  const label = el('div', 'page-label'); label.textContent = l10n('m73', [number]); label.setAttribute('translate', 'no');
   const sheets = el('div', 'sheets');
   const orig = el('div', 'sheet orig'); orig.setAttribute('translate', 'no');
   const trans = el('div', 'sheet trans'); trans.setAttribute('translate', 'no');
@@ -225,7 +228,7 @@ function createPage(number, size) {
   sheets.append(orig, trans); shell.append(label, sheets, reflow);
   const page = { number, shell, orig, trans, reflow, size: { ...size }, measured: false, ready: false, segments: null, sources: null,
     colors: null, text: null, blockEls: new Map(), whited: new Set(), rfEls: new Map(), reflowBuilt: false };
-  orig.append(placeholder('靠近此页时加载'));
+  orig.append(placeholder(l10n('m74')));
   trans.append(transPlaceholder(page));
   sizeSheets(page);
   return page;
@@ -254,7 +257,7 @@ function evict(page) {
   page.canvas = page.copy = page.overlay = page.proxy = null;
   page.atomGeometry = null;
   page.ready = false; page.transBuilt = false; page.whited = new Set(); page.blockEls = new Map();
-  page.orig.replaceChildren(placeholder('靠近此页时加载'));
+  page.orig.replaceChildren(placeholder(l10n('m74')));
   page.trans.replaceChildren(transPlaceholder(page));
   resident.delete(page);
   delete page.shell.dataset.rendered;
@@ -274,9 +277,9 @@ async function pump() {
     await renderPage(page, generation, rev);
   } catch (error) {
     if (generation === epoch && error?.name !== 'RenderingCancelledException') {
-      page.orig.replaceChildren(placeholder('此页解析失败；可点击页码跳转重试。'));
+      page.orig.replaceChildren(placeholder(l10n('m75')));
       page.failed = true;
-      message('部分页面无法渲染，其他页面仍可阅读。', true);
+      message(l10n('m76'), true);
     }
   } finally {
     busy = false;
@@ -318,7 +321,7 @@ async function renderPage(page, generation, rev) {
   const ratio = Math.min(devicePixelRatio || 1, 2, Math.sqrt(MAX_PIXELS / (viewport.width * viewport.height)));
   const canvas = el('canvas');
   canvas.width = Math.ceil(viewport.width * ratio); canvas.height = Math.ceil(viewport.height * ratio);
-  canvas.setAttribute('aria-label', `PDF 原版第 ${page.number} 页`);
+  canvas.setAttribute('aria-label', l10n('m77', [page.number]));
   const layer = el('div', 'textLayer'); layer.setAttribute('aria-hidden', 'true');
   page.orig.style.setProperty('--total-scale-factor', scale);
   page.orig.replaceChildren(canvas, layer);
@@ -414,7 +417,7 @@ function buildTranslated(page) {
     if (renderer) renderer.transferFromImageBitmap(bitmap);
     else { copy.getContext('2d').drawImage(bitmap, 0, 0); bitmap.close(); }
   }, () => {});
-  if (!page.segments.blocks.some(block => block.kind === 'text')) overlay.append(placeholder('此页没有可读取的文本层（可能为扫描件），不提供 OCR'));
+  if (!page.segments.blocks.some(block => block.kind === 'text')) overlay.append(placeholder(l10n('m71')));
   const ids = page.segments.blocks.filter(block => block.kind === 'text').map(block => blockId(page, block));
   queuePaint(ids);
   void ensureColors(page).then(colors => { if (colors && page.overlay === overlay) queuePaint(ids); });
@@ -503,7 +506,7 @@ function paintBlock(page, block) {
     Object.assign(node.style, { left: `${block.box.left * s - 6}px`, top: `${box.top * s}px`, height: `${Math.max(4, (box.bottom - box.top) * s)}px` });
   } else if (entry.state === 'error') {
     node = el('button', 'tb-retry'); node.type = 'button'; node.textContent = '↻';
-    node.title = `翻译失败：${entry.error?.message || '未知错误'}。点击重试`;
+    node.title = l10n('m78', [entry.error?.message || l10n('m4s')]);
     node.setAttribute('aria-label', node.title);
     Object.assign(node.style, { left: `${box.right * s - 10}px`, top: `${box.top * s - 10}px` });
     node.addEventListener('click', () => { session.retry(id); stateChanged(); });
@@ -526,7 +529,7 @@ function paintBlock(page, block) {
     node = el('div', 'tb');
     node.dataset.id = id; node.dataset.stage = entry.state; node.dataset.align = plan.align;
     if (bold) node.dataset.heading = '';
-    if (entry.refined === false) node.title = '大模型精修失败，显示的是机器翻译';
+    if (entry.refined === false) node.title = l10n('m79');
     Object.assign(node.style, { left: `${plan.left}px`, top: `${plan.top}px`, width: `${plan.width + 1}px`,
       fontSize: `${plan.size.toFixed(2)}px`, lineHeight: `${plan.lineHeight.toFixed(2)}px`, color: cssColor(colors.foreground),
       textIndent: plan.indent ? `${plan.indent}px` : '' });
@@ -569,7 +572,7 @@ async function buildReflow(page, generation, rev) {
     fragment.append(p);
   }
   if (!page.segments.blocks.some(block => block.kind === 'text')) {
-    const note = el('p', 'page-note'); note.textContent = '此页没有可读取的文本层（可能为扫描件），本轮不提供 PDF OCR。'; fragment.append(note);
+    const note = el('p', 'page-note'); note.textContent = l10n('m7a'); fragment.append(note);
   }
   page.reflow.replaceChildren(fragment);
   page.reflowBuilt = true;
@@ -591,7 +594,7 @@ function paintReflow(page, block) {
   const node = el('span', 'rf-t');
   node.dataset.stage = entry.state;
   if (entry.state === 'error') {
-    node.classList.add('error'); node.textContent = `翻译失败：${entry.error?.message || '未知错误'}（点击重试）`;
+    node.classList.add('error'); node.textContent = l10n('m4t', [entry.error?.message || l10n('m4s')]);
     node.addEventListener('click', () => { session.retry(id); stateChanged(); });
   } else {
     const atoms = page.sources.get(block.id)?.atoms || [];
@@ -688,7 +691,7 @@ function deactivate() {
   }
   hideHighlight();
   stateChanged();
-  message('已恢复原文，停止待处理翻译。');
+  message(l10n('m7b'));
 }
 function retranslate() {
   if (!session.active) return;
@@ -803,11 +806,11 @@ async function open(data) {
     useSystemFonts: true, stopAtErrors: true });
   // No annotation layer, document scripts, forms or automatic external links.
   task = loading;
-  loading.onPassword = () => { message('加密 PDF 暂不支持，请先在本地解密后重新选择文件。', true); void loading.destroy(); };
+  loading.onPassword = () => { message(l10n('m7c'), true); void loading.destroy(); };
   const opened = await loading.promise;
   if (generation !== epoch) { await loading.destroy(); return; }
   pdf = opened;
-  if (pdf.numPages > 2000) { await task.destroy(); pdf = null; throw new Error('最多打开 2000 页 PDF；请先在本地拆分。'); }
+  if (pdf.numPages > 2000) { await task.destroy(); pdf = null; throw new Error(l10n('m7d')); }
   const first = await pdf.getPage(1);
   const base = first.getViewport({ scale: 1 });
   const size = { w: base.width, h: base.height };
@@ -825,11 +828,11 @@ async function open(data) {
   watchPages();
   $('translate').disabled = false; ball.disabled = false;
   stateChanged();
-  message(`已打开 ${pdf.numPages} 页 PDF。确认模型设置后点击「翻译」。`);
+  message(l10n('m7e', [pdf.numPages]));
 }
 async function guarded(fn, request = sourceRequest) {
   try { await fn(); } catch {
-    if (request === sourceRequest) message('无法打开 PDF：文件无效、过大、加密，或链接需要登录/重定向。请先下载后选择本地文件；file:// 需允许访问文件网址。', true);
+    if (request === sourceRequest) message(l10n('m7f'), true);
   }
 }
 
@@ -920,8 +923,8 @@ if (token) {
   void (async()=>{
     const {hasOrigin,requestOrigin}=await import('../shared/permissions.js');
     if(file.startsWith('file:')||await hasOrigin(file))return read();
-    message('读取此 PDF 需要你允许访问该来源。也可以选择已下载的本地文件。');
-    const allow=el('button');allow.textContent='允许此 PDF 来源';$('status').append(' ',allow);
+    message(l10n('m7g'));
+    const allow=el('button');allow.textContent=l10n('m7h');$('status').append(' ',allow);
     allow.addEventListener('click',async()=>{
       const granted=await requestOrigin(file);
       if(request!==sourceRequest)return;
@@ -930,5 +933,5 @@ if (token) {
   })();
 }
 else if (new URL(location.href).searchParams.get('notice') === 'not-pdf') {
-  message('当前页面未确认是 PDF（或匿名探测失败）。请打开 PDF 文件后重试，也可选择已下载的本地 PDF。', true);
-} else message('请选择本地 PDF，或从 PDF 标签页的 DualLens 弹出页/右键菜单打开。');
+  message(l10n('m7i'), true);
+} else message(l10n('m7j'));

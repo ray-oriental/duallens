@@ -1,3 +1,5 @@
+import { localize } from '../shared/i18n.js';
+localize();
 import { createExtensionPlatform } from '../platform/extension.js';
 import { mountTextForm } from './text-form.js';
 import { mountSubtitleForm } from './subtitle-form.js';

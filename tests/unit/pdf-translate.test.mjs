@@ -89,16 +89,19 @@ test('PDF refinement failures keep the draft; real errors can be retried', () =>
   assert.equal(session.get('b').state, 'final');
 });
 
-test('PDF names and addresses that every model leaves unchanged keep the original quietly', () => {
+test('PDF names and addresses that every model leaves unchanged keep the original quietly', async () => {
+  const { messages } = await import('../../extension/shared/i18n-messages.js');
+  for (const message of messages.m2b) {
   const { service, session } = setup();
   session.request([{ id: 'name', source: source('Kaiming He') }, { id: 'url', source: source('http://example.org/a') },
     { id: 'long', source: source('A genuine paragraph with many words that the model failed to translate at all today.') }]);
-  const error = { code: 'provider_error', message: '模型漏翻，尝试备用模型' };
+  const error = { code: 'provider_error', message };
   service.calls[0].onPartial([{ id: 'name', error }, { id: 'url', error }, { id: 'long', error }]);
   assert.equal(session.get('name').state, 'final');
   assert.equal(session.get('name').same, true);
   assert.equal(session.get('url').state, 'skip');
   assert.equal(session.get('long').state, 'error');
+  }
 });
 
 test('PDF a finished request without an answer fails its blocks instead of spinning', async () => {

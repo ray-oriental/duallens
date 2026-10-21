@@ -250,11 +250,12 @@ def get_sw(ctx, timeout_s: float = 20.0):
 
 
 class Session:
-    def __init__(self, p: Playwright, ext_dir: Path, base: str, name: str):
+    def __init__(self, p: Playwright, ext_dir: Path, base: str, name: str, locale: str = 'zh-CN'):
         self.p = p
         self.ext_dir = ext_dir
         self.base = base
         self.name = name
+        self.locale = locale
         self.profile = E2E_ROOT / f"profile-{name}-{uuid.uuid4().hex[:8]}"
         self.ctx = None
         self.page = None
@@ -268,6 +269,7 @@ class Session:
             str(self.profile),
             headless=False,  # the --headless=new flag below keeps it headless while allowing extensions
             args=[
+                f"--lang={self.locale}",
                 "--headless=new",
                 f"--disable-extensions-except={self.ext_dir}",
                 f"--load-extension={self.ext_dir}",
@@ -276,6 +278,7 @@ class Session:
             ],
             ignore_default_args=["--disable-extensions"],
             viewport=VIEWPORT,
+            locale=self.locale,
         )
         sw = get_sw(self.ctx)
         self.ext_id = sw.url.split("/")[2]

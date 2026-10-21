@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Batched translation with bounded JSON retries and validated cache.
 // Injected dependencies keep tests offline.
 
@@ -53,7 +54,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       const selected = settings.provider.profiles.find(p => p.id === req.profileId);
       const model = req.model || selected?.model;
       if (!selected || typeof model !== 'string' || !model.trim() || model.length > 256) {
-        throw new DLError(ERR.CONFIG, '服务或模型选择无效');
+        throw new DLError(ERR.CONFIG, l10n('m28'));
       }
       // Per-request choice, never overwrite the page's provider or persisted chain.
       // providerChain retains the explicit-only subscription safeguards.
@@ -114,7 +115,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       }
     };
 
-    const problem = chain.length ? null : profileProblem(profile) || '没有可用的模型配置';
+    const problem = chain.length ? null : profileProblem(profile) || l10n('m19');
     if (problem) {
       cacheChecked();
       emit(items.map((it) => ({ id: it.id, error: { code: ERR.CONFIG, message: problem } })));
@@ -227,10 +228,10 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
           const retries=[];
           for(const sub of chunk(lost,isRetry?1:Math.max(1,Math.ceil(lost.length/2)))) {
             if(budget.left-- >0) retries.push(runBatch(sub,true,budget));
-            else failUnits(sub,{code:ERR.PARSE,message:'模型没有返回这一段的译文'});
+            else failUnits(sub,{code:ERR.PARSE,message:l10n('m29')});
           }
           await Promise.all(retries);
-        } else failUnits(lost,{code:ERR.PROVIDER,message:'模型未返回可靠译文'});
+        } else failUnits(lost,{code:ERR.PROVIDER,message:l10n('m2a')});
       }
       const { messages, idMap } = buildMessages({
         items: batch.map((u) => ({ id: u.uid, text: u.text })),
@@ -259,7 +260,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
             await confirmRequest(settings,{mode:'llm',profileId:selected.id,model});
             const content=await provider({profile:selected,model,messages,signal:s,beforeSend:()=>confirmRequest(settings,{mode:'llm',profileId:selected.id,model}),onDelta: delta => stream.push(delta)});
             const parsed=parseSegments(content,idMap);
-            if(parsed.invalidJSON) throw new DLError(ERR.PARSE,'模型返回了非 JSON 内容（可能是思考型模型）',{serverCode:'invalid_translation'});
+            if(parsed.invalidJSON) throw new DLError(ERR.PARSE,l10n('mj'),{serverCode:'invalid_translation'});
             if (/^(zh|ja|ko|ar|ru|th)/.test(to)) {
               const unchanged=batch.filter(u=>omitted(parsed.results.get(u.uid),u.text,selected.kind));
               if(unchanged.length) {
@@ -270,7 +271,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
                   completeUnit(u,text,model,selected);
                   if(u.rendered===text) {(u.g.validated ||= new Set()).add(u.idx);cacheCompleted(u.g);}
                 }
-                throw new DLError(ERR.PROVIDER,'模型漏翻，尝试备用模型',{status:502,serverCode:'untranslated_items'});
+                throw new DLError(ERR.PROVIDER,l10n('m2b'),{status:502,serverCode:'untranslated_items'});
               }
             }
             return {content,model,profile:selected};
@@ -297,7 +298,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
         await retryLost(lost);
         return;
       }
-      failUnits(lost, { code: ERR.PARSE, message: '模型没有返回这一段的译文' });
+      failUnits(lost, { code: ERR.PARSE, message: l10n('m29') });
     }
 
     const batches = makeBatches(
@@ -323,7 +324,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     );
     if (!(signal && signal.aborted)) {
       for (const g of pending) {
-        if (g.state === 'open') failUnits(units.filter((u) => u.g === g), { code: ERR.PARSE, message: '译文不完整' });
+        if (g.state === 'open') failUnits(units.filter((u) => u.g === g), { code: ERR.PARSE, message: l10n('m2c') });
       }
     }
     await flushWrites();
@@ -519,7 +520,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       if (signal?.aborted) return;
       llmCtrl.abort();
       const out = [];
-      const stalled = new Error('大模型响应超时');
+      const stalled = new Error(l10n('m2d'));
       for (const id of textOf.keys()) {
         if (finals.has(id)) continue;
         if (drafts.has(id)) { finals.add(id); out.push(finalMt(id, drafts.get(id), { refined: false })); }
@@ -576,7 +577,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       { onPartial: (r) => (result = r[0]), signal },
     );
     if (signal && signal.aborted) throw cancelledError();
-    if (!result) throw new DLError(ERR.PROVIDER, '没有得到译文');
+    if (!result) throw new DLError(ERR.PROVIDER, l10n('m2e'));
     if (result.error) throw new DLError(result.error.code, result.error.message);
     return { text: stripMarkup(result.text), by: result.engine ? 'mt' : 'llm', engine: result.engine };
   }

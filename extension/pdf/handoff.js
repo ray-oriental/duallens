@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Extension-origin IndexedDB only. Bytes never cross JSON messaging or enter sync storage.
 import { checkPDFBytes } from './source.js';
 const TTL = 5 * 60 * 1000;
@@ -20,7 +21,7 @@ export function createPDFHandoff({ database = globalThis.indexedDB, now = Date.n
       const tx = opened.transaction('files', 'readwrite'), store = tx.objectStore('files');
       let result;
       tx.oncomplete = () => resolve(result);
-      tx.onerror = tx.onabort = () => reject(tx.error || new Error('PDF cache unavailable'));
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error(l10n('pdfCacheUnavailable')));
       run(store, value => { result = value; });
     });
   }
@@ -46,12 +47,12 @@ export function createPDFHandoff({ database = globalThis.indexedDB, now = Date.n
       return token;
     },
     async take(token) {
-      if (!valid(token)) throw new Error('PDF token invalid');
+      if (!valid(token)) throw new Error(l10n('pdfTokenInvalid'));
       const value = await transact((store, done) => {
         const request = store.get(token);
         request.onsuccess = () => { store.delete(token); done(request.result); };
       });
-      if (!value || value.expires <= now()) throw new Error('PDF token expired');
+      if (!value || value.expires <= now()) throw new Error(l10n('pdfTokenExpired'));
       return checkPDFBytes(new Uint8Array(value.bytes));
     },
     async remove(token) { if(valid(token))await transact(store=>store.delete(token)); },

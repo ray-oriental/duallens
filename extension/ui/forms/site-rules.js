@@ -1,7 +1,8 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { parsePattern } from '../../shared/site-pattern.js';
 
-// User-visible copy is centralized for the next localization pass.
-const COPY=Object.freeze({s0:"规则已加入列表；点击保存设置。",s1:"站点模式或规则 JSON 无效，例如 example.com/docs/*"});
+// Localized copy shared by the extension and lazy userscript UI.
+const COPY=Object.freeze({s0:l10n('mi2'),s1:l10n('mi3')});
 
 // Shared compact editor; selector/style fields survive updates of an existing pattern.
 export function mountSiteRules(root) {

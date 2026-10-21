@@ -554,7 +554,7 @@ def main():
                 profile = E2E_ROOT / ('profile-userscript-' + uuid.uuid4().hex[:8])
                 context = None; started = time.time(); page = None
                 try:
-                    context = pw.chromium.launch_persistent_context(str(profile), headless=True,
+                    context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN",
                         viewport={'width': width, 'height': height}, has_touch=touch, is_mobile=touch,
                         args=['--no-first-run', '--no-default-browser-check'])
                     # Stub is installed before the real, unchanged artifact. No extension is loaded.

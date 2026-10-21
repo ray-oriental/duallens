@@ -19,7 +19,7 @@ def shot(page,name):
     page.screenshot(path=str(OUT/(name+'.png')))
 
 def run(pw,base,dark):
-    ctx=pw.chromium.launch(headless=True).new_context(viewport={'width':1100,'height':760},
+    ctx=pw.chromium.launch(headless=True).new_context(locale='zh-CN',viewport={'width':1100,'height':760},
         color_scheme='dark' if dark else 'light',reduced_motion='reduce')
     try:
         ctx.add_init_script(script=STUB+'\n'+(REPO/'dist'/'duallens.user.js').read_text(encoding='utf-8'))

@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Translation cache, SPEC §8. IndexedDB database `duallens`, store `tr`, rows { k, t, ts }.
 //
 // Cache interface (the translator only depends on this shape):
@@ -74,7 +75,7 @@ function txDone(tx) {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error || new Error('transaction aborted'));
+    tx.onabort = () => reject(tx.error || new Error(l10n('cacheOperationFailed')));
   });
 }
 
@@ -118,7 +119,7 @@ export function createIdbCache({ indexedDB = globalThis.indexedDB, dbName = DB_N
       const byTs = store.index('ts');
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error || new Error('transaction aborted'));
+      tx.onabort = () => reject(tx.error || new Error(l10n('cacheOperationFailed')));
 
       const evictOldest = () => {
         const counting = store.count();

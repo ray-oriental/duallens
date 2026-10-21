@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 import { ExtensionTranslateClient } from './port-client.js';
 import { chromeStorageArea } from '../shared/storage-areas.js';
 import { createSettingsStore } from '../shared/settings.js';
@@ -11,8 +12,8 @@ export function createExtensionPlatform(api = globalThis.chrome) {
   const syncArea = api.storage.sync && chromeStorageArea(api.storage.sync, 'sync', api.storage.onChanged);
   const coarse = globalThis.matchMedia?.('(pointer: coarse)').matches || false;
   const one = async (msg) => {
-    try { return await api.runtime.sendMessage(msg) || { ok: false, error: { code: ERR.NETWORK, message: '后台没有响应' } }; }
-    catch { return { ok: false, error: { code: ERR.NETWORK, message: '与后台的连接中断，请刷新页面' } }; }
+    try { return await api.runtime.sendMessage(msg) || { ok: false, error: { code: ERR.NETWORK, message: l10n('m7k') } }; }
+    catch { return { ok: false, error: { code: ERR.NETWORK, message: l10n('m7l') } }; }
   };
   const platform = {
     kind: 'extension', coarse, syncArea, localArea,
@@ -22,7 +23,7 @@ export function createExtensionPlatform(api = globalThis.chrome) {
       observe: observeTimedtext,
       async fetchTrack(raw, { signal } = {}) {
         const url = originalTrackURL(raw, location.href);
-        if (!url) throw new Error('字幕轨道地址无效');
+        if (!url) throw new Error(l10n('m63'));
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         if (new URL(url).origin === location.origin) return fetchTimedtext(url, { signal });
         const id = 'subtitle-' + crypto.randomUUID();
@@ -31,7 +32,7 @@ export function createExtensionPlatform(api = globalThis.chrome) {
         try {
           const result = await one({ type: 'subtitle-track', id, url });
           if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-          if (!result.ok) throw new Error(result.error?.message || '字幕轨道读取失败');
+          if (!result.ok) throw new Error(result.error?.message || l10n('m7m'));
           return result.data;
         } finally { signal?.removeEventListener('abort', cancel); }
       },

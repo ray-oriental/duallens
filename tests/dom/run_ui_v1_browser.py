@@ -193,7 +193,7 @@ def main():
             print('PASS popup_states: onboarding/default/translated/path, <=600px, tab-ensure ready contract, denied permission remains off')
             # Exercise the owned mobile integration seam with native modules; the release
             # entry-point menu binding is deliberately left to its owner.
-            mobile_context = p.chromium.launch_persistent_context(str(run/'mobile'),headless=True,
+            mobile_context = p.chromium.launch_persistent_context(str(run/'mobile'),headless=True, locale="zh-CN",
                 viewport={'width':375,'height':812},has_touch=True,is_mobile=True)
             try:
                 mobile = mobile_context.new_page()

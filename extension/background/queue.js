@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Global priority queue; concurrency is per profile, cooldown is per (profile, model).
 import { ERR } from '../shared/protocol.js';
 import { cancelledError, isCancelled } from '../shared/errors.js';
@@ -85,7 +86,7 @@ export function createQueue(options = {}) {
     return new Promise((resolve, reject) => {
       if (signal?.aborted) return reject(cancelledError());
       const list = candidates(profile, chain);
-      if (!list.length) return reject(new Error('No model configured'));
+      if (!list.length) return reject(new Error(l10n('m19')));
       const job = { seq: ++seq, chain: list, priority, reqId, run, resolve, reject,
         attempts: 0, skipped:new Set(), ctrl: new AbortController(), settled: false, running: false };
       if (signal) {

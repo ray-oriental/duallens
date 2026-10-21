@@ -1,3 +1,4 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { createRuntimeLoader } from './runtime-resources.js';
 import { LANGUAGES } from './languages.js';
 import { verifyLanguage } from '../../offscreen/language-store.js';
@@ -18,7 +19,7 @@ export function createUserscriptOCR({ storage,xmlhttpRequest,getResourceText }) 
   let work=Promise.resolve();
   const loading=new Map();
   async function language(lang) {
-    const spec=LANGUAGES[lang];if(!spec) throw new Error('不支持的 OCR 语言');
+    const spec=LANGUAGES[lang];if(!spec) throw new Error(l10n('m3r'));
     if(loading.has(lang)) return loading.get(lang);
     const promise=(async()=> {
       const start=performance.now();let data;let downloaded=false;
@@ -31,9 +32,9 @@ export function createUserscriptOCR({ storage,xmlhttpRequest,getResourceText }) 
         downloaded=true;
         data=await new Promise((resolve,reject)=> {
           let handle;handle=xmlhttpRequest({url:spec.url,method:'GET',anonymous:true,responseType:'arraybuffer',timeout:60000,
-          onprogress(r) {if(r.loaded>spec.bytes){handle?.abort();reject(new Error('语言包大小校验失败'));}},
-          onload(r) { if(r.status===200) resolve(r.response);else reject(new Error('语言包下载失败')); },
-          onerror:()=>reject(new Error('语言包下载失败')),ontimeout:()=>reject(new Error('语言包下载超时')),onabort:()=>reject(new Error('语言包下载已取消')),
+          onprogress(r) {if(r.loaded>spec.bytes){handle?.abort();reject(new Error(l10n('m3s')));}},
+          onload(r) { if(r.status===200) resolve(r.response);else reject(new Error(l10n('m3t'))); },
+          onerror:()=>reject(new Error(l10n('m3t'))),ontimeout:()=>reject(new Error(l10n('m3u'))),onabort:()=>reject(new Error(l10n('m3v'))),
         });});
         await verifyLanguage(data,spec);
         await storage.set({[lang]:{base64:toBase64(data),bytes:spec.bytes}});
@@ -52,18 +53,18 @@ export function createUserscriptOCR({ storage,xmlhttpRequest,getResourceText }) 
       worker.onmessage=({data})=> {
         const waiting=pending.get(data.jobId);if(!waiting) return;
         if(data.status==='resolve') { pending.delete(data.jobId);waiting.resolve(data.data); }
-        if(data.status==='reject') { pending.delete(data.jobId);waiting.reject(new Error('本地 OCR 失败')); }
+        if(data.status==='reject') { pending.delete(data.jobId);waiting.reject(new Error(l10n('m3w'))); }
       };
-      worker.onerror=()=> { for(const item of pending.values()) item.reject(new Error('此页无法本地识别（Worker 或 WASM 被页面策略阻止）'));pending.clear(); };
+      worker.onerror=()=> { for(const item of pending.values()) item.reject(new Error(l10n('m3x')));pending.clear(); };
       const rpc=(action,payload)=>new Promise((resolve,reject)=> {
-        if(cancelled) {reject(new Error('OCR 已取消'));return;}
+        if(cancelled) {reject(new Error(l10n('m3y')));return;}
         const jobId=String(++sequence);pending.set(jobId,{resolve,reject});
         worker.postMessage({workerId:'duallens-local',jobId,action,payload});
       });
       const task=(async()=> {
         bitmap=await createImageBitmap(blob);
-        if(cancelled) {bitmap.close();throw new Error('OCR 已取消');}
-        if(bitmap.width*bitmap.height>24e6) throw new Error('图片像素过大');
+        if(cancelled) {bitmap.close();throw new Error(l10n('m3y'));}
+        if(bitmap.width*bitmap.height>24e6) throw new Error(l10n('m3z'));
         const scale=Math.min(1,Math.sqrt(3e6/(bitmap.width*bitmap.height)),2400/Math.max(bitmap.width,bitmap.height));
         const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
         const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
@@ -87,11 +88,11 @@ export function createUserscriptOCR({ storage,xmlhttpRequest,getResourceText }) 
         canvas.width=canvas.height=1;
         return {ok:true,regions,width:bitmap.width,height:bitmap.height,metrics:{language:trained.metrics,ocrMs:performance.now()-start,heapBytes:performance.memory?.usedJSHeapSize??null}};
       })();
-      return await Promise.race([task,new Promise((_,reject)=> {timer=setTimeout(()=>reject(new Error('此页无法本地识别（OCR 超时 20 秒）')),20000);})]);
+      return await Promise.race([task,new Promise((_,reject)=> {timer=setTimeout(()=>reject(new Error(l10n('m40'))),20000);})]);
     } finally {
       cancelled=true;
       clearTimeout(timer);worker?.terminate();bitmap?.close();URL.revokeObjectURL(workerURL);
-      for(const item of pending.values()) item.reject(new Error('OCR 已取消'));pending.clear();
+      for(const item of pending.values()) item.reject(new Error(l10n('m3y')));pending.clear();
     }
   }
   return {

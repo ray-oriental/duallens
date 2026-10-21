@@ -1,7 +1,8 @@
+import { t as l10n } from '../shared/i18n.js';
 // Lightweight connected-ink baseline for high-contrast lettering, not an artwork/panel model.
 // Caller supplies a bounded downsampled raster. No pixels leave the OCR document.
 export function detectTextRegions({ data,width,height }, { vertical = false } = {}) {
-  if (width*height > 1e6) throw new Error('检测图像过大');
+  if (width*height > 1e6) throw new Error(l10n('m68'));
   const mask = new Uint8Array(width*height);
   for (let i=0;i<mask.length;i++) {
     const j=i*4;

@@ -103,8 +103,8 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
-    // Integration target leaves room below the unchanged 340000-byte release budget.
-    assert.ok(Buffer.byteLength(content)<=330000,'startup bundle exceeds the 330 KB integration target');
+    // Both UI languages must fit without pulling the lazy settings catalogue into startup.
+    assert.ok(Buffer.byteLength(content)<=335000,'startup bundle exceeds the 335 KB i18n budget');
     for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js', 'ui/popup-view.js', 'ui/popup-theme.js', 'userscript/panel.js', 'sidepanel/text-form.js', 'sidepanel/subtitle-form.js', 'sidepanel/userscript-panel.js']) {
       assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
     }

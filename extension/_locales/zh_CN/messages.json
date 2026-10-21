@@ -1,0 +1,2608 @@
+{
+  "m0": {
+    "message": "扩展身份无效"
+  },
+  "m1": {
+    "message": "图片 CDN 的 Referer 配置冲突"
+  },
+  "m2": {
+    "message": "此浏览器无法设置图片 Referer"
+  },
+  "m3": {
+    "message": "图片地址无效"
+  },
+  "m4": {
+    "message": "图片下载失败（HTTP $p1$）：站点拒绝扩展下载；原图已保留",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m5": {
+    "message": "不支持的图片格式"
+  },
+  "m6": {
+    "message": "图片超过 16 MB"
+  },
+  "m7": {
+    "message": "请在弹出页开启图片文字并允许网站访问权限；跨站图片还需要允许其图片来源。"
+  },
+  "m8": {
+    "message": "漫画识别排队已满，请稍后再试"
+  },
+  "m9": {
+    "message": "本地 OCR 文档未就绪"
+  },
+  "ma": {
+    "message": "漫画识别请求无效"
+  },
+  "mb": {
+    "message": "画布切片超限"
+  },
+  "mc": {
+    "message": "画布来源过多"
+  },
+  "md": {
+    "message": "画布含嵌套切片、透明混合或不支持的合成方式，暂无法可靠识别"
+  },
+  "me": {
+    "message": "画布切片无效"
+  },
+  "mf": {
+    "message": "画布变换无效"
+  },
+  "mg": {
+    "message": "找不到模型配置：$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mh": {
+    "message": "没有要翻译的文字"
+  },
+  "mi": {
+    "message": "文字太长（上限 $p1$ 字）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj": {
+    "message": "模型返回了非 JSON 内容（可能是思考型模型）"
+  },
+  "mk": {
+    "message": "Microsoft（免费，非官方接口）"
+  },
+  "ml": {
+    "message": "Google（免费，非官方接口）"
+  },
+  "mm": {
+    "message": "Microsoft Translator（官方，需 key）"
+  },
+  "mn": {
+    "message": "DeepL API（官方，需 key）"
+  },
+  "mo": {
+    "message": "Mock 机翻（不联网，测试用）"
+  },
+  "mq": {
+    "message": "机器翻译请求过于频繁"
+  },
+  "mr": {
+    "message": "机器翻译 key 无效或额度不足"
+  },
+  "ms": {
+    "message": "机器翻译服务暂不可用（HTTP $p1$）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mt": {
+    "message": "机器翻译请求被拒绝（HTTP $p1$）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mu": {
+    "message": "机器翻译返回了无法解析的内容"
+  },
+  "mv": {
+    "message": "机器翻译返回的条数不符"
+  },
+  "mw": {
+    "message": "机器翻译请求超时（$p1$ 秒）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mx": {
+    "message": "无法连接机器翻译服务"
+  },
+  "my": {
+    "message": "尚未设置 Microsoft Translator key"
+  },
+  "mz": {
+    "message": "尚未设置 DeepL key"
+  },
+  "m10": {
+    "message": "DeepL 额度已用完"
+  },
+  "m11": {
+    "message": "机器翻译没有返回这一段的译文"
+  },
+  "m12": {
+    "message": "；官方引擎失败，未转发到免费端点。"
+  },
+  "m13": {
+    "message": "机器翻译暂时不可用，稍后自动重试"
+  },
+  "m14": {
+    "message": "未知的机器翻译引擎"
+  },
+  "m15": {
+    "message": "机器翻译没有返回结果"
+  },
+  "m16": {
+    "message": "无法读取此 PDF。请允许该来源，或下载后在阅读页选择本地文件。"
+  },
+  "m17": {
+    "message": "当前页面未确认是 PDF，请先打开 PDF 文件。"
+  },
+  "m18": {
+    "message": "用 DualLens 打开此 PDF"
+  },
+  "m19": {
+    "message": "没有可用的模型配置"
+  },
+  "m1a": {
+    "message": "未知的接口类型：$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1b": {
+    "message": "接口地址为空或格式不对"
+  },
+  "m1c": {
+    "message": "接口地址必须以 http:// 或 https:// 开头"
+  },
+  "m1d": {
+    "message": "接口地址不能包含凭据或查询参数"
+  },
+  "m1e": {
+    "message": "尚未选择模型"
+  },
+  "m1f": {
+    "message": "API key 含有非法字符"
+  },
+  "m1g": {
+    "message": "不会通过明文 http 向远程主机发送 API key，请改用 https"
+  },
+  "m1h": {
+    "message": "接口地址"
+  },
+  "m1i": {
+    "message": "无效的流式响应"
+  },
+  "m1j": {
+    "message": "流式接口返回错误"
+  },
+  "m1k": {
+    "message": "流式响应过大"
+  },
+  "m1l": {
+    "message": "流式响应中断"
+  },
+  "m1m": {
+    "message": "请求超时（$p1$ 秒）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1n": {
+    "message": "无法连接 $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1o": {
+    "message": "被限流（429）$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m1p": {
+    "message": "认证失败（$p1$），请检查 API key$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m1q": {
+    "message": "接口返回 $p1$$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m1r": {
+    "message": "演示后端按要求返回错误"
+  },
+  "m1t": {
+    "message": "演示输入格式错误"
+  },
+  "m1w": {
+    "message": "此设备尚未填写 API key，请打开设置"
+  },
+  "m1x": {
+    "message": "接口返回的不是 JSON"
+  },
+  "m1y": {
+    "message": "接口返回里没有译文内容"
+  },
+  "m1z": {
+    "message": "接口返回里没有模型列表"
+  },
+  "m20": {
+    "message": "请使用 Alt+S 或浏览器侧栏入口"
+  },
+  "m21": {
+    "message": "翻译此页 / 显示原文"
+  },
+  "m22": {
+    "message": "翻译选中文字"
+  },
+  "m23": {
+    "message": "视频双语字幕"
+  },
+  "m24": {
+    "message": "翻译图片文字"
+  },
+  "m25": {
+    "message": "跨站字幕需要来源权限；请在弹出页授权网站访问，或使用当前站点字幕。"
+  },
+  "m26": {
+    "message": "字幕轨道请求无效或过多"
+  },
+  "m27": {
+    "message": "字幕轨道读取失败，请重新启用字幕"
+  },
+  "m28": {
+    "message": "服务或模型选择无效"
+  },
+  "m29": {
+    "message": "模型没有返回这一段的译文"
+  },
+  "m2a": {
+    "message": "模型未返回可靠译文"
+  },
+  "m2b": {
+    "message": "模型漏翻，尝试备用模型"
+  },
+  "m2c": {
+    "message": "译文不完整"
+  },
+  "m2d": {
+    "message": "大模型响应超时"
+  },
+  "m2e": {
+    "message": "没有得到译文"
+  },
+  "m2f": {
+    "message": "此页无法本地识别"
+  },
+  "m2g": {
+    "message": "此页无法本地识别（WASM 被页面策略阻止）"
+  },
+  "m2h": {
+    "message": "图片下载失败（HTTP $p1$）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m2i": {
+    "message": "不支持的图片或图片过大"
+  },
+  "m2j": {
+    "message": "此页无法取图"
+  },
+  "m2k": {
+    "message": "图片下载超时"
+  },
+  "m2l": {
+    "message": "图片下载已取消"
+  },
+  "m2m": {
+    "message": "此平台暂不支持语言包管理"
+  },
+  "m2n": {
+    "message": "本机下载与识别中…"
+  },
+  "m2o": {
+    "message": "文字翻译失败"
+  },
+  "m2p": {
+    "message": "漫画双语 · 本地 OCR"
+  },
+  "m2q": {
+    "message": "原图留在本机；仅识别出的文字发往你配置的翻译服务。"
+  },
+  "m2r": {
+    "message": "漫画原文语言与方向"
+  },
+  "m2s": {
+    "message": "日文横排"
+  },
+  "m2t": {
+    "message": "日文竖排"
+  },
+  "m2u": {
+    "message": "韩文"
+  },
+  "m2v": {
+    "message": "英文"
+  },
+  "m2w": {
+    "message": "识别并翻译"
+  },
+  "m2x": {
+    "message": "恢复原文"
+  },
+  "m2y": {
+    "message": "语言包"
+  },
+  "m2z": {
+    "message": "首次使用会下载并校验所选 fast 语言包。"
+  },
+  "m30": {
+    "message": "为本站启用 canvas 还原（刷新后生效）"
+  },
+  "m31": {
+    "message": "已为本站启用；请刷新页面后重试"
+  },
+  "m32": {
+    "message": "canvas 站点注册失败"
+  },
+  "m33": {
+    "message": "顺序可能不确定；可用上移按钮调整。"
+  },
+  "m34": {
+    "message": "识别完成"
+  },
+  "m35": {
+    "message": "没有找到可信文字；可切换语言/方向重试。"
+  },
+  "m36": {
+    "message": "翻译中…"
+  },
+  "m37": {
+    "message": "高亮区域"
+  },
+  "m38": {
+    "message": "上移"
+  },
+  "m39": {
+    "message": "语言包不可用"
+  },
+  "m3a": {
+    "message": "已下载（仅此设备）"
+  },
+  "m3b": {
+    "message": "尚未下载语言包"
+  },
+  "m3c": {
+    "message": "删除"
+  },
+  "m3d": {
+    "message": "语言包删除失败"
+  },
+  "m3e": {
+    "message": "OCR 运行时资源不可用"
+  },
+  "m3f": {
+    "message": "OCR 运行时大小校验失败"
+  },
+  "m3g": {
+    "message": "OCR 运行时 SHA-256 校验失败"
+  },
+  "m3h": {
+    "message": "OCR 运行时下载失败"
+  },
+  "m3i": {
+    "message": "OCR 运行时下载超时"
+  },
+  "m3j": {
+    "message": "OCR 运行时下载已取消"
+  },
+  "m3k": {
+    "message": "漫画站点名单最多 50 项"
+  },
+  "m3l": {
+    "message": "漫画站点域名无效"
+  },
+  "m3m": {
+    "message": "漫画站点请填写域名或 *.example.com，不含协议、端口或路径"
+  },
+  "m3n": {
+    "message": "漫画站点无效"
+  },
+  "m3o": {
+    "message": "图片 CDN 域名最多 8 项"
+  },
+  "m3p": {
+    "message": "图片 CDN 请填写具体域名"
+  },
+  "m3q": {
+    "message": "Referer 必须是该漫画站点的 HTTP(S) 根地址"
+  },
+  "m3r": {
+    "message": "不支持的 OCR 语言"
+  },
+  "m3s": {
+    "message": "语言包大小校验失败"
+  },
+  "m3t": {
+    "message": "语言包下载失败"
+  },
+  "m3u": {
+    "message": "语言包下载超时"
+  },
+  "m3v": {
+    "message": "语言包下载已取消"
+  },
+  "m3w": {
+    "message": "本地 OCR 失败"
+  },
+  "m3x": {
+    "message": "此页无法本地识别（Worker 或 WASM 被页面策略阻止）"
+  },
+  "m3y": {
+    "message": "OCR 已取消"
+  },
+  "m3z": {
+    "message": "图片像素过大"
+  },
+  "m40": {
+    "message": "此页无法本地识别（OCR 超时 20 秒）"
+  },
+  "m41": {
+    "message": "确认发送"
+  },
+  "m42": {
+    "message": "继续翻译"
+  },
+  "m43": {
+    "message": "更换服务"
+  },
+  "m44": {
+    "message": "关闭"
+  },
+  "m45": {
+    "message": "本次未翻译。"
+  },
+  "m46": {
+    "message": "下载语言包"
+  },
+  "m47": {
+    "message": "需下载语言包，图片在本机识别。"
+  },
+  "m48": {
+    "message": "约 11.3 MB"
+  },
+  "m49": {
+    "message": "$p1$ 来源：GitHub raw.githubusercontent.com；体积：$p2$（下载前校验固定大小与 SHA-256）。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m4a": {
+    "message": "译文为空"
+  },
+  "m4b": {
+    "message": "翻译 / 显示原文"
+  },
+  "m4c": {
+    "message": "翻译此页"
+  },
+  "m4d": {
+    "message": "显示原文"
+  },
+  "m4e": {
+    "message": "更多"
+  },
+  "m4f": {
+    "message": "仅译文"
+  },
+  "m4g": {
+    "message": "本站"
+  },
+  "m4h": {
+    "message": "按需"
+  },
+  "m4i": {
+    "message": "总是"
+  },
+  "m4j": {
+    "message": "从不"
+  },
+  "m4k": {
+    "message": "移到左侧"
+  },
+  "m4l": {
+    "message": "移到右侧"
+  },
+  "m4m": {
+    "message": "关闭悬浮球"
+  },
+  "m4n": {
+    "message": "设置"
+  },
+  "m4o": {
+    "message": "翻译当前输入框"
+  },
+  "m4p": {
+    "message": "悬浮球已关闭，可在弹出页重新打开"
+  },
+  "m4q": {
+    "message": "关闭悬停"
+  },
+  "m4r": {
+    "message": "重试翻译"
+  },
+  "m4s": {
+    "message": "未知错误"
+  },
+  "m4t": {
+    "message": "翻译失败：$p1$（点击重试）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m4u": {
+    "message": "选区结构无法安全写回"
+  },
+  "m4v": {
+    "message": "请先点进输入框"
+  },
+  "m4w": {
+    "message": "关闭输入框翻译"
+  },
+  "m4x": {
+    "message": "正在翻译…"
+  },
+  "m4y": {
+    "message": "请调整选区后重试。"
+  },
+  "m4z": {
+    "message": "输入框是空的"
+  },
+  "m50": {
+    "message": "翻译未完成。"
+  },
+  "m51": {
+    "message": "输入已更改，未写回译文。"
+  },
+  "m52": {
+    "message": "未写回译文，请复制后粘贴。"
+  },
+  "m53": {
+    "message": "译文"
+  },
+  "m54": {
+    "message": "复制译文"
+  },
+  "m55": {
+    "message": "已复制"
+  },
+  "m56": {
+    "message": "翻译 / 恢复当前页面"
+  },
+  "m57": {
+    "message": "切换双语 / 仅译文"
+  },
+  "m58": {
+    "message": "开关悬停 / 长按翻译"
+  },
+  "m59": {
+    "message": "翻译此页漫画"
+  },
+  "m5a": {
+    "message": "恢复漫画原文"
+  },
+  "m5b": {
+    "message": "DualLens 文本翻译"
+  },
+  "m5c": {
+    "message": "启用 / 恢复视频双语字幕"
+  },
+  "m5d": {
+    "message": "重试"
+  },
+  "m5e": {
+    "message": "自动检测"
+  },
+  "m5f": {
+    "message": "翻译结果"
+  },
+  "m5g": {
+    "message": "复制"
+  },
+  "m5h": {
+    "message": "已选中"
+  },
+  "m5i": {
+    "message": "朗读"
+  },
+  "m5j": {
+    "message": "关闭 (Esc)"
+  },
+  "m5k": {
+    "message": "双语"
+  },
+  "m5l": {
+    "message": "精修"
+  },
+  "m5m": {
+    "message": "精修中…"
+  },
+  "m5n": {
+    "message": "用大模型精修这段译文"
+  },
+  "m5o": {
+    "message": "已保留译文，可重试精修"
+  },
+  "m5p": {
+    "message": "划词服务"
+  },
+  "m5q": {
+    "message": "划词模型"
+  },
+  "m5r": {
+    "message": "模型（可留空）"
+  },
+  "m5s": {
+    "message": "继承网页翻译"
+  },
+  "m5t": {
+    "message": "重新翻译"
+  },
+  "m5u": {
+    "message": "关闭划词翻译"
+  },
+  "m5v": {
+    "message": "暂时没有翻译出来。"
+  },
+  "m5w": {
+    "message": "机器翻译"
+  },
+  "m5x": {
+    "message": "AI 服务"
+  },
+  "m5y": {
+    "message": "字幕格式无效：请使用有效的 SRT / VTT 时间轴"
+  },
+  "m5z": {
+    "message": "字幕文件不能超过 2 MB"
+  },
+  "m60": {
+    "message": "字幕格式无效或过大"
+  },
+  "m61": {
+    "message": "字幕片段过多"
+  },
+  "m62": {
+    "message": "字幕条数过多"
+  },
+  "m63": {
+    "message": "字幕轨道地址无效"
+  },
+  "m64": {
+    "message": "无法读取字幕轨道或轨道过大，请重新打开播放器字幕"
+  },
+  "m65": {
+    "message": "字幕轨道过大"
+  },
+  "m66": {
+    "message": "无法读取字幕轨道或轨道过大"
+  },
+  "m67": {
+    "message": "悬停翻译失败，请重试"
+  },
+  "m68": {
+    "message": "检测图像过大"
+  },
+  "m69": {
+    "message": "无法打开 OCR 语言缓存"
+  },
+  "m6a": {
+    "message": "OCR 语言缓存操作失败"
+  },
+  "m6b": {
+    "message": "语言包 SHA-256 校验失败"
+  },
+  "m6c": {
+    "message": "语言包下载失败（HTTP $p1$）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6d": {
+    "message": "图片过大"
+  },
+  "m6e": {
+    "message": "图片像素过大（上限 2400 万）"
+  },
+  "m6f": {
+    "message": "画布切片参数无效"
+  },
+  "m6g": {
+    "message": "本地 OCR 超时（20 秒）"
+  },
+  "m6h": {
+    "message": "$p1$；原图已保留",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6i": {
+    "message": "本地识别失败：解码或 WASM 不可用；原图已保留"
+  },
+  "m6j": {
+    "message": "PDF 文本块识别失败"
+  },
+  "m6k": {
+    "message": "PDF 文件必须小于 64 MiB。"
+  },
+  "m6l": {
+    "message": "文件不是有效的 PDF。"
+  },
+  "m6m": {
+    "message": "仅支持 HTTP(S) 或本地 file:// PDF，不接受带账号密码的 URL。"
+  },
+  "m6n": {
+    "message": "请在扩展详情页开启“允许访问文件网址”，或用上方“选择本地 PDF”。"
+  },
+  "m6o": {
+    "message": "无法读取 PDF；需要登录或重定向的文档请先下载，再选择本地文件。"
+  },
+  "m6p": {
+    "message": "没有收到完整译文"
+  },
+  "m6q": {
+    "message": "译文缺少公式，保留原文"
+  },
+  "m6r": {
+    "message": "中"
+  },
+  "m6s": {
+    "message": "翻译或恢复当前 PDF"
+  },
+  "m6t": {
+    "message": "翻译 / 恢复 PDF（拖动可移动，右键返回工具栏）"
+  },
+  "m6u": {
+    "message": "重试失败"
+  },
+  "m6v": {
+    "message": "翻译"
+  },
+  "m6w": {
+    "message": "已翻译 $p1$/$p2$ 块",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "m6x": {
+    "message": "草稿 $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6y": {
+    "message": "待处理 $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m6z": {
+    "message": "失败 $p1$（点 ↻ 重试）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m70": {
+    "message": "$p1$ 块精修失败，显示机器翻译",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m71": {
+    "message": "此页没有可读取的文本层（可能为扫描件），不提供 OCR"
+  },
+  "m72": {
+    "message": "点击「翻译」后，此处显示保持原版式的译文页"
+  },
+  "m73": {
+    "message": "第 $p1$ 页",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m74": {
+    "message": "靠近此页时加载"
+  },
+  "m75": {
+    "message": "此页解析失败；可点击页码跳转重试。"
+  },
+  "m76": {
+    "message": "部分页面无法渲染，其他页面仍可阅读。"
+  },
+  "m77": {
+    "message": "PDF 原版第 $p1$ 页",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m78": {
+    "message": "翻译失败：$p1$。点击重试",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m79": {
+    "message": "大模型精修失败，显示的是机器翻译"
+  },
+  "m7a": {
+    "message": "此页没有可读取的文本层（可能为扫描件），本轮不提供 PDF OCR。"
+  },
+  "m7b": {
+    "message": "已恢复原文，停止待处理翻译。"
+  },
+  "m7c": {
+    "message": "加密 PDF 暂不支持，请先在本地解密后重新选择文件。"
+  },
+  "m7d": {
+    "message": "最多打开 2000 页 PDF；请先在本地拆分。"
+  },
+  "m7e": {
+    "message": "已打开 $p1$ 页 PDF。确认模型设置后点击「翻译」。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m7f": {
+    "message": "无法打开 PDF：文件无效、过大、加密，或链接需要登录/重定向。请先下载后选择本地文件；file:// 需允许访问文件网址。"
+  },
+  "m7g": {
+    "message": "读取此 PDF 需要你允许访问该来源。也可以选择已下载的本地文件。"
+  },
+  "m7h": {
+    "message": "允许此 PDF 来源"
+  },
+  "m7i": {
+    "message": "当前页面未确认是 PDF（或匿名探测失败）。请打开 PDF 文件后重试，也可选择已下载的本地 PDF。"
+  },
+  "m7j": {
+    "message": "请选择本地 PDF，或从 PDF 标签页的 DualLens 弹出页/右键菜单打开。"
+  },
+  "m7k": {
+    "message": "后台没有响应"
+  },
+  "m7l": {
+    "message": "与后台的连接中断，请刷新页面"
+  },
+  "m7m": {
+    "message": "字幕轨道读取失败"
+  },
+  "m7n": {
+    "message": "扩展已更新，请刷新页面"
+  },
+  "m7o": {
+    "message": "与后台的连接中断"
+  },
+  "m7p": {
+    "message": "没有收到译文"
+  },
+  "m7q": {
+    "message": "密钥配置无效"
+  },
+  "m7r": {
+    "message": "配置格式无效"
+  },
+  "m7s": {
+    "message": "加密导出口令至少需要 8 个字符"
+  },
+  "m7t": {
+    "message": "配置文件最大 1MB"
+  },
+  "m7u": {
+    "message": "配置文件过大或格式无效"
+  },
+  "m7v": {
+    "message": "请输入导出时使用的口令"
+  },
+  "m7w": {
+    "message": "口令错误或加密配置已损坏"
+  },
+  "m7x": {
+    "message": "微软机器翻译"
+  },
+  "m7y": {
+    "message": "谷歌机器翻译"
+  },
+  "m7z": {
+    "message": "微软 Translator"
+  },
+  "m80": {
+    "message": "微软失败时才用谷歌，本页文字会发送到 $p1$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m81": {
+    "message": "和标题"
+  },
+  "m82": {
+    "message": "将使用 $p1$ 翻译，本页文字$p2$会发送到 $p3$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "m8i": {
+    "message": "OpenRouter（推荐）"
+  },
+  "m8j": {
+    "message": "可公开获取免费模型列表。免费模型有每分钟和每日限额，切换模型不能绕过账号限额；以服务商当前规则为准。JSON 模式按模型能力启用。"
+  },
+  "m8k": {
+    "message": "在 DeepSeek 开放平台创建自己的 API key。JSON 模式默认关闭，可按模型文档启用。"
+  },
+  "m8l": {
+    "message": "使用你自己的 OpenAI API key，API 费用与 ChatGPT 订阅分开。JSON 模式按模型能力启用。"
+  },
+  "m8m": {
+    "message": "需要自行运行 Ollama，并设置 OLLAMA_ORIGINS 允许扩展来源。localhost 指向当前设备；其它设备需填写可访问的服务地址。"
+  },
+  "m8n": {
+    "message": "需要自行启动 LM Studio 的 OpenAI 兼容服务；localhost 指向当前设备。"
+  },
+  "m8o": {
+    "message": "自定义 OpenAI 兼容接口"
+  },
+  "m8p": {
+    "message": "填写完整兼容 API 基础地址。可选 API key 仅存本机；JSON 模式默认关闭。"
+  },
+  "m8q": {
+    "message": "未知的服务商预设"
+  },
+  "m8r": {
+    "message": "简体中文"
+  },
+  "m8s": {
+    "message": "繁體中文"
+  },
+  "m8t": {
+    "message": "日本語"
+  },
+  "m8u": {
+    "message": "默认（轻微弱化）"
+  },
+  "m8v": {
+    "message": "无装饰"
+  },
+  "m8w": {
+    "message": "虚线下划线"
+  },
+  "m8x": {
+    "message": "背景淡色"
+  },
+  "m8y": {
+    "message": "学习（悬停显示）"
+  },
+  "m8z": {
+    "message": "引用块（左细线）"
+  },
+  "m90": {
+    "message": "机翻先出，大模型精修（推荐）"
+  },
+  "m91": {
+    "message": "只用机器翻译（最快）"
+  },
+  "m92": {
+    "message": "只用大模型"
+  },
+  "m93": {
+    "message": "大模型优先，慢或失败时机翻兜底"
+  },
+  "m94": {
+    "message": "演示（不调用模型）"
+  },
+  "m95": {
+    "message": "接口标识无效"
+  },
+  "m96": {
+    "message": "需要本机设置存储"
+  },
+  "m97": {
+    "message": "备选链的首个接口或模型无效"
+  },
+  "m98": {
+    "message": "默认扩展存储不可用，请传入 SettingsStore"
+  },
+  "m99": {
+    "message": "站点规则须使用列表"
+  },
+  "m9a": {
+    "message": "站点模式无效：如 example.com/docs/*，可加 HTTP(S) 和端口；不能含空白、查询串、片段或凭据"
+  },
+  "m9b": {
+    "message": "站点规则须包含 match"
+  },
+  "m9c": {
+    "message": "网页规则须为自动、从不或默认"
+  },
+  "m9d": {
+    "message": "划词、悬停和输入框规则须为开、关或默认"
+  },
+  "m9e": {
+    "message": "悬浮球自动隐藏开关无效"
+  },
+  "m9f": {
+    "message": "输入框双语模式或顺序无效"
+  },
+  "m9g": {
+    "message": "交互服务或模型选择无效"
+  },
+  "m9h": {
+    "message": "字幕翻译"
+  },
+  "m9i": {
+    "message": "关闭 / 恢复原字幕"
+  },
+  "m9j": {
+    "message": "启用"
+  },
+  "m9k": {
+    "message": "显示模式"
+  },
+  "m9l": {
+    "message": "原文 + 译文"
+  },
+  "m9m": {
+    "message": "字幕位置"
+  },
+  "m9n": {
+    "message": "底部"
+  },
+  "m9o": {
+    "message": "顶部"
+  },
+  "m9p": {
+    "message": "字号（16–48 px）"
+  },
+  "m9q": {
+    "message": "启用后请打开播放器字幕，选择原始轨道。支持 YouTube 和 HTML5 标准字幕，不做语音识别；使用已配置的翻译服务。关闭后恢复原字幕。"
+  },
+  "m9r": {
+    "message": "应用字幕设置"
+  },
+  "m9s": {
+    "message": "本地字幕文件"
+  },
+  "m9t": {
+    "message": "导入 SRT / VTT（最大 2 MB）"
+  },
+  "m9u": {
+    "message": "文件解析、预览和导出在本机完成。点击翻译后，仅字幕文字发送至当前配置的翻译服务；文件名和时间轴不发送。"
+  },
+  "m9v": {
+    "message": "翻译字幕文件"
+  },
+  "m9w": {
+    "message": "取消文件翻译"
+  },
+  "m9x": {
+    "message": "导出双语 $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "m9y": {
+    "message": "；部分失败，可重新翻译"
+  },
+  "m9z": {
+    "message": "$p1$ / $p2$ 条已翻译$p3$；预览前 20 条",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "ma0": {
+    "message": "请选择 .srt 或 .vtt 字幕文件"
+  },
+  "ma1": {
+    "message": "字幕翻译失败，请检查翻译服务配置"
+  },
+  "ma2": {
+    "message": "已取消；可继续翻译"
+  },
+  "ma3": {
+    "message": "字幕设置已应用"
+  },
+  "ma4": {
+    "message": "设置保存失败，请重试"
+  },
+  "ma5": {
+    "message": "设置读取失败"
+  },
+  "ma6": {
+    "message": "文本翻译"
+  },
+  "ma7": {
+    "message": "源语言"
+  },
+  "ma8": {
+    "message": "目标语言"
+  },
+  "ma9": {
+    "message": "服务"
+  },
+  "maa": {
+    "message": "模型"
+  },
+  "mab": {
+    "message": "获取模型"
+  },
+  "mac": {
+    "message": "配置服务"
+  },
+  "mad": {
+    "message": "待翻译文本"
+  },
+  "mae": {
+    "message": "正在获取模型…"
+  },
+  "maf": {
+    "message": "模型获取失败"
+  },
+  "mag": {
+    "message": "获取到 $p1$ 个模型",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mah": {
+    "message": "翻译失败"
+  },
+  "mai": {
+    "message": "翻译完成"
+  },
+  "maj": {
+    "message": "翻译失败，请重试"
+  },
+  "mak": {
+    "message": "无法访问剪贴板，请选中译文复制"
+  },
+  "mal": {
+    "message": "此设备无法朗读"
+  },
+  "mam": {
+    "message": "当前备选链（默认）"
+  },
+  "man": {
+    "message": "正在加载设置…"
+  },
+  "mao": {
+    "message": "视频字幕"
+  },
+  "map": {
+    "message": "页面加载失败，请关闭后重试"
+  },
+  "maq": {
+    "message": "操作失败"
+  },
+  "mar": {
+    "message": "显示密钥"
+  },
+  "mas": {
+    "message": "隐藏密钥"
+  },
+  "mat": {
+    "message": "有未保存的修改，要放弃这些修改吗？"
+  },
+  "mau": {
+    "message": "悬浮球"
+  },
+  "mav": {
+    "message": "页面边缘的快捷按钮"
+  },
+  "maw": {
+    "message": "划词翻译"
+  },
+  "max": {
+    "message": "选中文字后显示翻译"
+  },
+  "may": {
+    "message": "悬停翻译"
+  },
+  "maz": {
+    "message": "按住 Shift 翻译段落"
+  },
+  "mb0": {
+    "message": "输入框翻译"
+  },
+  "mb1": {
+    "message": "连按三次空格翻译"
+  },
+  "mb2": {
+    "message": "给视频加双语字幕"
+  },
+  "mb3": {
+    "message": "图片文字"
+  },
+  "mb4": {
+    "message": "识别图片文字再翻译"
+  },
+  "mb5": {
+    "message": "未获得网站访问权限，功能保持关闭。"
+  },
+  "mb6": {
+    "message": "微软"
+  },
+  "mb7": {
+    "message": "谷歌"
+  },
+  "mb8": {
+    "message": "微软官方 API"
+  },
+  "mb9": {
+    "message": "离线测试"
+  },
+  "mba": {
+    "message": "文字只发送到你本机的服务。"
+  },
+  "mbb": {
+    "message": "未选择 AI 服务，请先在设置里添加。"
+  },
+  "mbc": {
+    "message": "本地模型 $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbd": {
+    "message": "文字和页面标题会发送给 $p1$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbe": {
+    "message": "网页文字和页面标题会发送给 $p1$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbf": {
+    "message": "，失败时改用$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbg": {
+    "message": "失败时直接报错，不转发到免费端点。"
+  },
+  "mbh": {
+    "message": "网页文字会发送给$p1$$p2$。$p3$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "mbi": {
+    "message": "机器翻译 + AI 精修"
+  },
+  "mbj": {
+    "message": "$p1$文字和页面标题也会发送给所选 AI 服务。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbk": {
+    "message": "$p1$网页文字和页面标题也会发送给 $p2$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "mbl": {
+    "message": "（免费）"
+  },
+  "mbm": {
+    "message": "$p1$机器翻译$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "mbn": {
+    "message": "长按段落翻译"
+  },
+  "mbo": {
+    "message": "停留片刻翻译段落"
+  },
+  "mbp": {
+    "message": "按住 $p1$ 翻译段落",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mbq": {
+    "message": "按 Alt+I 翻译输入框"
+  },
+  "mbr": {
+    "message": "已设置"
+  },
+  "mbs": {
+    "message": "未设置"
+  },
+  "mbt": {
+    "message": "设置已同步；API 密钥 仅存此设备。"
+  },
+  "mbu": {
+    "message": "此设备未同步；配置与 API 密钥 保存在本机。"
+  },
+  "mbv": {
+    "message": "API 密钥（仅存本机）"
+  },
+  "mbw": {
+    "message": "使用自己的模型服务；不会自动联网。"
+  },
+  "mbx": {
+    "message": "选择一个服务"
+  },
+  "mby": {
+    "message": "站点规则 JSON 格式无效"
+  },
+  "mbz": {
+    "message": "正在读取本机密钥，请稍后保存"
+  },
+  "mc0": {
+    "message": "漫画站点钩子注册失败"
+  },
+  "mc1": {
+    "message": "设置已保存"
+  },
+  "mc2": {
+    "message": "此平台不能查看语言包"
+  },
+  "mc3": {
+    "message": "输入此服务的 API 密钥（留空清除；取消保留原值）"
+  },
+  "mc4": {
+    "message": "API 密钥 含有非法字符"
+  },
+  "mc5": {
+    "message": "密钥修改尚未保存；点击保存设置。"
+  },
+  "mc6": {
+    "message": "输入此机器翻译服务的 密钥（留空清除；取消保留原值）"
+  },
+  "mc7": {
+    "message": "密钥 含有非法字符"
+  },
+  "mc8": {
+    "message": "机器翻译 密钥 修改尚未保存；点击保存设置。"
+  },
+  "mc9": {
+    "message": "机器翻译 密钥 清除尚未保存；点击保存设置。"
+  },
+  "mca": {
+    "message": "密钥清除尚未保存；点击保存设置。"
+  },
+  "mcb": {
+    "message": "先选择一个服务预设"
+  },
+  "mcc": {
+    "message": "填写 密钥，获取模型并测试；最后保存。"
+  },
+  "mcd": {
+    "message": "正在获取模型列表…"
+  },
+  "mce": {
+    "message": "未获得服务访问权限。"
+  },
+  "mcf": {
+    "message": "此平台需提供 http 才能在保存前获取模型"
+  },
+  "mcg": {
+    "message": "获取失败"
+  },
+  "mch": {
+    "message": "正在翻译测试文本…"
+  },
+  "mci": {
+    "message": "接口没有返回有效的翻译 JSON"
+  },
+  "mcj": {
+    "message": "此平台需提供 http 才能在保存前测试"
+  },
+  "mck": {
+    "message": "测试失败"
+  },
+  "mcl": {
+    "message": "此平台不能直接测试机器翻译"
+  },
+  "mcm": {
+    "message": "正在测试机器翻译…"
+  },
+  "mcn": {
+    "message": "配置导出口令（留空导出不含 密钥 的明文；取消停止导出）"
+  },
+  "mco": {
+    "message": "已取消导出"
+  },
+  "mcp": {
+    "message": "已导出；明文配置不含 密钥，加密配置包含 密钥。"
+  },
+  "mcq": {
+    "message": "设置手机配置导出口令（至少 8 个字符；取消停止）"
+  },
+  "mcr": {
+    "message": "导出到手机必须设置加密口令"
+  },
+  "mcs": {
+    "message": "加密配置已生成；请复制文本并在另一设备导入。口令通过其他安全方式传递。"
+  },
+  "mct": {
+    "message": "加密配置已生成；手机扫码或复制文本，然后从电脑导入。口令通过其他安全方式传递。"
+  },
+  "mcu": {
+    "message": "先生成配置文本"
+  },
+  "mcv": {
+    "message": "已选中配置文本，请用系统复制。"
+  },
+  "mcw": {
+    "message": "配置文本已复制"
+  },
+  "mcx": {
+    "message": "浏览器未允许复制；文本已选中，请用系统复制。"
+  },
+  "mcy": {
+    "message": "输入配置导入口令（取消停止导入）"
+  },
+  "mcz": {
+    "message": "已取消导入"
+  },
+  "md0": {
+    "message": "设置已导入"
+  },
+  "md1": {
+    "message": "请粘贴电脑生成的加密配置串"
+  },
+  "md2": {
+    "message": "配置文件过大"
+  },
+  "md3": {
+    "message": "此平台未提供清理缓存操作"
+  },
+  "md4": {
+    "message": "译文缓存已清空"
+  },
+  "md5": {
+    "message": "修改后自动保存；AI 服务、网站规则和术语表需保存。"
+  },
+  "md6": {
+    "message": "读取更新后的配置失败"
+  },
+  "md7": {
+    "message": "获取到 $p1$ 个模型，选择后测试连接并保存。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "md8": {
+    "message": "连接正常 · $p1$ ms · $p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "md9": {
+    "message": "机器翻译正常 · $p1$ · $p2$ ms · $p3$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "mda": {
+    "message": "已保存"
+  },
+  "mdb": {
+    "message": "保存"
+  },
+  "mdc": {
+    "message": "取消"
+  },
+  "mdd": {
+    "message": "继续"
+  },
+  "mde": {
+    "message": "未获得服务访问权限，配置没有保存。"
+  },
+  "mdf": {
+    "message": "恢复默认设置？本机密钥、上手状态与去向确认会保留。"
+  },
+  "mdg": {
+    "message": "删除此服务？同时删除它的本机密钥。"
+  },
+  "mdh": {
+    "message": "清除此密钥？"
+  },
+  "mdi": {
+    "message": "下移"
+  },
+  "mdj": {
+    "message": "移除"
+  },
+  "mdk": {
+    "message": "填写备选模型"
+  },
+  "mdl": {
+    "message": "不使用 AI 服务"
+  },
+  "mdm": {
+    "message": "文字只发送到你本机的服务，不会离开这台电脑。"
+  },
+  "mdn": {
+    "message": "使用后，网页文字和页面标题会发送给 $p1$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mdo": {
+    "message": "版本"
+  },
+  "mdp": {
+    "message": "命令已复制"
+  },
+  "mdq": {
+    "message": "复制以下命令："
+  },
+  "mdr": {
+    "message": "只列出免费模型"
+  },
+  "mds": {
+    "message": "先选择服务并填写模型。"
+  },
+  "mdt": {
+    "message": "操作没有完成，请检查设置。"
+  },
+  "mdu": {
+    "message": "<扩展 ID>"
+  },
+  "mdv": {
+    "message": "首次使用向导"
+  },
+  "mdw": {
+    "message": "现在就能翻译：默认用机器翻译（Microsoft 免费接口，无需 密钥），译文秒出。"
+  },
+  "mdx": {
+    "message": "想要更好的译文？再添加一个大模型服务，它会在后台把机翻结果无感替换成精修译文。推荐 OpenRouter 免费模型，也可选择你自己的服务。"
+  },
+  "mdy": {
+    "message": "1 选预设 → 2 填 密钥 → 3 获取模型 → 4 测试连接 → 5 保存"
+  },
+  "mdz": {
+    "message": "免费模型有每分钟和每日限额；自动备选不能绕过账号限额。未点击获取或测试前不会联网。"
+  },
+  "me0": {
+    "message": "阅读"
+  },
+  "me1": {
+    "message": "显示方式"
+  },
+  "me2": {
+    "message": "双语对照"
+  },
+  "me3": {
+    "message": "译文样式"
+  },
+  "me4": {
+    "message": "最短段落字符数"
+  },
+  "me5": {
+    "message": "行内译文阈值"
+  },
+  "me6": {
+    "message": "预加载距离（px）"
+  },
+  "me7": {
+    "message": "合批等待（ms）"
+  },
+  "me8": {
+    "message": "翻译短文本（按钮、标签、导航项）"
+  },
+  "me9": {
+    "message": "翻译方式"
+  },
+  "mea": {
+    "message": "机器翻译引擎"
+  },
+  "meb": {
+    "message": "失败时自动换另一家免费引擎"
+  },
+  "mec": {
+    "message": "Microsoft Translator 区域（官方接口可选，例如 eastasia）"
+  },
+  "med": {
+    "message": "官方机器翻译 密钥（Microsoft Translator 或 DeepL；仅存本机）"
+  },
+  "mee": {
+    "message": "设置 密钥"
+  },
+  "mef": {
+    "message": "清除 密钥"
+  },
+  "meg": {
+    "message": "测试机器翻译"
+  },
+  "meh": {
+    "message": "机翻先显示，大模型随后原位精修；失败保留机翻。划词、悬停、输入框优先机翻，划词可「精修」。"
+  },
+  "mei": {
+    "message": "免费 Microsoft/Google 为非官方接口，无可用性保证，会收到待译文字。可改用「只用大模型」或带 密钥 的官方引擎。"
+  },
+  "mej": {
+    "message": "模型服务"
+  },
+  "mek": {
+    "message": "编辑 / 切换服务"
+  },
+  "mel": {
+    "message": "新增服务预设"
+  },
+  "mem": {
+    "message": "请选择（推荐 OpenRouter）"
+  },
+  "men": {
+    "message": "添加所选服务"
+  },
+  "meo": {
+    "message": "服务商说明 / 获取 密钥"
+  },
+  "mep": {
+    "message": "服务名称"
+  },
+  "meq": {
+    "message": "兼容 API 基础地址"
+  },
+  "mer": {
+    "message": "在浏览器原生对话框中输入；修改后点击保存。"
+  },
+  "mes": {
+    "message": "模型标识"
+  },
+  "met": {
+    "message": "获取模型列表"
+  },
+  "meu": {
+    "message": "测试连接"
+  },
+  "mev": {
+    "message": "同服务备选模型（每行一个）"
+  },
+  "mew": {
+    "message": "每批段落上限"
+  },
+  "mex": {
+    "message": "每批字符上限"
+  },
+  "mey": {
+    "message": "并发数"
+  },
+  "mez": {
+    "message": "超时（ms）"
+  },
+  "mf0": {
+    "message": "使用 JSON 响应模式"
+  },
+  "mf1": {
+    "message": "跨服务备选链（JSON：profileId + model，按顺序）"
+  },
+  "mf2": {
+    "message": "选择 OpenRouter 免费模型后会建议 2–3 家厂商的备选链，可自行修改。网页正文只发送到这条链中的服务。"
+  },
+  "mf3": {
+    "message": "交互"
+  },
+  "mf4": {
+    "message": "悬停 / 触屏长按翻译"
+  },
+  "mf5": {
+    "message": "显示划词按钮"
+  },
+  "mf6": {
+    "message": "允许 /ja 等语言前缀"
+  },
+  "mf7": {
+    "message": "显示悬浮球"
+  },
+  "mf8": {
+    "message": "悬停修饰键"
+  },
+  "mf9": {
+    "message": "停留 500ms"
+  },
+  "mfa": {
+    "message": "输入框目标语言"
+  },
+  "mfb": {
+    "message": "输入触发"
+  },
+  "mfc": {
+    "message": "三次空格或快捷键"
+  },
+  "mfd": {
+    "message": "仅快捷键"
+  },
+  "mfe": {
+    "message": "输入框写回"
+  },
+  "mff": {
+    "message": "替换原文"
+  },
+  "mfg": {
+    "message": "双语（保留原文）"
+  },
+  "mfh": {
+    "message": "双语顺序"
+  },
+  "mfi": {
+    "message": "原文在前"
+  },
+  "mfj": {
+    "message": "译文在前"
+  },
+  "mfk": {
+    "message": "悬停 / 长按"
+  },
+  "mfl": {
+    "message": "输入框"
+  },
+  "mfm": {
+    "message": "模型（留空使用服务默认模型）"
+  },
+  "mfn": {
+    "message": "继承网页翻译时沿用网页翻译方式与备选链；指定服务时使用其大模型，仅影响该交互。双语输入以换行分隔，单行输入框以空格分隔。"
+  },
+  "mfo": {
+    "message": "悬浮球侧边"
+  },
+  "mfp": {
+    "message": "右侧"
+  },
+  "mfq": {
+    "message": "左侧"
+  },
+  "mfr": {
+    "message": "漫画"
+  },
+  "mfs": {
+    "message": "启用漫画本地 OCR"
+  },
+  "mft": {
+    "message": "漫画源语言"
+  },
+  "mfu": {
+    "message": "漫画站点（域名、*.example.com 或 JSON 对象，每行一个）"
+  },
+  "mfv": {
+    "message": "仅名单站点安装 canvas 来源钩子；增删后刷新网页生效。原图本地识别，仅 OCR 文字发给模型。"
+  },
+  "mfw": {
+    "message": "查看已下载语言包"
+  },
+  "mfx": {
+    "message": "提示词与术语"
+  },
+  "mfy": {
+    "message": "翻译风格"
+  },
+  "mfz": {
+    "message": "通用"
+  },
+  "mg0": {
+    "message": "技术"
+  },
+  "mg1": {
+    "message": "学术"
+  },
+  "mg2": {
+    "message": "新闻"
+  },
+  "mg3": {
+    "message": "口语"
+  },
+  "mg4": {
+    "message": "自定义"
+  },
+  "mg5": {
+    "message": "自定义风格要求"
+  },
+  "mg6": {
+    "message": "术语表（每行 原词 → 译词）"
+  },
+  "mg7": {
+    "message": "站点规则"
+  },
+  "mg8": {
+    "message": "自动翻译模式（每行一个）"
+  },
+  "mg9": {
+    "message": "从不自动翻译模式（每行一个）"
+  },
+  "mga": {
+    "message": "这些源语言自动翻译"
+  },
+  "mgb": {
+    "message": "* 匹配任意路径字符，区分大小写；忽略查询串/片段。最具体规则优先。「从不」允许手动，但隐藏悬浮球；功能默认沿用全局。"
+  },
+  "mgc": {
+    "message": "新增 / 编辑路径模式"
+  },
+  "mgd": {
+    "message": "网页翻译"
+  },
+  "mge": {
+    "message": "默认"
+  },
+  "mgf": {
+    "message": "自动"
+  },
+  "mgg": {
+    "message": "从不（允许手动）"
+  },
+  "mgh": {
+    "message": "划词"
+  },
+  "mgi": {
+    "message": "开"
+  },
+  "mgj": {
+    "message": "关"
+  },
+  "mgk": {
+    "message": "添加 / 更新此规则"
+  },
+  "mgl": {
+    "message": "规则列表（JSON，可修改或删除）"
+  },
+  "mgm": {
+    "message": "本机缓存与配置备份"
+  },
+  "mgn": {
+    "message": "缓存译文"
+  },
+  "mgo": {
+    "message": "缓存条数上限"
+  },
+  "mgp": {
+    "message": "缓存有效天数"
+  },
+  "mgq": {
+    "message": "清空译文缓存"
+  },
+  "mgr": {
+    "message": "导出或导入加密配置时，浏览器原生对话框会询问口令；加密导出口令至少 8 个字符；留空则生成不含 密钥 的明文。"
+  },
+  "mgs": {
+    "message": "备份口令（留空则导出不含 密钥 的明文）"
+  },
+  "mgt": {
+    "message": "配置文本（加密文件可在设备之间搬运）"
+  },
+  "mgu": {
+    "message": "导出配置"
+  },
+  "mgv": {
+    "message": "导入配置文本"
+  },
+  "mgw": {
+    "message": "导出到手机"
+  },
+  "mgx": {
+    "message": "复制配置文本"
+  },
+  "mgy": {
+    "message": "从电脑导入"
+  },
+  "mgz": {
+    "message": "加密配置二维码"
+  },
+  "mh0": {
+    "message": "选择配置文件"
+  },
+  "mh1": {
+    "message": "加密备份含所填 密钥，请妥善保管。口令不会保存。明文导入保留本机 密钥。译文缓存不会导出。"
+  },
+  "mh2": {
+    "message": "保存设置"
+  },
+  "mh3": {
+    "message": "常用"
+  },
+  "mh4": {
+    "message": "增强功能"
+  },
+  "mh5": {
+    "message": "网站规则"
+  },
+  "mh6": {
+    "message": "术语表"
+  },
+  "mh7": {
+    "message": "数据与隐私"
+  },
+  "mh8": {
+    "message": "关于"
+  },
+  "mh9": {
+    "message": "DualLens 设置"
+  },
+  "mha": {
+    "message": "高级"
+  },
+  "mhb": {
+    "message": "靠边自动半隐藏"
+  },
+  "mhc": {
+    "message": "字幕显示"
+  },
+  "mhd": {
+    "message": "字幕字号"
+  },
+  "mhe": {
+    "message": "删除此服务"
+  },
+  "mhf": {
+    "message": "恢复默认"
+  },
+  "mhg": {
+    "message": "图书馆的悄然变革。"
+  },
+  "mhh": {
+    "message": "译文默认模糊，指到上面才显示。"
+  },
+  "mhi": {
+    "message": "待翻译的文字只发送给你选择的服务。AI 服务还会收到页面标题；网址、cookie 和密码不会发送。密钥与译文缓存只存在本机；密钥不会同步。"
+  },
+  "mhj": {
+    "message": "MIT 许可 · 独立开源项目"
+  },
+  "mhk": {
+    "message": "查看源代码"
+  },
+  "mhl": {
+    "message": "备选顺序"
+  },
+  "mhm": {
+    "message": "添加备选"
+  },
+  "mhn": {
+    "message": "本地模型"
+  },
+  "mho": {
+    "message": "需要密钥"
+  },
+  "mhp": {
+    "message": "有免费模型"
+  },
+  "mhq": {
+    "message": "Ollama、LM Studio · 文字不出本机"
+  },
+  "mhr": {
+    "message": "OpenAI 兼容接口"
+  },
+  "mhs": {
+    "message": "本地服务"
+  },
+  "mht": {
+    "message": "复制命令"
+  },
+  "mhu": {
+    "message": "Ollama 需要允许扩展来源；localhost 指向当前设备。"
+  },
+  "mhv": {
+    "message": "打开后在播放器里选择原语言字幕；支持 YouTube 和 HTML5 字幕，不做语音识别。"
+  },
+  "mhw": {
+    "message": "配置后，翻译文字会发送给你选择的服务。密钥只保存在这台设备上，不会同步。"
+  },
+  "mhx": {
+    "message": "译文缓存"
+  },
+  "mhy": {
+    "message": "迁移到另一台设备"
+  },
+  "mhz": {
+    "message": "只用本地模型（不使用在线机器翻译）"
+  },
+  "mi0": {
+    "message": "勾选后只使用 AI 服务；备用服务链也请仅保留本机地址。"
+  },
+  "mi1": {
+    "message": "配置超出单个二维码容量；请复制加密文本或传输加密文件"
+  },
+  "mi2": {
+    "message": "规则已加入列表；点击保存设置。"
+  },
+  "mi3": {
+    "message": "站点模式或规则 JSON 无效，例如 example.com/docs/*"
+  },
+  "mi4": {
+    "message": "网站访问权限已撤销，相关增强功能与自动翻译已关闭。需要时可重新打开。"
+  },
+  "mi5": {
+    "message": "翻译此页图片"
+  },
+  "mi6": {
+    "message": "尚未翻译此页"
+  },
+  "mi7": {
+    "message": "此页面无法翻译"
+  },
+  "mi8": {
+    "message": "正在连接当前页面…"
+  },
+  "mi9": {
+    "message": "翻译成"
+  },
+  "mia": {
+    "message": "译为"
+  },
+  "mib": {
+    "message": "引擎"
+  },
+  "mic": {
+    "message": "更改"
+  },
+  "mid": {
+    "message": "仅当前路径"
+  },
+  "mie": {
+    "message": "规则已保存；从不仍允许手动翻译。"
+  },
+  "mif": {
+    "message": "全部默认关闭"
+  },
+  "mig": {
+    "message": "跳过"
+  },
+  "mih": {
+    "message": "下一步"
+  },
+  "mii": {
+    "message": "上一步"
+  },
+  "mij": {
+    "message": "开始使用"
+  },
+  "mik": {
+    "message": "你想读哪种语言？"
+  },
+  "mil": {
+    "message": "页面会翻译成这种语言，之后可以在弹出页更改。"
+  },
+  "mim": {
+    "message": "已按浏览器语言选择。"
+  },
+  "min": {
+    "message": "选择翻译方式"
+  },
+  "mio": {
+    "message": "翻译时，网页文字会发送给翻译服务。可随时更改。"
+  },
+  "mip": {
+    "message": "免费机器翻译"
+  },
+  "miq": {
+    "message": "无需账号和密钥。网页文字会发送给微软，失败时改用谷歌。"
+  },
+  "mir": {
+    "message": "我自己的 AI 服务"
+  },
+  "mis": {
+    "message": "使用你自己的密钥或本地模型。文字只发给你选择的服务。稍后在设置里添加。"
+  },
+  "mit": {
+    "message": "准备好了"
+  },
+  "miu": {
+    "message": "点「翻译此页」，或按 Alt+A。"
+  },
+  "miv": {
+    "message": "不会自动翻译任何网站。"
+  },
+  "miw": {
+    "message": "悬浮球、划词翻译等功能默认关闭，可在增强功能里打开。"
+  },
+  "mix": {
+    "message": "手机没有工具栏按钮。从 Tampermonkey 菜单打开 DualLens，或在增强功能里打开悬浮球。"
+  },
+  "miy": {
+    "message": "1.0 版起，增强功能默认关闭，已替你关闭了原来开启的几项。需要时在下方重新打开。"
+  },
+  "miz": {
+    "message": "知道了"
+  },
+  "mj0": {
+    "message": "操作没有完成，请稍后重试。"
+  },
+  "mj1": {
+    "message": "第 $p1$ 步，共 3 步",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj2": {
+    "message": "，AI 精修中 $p1$ 段",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj3": {
+    "message": "，待翻译 $p1$ 段",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj4": {
+    "message": "，$p1$ 段没有成功",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mj5": {
+    "message": "已翻译 $p1$ 段$p2$$p3$$p4$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      },
+      "p4": {
+        "content": "$4"
+      }
+    }
+  },
+  "mj6": {
+    "message": "设置读取失败，请重新打开。"
+  },
+  "mj7": {
+    "message": "术语表每行使用 原词 → 译词"
+  },
+  "mj8": {
+    "message": "漫画开关或源语言无效"
+  },
+  "mj9": {
+    "message": "字幕设置无效"
+  },
+  "mja": {
+    "message": "翻译方式或机器翻译设置无效"
+  },
+  "mjb": {
+    "message": "请选择有效的源语言和目标语言"
+  },
+  "mjc": {
+    "message": "显示模式无效"
+  },
+  "mjd": {
+    "message": "翻译短文本开关无效"
+  },
+  "mje": {
+    "message": "译文样式无效"
+  },
+  "mjf": {
+    "message": "提示词设置无效"
+  },
+  "mjg": {
+    "message": "最短段落"
+  },
+  "mjh": {
+    "message": "行内阈值"
+  },
+  "mji": {
+    "message": "预加载距离"
+  },
+  "mjj": {
+    "message": "合批等待"
+  },
+  "mjk": {
+    "message": "缓存条数"
+  },
+  "mjl": {
+    "message": "缓存天数"
+  },
+  "mjm": {
+    "message": "术语表最多500项，每项须包含原词和译词"
+  },
+  "mjn": {
+    "message": "悬停快捷键无效"
+  },
+  "mjo": {
+    "message": "输入框设置无效"
+  },
+  "mjp": {
+    "message": "悬浮球位置无效"
+  },
+  "mjq": {
+    "message": "开关设置无效"
+  },
+  "mjr": {
+    "message": "自动翻译语言无效"
+  },
+  "mjs": {
+    "message": "自定义规则须是JSON数组"
+  },
+  "mjt": {
+    "message": "include/exclude 须是选择器字符串或字符串数组"
+  },
+  "mju": {
+    "message": "自定义规则样式无效"
+  },
+  "mjv": {
+    "message": "活动接口无效"
+  },
+  "mjw": {
+    "message": "接口标识重复或类型无效"
+  },
+  "mjx": {
+    "message": "接口名称或模型无效"
+  },
+  "mjy": {
+    "message": "接口地址无效"
+  },
+  "mjz": {
+    "message": "接口须使用不含凭据或查询参数的HTTP(S)地址"
+  },
+  "mk0": {
+    "message": "JSON模式无效"
+  },
+  "mk1": {
+    "message": "备选模型须为非空字符串"
+  },
+  "mk2": {
+    "message": "批量段数"
+  },
+  "mk3": {
+    "message": "批量字符"
+  },
+  "mk4": {
+    "message": "超时"
+  },
+  "mk5": {
+    "message": "备选链须为数组"
+  },
+  "mk6": {
+    "message": "备选链的接口或模型无效"
+  },
+  "mk7": {
+    "message": "设置文件须是JSON对象"
+  },
+  "mk8": {
+    "message": "$p1$需在 $p2$–$p3$ 范围内",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      },
+      "p3": {
+        "content": "$3"
+      }
+    }
+  },
+  "mk9": {
+    "message": "$p1$设置无效",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "mka": {
+    "message": "设置加载失败，请关闭后重试"
+  },
+  "mkb": {
+    "message": "设置资源缺失或校验失败，请重新安装用户脚本（从官方 Release 安装，并允许 Tampermonkey 缓存资源）。"
+  },
+  "appName": {
+    "message": "DualLens 双语对照翻译"
+  },
+  "appDescription": {
+    "message": "段落级双语网页翻译。支持自选OpenAI兼容接口、本地模型及自定义服务。"
+  },
+  "appTitle": {
+    "message": "DualLens"
+  },
+  "pdfTitle": {
+    "message": "DualLens PDF 双语阅读"
+  },
+  "pdfView": {
+    "message": "视图"
+  },
+  "pdfSide": {
+    "message": "双栏对照"
+  },
+  "pdfTranslated": {
+    "message": "仅译文页"
+  },
+  "pdfOriginal": {
+    "message": "原文页"
+  },
+  "pdfReflow": {
+    "message": "重排阅读"
+  },
+  "pdfZoom": {
+    "message": "缩放"
+  },
+  "pdfFit": {
+    "message": "适合宽度"
+  },
+  "pdfPage": {
+    "message": "页"
+  },
+  "pdfPageNumber": {
+    "message": "页码"
+  },
+  "pdfJump": {
+    "message": "跳转"
+  },
+  "pdfTheme": {
+    "message": "主题"
+  },
+  "pdfAuto": {
+    "message": "跟随系统"
+  },
+  "pdfLight": {
+    "message": "浅色"
+  },
+  "pdfDark": {
+    "message": "深色"
+  },
+  "pdfSettings": {
+    "message": "模型设置"
+  },
+  "pdfLocal": {
+    "message": "选择本地 PDF"
+  },
+  "pdfOpening": {
+    "message": "正在打开 PDF…"
+  },
+  "pdfPrivacy": {
+    "message": "本地解析；翻译前将说明实际发送去向。"
+  },
+  "pdfPages": {
+    "message": "PDF 页面"
+  },
+  "subtitleSettings": {
+    "message": "视频字幕设置"
+  },
+  "startupFailure": {
+    "message": "设置读取失败，请重新打开设置页。"
+  },
+  "cancelled": {
+    "message": "已取消"
+  },
+  "unknownError": {
+    "message": "未知错误"
+  },
+  "languageKo": {
+    "message": "한국어"
+  },
+  "languageFr": {
+    "message": "Français"
+  },
+  "languageDe": {
+    "message": "Deutsch"
+  },
+  "languageEs": {
+    "message": "Español"
+  },
+  "languageRu": {
+    "message": "Русский"
+  },
+  "languagePt": {
+    "message": "Português"
+  },
+  "languageIt": {
+    "message": "Italiano"
+  },
+  "languageAr": {
+    "message": "العربية"
+  },
+  "languageVi": {
+    "message": "Tiếng Việt"
+  },
+  "languageTh": {
+    "message": "ไทย"
+  },
+  "cacheClearFailed": {
+    "message": "缓存清除失败"
+  },
+  "cacheOperationFailed": {
+    "message": "缓存操作失败"
+  },
+  "pdfCacheUnavailable": {
+    "message": "PDF 暂存不可用，请下载后选择本地文件。"
+  },
+  "pdfTokenInvalid": {
+    "message": "PDF 打开链接无效，请从原 PDF 标签页重新打开。"
+  },
+  "pdfTokenExpired": {
+    "message": "PDF 暂存已过期，请从原 PDF 标签页重新打开。"
+  },
+  "errorDetail": {
+    "message": "：$p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "listSeparator": {
+    "message": "、"
+  },
+  "commandOpenSidepanel": {
+    "message": "打开 DualLens 文本翻译侧栏"
+  },
+  "commandTogglePage": {
+    "message": "翻译 / 恢复当前页面"
+  },
+  "commandToggleMode": {
+    "message": "切换双语对照 / 仅显示译文"
+  },
+  "commandTranslateInput": {
+    "message": "翻译当前输入框的内容"
+  },
+  "commandToggleHover": {
+    "message": "开关悬停翻译"
+  }
+}

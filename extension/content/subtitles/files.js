@@ -1,5 +1,6 @@
+import { t as l10n } from '../../shared/i18n.js';
 export const MAX_SUBTITLE_BYTES = 2 * 1024 * 1024;
-const invalid = () => { throw new Error('字幕格式无效：请使用有效的 SRT / VTT 时间轴'); };
+const invalid = () => { throw new Error(l10n('m5y')); };
 // Strip cue styling before decoding, so escaped literal angle brackets stay text.
 export function subtitleText(text) {
   return String(text).replace(/<[^>]*>/g, '').replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (all, code) => {
@@ -17,7 +18,7 @@ function timestamp(value, format) {
   return ms;
 }
 export function parseSubtitles(text, format = 'vtt') {
-  if (typeof text !== 'string' || new TextEncoder().encode(text).length > MAX_SUBTITLE_BYTES) throw new Error('字幕文件不能超过 2 MB');
+  if (typeof text !== 'string' || new TextEncoder().encode(text).length > MAX_SUBTITLE_BYTES) throw new Error(l10n('m5z'));
   if (!['srt', 'vtt'].includes(format)) return invalid();
   const blocks = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim().split(/\n[\t ]*\n+/);
   if (format === 'vtt' && !/^WEBVTT(?:[\t ]|$)/.test(blocks[0]?.split('\n')[0])) return invalid();

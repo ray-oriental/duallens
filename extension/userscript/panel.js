@@ -1,6 +1,7 @@
+import { t as l10n } from '../shared/i18n.js';
 import { createOverlay } from '../content/overlay.js';
 import { deepActiveElement } from '../content/util.js';
-const TEXT={settings:'DualLens 设置',popup:'DualLens',close:'关闭',failed:'设置加载失败，请关闭后重试'};
+const TEXT={settings:l10n('mh9'),popup:'DualLens',close:l10n('m44'),failed:l10n('mka')};
 
 const CSS = `
 .backdrop { position: fixed; inset: 0; background: #0006; pointer-events: auto; }

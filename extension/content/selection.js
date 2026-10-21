@@ -1,13 +1,14 @@
+import { t as l10n } from '../shared/i18n.js';
 // Selection UI is created on demand, entirely inside one closed shadow root.
 import{lensIcon}from './visual.js';
 import{createOverlay}from './overlay.js';
 import{deepActiveElement,interactionRequest}from './util.js';
 import{LANGS}from '../shared/settings.js';
-const UI={auto:'自动检测',translate:'翻译选中文字',result:'翻译结果',copy:'复制',copied:'已复制',selected:'已选中',
-  speak:'朗读',more:'更多',close:'关闭 (Esc)',both:'双语',only:'仅译文',refine:'精修',refining:'精修中…',
-  hint:'用大模型精修这段译文',kept:'已保留译文，可重试精修',
-  profile:'划词服务',model:'划词模型',modelHint:'模型（可留空）',inherit:'继承网页翻译',again:'重新翻译',
-  off:'关闭划词翻译',error:'暂时没有翻译出来。',retry:'重试',mt:'机器翻译',ai:'AI 服务'};
+const UI={auto:l10n('m5e'),translate:l10n('m22'),result:l10n('m5f'),copy:l10n('m5g'),copied:l10n('m55'),selected:l10n('m5h'),
+  speak:l10n('m5i'),more:l10n('m4e'),close:l10n('m5j'),both:l10n('m5k'),only:l10n('m4f'),refine:l10n('m5l'),refining:l10n('m5m'),
+  hint:l10n('m5n'),kept:l10n('m5o'),
+  profile:l10n('m5p'),model:l10n('m5q'),modelHint:l10n('m5r'),inherit:l10n('m5s'),again:l10n('m5t'),
+  off:l10n('m5u'),error:l10n('m5v'),retry:l10n('m5d'),mt:l10n('m5w'),ai:l10n('m5x')};
 const CSS=`.icon,.card{position:fixed;background:var(--bg);border:1px solid var(--line);box-shadow:var(--shadow);pointer-events:auto}.icon{display:none;width:28px;height:28px;border-radius:50%;padding:4px;border-color:var(--dl-border-strong);color:var(--fg2)}.icon.show{display:grid;place-items:center}.icon svg{width:16px;height:16px}.card{display:none;width:320px;max-width:calc(100vw - 16px);max-height:70vh;border-radius:12px;overflow:auto}.card.show{display:block}.head,.foot,.services{display:flex;align-items:center;gap:4px;padding:6px 10px}.head{cursor:move;background:var(--bg2);touch-action:none}.title,.engine{font-size:12px;color:var(--dl-text-3);flex:1}.tool{color:var(--fg2);padding:4px 6px;font-size:12px}[hidden]{display:none!important}.body{padding:12px;overflow-wrap:anywhere}.src,.dst{margin:0;white-space:pre-wrap}.dst{font-size:15px;line-height:1.6}.src{font-size:12.5px;color:var(--fg2);border-top:1px dashed var(--line);padding-top:8px;margin-top:12px}.only .src{display:none}.services{flex-wrap:wrap}.services input,.services select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--dl-border-strong);border-radius:8px;width:100%;padding:4px}.retry{padding:6px;color:var(--accent);background:var(--bg2)}.err{color:var(--fg2)}@media(pointer:coarse){.icon{width:44px;height:44px}.tool,.retry{min-width:44px;min-height:44px}}`;
 const node=(tag,cls,text)=>{const e=document.createElement(tag);e.className=cls;if(text!=null)e.textContent=text;return e;};
 const button=(text,fn,title=text)=>{const b=node('button','tool',text);b.type='button';b.title=title;b.ariaLabel=title;b.onclick=fn;return b;};

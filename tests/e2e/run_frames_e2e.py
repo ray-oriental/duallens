@@ -237,7 +237,7 @@ def main():
             finally: h.close()
             browser = pw.chromium.launch(headless=True)
             try:
-                context = browser.new_context(viewport=e.VIEWPORT)
+                context = browser.new_context(viewport=e.VIEWPORT, locale="zh-CN")
                 context.add_init_script(script=STUB); context.add_init_script(path=str(bundle))
                 def userscript_case(path,shadow=False):
                     page=context.new_page()

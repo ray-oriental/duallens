@@ -1,3 +1,4 @@
+import { t as l10n } from '../../shared/i18n.js';
 // Small descriptors only. Executable sources are never imported into the ordinary page bundle.
 export const OCR_RESOURCES = Object.freeze([
   { name:'duallensOcrCore', file:'tesseract-core-simd-lstm.wasm.js', bytes:3938657,
@@ -8,12 +9,12 @@ export const OCR_RESOURCES = Object.freeze([
     sha256:'aca1229639fc9907d86f96e825955a2b7c5716d17f3bc3acd71f9c7ab66181fc' },
 ]);
 export async function verifyRuntime(text,spec) {
-  if(typeof text!=='string') throw new Error('OCR 运行时资源不可用');
+  if(typeof text!=='string') throw new Error(l10n('m3e'));
   const bytes=new TextEncoder().encode(text);
-  if(bytes.byteLength!==spec.bytes) throw new Error('OCR 运行时大小校验失败');
+  if(bytes.byteLength!==spec.bytes) throw new Error(l10n('m3f'));
   const digest=await crypto.subtle.digest('SHA-256',bytes);
   const hex=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
-  if(hex!==spec.sha256) throw new Error('OCR 运行时 SHA-256 校验失败');
+  if(hex!==spec.sha256) throw new Error(l10n('m3g'));
   return text;
 }
 export function createRuntimeLoader({storage,xmlhttpRequest,getResourceText}) {
@@ -32,10 +33,10 @@ export function createRuntimeLoader({storage,xmlhttpRequest,getResourceText}) {
     const bytes=await new Promise((resolve,reject)=> {
       let handle;
       handle=xmlhttpRequest({url:spec.url,method:'GET',anonymous:true,responseType:'arraybuffer',timeout:60000,
-        onprogress(r){if(r.loaded>spec.bytes){handle?.abort();reject(new Error('OCR 运行时大小校验失败'));}},
-        onload(r){if(r.status!==200)reject(new Error('OCR 运行时下载失败'));else resolve(r.response);},
-        onerror:()=>reject(new Error('OCR 运行时下载失败')),ontimeout:()=>reject(new Error('OCR 运行时下载超时')),
-        onabort:()=>reject(new Error('OCR 运行时下载已取消')),
+        onprogress(r){if(r.loaded>spec.bytes){handle?.abort();reject(new Error(l10n('m3f')));}},
+        onload(r){if(r.status!==200)reject(new Error(l10n('m3h')));else resolve(r.response);},
+        onerror:()=>reject(new Error(l10n('m3h'))),ontimeout:()=>reject(new Error(l10n('m3i'))),
+        onabort:()=>reject(new Error(l10n('m3j'))),
       });
     });
     const text=await verifyRuntime(new TextDecoder().decode(bytes),spec);

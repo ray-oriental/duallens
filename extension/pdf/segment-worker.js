@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Original local worker: coordinate grouping cannot block the reader's main thread.
 // No network, storage, document URL, image bytes or provider configuration is used.
 import { segmentPage, estimateWidth } from './segments.js';
@@ -17,6 +18,6 @@ self.onmessage = ({ data }) => {
   try {
     self.postMessage({ id: data.id, result: segmentPage(data.items, { ...data.options, measure }) });
   } catch {
-    self.postMessage({ id: data.id, error: 'PDF 文本块识别失败' });
+    self.postMessage({ id: data.id, error: l10n('m6j') });
   }
 };

@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // DOM writes for translation units (SPEC §5.6-5.7). Everything that touches the page DOM on behalf
 // of a unit lives here so that restore() can promise to leave the page exactly as it was found.
 //
@@ -278,8 +279,8 @@ export function markError(u,message) {
     const r=document.createElement(TAG_R);
     r.setAttribute('role','button');
     r.setAttribute('tabindex','0');
-    r.setAttribute('aria-label','重试翻译');
-    r.setAttribute('title',`翻译失败：${message || '未知错误'}（点击重试）`);
+    r.setAttribute('aria-label',l10n('m4r'));
+    r.setAttribute('title',l10n('m4t', [message || l10n('m4s')]));
     r.textContent='↻';
     t.replaceChildren(r);
     setHostState(u,'error');

@@ -1,6 +1,7 @@
+import { t as l10n } from '../shared/i18n.js';
 // Small helpers shared by the content modules. No state, no DOM writes.
 import{escapeText,stripMarkup}from '../shared/markup.js';
-const UI={hoverError:'悬停翻译失败，请重试'};
+const UI={hoverError:l10n('m67')};
 
 export const TAG_T='dl-t'; // translation
 export const TAG_O='dl-o'; // wrapper around original nodes (translation-only mode)

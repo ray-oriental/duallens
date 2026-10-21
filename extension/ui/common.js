@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 export const $ = (id) => document.getElementById(id);
 export function options(select, entries, selected) {
   select.replaceChildren();
@@ -15,10 +16,10 @@ export function notice(text, error = false, id = 'status') {
   out.className = `status ${error ? 'error' : 'success'}`;
 }
 export async function request(type, fields = {}) {
-  try { return await chrome.runtime.sendMessage({ type, ...fields }) || { ok:false, error:{message:'后台没有响应'} }; }
+  try { return await chrome.runtime.sendMessage({ type, ...fields }) || { ok:false, error:{message:l10n('m7k')} }; }
   catch (e) { return { ok:false, error:{message:e.message || String(e)} }; }
 }
-export function errorText(res) { return res?.error?.message || '操作失败'; }
+export function errorText(res) { return res?.error?.message || l10n('maq'); }
 export async function busy(button, task) {
   button.disabled = true;
   try { return await task(); } catch (e) { notice(e.message || String(e), true); }

@@ -1,9 +1,10 @@
+import { t as l10n } from '../shared/i18n.js';
 // PDF entry points: explicit user actions, no upload or automatic redirection.
 import { pdfURL } from '../shared/pdf-url.js';
 import { readPDFURL } from '../pdf/source.js';
 import { createPDFHandoff } from '../pdf/handoff.js';
 export { pdfURL };
-const TEXT = { permission: '无法读取此 PDF。请允许该来源，或下载后在阅读页选择本地文件。' };
+const TEXT = { permission: l10n('m16') };
 export function hasPDFExtension(value) {
   try { return /\.pdf$/i.test(new URL(value).pathname); } catch { return false; }
 }
@@ -44,7 +45,7 @@ export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = cr
   }
   async function open(tab) {
     const r = await status(tab);
-    if (!r.available) return { ok: false, error: { message: '当前页面未确认是 PDF，请先打开 PDF 文件。' } };
+    if (!r.available) return { ok: false, error: { message: l10n('m17') } };
     let token;
     try {
       // Fetch while the explicitly operated tab still has activeTab access.
@@ -68,7 +69,7 @@ export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = cr
     return result;
   }
   return {
-    menu: { id: menuId, title: '用 DualLens 打开此 PDF', contexts: ['page'] },
+    menu: { id: menuId, title: l10n('m18'), contexts: ['page'] },
     open, openFromMenu,
     handlers: {
       'pdf-status': async (msg,sender) => trusted(sender) ? status(await api.tabs.get(msg.tabId)) : {ok:false},

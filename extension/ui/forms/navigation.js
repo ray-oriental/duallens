@@ -1,58 +1,59 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { element,FEATURES,segmented,TEXT as COMMON } from '../components.js';
 
-// User-visible copy is centralized for the next localization pass.
+// Localized copy shared by the extension and lazy userscript UI.
 const COPY=Object.freeze({
-  s0:"常用",
-  s1:"AI 服务",
-  s2:"增强功能",
-  s3:"网站规则",
-  s4:"术语表",
-  s5:"数据与隐私",
-  s6:"关于",
-  s7:"DualLens 设置",
-  s8:"已保存",
-  s9:"高级",
-  s10:"靠边自动半隐藏",
-  s11:"字幕显示",
-  s12:"字幕位置",
-  s13:"字幕字号",
-  s14:"原文 + 译文",
-  s15:"仅译文",
-  s16:"底部",
-  s17:"顶部",
-  s18:"保存",
-  s19:"取消",
-  s20:"删除此服务",
-  s21:"恢复默认",
-  s22:"图书馆的悄然变革。",
-  s23:"译文默认模糊，指到上面才显示。",
-  s24:"待翻译的文字只发送给你选择的服务。AI 服务还会收到页面标题；网址、cookie 和密码不会发送。密钥与译文缓存只存在本机；密钥不会同步。",
-  s25:"MIT 许可 · 独立开源项目",
-  s26:"查看源代码",
-  s27:"版本",
-  s28:"只列出免费模型",
-  s29:"备选顺序",
-  s30:"上移",
-  s31:"下移",
-  s32:"移除",
-  s33:"添加备选",
-  s34:"本地模型",
-  s35:"自定义",
-  s36:"需要密钥",
-  s37:"有免费模型",
-  s38:"Ollama、LM Studio · 文字不出本机",
-  s39:"OpenAI 兼容接口",
-  s40:"本地服务",
-  s41:"复制命令",
-  s42:"Ollama 需要允许扩展来源；localhost 指向当前设备。",
-  s43:"打开后在播放器里选择原语言字幕；支持 YouTube 和 HTML5 字幕，不做语音识别。",
-  s44:"译文样式",
-  s45:"配置后，翻译文字会发送给你选择的服务。密钥只保存在这台设备上，不会同步。",
-  s46:"服务",
-  s47:"模型",
-  s48:"视频字幕",
-  s49:"译文缓存",
-  s50:"迁移到另一台设备"
+  s0:l10n('mh3'),
+  s1:l10n('m5x'),
+  s2:l10n('mh4'),
+  s3:l10n('mh5'),
+  s4:l10n('mh6'),
+  s5:l10n('mh7'),
+  s6:l10n('mh8'),
+  s7:l10n('mh9'),
+  s8:l10n('mda'),
+  s9:l10n('mha'),
+  s10:l10n('mhb'),
+  s11:l10n('mhc'),
+  s12:l10n('m9m'),
+  s13:l10n('mhd'),
+  s14:l10n('m9l'),
+  s15:l10n('m4f'),
+  s16:l10n('m9n'),
+  s17:l10n('m9o'),
+  s18:l10n('mdb'),
+  s19:l10n('mdc'),
+  s20:l10n('mhe'),
+  s21:l10n('mhf'),
+  s22:l10n('mhg'),
+  s23:l10n('mhh'),
+  s24:l10n('mhi'),
+  s25:l10n('mhj'),
+  s26:l10n('mhk'),
+  s27:l10n('mdo'),
+  s28:l10n('mdr'),
+  s29:l10n('mhl'),
+  s30:l10n('m38'),
+  s31:l10n('mdi'),
+  s32:l10n('mdj'),
+  s33:l10n('mhm'),
+  s34:l10n('mhn'),
+  s35:l10n('mg4'),
+  s36:l10n('mho'),
+  s37:l10n('mhp'),
+  s38:l10n('mhq'),
+  s39:l10n('mhr'),
+  s40:l10n('mhs'),
+  s41:l10n('mht'),
+  s42:l10n('mhu'),
+  s43:l10n('mhv'),
+  s44:l10n('me3'),
+  s45:l10n('mhw'),
+  s46:l10n('ma9'),
+  s47:l10n('maa'),
+  s48:l10n('mao'),
+  s49:l10n('mhx'),
+  s50:l10n('mhy')
 });
 
 export const GROUPS=Object.freeze([['common',COPY.s0],['ai',COPY.s1],['enhance',COPY.s2],['sites',COPY.s3],['glossary',COPY.s4],['data',COPY.s5],['about',COPY.s6]]);
@@ -75,7 +76,7 @@ export function organizeLayout(container,form,{field,button}) {
   const advanced=(dest,ids,title=T.advanced)=>{const d=el('details');d.append(el('summary',title));const body=grid(d);move(body,ids);dest.append(d);return body;};
   const common=card('common'),commonGrid=grid(common);move(commonGrid,['targetLang','displayMode']);
   const display=$('displayMode');display.parentElement.hidden=true;
-  const displayGroup=segmented(doc,'显示方式',[['bilingual','双语对照'],['translation-only','仅译文']],'bilingual',value=>{display.value=value;display.dispatchEvent(new Event('change',{bubbles:true}));});displayGroup.id='display-segments';commonGrid.append(displayGroup);
+  const displayGroup=segmented(doc,l10n('me1'),[['bilingual',l10n('me2')],['translation-only',l10n('m4f')]],'bilingual',value=>{display.value=value;display.dispatchEvent(new Event('change',{bubbles:true}));});displayGroup.id='display-segments';commonGrid.append(displayGroup);
   const styles=card('common',COPY.s44);move(styles,['style']);$('style').parentElement.hidden=true;
   const tiles=el('div',null,{class:'style-tiles',id:'style-tiles','aria-label':COPY.s44});styles.append(tiles);
   for(const option of $('style').options){const label=el('label',null,{class:'dl-radio-card'}),radio=el('input',null,{type:'radio',name:'style-tile',value:option.value});const span=el('span',option.textContent);span.append(el('span',T.preview,{class:'sample-translation style-sample','data-style':option.value}));label.append(radio,span);tiles.append(label);}
@@ -90,8 +91,8 @@ export function organizeLayout(container,form,{field,button}) {
   if($('apiKey')) button(main,'show-key',COMMON.showKey);
   field(main,'localEngine',T.localEngine,'select',[{id:'ollama',name:'Ollama'},{id:'lmstudio',name:'LM Studio'}]);field(main,'freeModels',T.freeModels,'checkbox');
   move(main,['baseUrl']);provider.append(el('p','',{id:'ai-destination',class:'hint'}));
-  field(main,'localOnly','只用本地模型（不使用在线机器翻译）','checkbox');
-  const local=el('div',null,{id:'local-help'});local.append(el('p','勾选后只使用 AI 服务；备用服务链也请仅保留本机地址。',{class:'hint'}));local.append(el('p',T.origin,{class:'hint'}));button(local,'copy-origin',T.copy);provider.append(local);
+  field(main,'localOnly',l10n('mhz'),'checkbox');
+  const local=el('div',null,{id:'local-help'});local.append(el('p',l10n('mi0'),{class:'hint'}));local.append(el('p',T.origin,{class:'hint'}));button(local,'copy-origin',T.copy);provider.append(local);
   const adv=advanced(provider,['profileName','jsonMode','maxItems','maxChars','concurrency','timeoutMs','fallbackModels']);move(adv,['providerChain']);$('providerChain').parentElement.hidden=true;adv.append(el('h3',T.chain),el('div','',{id:'chain-list'}));
   const chainControls=el('div',null,{class:'actions wide'});field(chainControls,'chain-profile',COPY.s46,'select');field(chainControls,'chain-model',COPY.s47);button(chainControls,'chain-add',T.add);adv.append(chainControls);button(provider,'delete-profile',T.delete).className='dl-danger';
   const providerActions=el('div',null,{class:'group-actions'});button(providerActions,'cancel-ai',T.cancel);move(providerActions,['save']);provider.append(providerActions);

@@ -13,7 +13,7 @@ Translate the way you like
 • Free machine translation works out of the box — no account, no key.
 • Optionally refine with your own AI service: OpenAI, DeepSeek, OpenRouter, a local model (Ollama, LM Studio) or any OpenAI-compatible endpoint. You pay the provider directly.
 • Also included: PDF pages shown side by side, bilingual captions for HTML5 video and YouTube, a side panel for free text, per-site rules and a glossary.
-• The current interface is in Simplified Chinese.
+• The interface follows your browser language: Simplified Chinese for Chinese browsers, English otherwise. The translation target language is a separate setting.
 
 Your data
 • DualLens has no accounts, analytics or servers of its own. The developer receives nothing.

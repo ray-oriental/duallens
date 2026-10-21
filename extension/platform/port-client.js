@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // Long-lived port to the service worker (SPEC §4.1).
 //
 // The worker can be recycled at any time; when the port drops while requests are outstanding the
@@ -100,10 +101,10 @@ export class ExtensionTranslateClient {
   }
 
   #resendAll() {
-    if (!this.valid()) return this.#failAll(ERR.CONFIG, '扩展已更新，请刷新页面');
+    if (!this.valid()) return this.#failAll(ERR.CONFIG, l10n('m7n'));
     for (const [reqId, r] of [...this.reqs]) {
       if (++r.attempts > MAX_RECONNECTS) {
-        this.#fail(reqId, ERR.NETWORK, '与后台的连接中断');
+        this.#fail(reqId, ERR.NETWORK, l10n('m7o'));
         continue;
       }
       const items = r.msg.items.filter((i) => r.remaining.has(i.id));
@@ -151,7 +152,7 @@ export class ExtensionTranslateClient {
       this.reqs.delete(m.reqId);
       if (r.remaining.size) {
         // the worker finished without answering some ids: surface it instead of spinning forever
-        const lost = [...r.remaining].map((id) => ({ id, error: { code: ERR.PARSE, message: '没有收到译文' } }));
+        const lost = [...r.remaining].map((id) => ({ id, error: { code: ERR.PARSE, message: l10n('m7p') } }));
         r.remaining.clear();
         r.onResults?.(lost);
       }
