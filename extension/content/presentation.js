@@ -29,11 +29,14 @@ export function contrastRatio(a,b) {
   const x=luminance(a),y=luminance(b);
   return(Math.max(x,y) + .05) /(Math.min(x,y) + .05);
 }
-export function translationColor(foreground,background,{moreContrast=false,supportsMix=false}={}) {
+export function translationColor(fg,bg,{moreContrast=false,supportsMix=false}={}) {
   const rgb=c=>`rgb(${c.join(',')})`;
-  const raw=foreground.map((v,i)=>v*.78+background[i]*.22),muted=raw.map(Math.round);
-  if(moreContrast || contrastRatio(raw,background)<4.5 || contrastRatio(muted,background)<4.5) return rgb(foreground);
-  return supportsMix ? `color-mix(in srgb, ${rgb(foreground)} 78%, ${rgb(background)})` : rgb(muted);
+  const raw=fg.map((v,i)=>v*.78+bg[i]*.22),muted=raw.map(Math.round);
+  // The original page may itself use illegible metadata colours. Preserve the
+  // source colour only when it is readable; otherwise use the safer endpoint.
+  if(moreContrast || contrastRatio(raw,bg)<4.5 || contrastRatio(muted,bg)<4.5)
+    return rgb(contrastRatio(fg,bg)>=4.5?fg:contrastRatio([0,0,0],bg)>contrastRatio([255,255,255],bg)?[0,0,0]:[255,255,255]);
+  return supportsMix ? `color-mix(in srgb, ${rgb(fg)} 78%, ${rgb(bg)})` : rgb(muted);
 }
 
 const colorCache=new Map();

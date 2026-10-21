@@ -279,6 +279,10 @@ class Browser:
         tab = await self.sw.evaluate("async u=>(await chrome.tabs.query({})).find(t=>t.url===u)?.id", page.url)
         if tab is None:
             raise RuntimeError('Extension tab not found')
+        # v0.6 has resident content scripts and no tab-ensure message. Probe the
+        # same controller state first; current on-demand pages still use ensure.
+        if await self.send(tab, {'type':'get-state'}) is not None:
+            return tab
         try:
             ensured = await asyncio.wait_for(self.bridge.evaluate("tabId=>chrome.runtime.sendMessage({type:'tab-ensure',tabId})",tab),20)
         except asyncio.TimeoutError:
@@ -332,7 +336,8 @@ def acknowledged_destinations(llm):
 def settings(llm):
     patch = {'version': 3, 'targetLang': 'zh-CN', 'sourceLang': 'auto', 'cache': {'enabled': False},
              'translation': {'mode': 'mt+llm', 'refineTimeoutMs': 90000, 'mt': {'engine': 'microsoft', 'fallback': True}},
-             'provider': {'active': '', 'chain': []}}
+             'provider': {'active': '', 'chain': []},
+             **{feature:{'enabled':False} for feature in ['floatBall','selection','hover','input','comics','subtitles']}}
     if llm != 'none':
         patch['provider'] = {'active': 'acceptance', 'chain': [{'profileId': 'acceptance', 'model': os.environ.get('DUALLENS_MODEL', '')}],
             'profiles': [{'id': 'acceptance', 'name': 'Acceptance model service', 'kind': 'openai',

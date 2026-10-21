@@ -28,8 +28,7 @@ test('replacement requires a measured failure of an eligible short interactive c
 test('translation colours soften only while contrast remains at least 4.5 on light and dark backgrounds', () => {
   for (const [fg,bg] of [[[20,20,20],[255,255,255]],[[230,230,230],[20,20,20]],[[150,150,150],[255,255,255]],[[90,90,90],[100,100,100]]]) {
     const rgb=translationColor(fg,bg).match(/\d+/g).map(Number);
-    if(contrastRatio(fg,bg)>=4.5)assert.ok(contrastRatio(rgb,bg)>=4.5);
-    else assert.deepEqual(rgb,fg);
+    assert.ok(contrastRatio(rgb,bg)>=4.5);
   }
 });
 test('six explicit styles resolve every former id including site-rule preferences', () => {
@@ -43,16 +42,24 @@ test('six explicit styles resolve every former id including site-rule preference
   assert.equal(normalizeStyle('unknown'),'muted');
   assert.equal(normalizeStyle(undefined),'muted');
 });
-test('high contrast preserves source colour; low contrast source falls back without changing its colour', () => {
+test('high contrast preserves readable source colours and repairs unreadable source colours', () => {
   assert.equal(translationColor([30,60,90],[255,255,255],{moreContrast:true}),'rgb(30,60,90)');
   assert.equal(translationColor([230,220,210],[18,18,18],{moreContrast:true}),'rgb(230,220,210)');
   for(let n=0;n<=255;n+=15) for(const bg of [[255,255,255],[18,18,18],[100,120,140]]) {
     const fg=[n,Math.min(n+12,255),n];
     for(const moreContrast of [true,false]) {
       const rgb=translationColor(fg,bg,{moreContrast}).match(/\d+/g).map(Number);
-      if(contrastRatio(fg,bg)>=4.5)assert.ok(contrastRatio(rgb,bg)>=4.5,`${fg} on ${bg}`);
-      else assert.deepEqual(rgb,fg);
+      assert.ok(contrastRatio(rgb,bg)>=4.5,`${fg} on ${bg}`);
     }
+  }
+});
+
+test('HN metadata grey on its light page remains readable under dark OS preference',()=>{
+  const fg=[130,130,130],bg=[246,246,239];
+  assert.ok(contrastRatio(fg,bg)<4.5,'fixture must reproduce the unreadable source');
+  for(const supportsMix of [false,true])for(const moreContrast of [false,true]){
+    const rgb=translationColor(fg,bg,{supportsMix,moreContrast}).match(/\d+/g).map(Number);
+    assert.ok(contrastRatio(rgb,bg)>=4.5);
   }
 });
 test('visible short words and product labels translate; identifiers and dates do not', () => {

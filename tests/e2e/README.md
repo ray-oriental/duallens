@@ -54,3 +54,13 @@ Chromium/GM stubs and device emulation do not certify actual Tampermonkey isolat
 The real-page acceptance runner defaults to `--ack`: it seeds only the configured translation destinations in device-local consent state before translation. Use `--no-ack` to verify the first-send card and zero translation-service requests instead. Repeat `--device` to add devices, or use `--device all` (the default) for desktop, phone and tablet.
 
 Mobile acceptance captures only the current viewport: Chromium 130 beyond-viewport capture can reset mobile emulation and reflow fixed overlays. The mobile runner uses a fresh context; desktop still uses an isolated extension profile and the popup tab-ensure path. Staged test host grants do not validate native activeTab gestures.
+
+For checkout comparisons, run the same acceptance runner with each `--repo` and a separate `--out`. Optional interaction features are explicitly disabled in both checkouts; resident v0.6 content scripts are detected before attempting on-demand injection. Keep the probe, device, provider and observation deadline unchanged. Compare the retained measurements without rescoring:
+
+```sh
+python -B tests/e2e/compare_coverage.py baseline/matrix.json current/matrix.json --out comparison
+```
+
+The comparison rejects different probe/deadline/provider metadata and case sets, preserves unobserved values, and lists exact added, removed and shared missing records. Public-page content and free-provider failures can still differ between sequential runs; inspect those records and transport outcomes alongside percentages.
+
+`run_contrast_e2e.py` is an offline mock regression for low-contrast webpage metadata under light and dark OS preferences. It verifies actual inserted colours at 4.5:1 or better and exact original-DOM restore.

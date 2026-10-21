@@ -408,7 +408,9 @@ export class PageTranslator {
     const top=det && det.reliable && det.lang;
     if(!top) return false;
     const pct=det.percentage ?? 100;
-    if(s.sourceLang==='auto' && pct>=80) unit.from=normalizeLang(top);
+    // Browser language guesses can be wrong or unsupported by the chosen engine
+    // (e.g. an English video title guessed as co). Keep automatic source detection
+    // at the service; retain the script-based Japanese hint initialized above.
     if(pct >=70 && sameLanguage(normalizeLang(top),s.targetLang)) return true;
     if(s.sourceLang && s.sourceLang !=='auto' && pct >=80 && !sameLanguage(normalizeLang(top),s.sourceLang)) {
       return true;

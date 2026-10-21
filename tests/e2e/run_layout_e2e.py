@@ -207,7 +207,11 @@ def visible_controls(h):
     assert h.js("() => document.querySelector('#icon').title.startsWith('【译】') && !document.querySelector('#button').hasAttribute('title') && document.querySelector('#button dl-t').textContent==='前往'"), 'icon attribute and inline control'
     assert h.js("() => document.querySelectorAll('#prose dl-t').length===1 && document.querySelector('#select').value==='eng'")
     assert h.js("() => getComputedStyle(document.querySelector('#label dl-t'),'::before').content==='none'")
-    assert h.js("() => document.querySelector('#label dl-t').style.getPropertyValue('--dl-fg')==='rgb(204,204,204)'"), 'low contrast source falls back to its original colour'
+    assert h.js("""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');
+      const label=document.querySelector('#label'),c=document.createElement('canvas').getContext('2d');
+      c.fillStyle=getComputedStyle(label.querySelector('dl-t')).color;c.fillRect(0,0,1,1);
+      return label.style.color==='color(srgb 0.8 0.8 0.8)'&&contrastRatio([...c.getImageData(0,0,1,1).data].slice(0,3),[255,255,255])>=4.5;
+    }""",f'chrome-extension://{h.ext_id}'), 'low contrast source stays unchanged while its translation is readable'
     h.js("() => {document.querySelector('#search').placeholder='Find books';document.querySelector('#later').hidden=false}")
     h.wait_js("() => document.querySelector('#search').placeholder==='【译】Find books' && document.querySelector('#later dl-t[data-dl-state=done]')")
     h.settings({'translation':{'mode':'mt','mt':{'engine':'mock'}}})
@@ -363,10 +367,14 @@ def pending_theme_color(h):
     h.wait_js('()=>themeReplies.length>0')
     h.js("""()=>{const style=document.createElement('style');style.textContent='body{background:rgb(13,17,23);color:rgb(94,104,119)}';document.head.append(style);themeReplies.forEach(reply=>reply());}""")
     h.wait_js("()=>!!document.querySelector('#source dl-t[data-dl-state=done]')")
-    assert h.js("()=>{const t=document.querySelector('#source dl-t');return getComputedStyle(t).color===getComputedStyle(t.parentElement).color}"), 'late response must retain current low-contrast source colour'
+    assert h.js("""async ext=>{const {contrastRatio}=await import(ext+'/content/presentation.js');
+      const t=document.querySelector('#source dl-t'),c=document.createElement('canvas').getContext('2d');
+      c.fillStyle=getComputedStyle(t).color;c.fillRect(0,0,1,1);
+      return getComputedStyle(t.parentElement).color==='rgb(94, 104, 119)'&&contrastRatio([...c.getImageData(0,0,1,1).data].slice(0,3),[13,17,23])>=4.5;
+    }""",f'chrome-extension://{h.ext_id}'), 'late response must remain readable against the current dark theme without recolouring the source'
     h.js('()=>themeController.stop()')
     assert h.js('()=>document.body.outerHTML')==before, 'theme-change restore keeps original nodes and attributes'
-    return 'held response; theme changes after dispatch; current low-contrast source retained; exact restore'
+    return 'held response; theme changes after dispatch; readable translation and unchanged source colour; exact restore'
 
 @e.case('coverage_round3', 'Capitalized navigation, edge identifiers, compact metadata and original whitespace identity')
 def coverage_round3(h):
@@ -408,12 +416,39 @@ def coverage_round3(h):
         const color=rgb(getComputedStyle(t).color),source=rgb(getComputedStyle(t.parentElement).color),unit=[...round3.units.values()].find(u=>u.tEl===t);
         return {text:t.textContent,raw:getComputedStyle(t).color,inline:t.getAttribute('style'),parent:t.parentElement.localName,host:unit?.host.localName,hostColor:unit&&getComputedStyle(unit.host).color,saved:unit?.translationColor,color,source,ratio:contrastRatio(color,[13,17,23]),sourceRatio:contrastRatio(source,[13,17,23]),same:JSON.stringify(color)===JSON.stringify(source)};
       });}""",f'chrome-extension://{h.ext_id}')
-    assert all(c['ratio']>=4.5 or c['sourceRatio']<4.5 and c['same'] for c in contrasts), 'accessible translation or exact low-contrast source fallback: '+str(contrasts)
+    assert all(c['ratio']>=4.5 for c in contrasts), 'accessible translation even when the source has insufficient contrast: '+str(contrasts)
     h.js('() => round3.stop()')
     restored=h.js('() => document.body.outerHTML')
     assert restored==dark_before, 'restore retains site-authored dark theme exactly'
     assert h.js("() => {const current=[];const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);for(let n;(n=w.nextNode());)current.push(n);return originalTexts.every((x,i)=>current[i]===x.n&&x.n.parentNode===x.parent&&x.n.data===x.data)}"), 'text identity, parent, content and order'
     return 'BBC-style capitalized navigation and GitHub identifiers; edge domain never sent; one metadata line; exact text-node order'
+
+@e.case('auto_source_hint', 'Browser language guesses never force an unsupported source language in automatic mode')
+def auto_source_hint(h):
+    html='<meta charset="utf-8"><p id="english">Adventure of Mowgli and friends is an English story for children.</p><p id="japanese">これは日本語で書かれた長い文章です。明日の天気について詳しく説明しています。</p><p id="target">这一段已经是目标语言，不应再次发送给翻译服务。</p>'
+    h.ctx.route('https://github.com/source-hint-fixture',lambda route:route.fulfill(body=html,content_type='text/html'))
+    h.page=h.ctx.new_page();h.page.goto('https://github.com/source-hint-fixture')
+    h.tab_id=h.sw_eval(e.JS_FIND_TAB,h.page.url);h.wait_ready()
+    before=h.js('()=>document.body.outerHTML')
+    h.js("""async ext=>{
+      const {PageTranslator}=await import(ext+'/content/controller.js');const {DEFAULT_SETTINGS}=await import(ext+'/shared/settings.js');
+      window.hintSource='auto';window.hintDetected='co';window.hintRequests=[];
+      window.hintController=new PageTranslator({getSettings:()=>({...DEFAULT_SETTINGS,sourceLang:hintSource,translation:{mode:'llm'},provider:{...DEFAULT_SETTINGS.provider,active:'mock'}}),
+        platform:{detectLanguage:async()=>({reliable:true,lang:hintDetected,percentage:100}),translator:()=>({translateBatch(req,cb){
+          hintRequests.push(structuredClone(req));cb(req.items.map(it=>({id:it.id,text:'这是可靠的中文译文。'})));return{cancel(){}};
+        }})}});hintController.start();
+    }""",f'chrome-extension://{h.ext_id}')
+    h.wait_js("()=>document.querySelectorAll('dl-t[data-dl-state=done]').length===2")
+    assert h.js("()=>hintRequests.some(r=>r.from==='auto'&&r.items.some(it=>it.text.includes('Mowgli')))&&hintRequests.some(r=>r.from==='ja')&&!hintRequests.some(r=>r.from==='co')"),'misclassified English remains auto; Japanese script hint retained'
+    assert h.js("()=>!document.querySelector('#target dl-t')"),'target-language filtering retained'
+    h.js('()=>hintController.stop()')
+    assert h.js('()=>document.body.outerHTML')==before
+    h.js("()=>{hintRequests.length=0;hintSource='fr';hintDetected='fr';hintController.start()}")
+    h.wait_js('()=>hintRequests.length>0')
+    assert h.js("()=>hintRequests.every(r=>r.from==='fr')"),'explicit user source must remain unchanged'
+    h.js('()=>hintController.stop()')
+    assert h.js('()=>document.body.outerHTML')==before
+    return 'co browser misclassification stays auto; Japanese hint/target filtering/explicit source retained; exact restore'
 
 if __name__=='__main__':
     raise SystemExit(e.main(['--mock-only','--artifacts-dir',str(e.E2E_ROOT/'layout'/'offline'),*sys.argv[1:]]))
