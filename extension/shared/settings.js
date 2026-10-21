@@ -117,7 +117,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
   siteRules: {
     always: [], // host patterns to auto-translate on load
-    never: [], // patterns blocking automatic page translation and the floating ball
+    never: [], // patterns blocking automatic page translation and the floating button
     custom: [], // [{ match, page?, selection?, hover?, input?, include?, exclude?, style? }]
   },
   autoTranslateLangs: [], // page languages that trigger auto-translate everywhere

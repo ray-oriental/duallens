@@ -385,4 +385,24 @@ def comics_canvas(h):
     runner.check(h.js("() => document.querySelector('#canvas-test').toDataURL()")==pixels,'canvas pixels were modified')
     h.command('restore-comics');runner.check(h.js('() => document.body.outerHTML')==before,'canvas DOM changed on restore')
 
-if __name__=='__main__': raise SystemExit(runner.main(['--mock-only','--artifacts-dir',str(runner.E2E_ROOT/'artifacts-comics'),*sys.argv[1:]]))
+def ensure_fixture_downloads():
+    """Fetch the pinned OCR runtime and language packs into E2E_ROOT once, verifying size and SHA-256,
+    so a fresh checkout can run these tests. Production code pins the same URLs and hashes."""
+    import hashlib, re, urllib.request
+    ext=runner.REPO/'extension/content/comics'
+    runtime=re.findall(r"file:'([^']+)',\s*bytes:(\d+),\s*url:'([^']+)',\s*sha256:'([0-9a-f]{64})'",(ext/'runtime-resources.js').read_text(encoding='utf-8'))
+    langs=re.findall(r'"url":\s*"([^"]+/([^/"]+))",\s*"sha256":\s*"([0-9a-f]{64})",\s*"bytes":\s*(\d+)',(ext/'languages.js').read_text(encoding='utf-8'))
+    wanted=[('comics-runtime',f,int(b),u,h) for f,b,u,h in runtime]+[('comics-data',f,int(b),u,h) for u,f,h,b in langs]
+    if len(runtime)!=2 or not langs: raise SystemExit('comics fixtures: could not read the pinned resource descriptors')
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    for folder,name,size,url,digest in wanted:
+        target=runner.E2E_ROOT/folder/name
+        if target.is_file() and target.stat().st_size==size: continue
+        try: data=opener.open(url,timeout=120).read()
+        except OSError as error: raise SystemExit(f'comics fixtures: cannot download {url} ({error}); run once with network access')
+        if len(data)!=size or hashlib.sha256(data).hexdigest()!=digest: raise SystemExit(f'comics fixtures: integrity check failed for {url}')
+        target.parent.mkdir(parents=True,exist_ok=True); tmp=target.with_name(name+'.part'); tmp.write_bytes(data); tmp.replace(target)
+
+if __name__=='__main__':
+    ensure_fixture_downloads()
+    raise SystemExit(runner.main(['--mock-only','--artifacts-dir',str(runner.E2E_ROOT/'artifacts-comics'),*sys.argv[1:]]))

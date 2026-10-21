@@ -10,7 +10,7 @@ def exercise(page, toggle, input_command):
     original = page.evaluate('document.body.outerHTML')
     page.wait_for_timeout(1200)
     assert page.locator('dl-t').count() == 0, 'never route translated automatically'
-    assert page.locator('dl-ui').count() == 0, 'never route showed floating ball'
+    assert page.locator('dl-ui').count() == 0, 'never route showed floating button'
     page.locator('#p-hover').hover()
     page.keyboard.down('Shift'); page.wait_for_timeout(650); page.keyboard.up('Shift')
     if page.evaluate("matchMedia('(pointer:coarse)').matches"):

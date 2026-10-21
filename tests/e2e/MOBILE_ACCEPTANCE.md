@@ -32,7 +32,7 @@ also creates an OpenRouter preset with a fake key through the shared form and ch
 1. On both phone and tablet, record Android/Edge/Tampermonkey versions. Install the reviewed
    `duallens.user.js` artifact in Tampermonkey. Confirm it runs only in the top-level document.
 2. Start with the mock profile if provisioned by the shared form. Open a public English page;
-   tap the floating ball, switch to only mode, then restore. Confirm the original links and layout remain.
+   tap the floating button, switch to only mode, then restore. Confirm the original links and layout remain.
 3. Hold a plain paragraph for 500 ms. Confirm only that paragraph translates; tap/short hold,
    scroll, and two-finger gestures must not translate. Disable hover/long-press and confirm the hold stops working.
 4. Select text. Confirm the translation icon sits below the selection and is easy to tap without

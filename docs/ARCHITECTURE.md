@@ -57,7 +57,7 @@ QR export is an optional `platform.renderQr(canvas, text)` capability supplied o
 
 Closed shadow roots and bullet rendering do not isolate composed keyboard, input or paste events from a hostile page. The former Proxy input adapter has been removed. An isolated-world regression loads the unchanged bundle after poisoning the host page's prompt and installing document event listeners; native dialog entry must still save the key without reaching those hooks. Actual Tampermonkey sandbox behavior still needs real-device acceptance.
 
-On coarse-pointer devices hover becomes a cancellable 500 ms paragraph hold. Runtime limits cap batches at 12 items, concurrency at 2 and lazy margin at 400 px without changing saved values. Selection controls appear below the selected text; the draggable floating ball also offers translation of the last focused input. Narrow settings panels use the full viewport and safe-area padding. Synthetic Chromium touch checks are distinct from real Android Edge/Tampermonkey acceptance.
+On coarse-pointer devices hover becomes a cancellable 500 ms paragraph hold. Runtime limits cap batches at 12 items, concurrency at 2 and lazy margin at 400 px without changing saved values. Selection controls appear below the selected text; the draggable floating button also offers translation of the last focused input. Narrow settings panels use the full viewport and safe-area padding. Synthetic Chromium touch checks are distinct from real Android Edge/Tampermonkey acceptance.
 
 ## Providers and release state
 

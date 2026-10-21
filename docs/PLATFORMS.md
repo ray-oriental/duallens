@@ -1,4 +1,4 @@
-# 多平台与通用配置契约（v0.6.0）
+# 多平台与通用配置契约（v1.0.0）
 
 状态：2026-10-13 起草，主控维护。本文件与 [SPEC.md](SPEC.md) 同级，接口变更先改这里。
 
@@ -146,7 +146,7 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 `translateBatch` 继续支持可选 `done`，等待期间的取消不得启动迟到的请求。
 首次缺少 OCR 语言包时，另行确认下载；已经安装的语言包直接复用。
 
-页面 UI 使用 closed shadow root 内的设计令牌。悬浮球为桌面 36px / 触屏 44px，
+页面 UI 使用 closed shadow root 内的设计令牌。悬浮按钮为桌面 36px / 触屏 44px，
 `floatBall.autoHide !== false` 时空闲 2.5 秒只露出 24px；长按、菜单键和 Shift+F10
 可打开菜单。划词临时服务选择收进「更多」，关闭功能会立即卸下其被动监听和界面。
 侧边栏及用户脚本文本/字幕文件工具使用同一门禁，在工具内显示相同文案；取消或关闭不会发送等待中的内容。
@@ -173,7 +173,7 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 ## 3. 设置 v3：可同步设置与机密分离
 
 - v1 界面增量：`floatBall.autoHide:boolean` 默认 `true`，随公共设置同步；新安装的 `targetLang` 匹配浏览器界面语言（中文地区/文字变体分别匹配简繁），不支持时回退 `zh-CN`，已有选择保持不变。
-- `ui.device` 独立存在 `localArea`，包含 `onboarded`、`acked`、`upgradeNoticeSeen`，不进入设置分片、明文或加密配置；恢复默认保留它和本机密钥。旧版迁移确实关闭过增强功能时，记录本机一次性升级提示。
+- `ui.device` 独立存在 `localArea`，包含 `onboarded`、`acked`、`upgradeNoticeSeen`，不进入设置分片、明文或加密配置；恢复默认保留它和本机密钥。旧版迁移确实关闭过更多功能时，记录本机一次性升级提示。
 
 - `syncArea` 存非机密设置，`localArea` 存 `secrets`：`{ [profileId]: { apiKey } }`。API key **永远**不进同步区、
   不进导出（除非走加密导出）、不进日志、不进页面上下文以外的任何地方。
@@ -181,7 +181,7 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
   三个键；任何一项超限就整体退回 `localArea`，并在设置页提示「此设备未同步」。
 - v1 旧配置先把 `provider.profiles[].apiKey` 移入 `secrets`，已有本机密钥及清除标记优先。
 - v2 → v3：旧 `kind:'gateway'` 仅转为 `kind:'openai'`，保留 id/name/baseUrl/model/fallbackModels/jsonMode/maxItems/maxChars/concurrency/timeoutMs 与 chain 引用；同一 secrets 槽中的令牌继续作为 Bearer key。一次性把 floatBall/selection/hover/input/comics 的 enabled 设为 false；其它设置保留。扩展、GM 私有存储及旧版加密导入共用迁移，新版重新开启的功能不再重置。
-- 新安装默认不自动翻译网站，floatBall/selection/hover/input/comics/subtitles 默认关闭。用户可在设置中显式开启增强功能。右键仅 page 翻译/显示原文、selection 翻译选中文字、video 视频双语字幕、comics 开启后的 image 翻译图片文字；显式选中文字入口始终可用。
+- 新安装默认不自动翻译网站，floatBall/selection/hover/input/comics/subtitles 默认关闭。用户可在设置中显式开启更多功能。右键仅 page 翻译/显示原文、selection 翻译选中文字、video 视频双语字幕、comics 开启后的 image 翻译图片文字；显式选中文字入口始终可用。
 - 统一入口 `createSettingsStore({ syncArea, localArea })`，返回
   `{ load(), save(patch), getSecret(id), setSecret(id, key), onChange(cb) }`。旧的 `loadSettings/saveSettings`
   改为基于默认平台的薄包装，保持现有调用不坏。
@@ -213,7 +213,7 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
 page 使用 `always/never/default`，其余使用 `on/off/default`，缺省继承全局；旧域名列表与选择器规则无需迁移。
 match 可含 HTTP(S) 协议、端口和任意 `*` 路径通配，忽略网页查询串/片段；域名不分大小写，路径区分大小写和末尾斜杠。
 最长非通配路径、最少通配符的规则优先，完整排序、旧格式继承和校验约束见 [SPEC §3.1](SPEC.md#31-站点与路径规则v05-增量)。
-never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页、快捷键或用户脚本菜单手动翻译；
+never 仅阻止自动网页翻译并隐藏悬浮按钮，用户仍能用弹出页、快捷键或用户脚本菜单手动翻译；
 这修正了 v0.4 实际代码连手动入口一起禁用的行为。selection/hover/input 关闭时对应被动 UI 与事件禁用；右键选中文字始终可用，
 触屏长按受 hover 控制。SPA 路由变化重新判定，独立监听在未翻译状态仍有效。
 规则与翻译共用同一窗口/隔离世界的路由检测器：支持 Navigation API 时监听 `navigatesuccess` / `currententrychange`，
@@ -241,11 +241,11 @@ never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页�
   富文本使用文本节点、BR 与常见块标签的文本视图；无法安全映射的选区拒绝写回。真实编辑器与物理 Android 仍需人工验收。
 
 - 触屏没有 Shift 悬停：「悬停翻译」在触屏上换成**长按段落 500ms**，可在设置里关闭。
-- 划词图标放在选区**下方**，避开系统选择菜单；所有触控目标 ≥ 44px；悬浮球用 pointer 事件拖动，并避开安全区。
+- 划词图标放在选区**下方**，避开系统选择菜单；所有触控目标 ≥ 44px；悬浮按钮用 pointer 事件拖动，并避开安全区。
 - 设置面板在窄屏（< 600px）上是全屏底部弹出层；扩展的 popup 与 options 也要能在窄窗口里正常用。
 - 性能默认值按 `matchMedia('(pointer: coarse)')` 区分：移动端并发 2、每批最多 12 段、`rootMargin` 400px，切段与插入用
   `requestIdleCallback` 分片，单次主线程任务 < 50ms。
-- 输入框三连空格在移动输入法下不可靠：用户脚本里同时提供悬浮球菜单的「翻译当前输入框」。
+- 输入框三连空格在移动输入法下不可靠：用户脚本里同时提供悬浮按钮菜单的「翻译当前输入框」。
 
 ## 5. 书签脚本（P1，尽力而为）
 
@@ -258,7 +258,7 @@ never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页�
 
 - 商店包去掉 manifest 的 `key` 字段，由商店分配扩展 ID；不分发签名私钥。
 - 上架材料放 `docs/store/`：中英文简介与详细说明、每项权限（尤其 `<all_urls>`）的用途说明、截图（1280×800，由 mock E2E
-  生成）、小宣传图 440×280。隐私政策 `docs/PRIVACY.md`：不收集任何数据；网页文本只发往用户自己选的模型服务。
+  生成）、小宣传图 440×280。隐私政策 `docs/PRIVACY.md`：开发者不接收任何数据；网页文字只发往用户选择的翻译服务（默认微软免费翻译，失败时谷歌），商店按「网站内容」与「身份验证信息」申报。
 - **提交由用户本人用自己的开发者账号完成**；我们只准备材料。
 
 ## 7. 验收矩阵
@@ -267,7 +267,7 @@ never 仅阻止自动网页翻译并隐藏悬浮球，用户仍能用弹出页�
 | --- | --- |
 | 桌面 Chrome、Edge（扩展） | 现有 E2E 全部通过；设置同步与机密不同步；加密导入导出往返 |
 | 桌面 Chromium + Tampermonkey 等价的 GM 桩（用户脚本） | 同一套 E2E 夹具用例：翻译、恢复、仅译文、动态内容、划词、设置面板 |
-| 移动端模拟（Chromium 设备模拟，375×812 与 800×1280，`pointer: coarse`） | 长按翻译、划词图标位置、悬浮球拖动、设置面板可用、长页面滚动无卡顿（主线程长任务 < 50ms 的占比） |
+| 移动端模拟（Chromium 设备模拟，375×812 与 800×1280，`pointer: coarse`） | 长按翻译、划词图标位置、悬浮按钮拖动、设置面板可用、长页面滚动无卡顿（主线程长任务 < 50ms 的占比） |
 | 真机 Android Edge + Tampermonkey | 用户手动验收（我们提供逐步清单） |
 | 真实服务 | OpenRouter 免费模型一条链路（key 由用户放进环境变量 `DUALLENS_OPENROUTER_KEY`，测试从环境变量读取，不落盘） |
 

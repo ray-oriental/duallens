@@ -609,7 +609,7 @@ def style_change_syncs(h: Session) -> None:
     h.wait_js(JS_STYLE_UNDERLINE, 10, what="translations switched to dl-s-underline")
 
 
-@case("quiet_defaults_explicit_selection", "增强功能关闭时无页面控件；显式右键选中文字仍可用")
+@case("quiet_defaults_explicit_selection", "更多功能关闭时无页面控件；显式右键选中文字仍可用")
 def quiet_defaults_explicit_selection(h: Session) -> None:
     h.settings({feature: {"enabled": False} for feature in ("floatBall", "selection", "hover", "input", "comics")})
     h.open("article.html")
@@ -853,7 +853,7 @@ def native_attributes_restore(h: Session) -> None:
 @case("toast_expiry_cleanup", "无焦点输入提示到期detach，设从不时立即移除提示和UI")
 def toast_expiry_cleanup(h: Session) -> None:
     h.open('article.html')
-    h.wait_state(lambda s:(s.get('ui') or {}).get('floatBall'),5,'floating ball ready')
+    h.wait_state(lambda s:(s.get('ui') or {}).get('floatBall'),5,'floating button ready')
     baseline=h.js("() => document.querySelectorAll('dl-ui').length")
     h.command('translate-input')
     h.wait_js("count => document.querySelectorAll('dl-ui').length === count + 1",5,arg=baseline,what='toast host added')
