@@ -196,6 +196,25 @@ def main():
                 popup.screenshot(path=str(artifact/f'popup-path-{theme}.png'))
             checks += 1
             print('PASS popup_states: onboarding/default/translated/path, <=600px, tab-ensure ready contract, denied permission remains off')
+            # An older background (files changed under a developer-mode install) does not answer tab-ensure:
+            # the popup asks for one reload instead of claiming the page cannot be translated.
+            stale = h.ctx.new_page()
+            stale.set_viewport_size({'width':360,'height':600})
+            stale.on('pageerror',lambda err:errors.append(str(err)))
+            stale.add_init_script(MOCK + r"""
+              window.uiData['ui.device']={onboarded:true,acked:[],upgradeNoticeSeen:true};
+              const baseSend=window.chrome.runtime.sendMessage;
+              window.chrome.runtime.sendMessage=async msg=>msg.type==='tab-ensure'?undefined:baseSend(msg);
+              window.chrome.runtime.reload=()=>uiMessages.push('reload');
+            """)
+            stale.goto(base+'/extension/ui/popup.html')
+            stale.locator('#stale-notice').wait_for()
+            assert stale.locator('#page-status').inner_text() == '', 'a stale background must not read as an untranslatable page'
+            stale.click('#reload-extension')
+            assert stale.evaluate("uiMessages.includes('reload')")
+            stale.close()
+            checks += 1
+            print('PASS popup_stale_background: reload notice instead of "cannot translate"; button reloads the extension')
             # Exercise the owned mobile integration seam with native modules; the release
             # entry-point menu binding is deliberately left to its owner.
             mobile_context = p.chromium.launch_persistent_context(str(run/'mobile'),headless=True, locale="zh-CN",

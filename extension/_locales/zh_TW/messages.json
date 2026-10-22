@@ -2868,5 +2868,11 @@
   },
   "uiLanguageInvalid": {
     "message": "界面语言无效"
+  },
+  "popupStale": {
+    "message": "DualLens 刚更新过，需要重新加载一次才能使用。"
+  },
+  "popupReload": {
+    "message": "重新加载"
   }
 }

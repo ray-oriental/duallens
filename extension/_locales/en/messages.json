@@ -2868,5 +2868,11 @@
   },
   "uiLanguageInvalid": {
     "message": "Invalid interface language"
+  },
+  "popupStale": {
+    "message": "DualLens was just updated and needs one reload."
+  },
+  "popupReload": {
+    "message": "Reload"
   }
 }
