@@ -4,7 +4,7 @@ import { readTimedtextResponse } from '../content/subtitles/observe.js';
 
 // Only cross-www/m caption GETs use worker transport to avoid content CORS.
 // This is deliberately not a general HTTP message endpoint.
-const TEXT = { permission: l10n('m25') };
+const TEXT = { get permission(){return l10n('m25');} };
 export function createSubtitleHandlers({ fetchImpl = (...args) => globalThis.fetch(...args), api } = {}) {
   const active = new Map();
   const keyFor = (msg, sender) => {
@@ -17,7 +17,7 @@ export function createSubtitleHandlers({ fetchImpl = (...args) => globalThis.fet
       // Chrome's sender.url can retain the document's original URL across a
       // same-document SPA navigation; tab.url describes the current video.
       const url = originalTrackURL(msg.url, sender?.tab?.url || sender?.url || '');
-      if (!key || !url || active.size >= 16) return { ok: false, error: { code: 'config', message: l10n('m26') } };
+      if (!key || !url || active.size >= 16) return { ok: false, error: { code: 'config', get message(){return l10n('m26');} } };
       if (api && !(await api.permissions.contains({ origins: [new URL(url).origin + '/*'] }))) {
         return { ok: false, error: { code: 'permission', message: TEXT.permission } };
       }
@@ -28,7 +28,7 @@ export function createSubtitleHandlers({ fetchImpl = (...args) => globalThis.fet
         const response = await fetchImpl(url, { signal: controller.signal, credentials: 'omit', redirect: 'error' });
         const data = await readTimedtextResponse(response);
         return { ok: true, data };
-      } catch { return { ok: false, error: { code: 'network', message: l10n('m27') } }; }
+      } catch { return { ok: false, error: { code: 'network', get message(){return l10n('m27');} } }; }
       finally { clearTimeout(timer); if (active.get(key) === controller) active.delete(key); }
     },
     'subtitle-track-cancel'(msg, sender) {

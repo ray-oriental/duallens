@@ -4,7 +4,7 @@ import { isMtEngine } from '../background/mt.js';
 import { comicSites } from '../content/comics/sites.js';
 
 // Localized copy shared by the extension and lazy userscript UI.
-const COPY=Object.freeze({s0:l10n('mj7'),s1:l10n('mj8'),s2:l10n('mj9'),s3:l10n('mja'),s4:l10n('mjb'),s5:l10n('mjc'),s6:l10n('mjd'),s7:l10n('mje'),s8:l10n('mjf'),s9:l10n('mjg'),s10:l10n('mjh'),s11:l10n('mji'),s12:l10n('mjj'),s13:l10n('mjk'),s14:l10n('mjl'),s15:l10n('mjm'),s16:l10n('mjn'),s17:l10n('mjo'),s18:l10n('mjp'),s19:l10n('mjq'),s20:l10n('mjr'),s21:l10n('mjs'),s22:l10n('mjt'),s23:l10n('mju'),s24:l10n('mjv'),s25:l10n('mjw'),s26:l10n('mjx'),s27:l10n('mjy'),s28:l10n('mjz'),s29:l10n('mk0'),s30:l10n('mk1'),s31:l10n('mk2'),s32:l10n('mk3'),s33:l10n('mey'),s34:l10n('mk4'),s35:l10n('mk5'),s36:l10n('mk6'),s37:l10n('mk7')});
+const COPY=Object.freeze({get s0(){return l10n('mj7');},get s1(){return l10n('mj8');},get s2(){return l10n('mj9');},get s3(){return l10n('mja');},get s4(){return l10n('mjb');},get s5(){return l10n('mjc');},get s6(){return l10n('mjd');},get s7(){return l10n('mje');},get s8(){return l10n('mjf');},get s9(){return l10n('mjg');},get s10(){return l10n('mjh');},get s11(){return l10n('mji');},get s12(){return l10n('mjj');},get s13(){return l10n('mjk');},get s14(){return l10n('mjl');},get s15(){return l10n('mjm');},get s16(){return l10n('mjn');},get s17(){return l10n('mjo');},get s18(){return l10n('mjp');},get s19(){return l10n('mjq');},get s20(){return l10n('mjr');},get s21(){return l10n('mjs');},get s22(){return l10n('mjt');},get s23(){return l10n('mju');},get s24(){return l10n('mjv');},get s25(){return l10n('mjw');},get s26(){return l10n('mjx');},get s27(){return l10n('mjy');},get s28(){return l10n('mjz');},get s29(){return l10n('mk0');},get s30(){return l10n('mk1');},get s31(){return l10n('mk2');},get s32(){return l10n('mk3');},get s33(){return l10n('mey');},get s34(){return l10n('mk4');},get s35(){return l10n('mk5');},get s36(){return l10n('mk6');},get s37(){return l10n('mk7');}});
 const badKeys = new Set(['__proto__', 'constructor', 'prototype']);
 export function safeExport(value) {
   return publicSettings(value);
@@ -19,6 +19,7 @@ export function terms(text) {
   });
 }
 export function validateSettings(s) {
+  requireThat(['zh-CN','en','auto'].includes(s.uiLanguage), l10n('uiLanguageInvalid'));
   validateInteractionSettings(s);
   requireThat(typeof s.comics?.enabled==='boolean' && ['jpn','jpn_vert','kor','eng'].includes(s.comics.language),COPY.s1);
   s.comics.canvasSites=comicSites(s.comics.canvasSites);
@@ -81,6 +82,7 @@ function cleanLike(value, shape) {
 }
 export function importSettings(data, current) {
   requireThat(data && typeof data==='object' && !Array.isArray(data), COPY.s37);
+  requireThat(!Object.hasOwn(data,'uiLanguage') || ['zh-CN','en','auto'].includes(data.uiLanguage), l10n('uiLanguageInvalid'));
   const migrated = migrateSettings(safeExport(data));
   const next=cleanLike(migrated, DEFAULT_SETTINGS);
   const incoming = Array.isArray(data.provider?.profiles) ? migrated.provider.profiles : current.provider.profiles;

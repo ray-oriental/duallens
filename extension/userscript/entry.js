@@ -17,6 +17,7 @@ if (window.top === window.self && /html/i.test(document.contentType || 'text/htm
     const platform = createUserscriptPlatform(gm, {
       coarse: matchMedia('(pointer: coarse)').matches,
     });
+    await platform.ready;
     platform.injectStyle(contentCSS);
     platform.contentCSS=contentCSS;
     platform.registerCommand('settings', l10n('mh9'), platform.openSettings);

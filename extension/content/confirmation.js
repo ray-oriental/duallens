@@ -7,8 +7,8 @@ import{loadDeviceState,needsConfirmation,acknowledge}from '../shared/device-stat
 import{createOverlay,spaced}from './overlay.js';
 
 const UI={
-  title:l10n('m41'),continue:l10n('m42'),change:l10n('m43'),close:l10n('m44'),stopped:l10n('m45'),
-  download:l10n('m46'),ocr:l10n('m47'),
+  get title(){return l10n('m41');},get continue(){return l10n('m42');},get change(){return l10n('m43');},get close(){return l10n('m44');},get stopped(){return l10n('m45');},
+  get download(){return l10n('m46');},get ocr(){return l10n('m47');},
 };
 const CSS=`.confirm{position:fixed;right:calc(16px + var(--safe-right));bottom:calc(16px + var(--safe-bottom));width:min(360px,calc(100% - 32px - var(--safe-left) - var(--safe-right)));max-height:calc(100% - 32px - var(--safe-top) - var(--safe-bottom));overflow:auto;padding:14px 16px}.confirm.left{right:auto;left:calc(16px + var(--safe-left))}.confirm p{margin:0 24px 10px 0;overflow-wrap:anywhere;white-space:pre-line}.confirm details{margin:0 0 10px}.confirm summary{display:inline-block;padding:2px 0;list-style:none;cursor:pointer;color:var(--fg2);border-radius:4px}.confirm summary::-webkit-details-marker{display:none}.confirm summary:hover{color:var(--fg);text-decoration:underline;text-underline-offset:2px}.confirm details p{margin:4px 0 0;color:var(--fg2)}.actions{position:sticky;bottom:-14px;display:flex;justify-content:flex-end;align-items:center;gap:4px;margin:0 -16px -14px;padding:2px 16px 14px;background:var(--bg)}.confirm .close{position:absolute;right:8px;top:8px;width:24px;min-width:24px;height:24px;font-size:16px;line-height:1;color:var(--dl-text-3)}.confirm .close:hover{color:var(--fg);background:var(--bg2)}@media(pointer:coarse){.confirm .close{right:0;top:0;width:44px;height:44px}.confirm p{margin-right:36px}.confirm summary{padding:8px 0}}`;
 

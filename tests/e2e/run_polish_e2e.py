@@ -21,7 +21,7 @@ def shot(page,name):
 def extension(pw,ext,base,locale):
     h=Session(pw,ext,base,'polish-'+locale,locale=locale)
     try:
-        h.start();h.settings({'provider':{'active':'','chain':[]},'translation':{'mode':'mt+llm','mt':{'engine':'microsoft','fallback':True}},**{f:{'enabled':False} for f in FEATURES}})
+        h.start();h.settings({'uiLanguage':'en' if locale.startswith('en') else 'zh-CN','provider':{'active':'','chain':[]},'translation':{'mode':'mt+llm','mt':{'engine':'microsoft','fallback':True}},**{f:{'enabled':False} for f in FEATURES}})
         h.open('article.html?polish='+locale)
         popup=h.ctx.new_page();popup.set_viewport_size({'width':360,'height':600})
         popup.add_init_script('chrome.tabs.query=async()=>'+json.dumps([{'id':h.tab_id,'url':base+'/guide/intro'}])+';')
@@ -90,7 +90,7 @@ def extension(pw,ext,base,locale):
                     shot(options,f'{locale}-{theme}-{width}-service-{preset}')
             options.locator('#cancel-ai').click()
         # All feature detail rows are part of the acceptance matrix, not only the fresh off state.
-        h.settings({f:{'enabled':True} for f in FEATURES})
+        h.settings({'uiLanguage':'en' if locale.startswith('en') else 'zh-CN',**{f:{'enabled':True} for f in FEATURES}})
         options.reload();options.locator('[href="#enhance"]').click()
         for theme in ['light','dark']:
             for width in [1100,375]:
@@ -102,7 +102,7 @@ def extension(pw,ext,base,locale):
             check(popup.locator('.dl-popup').bounding_box()['height']<=580,'all-on popup exceeds compact height')
             check(all(n.bounding_box()['height']<20 for n in popup.locator('.feature-row>span').all()),'desktop feature labels wrap')
             shot(popup,f'{locale}-{theme}-popup-all-on')
-        h.settings({'siteRules':{'custom':[{'match':'127.0.0.1/guide/*','page':'never'}]}})
+        h.settings({'uiLanguage':'en' if locale.startswith('en') else 'zh-CN','siteRules':{'custom':[{'match':'127.0.0.1/guide/*','page':'never'}]}})
         popup.reload();popup.locator('#site-path').wait_for()
         check(popup.locator('.dl-popup').bounding_box()['height']<=600,'path hint exceeds 600px: '+str(popup.locator('.dl-popup').bounding_box()['height']))
         check(popup.locator('.path-row>span').inner_text()==('Only /guide/*' if locale=='en-US' else '仅 /guide/*'),'path scope must omit hostname and port')
@@ -116,7 +116,7 @@ def extension(pw,ext,base,locale):
             sidebar.emulate_media(color_scheme=theme);shot(sidebar,f'{locale}-{theme}-sidebar-text')
             sidebar.locator('[data-tab=subtitles]').check();shot(sidebar,f'{locale}-{theme}-sidebar-subtitle-files');sidebar.locator('[data-tab=text]').check()
         choices=[{'id':name,'kind':'openai','name':'Fixture '+name,'baseUrl':'http://127.0.0.1:11434/v1','model':'fixture-model','maxItems':20,'maxChars':4000,'concurrency':2,'timeoutMs':5000,'fallbackModels':[]} for name in ['A','B']]
-        h.settings({'provider':{'active':'A','profiles':choices,'chain':[]},'translation':{'mode':'llm'}})
+        h.settings({'uiLanguage':'en' if locale.startswith('en') else 'zh-CN','provider':{'active':'A','profiles':choices,'chain':[]},'translation':{'mode':'llm'}})
         sidebar.locator('.service-choices').wait_for();sidebar.locator('.service-choices>summary').click()
         sidebar.select_option('[name=text-profile]','B')
         check(sidebar.locator('[name=text-model]').input_value()=='fixture-model','sidebar service/model choice is not connected')
@@ -126,7 +126,7 @@ def extension(pw,ext,base,locale):
         # Consent is a blocking dialog labelled by its message. Focus rests on the card itself, so Enter or Space
         # cannot consent until the user tabs to a button; no marker is inserted before consent.
         remote={'id':'remote','kind':'openai','name':'Fixture AI','baseUrl':'https://consent.duallens.invalid/v1','model':'test','maxItems':20,'maxChars':4000,'concurrency':2,'timeoutMs':5000,'fallbackModels':[]}
-        h.settings({'provider':{'active':'remote','chain':[],'profiles':[remote]},'translation':{'mode':'llm'},**{f:{'enabled':False} for f in FEATURES}})
+        h.settings({'uiLanguage':'en' if locale.startswith('en') else 'zh-CN','provider':{'active':'remote','chain':[],'profiles':[remote]},'translation':{'mode':'llm'},**{f:{'enabled':False} for f in FEATURES}})
         h.page.bring_to_front();original=h.page.locator('#p-plain').inner_html();h.command('toggle-page')
         cdp=h.ctx.new_cdp_session(h.page)
         for _ in range(80):
@@ -157,7 +157,7 @@ def extension(pw,ext,base,locale):
 def mobile(pw,base,locale):
     browser=pw.chromium.launch(headless=True);ctx=browser.new_context(locale=locale,viewport={'width':375,'height':812},is_mobile=True,has_touch=True)
     try:
-        ctx.add_init_script(STUB+'\n'+(REPO/'dist/duallens.user.js').read_text('utf-8'));page=ctx.new_page();page.goto(base+'/article.html?polish-mobile='+locale)
+        ctx.add_init_script(STUB+'\n{const seed=GM_getValue("duallens:sync",{});Object.assign(seed.settings,'+json.dumps({'uiLanguage':'en' if locale.startswith('en') else 'zh-CN'})+');GM_setValue("duallens:sync",seed); }' +'\n'+(REPO/'dist/duallens.user.js').read_text('utf-8'));page=ctx.new_page();page.goto(base+'/article.html?polish-mobile='+locale)
         page.wait_for_function("__platformFixture.hasCommand('DualLens')")
         command(page,'DualLens');page.wait_for_function("__platformFixture.elements('#onboard-skip').length>0");click_shadow(page,'#onboard-skip')
         page.wait_for_function("__platformFixture.elements('#target').length>0")

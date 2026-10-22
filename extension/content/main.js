@@ -1,4 +1,4 @@
-import { t as l10n } from '../shared/i18n.js';
+import { t as l10n, setUiLanguage } from '../shared/i18n.js';
 // Content entry point: wires the page translator and the interaction modules together and
 // answers messages from the background and the popup.
 
@@ -25,6 +25,7 @@ import { loadDeviceState } from '../shared/device-state.js';
 
 class App {
   constructor(settings, platform) {
+    setUiLanguage(settings.uiLanguage);
     this.platform = platform;
     this.store = platform.settingsStore;
     this.settings = settings;
@@ -85,8 +86,8 @@ class App {
       }).catch(() => {});
     });
     for (const name of Object.values(P.COMMANDS)) this.platform.registerCommand(name, {
-      'toggle-page': l10n('m56'), 'toggle-translation-only': l10n('m57'),
-      'translate-input': l10n('m4o'), 'toggle-hover': l10n('m58'),
+      get 'toggle-page'(){return l10n('m56');}, get 'toggle-translation-only'(){return l10n('m57');},
+      get 'translate-input'(){return l10n('m4o');}, get 'toggle-hover'(){return l10n('m58');},
     }[name] || name, () => this.#command(name));
     this.platform.registerCommand('translate-comics', l10n('m59'), () => this.#command('translate-comics'));
     this.platform.registerCommand('restore-comics', l10n('m5a'), () => this.#command('restore-comics'));
@@ -160,6 +161,8 @@ class App {
   #applySettings(next) {
     if(next.comics?.enabled===false) this.comics.restore();
     const prev = this.settings;
+    setUiLanguage(next.uiLanguage);
+    if(prev.uiLanguage!==next.uiLanguage){this.selection.destroy();this.input.disable();this.input.chip?.ui.detach();this.input.chip=null;this.ball.disable();this.ball.ui=null;this.hover.outline?.detach();this.hover.outline=null;}
     this.settings = next;
     const mode = siteRuleFor(next, location.href).mode;
     if (mode === 'never' && !this.dormant) this.#sleep();

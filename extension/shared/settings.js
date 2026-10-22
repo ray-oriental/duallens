@@ -12,20 +12,20 @@ export const SECRETS_KEY = 'secrets';
 const STORAGE_KEY = 'settings.storage';
 
 export const LANGS = Object.freeze([
-  { code: 'zh-CN', name: l10n('m8r') },
-  { code: 'zh-TW', name: l10n('m8s') },
+  { code: 'zh-CN', get name(){return l10n('m8r');} },
+  { code: 'zh-TW', get name(){return l10n('m8s');} },
   { code: 'en', name: 'English' },
-  { code: 'ja', name: l10n('m8t') },
-  { code: 'ko', name: l10n('languageKo') },
-  { code: 'fr', name: l10n('languageFr') },
-  { code: 'de', name: l10n('languageDe') },
-  { code: 'es', name: l10n('languageEs') },
-  { code: 'ru', name: l10n('languageRu') },
-  { code: 'pt', name: l10n('languagePt') },
-  { code: 'it', name: l10n('languageIt') },
-  { code: 'ar', name: l10n('languageAr') },
-  { code: 'vi', name: l10n('languageVi') },
-  { code: 'th', name: l10n('languageTh') },
+  { code: 'ja', get name(){return l10n('m8t');} },
+  { code: 'ko', get name(){return l10n('languageKo');} },
+  { code: 'fr', get name(){return l10n('languageFr');} },
+  { code: 'de', get name(){return l10n('languageDe');} },
+  { code: 'es', get name(){return l10n('languageEs');} },
+  { code: 'ru', get name(){return l10n('languageRu');} },
+  { code: 'pt', get name(){return l10n('languagePt');} },
+  { code: 'it', get name(){return l10n('languageIt');} },
+  { code: 'ar', get name(){return l10n('languageAr');} },
+  { code: 'vi', get name(){return l10n('languageVi');} },
+  { code: 'th', get name(){return l10n('languageTh');} },
 ]);
 
 // Match the browser UI language once for fresh settings; persisted choices always win.
@@ -59,6 +59,7 @@ export const TRANSLATION_MODES = Object.freeze([
 
 export const DEFAULT_SETTINGS = Object.freeze({
   version: SETTINGS_VERSION,
+  uiLanguage: 'zh-CN',
   targetLang: defaultTargetLanguage(),
   sourceLang: 'auto',
   displayMode: 'bilingual', // 'bilingual' | 'translation-only'
@@ -81,7 +82,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
       {
         id: 'openai',
         kind: 'openai', // any OpenAI-compatible endpoint the user supplies
-        name: l10n('m8o'),
+        get name(){return l10n('m8o');},
         baseUrl: '',
         model: '',
         fallbackModels: [],
@@ -94,7 +95,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
       {
         id: 'mock',
         kind: 'mock', // deterministic fake translation, no network; for tests and demos
-        name: l10n('m94'),
+        get name(){return l10n('m94');},
         model: 'mock',
         fallbackModels: [],
         maxItems: 50,
@@ -222,6 +223,7 @@ export function createSettingsStore({ syncArea, localArea, browserLanguage }) {
     }
     const s = publicSettings(migrateSettings(input));
     s.version = SETTINGS_VERSION;
+    if (!['zh-CN','en','auto'].includes(s.uiLanguage)) throw new Error(l10n('uiLanguageInvalid'));
     validateSiteRules(s.siteRules);
     validateInteractionSettings(s);
     for (const p of s.provider.profiles) {

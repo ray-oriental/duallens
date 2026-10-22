@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { t, uiLanguage, localize, registerMessages } from '../../extension/shared/i18n.js';
+import { t, uiLanguage, setUiLanguage, localize, registerMessages } from '../../extension/shared/i18n.js';
 import { messages } from '../../extension/shared/i18n-messages.js';
 import { packLocale, unpackLocale, tokens, buildBundle } from '../../scripts/build_userscript.mjs';
 
@@ -27,19 +27,21 @@ test('both catalogues have identical keys and placeholders, with no empty messag
   assert.equal(Object.keys(messages).length,Object.keys(en).length);
 });
 
-test('UI locale follows browser independently of translation target; every Chinese variant uses Simplified Chinese',()=>{
-  for(const lang of ['zh','zh-CN','zh-TW','zh-HK','zh-Hant','zh_SG'])assert.equal(uiLanguage(lang),'zh-CN');
-  for(const lang of ['en-US','fr','ja','de',''])assert.equal(uiLanguage(lang),'en');
+test('UI language defaults to Simplified Chinese even in an English browser; only auto follows it',()=>{
   const previous=globalThis.chrome;
   try {
-    const calls=[];
-    globalThis.chrome={i18n:{getUILanguage:()=> 'en-US',getMessage:(key,args)=>{calls.push([key,args]);return key==='m82'?'Native $safe':'';}}};
-    assert.equal(t('m82',['x','y','z']),'Native $safe');
-    assert.deepEqual(calls[0],['m82',['x','y','z']]);
+    let calls=0;
+    globalThis.chrome={i18n:{getUILanguage:()=> 'en-US',getMessage:()=>{calls++;return 'Native copy';}}};
+    setUiLanguage('zh-CN');assert.equal(uiLanguage(),'zh-CN');assert.equal(t('m44'),messages.m44[0]);
+    setUiLanguage('auto');
+    for(const lang of ['zh','zh-CN','zh-TW','zh-HK','zh-Hant','zh_SG'])assert.equal(uiLanguage(lang),'zh-CN');
+    for(const lang of ['en-US','fr','ja','de',''])assert.equal(uiLanguage(lang),'en');
+    assert.equal(t('m44'),messages.m44[1]);
+    setUiLanguage('zh-CN');assert.equal(t('m44'),messages.m44[0]);
+    setUiLanguage('en');assert.equal(t('m44'),messages.m44[1]);assert.equal(uiLanguage('zh-CN'),'en');
     assert.equal(t('m7e',12),'Opened a 12-page PDF. Check the model settings, then click Translate.');
-    globalThis.chrome.i18n.getUILanguage=()=> 'zh-TW';
-    assert.equal(t('m82',['AI','和标题','example.com']),messages.m82[0].replace('$1','AI').replace('$2','和标题').replace('$3','example.com'));
-  } finally {if(previous===undefined)delete globalThis.chrome;else globalThis.chrome=previous;}
+    assert.equal(calls,0,'native getMessage must never supply application UI copy');
+  } finally {setUiLanguage('zh-CN');if(previous===undefined)delete globalThis.chrome;else globalThis.chrome=previous;}
 });
 
 test('HTML localization writes text and inert attributes without parsing markup',()=>{
@@ -52,11 +54,12 @@ test('verified lazy UI copy supplements the startup dictionary as plain text',()
   const previous=globalThis.chrome;
   try {
     globalThis.chrome={i18n:{getUILanguage:()=> 'en-US',getMessage:()=> ''}};
+    setUiLanguage('en');
     registerMessages({lazyFixtureCopy:['延迟文案','<b>Lazy copy</b>'],invalidFixtureCopy:[42]});
     assert.equal(t('lazyFixtureCopy'),'<b>Lazy copy</b>');
     assert.equal(t('invalidFixtureCopy'),'invalidFixtureCopy');
   } finally {
-    delete messages.lazyFixtureCopy;delete messages.invalidFixtureCopy;
+    setUiLanguage('zh-CN');delete messages.lazyFixtureCopy;delete messages.invalidFixtureCopy;
     if(previous===undefined)delete globalThis.chrome;else globalThis.chrome=previous;
   }
 });
@@ -99,7 +102,7 @@ test('all literal message references exist, including static HTML and manifest m
   const en=await catalogue('en');
   for(const file of await files('extension')) {
     if(!/\.(?:js|html|json)$/.test(file)||/\/vendor\//.test(file)||/\/_locales\//.test(file)||file.endsWith('i18n-messages.js'))continue;
-    for(const match of (await read(file)).matchAll(/\b(?:t|l10n)\(\s*['"](\w+)['"]|data-i18n(?:-[\w-]+)?="(\w+)"|__MSG_(\w+)__/g)) {
+    for(const match of (await read(file)).matchAll(/\b(?:t|l10n|message)\(\s*['"](\w+)['"]|data-i18n(?:-[\w-]+)?="(\w+)"|__MSG_(\w+)__/g)) {
       assert.ok(en[match[1]||match[2]||match[3]],`${file}: ${match[0]}`);
     }
   }

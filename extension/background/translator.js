@@ -228,10 +228,10 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
           const retries=[];
           for(const sub of chunk(lost,isRetry?1:Math.max(1,Math.ceil(lost.length/2)))) {
             if(budget.left-- >0) retries.push(runBatch(sub,true,budget));
-            else failUnits(sub,{code:ERR.PARSE,message:l10n('m29')});
+            else failUnits(sub,{code:ERR.PARSE,get message(){return l10n('m29');}});
           }
           await Promise.all(retries);
-        } else failUnits(lost,{code:ERR.PROVIDER,message:l10n('m2a')});
+        } else failUnits(lost,{code:ERR.PROVIDER,get message(){return l10n('m2a');}});
       }
       const { messages, idMap } = buildMessages({
         items: batch.map((u) => ({ id: u.uid, text: u.text })),
@@ -298,7 +298,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
         await retryLost(lost);
         return;
       }
-      failUnits(lost, { code: ERR.PARSE, message: l10n('m29') });
+      failUnits(lost, { code: ERR.PARSE, get message(){return l10n('m29');} });
     }
 
     const batches = makeBatches(
@@ -324,7 +324,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     );
     if (!(signal && signal.aborted)) {
       for (const g of pending) {
-        if (g.state === 'open') failUnits(units.filter((u) => u.g === g), { code: ERR.PARSE, message: l10n('m2c') });
+        if (g.state === 'open') failUnits(units.filter((u) => u.g === g), { code: ERR.PARSE, get message(){return l10n('m2c');} });
       }
     }
     await flushWrites();

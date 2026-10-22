@@ -1,10 +1,10 @@
 import { t as l10n } from '../../shared/i18n.js';
 export async function probeLocalOCR(env = globalThis) {
-  if (!env.WebAssembly?.compile || !env.Worker) return { ok: false, reason: l10n('m2f') };
+  if (!env.WebAssembly?.compile || !env.Worker) return { ok: false, get reason(){return l10n('m2f');} };
   try {
     await env.WebAssembly.compile(new Uint8Array([0,97,115,109,1,0,0,0]));
     return { ok: true };
-  } catch { return { ok: false, reason: l10n('m2g') }; }
+  } catch { return { ok: false, get reason(){return l10n('m2g');} }; }
 }
 
 export function createGMImageFetch(xmlhttpRequest) {

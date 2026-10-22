@@ -1,7 +1,7 @@
-import { t as l10n } from '../shared/i18n.js';
+import { t as l10n, message, setText, setAttribute, setUiLanguage, localize } from '../shared/i18n.js';
 import { createOverlay } from '../content/overlay.js';
 import { deepActiveElement } from '../content/util.js';
-const TEXT={settings:l10n('mh9'),popup:'DualLens',close:l10n('m44'),failed:l10n('mka')};
+const TEXT={get settings(){return l10n('mh9');},popup:'DualLens',get close(){return l10n('m44');},get failed(){return l10n('mka');}};
 
 const CSS = `
 .backdrop { position: fixed; inset: 0; background: var(--dl-scrim, rgba(0,0,0,.32)); pointer-events: auto; }
@@ -32,17 +32,17 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
 }
 `;
 
-const node = (tag, text) => { const el = document.createElement(tag); if (text) el.textContent = text; return el; };
+const node = (tag, text) => { const el = document.createElement(tag); if (text) setText(el,text); return el; };
 
 export function createSettingsPanel({ store, platform, mountForm, kind='settings' }) {
   let ui = null, mounted = null, previous = null;
-  let generation = 0;
+  let generation = 0, offLanguage;
   function close() {
     if(mounted?.canClose){const token=generation;Promise.resolve(mounted.canClose()).then(yes=>{if(yes&&token===generation)finishClose();});return;}
     finishClose();
   }
   function finishClose() {
-    generation++;
+    generation++;offLanguage?.();offLanguage=null;
     mounted?.destroy?.(); mounted = null;
     ui?.detach(); ui = null;
     previous?.focus?.(); previous = null;
@@ -63,20 +63,22 @@ export function createSettingsPanel({ store, platform, mountForm, kind='settings
     async open() {
       if (ui) return;
       const token = ++generation;
+      setUiLanguage((await store.load()).uiLanguage);if(token!==generation)return;
       previous = deepActiveElement();
       ui = createOverlay(CSS);
       const backdrop = node('div'); backdrop.className = 'backdrop'; backdrop.addEventListener('click', close);
       const panel = node('section'); panel.className = 'panel'; panel.setAttribute('role', 'dialog');
-      panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', kind==='popup'?TEXT.popup:TEXT.settings);
+      panel.setAttribute('aria-modal', 'true'); setAttribute(panel,'aria-label',kind==='popup'?TEXT.popup:message('mh9'));
       // Rings mark keyboard focus only; the initial programmatic focus stays quiet until a key is pressed.
       panel.addEventListener('keydown', () => { panel.dataset.keyboard = ''; }); panel.addEventListener('pointerdown', () => { delete panel.dataset.keyboard; });
       if(kind==='popup') panel.classList.add('popup-panel');
       const head = node('div'); head.className = 'head';
-      const exit = node('button', '×'); exit.type = 'button'; exit.setAttribute('aria-label',TEXT.close); exit.addEventListener('click', close);
-      head.append(node('h2', kind==='popup'?TEXT.popup:TEXT.settings), exit);
+      const exit = node('button', '×'); exit.type = 'button'; setAttribute(exit,'aria-label',message('m44')); exit.addEventListener('click', close);
+      head.append(node('h2',kind==='popup'?TEXT.popup:message('mh9')), exit);
       // Shared-form integration seam, inside the closed shadow root.
       const mount = node('div'); mount.className = 'settings-form-mount';
       panel.append(head, mount); ui.el.append(backdrop, panel); ui.attach();
+      offLanguage=store.onChange(async()=>{const pref=(await store.load()).uiLanguage;if(token!==generation||!ui)return;setUiLanguage(pref);localize(ui.el);});
       document.addEventListener('keydown', onKey, true); exit.focus();
       try {
         const result = await mountForm(mount, { store, platform });

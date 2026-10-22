@@ -289,7 +289,7 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
   const dictionary = [...graph.keys()].find(file => path.relative(root,file).replaceAll('\\','/') === 'shared/i18n-messages.js');
   if (dictionary) {
     const keys = new Set();
-    for (const mod of graph.values()) for (const match of mod.source.matchAll(/\b(?:l10n|t)\(\s*['"]([\w]+)['"]/g)) keys.add(match[1]);
+    for (const mod of graph.values()) for (const match of mod.source.matchAll(/\b(?:l10n|t|message)\(\s*['"]([\w]+)['"]/g)) keys.add(match[1]);
     // These shared metadata labels are getters, read only by the lazy forms. Page
     // translation uses their stable ids/capabilities, and never reads their UI names.
     // The verified UI resource registers its dictionary before exposing those tools.

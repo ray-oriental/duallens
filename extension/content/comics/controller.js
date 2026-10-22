@@ -71,7 +71,7 @@ export class ComicTranslator {
           const result=await this.platform.comics?.syncSites?.();
           return !result || result.ok;
         } : null,
-        onLanguages:(language)=>this.platform.comics?.languages(language) || Promise.resolve({ ok:false,error:{message:l10n('m2m')} }) });
+        onLanguages:(language)=>this.platform.comics?.languages(language) || Promise.resolve({ ok:false,error:{get message(){return l10n('m2m');}} }) });
       this.panels.set(candidate.element,entry);
       // Explicit page command runs only the bounded visible set and one upcoming image.
       this.nearby.observe(candidate.element);

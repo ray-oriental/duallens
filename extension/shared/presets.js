@@ -3,10 +3,10 @@ import { t as l10n } from './i18n.js';
 // JSON mode is conservative: capability also depends on the selected model.
 const batch = Object.freeze({ maxItems: 12, maxChars: 3000, concurrency: 2, timeoutMs: 60000 });
 const preset = (id, name, baseUrl, requiresKey, keyUrl, description, extra = {}) => Object.freeze({
-  id, name, baseUrl, requiresKey, keyUrl, get description() { return description(); }, kind: 'openai', jsonMode: false, ...batch, ...extra,
+  id, get name(){return typeof name==='function'?name():name;}, baseUrl, requiresKey, keyUrl, get description() { return description(); }, kind: 'openai', jsonMode: false, ...batch, ...extra,
 });
 export const PROVIDER_PRESETS = Object.freeze([
-  preset('openrouter', l10n('m8i'), 'https://openrouter.ai/api/v1', true,
+  preset('openrouter', () => l10n('m8i'), 'https://openrouter.ai/api/v1', true,
     'https://openrouter.ai/settings/keys', () => l10n('m8j'), { freeModels: true }),
   preset('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1', true,
     'https://platform.deepseek.com/api_keys', () => l10n('m8k')),
@@ -16,7 +16,7 @@ export const PROVIDER_PRESETS = Object.freeze([
     'https://docs.ollama.com/faq', () => l10n('m8m')),
   preset('lmstudio', 'LM Studio', 'http://localhost:1234/v1', false,
     'https://lmstudio.ai/docs/developer/openai-compat', () => l10n('m8n')),
-  preset('custom', l10n('m8o'), '', false,
+  preset('custom', () => l10n('m8o'), '', false,
     '', () => l10n('m8p')),
 
 ]);

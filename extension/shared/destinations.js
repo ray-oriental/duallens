@@ -5,7 +5,7 @@ import { llmDestination, mtDestination, loadDeviceState, needsConfirmation } fro
 import { DLError } from './errors.js';
 import { ERR } from './protocol.js';
 
-const NAMES = { microsoft:l10n('m7x'), google:l10n('m7y'), 'microsoft-api':l10n('m7z'), deepl:'DeepL' };
+const NAMES = { get microsoft(){return l10n('m7x');}, get google(){return l10n('m7y');}, get 'microsoft-api'(){return l10n('m7z');}, deepl:'DeepL' };
 const HOSTS = { microsoft:'edge.microsoft.com / api-edge.cognitive.microsofttranslator.com', google:'clients5.google.com',
   'microsoft-api':'api.cognitive.microsofttranslator.com', deepl:'api.deepl.com / api-free.deepl.com' };
 export function requestDestinations(s, req = {}) {

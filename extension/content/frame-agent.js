@@ -1,3 +1,4 @@
+import {setUiLanguage} from '../shared/i18n.js';
 // Extension-only child entry: one startup snapshot, then pushes. No polling or interaction UI.
 import {PageTranslator} from './controller.js';
 import {settingsEqual} from '../platform/settings-store.js';
@@ -25,10 +26,10 @@ export function startFrameAgent(platform) {
   };
   const receive=next=>{
     if(disposed)return;
-    const modeOnly=snapshot?.settings && next?.settings && settingsEqual({...snapshot.settings,displayMode:next.settings.displayMode},next.settings) && settingsEqual(snapshot.context,next.context);
+    const modeOnly=snapshot?.settings && next?.settings && settingsEqual({...snapshot.settings,uiLanguage:next.settings.uiLanguage,displayMode:next.settings.displayMode},next.settings) && settingsEqual(snapshot.context,next.context);
     const changed=snapshot && !modeOnly && (!settingsEqual(snapshot.settings,next?.settings)||!settingsEqual(snapshot.context,next?.context));
     if(changed)stop();
-    snapshot=next;
+    snapshot=next;setUiLanguage(next?.settings?.uiLanguage);
     if(modeOnly)translator?.setDisplayMode(next.settings.displayMode);
     reconcile();
   };

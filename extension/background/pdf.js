@@ -4,7 +4,7 @@ import { pdfURL } from '../shared/pdf-url.js';
 import { readPDFURL } from '../pdf/source.js';
 import { createPDFHandoff } from '../pdf/handoff.js';
 export { pdfURL };
-const TEXT = { permission: l10n('m16') };
+const TEXT = { get permission(){return l10n('m16');} };
 export function hasPDFExtension(value) {
   try { return /\.pdf$/i.test(new URL(value).pathname); } catch { return false; }
 }
@@ -45,7 +45,7 @@ export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = cr
   }
   async function open(tab) {
     const r = await status(tab);
-    if (!r.available) return { ok: false, error: { message: l10n('m17') } };
+    if (!r.available) return { ok: false, error: { get message(){return l10n('m17');} } };
     let token;
     try {
       // Fetch while the explicitly operated tab still has activeTab access.
@@ -69,7 +69,7 @@ export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = cr
     return result;
   }
   return {
-    menu: { id: menuId, title: l10n('m18'), contexts: ['page'] },
+    menu: { id: menuId, get title(){return l10n('m18');}, contexts: ['page'] },
     open, openFromMenu,
     handlers: {
       'pdf-status': async (msg,sender) => trusted(sender) ? status(await api.tabs.get(msg.tabId)) : {ok:false},

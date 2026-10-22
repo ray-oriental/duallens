@@ -1,5 +1,4 @@
-import { localize } from '../shared/i18n.js';
-localize();
+import { localize, setUiLanguage } from '../shared/i18n.js';
 import { t as l10n } from '../shared/i18n.js';
 // Layout-preserving bilingual PDF reader (docs/PDF.md).
 //
@@ -31,6 +30,7 @@ const VIEW_KEY = 'duallens.pdf.view';
 const MAX_PIXELS = 4_000_000; // per canvas, independent of zoom and device pixel ratio
 const MAX_RESIDENT = 5; // pages holding canvases
 let settings = await platform.settingsStore.load();
+setUiLanguage(settings.uiLanguage);localize();
 const updatePrivacy=()=>{document.getElementById('privacy').textContent=engineSummary(settings).full;};
 updatePrivacy();
 let view = initialView();
@@ -161,6 +161,7 @@ function updateTranslating(active) {
   if(!document.body.className) document.body.removeAttribute('class');
 }
 function stateChanged() {
+  ball.setAttribute('aria-label',l10n('m6s'));ball.title=l10n('m6t');
   const stats = session.stats();
   ball.disabled = !pdf; ball.setAttribute('aria-pressed', String(session.active));
   $('translate').textContent = session.active ? (stats.failed ? l10n('m6u') : l10n('m42')) : l10n('m6v');
@@ -871,8 +872,8 @@ $('local-file').addEventListener('change', () => {
   $('local-file').value = '';
 });
 const unsubscribe = platform.settingsStore.onChange(() => { void guarded(async () => {
-  const previous = settings; settings = await platform.settingsStore.load(); updatePrivacy();
-  const strip = value => JSON.stringify({ ...value, displayMode: null, style: null, floatBall: null });
+  const previous = settings; settings = await platform.settingsStore.load(); setUiLanguage(settings.uiLanguage);localize();updatePrivacy();
+  const strip = value => JSON.stringify({ ...value, uiLanguage:null, displayMode: null, style: null, floatBall: null });
   if (strip(previous) !== strip(settings)) retranslate();
   // The shared "bilingual / translation only" switch (popup, options) maps onto the PDF views.
   if (previous.displayMode !== settings.displayMode && view !== 'reflow') {

@@ -1,4 +1,4 @@
-import { t as l10n, registerMessages } from '../shared/i18n.js';
+import { t as l10n, registerMessages, setUiLanguage } from '../shared/i18n.js';
 import { createGMStorageArea } from './storage.js';
 import { createGMHttp, asFetch } from './http.js';
 import { performanceSettings } from './settings-store.js';
@@ -45,14 +45,14 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
         try {
           const capability=await probeLocalOCR();
           if (!capability.ok) return { ok:false,error:{ code:'ocr_unavailable',message:capability.reason } };
-          const settings=await store.load();
+          const settings=await store.load();setUiLanguage(settings.uiLanguage);
           const blob=await createGMImageFetch(gm.xmlhttpRequest)(req.url,imageReferer(settings,location.href,req.url));
           return await (localOCR || ocr.recognize)(blob,{ lang:req.lang });
         } catch(e) { return { ok:false,error:{ code:'image_unavailable',message:e.message } }; }
       },
       languages: (lang) => ocr.languages(lang),
       async syncSites() {
-        const settings=await store.load();
+        const settings=await store.load();setUiLanguage(settings.uiLanguage);
         // Changing opt-in takes effect on the next document; do not patch the current page here.
         return {ok:true,sites:settings.comics.canvasSites};
       },
@@ -86,10 +86,11 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
   const loadSettingsForm = async () => {
     const mount = await loadResource();
     registerMessages(mount.messages);
+    const pref=(await store.load()).uiLanguage;setUiLanguage(pref);mount.setUiLanguage(pref);
     return mount;
   };
   platform.loadSettingsForm = loadSettingsForm;
-  platform.showResourceError = () => toast(SETTINGS_RESOURCE_ERROR);
+  platform.showResourceError = () => toast(SETTINGS_RESOURCE_ERROR());
   let mediaPanel;
   const openPanel = async tab => {
     try {
@@ -125,7 +126,7 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
       }
     }
     await store.load();
-    const settings=await store.load();
+    const settings=await store.load();setUiLanguage(settings.uiLanguage);
     if(typeof document!=='undefined' && settings.comics.enabled && comicSiteMatches(location.hostname,settings.comics.canvasSites)) {
       const script=document.createElement('script');script.textContent='('+installCanvasHook.toString()+')();';
       (document.head || document.documentElement).append(script);script.remove();

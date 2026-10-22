@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SETTINGS,
+  defaultTargetLanguage,
   mergeSettings,
   hostMatches,
   siteRuleFor,
@@ -79,7 +80,8 @@ test('loadSettings / saveSettings round trip against a fake chrome.storage', asy
     },
   };
   try {
-    assert.equal((await loadSettings()).targetLang, 'zh-CN');
+    assert.equal((await loadSettings()).targetLang, defaultTargetLanguage());
+    assert.equal((await loadSettings()).uiLanguage, 'zh-CN');
     const next = await saveSettings({ targetLang: 'fr', siteRules: { always: ['x.com'] } });
     assert.equal(next.targetLang, 'fr');
     assert.deepEqual(store[SETTINGS_KEY].siteRules.always, ['x.com']);

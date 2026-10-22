@@ -11,7 +11,7 @@ import{editableOf}from './inputbox.js';
 import{deepActiveElement,hoverService}from './util.js';
 import{createOverlay}from './overlay.js';
 
-const UI={close:l10n('m4q')};
+const UI={get close(){return l10n('m4q');}};
 const HOLD_MS=130;
 const REST_MS=500;
 

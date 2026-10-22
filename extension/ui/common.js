@@ -16,7 +16,7 @@ export function notice(text, error = false, id = 'status') {
   out.className = `status ${error ? 'error' : 'success'}`;
 }
 export async function request(type, fields = {}) {
-  try { return await chrome.runtime.sendMessage({ type, ...fields }) || { ok:false, error:{message:l10n('m7k')} }; }
+  try { return await chrome.runtime.sendMessage({ type, ...fields }) || { ok:false, error:{get message(){return l10n('m7k');}} }; }
   catch (e) { return { ok:false, error:{message:e.message || String(e)} }; }
 }
 export function errorText(res) { return res?.error?.message || l10n('maq'); }

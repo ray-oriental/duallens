@@ -1,5 +1,4 @@
-import { localize, t } from '../shared/i18n.js';
-localize();
+import { initUiLanguage, localize, t } from '../shared/i18n.js';
 import { getDefaultSettingsStore } from '../shared/settings.js';
 import { mountSettingsForm } from './forms/index.js';
 import { MSG_CACHE_CLEAR } from '../shared/protocol.js';
@@ -25,6 +24,8 @@ const platform = {
   },
 };
 try {
+  const offLanguage=await initUiLanguage(getDefaultSettingsStore(),document);
+  window.addEventListener('pagehide',offLanguage,{once:true});
   await mountSettingsForm(document.getElementById('settings-root'), { store: getDefaultSettingsStore(), platform });
 } catch {
   document.getElementById('startup-status').hidden = false;

@@ -7,7 +7,7 @@ import{LANGS}from '../shared/settings.js';
 import{createOverlay,toast}from './overlay.js';
 import{deepActiveElement,interactionRequest}from './util.js';
 
-const UI={s0:l10n('m4u'),s1:l10n('m4v'),s2:l10n('m4w'),s3:l10n('m4x'),s4:l10n('m4y'),s5:l10n('m4z'),s6:l10n('m50'),s7:l10n('m51'),s8:l10n('m52'),s9:l10n('m53'),s10:l10n('m54'),s11:l10n('m55'),s12:l10n('m44')};
+const UI={get s0(){return l10n('m4u');},get s1(){return l10n('m4v');},get s2(){return l10n('m4w');},get s3(){return l10n('m4x');},get s4(){return l10n('m4y');},get s5(){return l10n('m4z');},get s6(){return l10n('m50');},get s7(){return l10n('m51');},get s8(){return l10n('m52');},get s9(){return l10n('m53');},get s10(){return l10n('m54');},get s11(){return l10n('m55');},get s12(){return l10n('m44');}};
 const node=(tag,cls='',text='')=>Object.assign(document.createElement(tag),{className:cls,textContent:text});
 const TEXT_TYPES=new Set(['text','search','url','email','tel']);
 const PREFIX=/^\s*\/([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)[ \t ]+/;

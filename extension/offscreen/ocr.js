@@ -1,4 +1,4 @@
-import { t as l10n } from '../shared/i18n.js';
+import { t as l10n, setUiLanguage } from '../shared/i18n.js';
 import { ensureLanguage, languageRecord } from './language-store.js';
 import { detectTextRegions } from './detector.js';
 const manifestReady = fetch('./languages.json').then((res) => res.json());
@@ -124,7 +124,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply) => {
     const all = await languageRecord(null,'getAll');
     return { ok: true, languages: all.map(({ lang,bytes }) => ({ lang,bytes })) };
   };
-  schedule(task).then(reply).catch((e) => reply({ ok:false,error:{ code:'ocr_failed',message:
+  schedule(async()=>{setUiLanguage(msg.uiLanguage);return task();}).then(reply).catch((e) => reply({ ok:false,error:{ code:'ocr_failed',message:
     /^(语言包|本地 OCR|图片|画布|不支持|无法打开|OCR 语言|Language pack|Local OCR|Image|Canvas|Invalid canvas|Unsupported|Could not open|OCR language)/.test(e?.message) ? l10n('m6h', [e.message]) : l10n('m6i') } }));
   return true;
 });

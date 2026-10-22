@@ -1,10 +1,10 @@
-import { t as l10n } from '../../shared/i18n.js';
+import { t as l10n, setUiLanguage, localize } from '../../shared/i18n.js';
 import { mountPopup } from '../popup-view.js';
 import { installSettingsInteractions } from './interactions.js';
 import { requestOrigin, requestBroad, requestMTOrigin } from '../../shared/permissions.js';
 import { acknowledge,llmDestination } from '../../shared/device-state.js';
-import { providerChain } from '../../shared/settings.js';
-import { getPreset, profileFromPreset, recommendedFreeChain } from '../../shared/presets.js';
+import { LANGS, STYLES, providerChain } from '../../shared/settings.js';
+import { PROVIDER_PRESETS, getPreset, profileFromPreset, recommendedFreeChain } from '../../shared/presets.js';
 import { exportConfig, importConfig } from '../../shared/configcrypto.js';
 import { createProviders, profileProblem } from '../../background/providers.js';
 import { createMT, MT_ENGINES, MT_SECRET_IDS } from '../../background/mt.js';
@@ -14,76 +14,77 @@ import { validateSettings, importSettings, lines, terms } from './validation.js'
 import { drawLayout } from './layout.js';
 import { mountSiteRules } from './site-rules.js';
 import { compactConfig } from '../../shared/configcrypto.js';
-import { TEXT as COMMON } from '../components.js';
+import { TEXT as COMMON, FEATURES } from '../components.js';
 
 // Localized copy shared by the extension and lazy userscript UI.
 const COPY=Object.freeze({
-  s0:l10n('mbr'),
-  s1:l10n('mbs'),
-  s2:l10n('maq'),
-  s3:l10n('mbt'),
-  s4:l10n('mbu'),
-  s5:l10n('mbv'),
-  s6:l10n('mbw'),
-  s7:l10n('m5s'),
-  s8:l10n('mbx'),
-  s9:l10n('mby'),
-  s10:l10n('mbz'),
-  s11:l10n('mc0'),
-  s13:l10n('mc2'),
-  s14:l10n('m3b'),
-  s15:l10n('m3c'),
-  s16:l10n('m3d'),
-  s17:l10n('mc3'),
-  s18:l10n('mc4'),
-  s19:l10n('mc5'),
-  s20:l10n('mc6'),
-  s21:l10n('mc7'),
-  s22:l10n('mc8'),
-  s23:l10n('mc9'),
-  s24:l10n('mca'),
-  s25:l10n('mcb'),
-  s26:l10n('mcc'),
-  s27:l10n('mcd'),
-  s28:l10n('mce'),
-  s29:l10n('mcf'),
-  s30:l10n('mcg'),
-  s31:l10n('mch'),
-  s32:l10n('mci'),
-  s33:l10n('mcj'),
-  s34:l10n('mck'),
-  s35:l10n('mcl'),
-  s36:l10n('mcm'),
-  s37:l10n('mcn'),
-  s38:l10n('mco'),
-  s39:l10n('mcp'),
-  s40:l10n('mcq'),
-  s41:l10n('mcr'),
-  s42:l10n('mcs'),
-  s43:l10n('mct'),
-  s44:l10n('mcu'),
-  s45:l10n('mcv'),
-  s46:l10n('mcw'),
-  s47:l10n('mcx'),
-  s48:l10n('mcy'),
-  s49:l10n('mcz'),
-  s50:l10n('md0'),
-  s51:l10n('md1'),
-  s52:l10n('md2'),
-  s53:l10n('md3'),
-  s54:l10n('md4'),
-  s56:l10n('md6')
+  get s0(){return l10n('mbr');},
+  get s1(){return l10n('mbs');},
+  get s2(){return l10n('maq');},
+  get s3(){return l10n('mbt');},
+  get s4(){return l10n('mbu');},
+  get s5(){return l10n('mbv');},
+  get s6(){return l10n('mbw');},
+  get s7(){return l10n('m5s');},
+  get s8(){return l10n('mbx');},
+  get s9(){return l10n('mby');},
+  get s10(){return l10n('mbz');},
+  get s11(){return l10n('mc0');},
+  get s13(){return l10n('mc2');},
+  get s14(){return l10n('m3b');},
+  get s15(){return l10n('m3c');},
+  get s16(){return l10n('m3d');},
+  get s17(){return l10n('mc3');},
+  get s18(){return l10n('mc4');},
+  get s19(){return l10n('mc5');},
+  get s20(){return l10n('mc6');},
+  get s21(){return l10n('mc7');},
+  get s22(){return l10n('mc8');},
+  get s23(){return l10n('mc9');},
+  get s24(){return l10n('mca');},
+  get s25(){return l10n('mcb');},
+  get s26(){return l10n('mcc');},
+  get s27(){return l10n('mcd');},
+  get s28(){return l10n('mce');},
+  get s29(){return l10n('mcf');},
+  get s30(){return l10n('mcg');},
+  get s31(){return l10n('mch');},
+  get s32(){return l10n('mci');},
+  get s33(){return l10n('mcj');},
+  get s34(){return l10n('mck');},
+  get s35(){return l10n('mcl');},
+  get s36(){return l10n('mcm');},
+  get s37(){return l10n('mcn');},
+  get s38(){return l10n('mco');},
+  get s39(){return l10n('mcp');},
+  get s40(){return l10n('mcq');},
+  get s41(){return l10n('mcr');},
+  get s42(){return l10n('mcs');},
+  get s43(){return l10n('mct');},
+  get s44(){return l10n('mcu');},
+  get s45(){return l10n('mcv');},
+  get s46(){return l10n('mcw');},
+  get s47(){return l10n('mcx');},
+  get s48(){return l10n('mcy');},
+  get s49(){return l10n('mcz');},
+  get s50(){return l10n('md0');},
+  get s51(){return l10n('md1');},
+  get s52(){return l10n('md2');},
+  get s53(){return l10n('md3');},
+  get s54(){return l10n('md4');},
+  get s56(){return l10n('md6');}
 });
 
 // Shared by options and the platform's page panel. No browser globals or implicit storage.
 export async function mountSettingsForm(root, { store, platform }) {
   // Extension settings have their own origin and retain the ordinary password field.
+  let s = await store.load(); setUiLanguage(s.uiLanguage);
   const dialog = platform.kind !== 'extension';
   const ui = drawLayout(root, { secretDialog:dialog });
   const siteRules=mountSiteRules(ui);
   const $ = id => ui.querySelector('#' + id);
   $('save').disabled=true;
-  let s, pid = '', dirty = false, saving = false, closed = false, drawToken = 0, loadingKey = false;
+  let pid = '', dirty = false, saving = false, closed = false, drawToken = 0, loadingKey = false;
   const discovered = new Map();
   const drafts = new Map();
   const edited = new Set();
@@ -115,7 +116,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     drafts.set(id, secret);
     if (dialog) $('mt-key-status').textContent = secret ? COPY.s0 : COPY.s1; else $('mtKey').value = secret;
   }
-  const simple = ['targetLang', 'sourceLang', 'displayMode', 'style', 'minChars', 'inlineMaxChars', 'translateShortText'];
+  const simple = ['uiLanguage', 'targetLang', 'sourceLang', 'displayMode', 'style', 'minChars', 'inlineMaxChars', 'translateShortText'];
   const nums = new Set(['minChars', 'inlineMaxChars', 'rootMarginPx', 'batchDelayMs', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs', 'maxEntries', 'ttlDays', 'subtitleSize']);
   const bind = {
     rootMarginPx: 'lazy.rootMarginPx', batchDelayMs: 'lazy.batchDelayMs', hoverEnabled: 'hover.enabled', hoverModifier: 'hover.modifier',
@@ -192,7 +193,23 @@ export async function mountSettingsForm(root, { store, platform }) {
     const chain = p ? [p.model, ...(p.fallbackModels || [])].filter(Boolean).map(model => ({ profileId: p.id, model })) : [];
     fill('providerChain', JSON.stringify(chain, null, 2)); interactions?.draw();
   }
+  function refreshLanguage() {
+    setUiLanguage(s.uiLanguage); localize(ui);
+    for (const id of ['targetLang','sourceLang','inputLang','autoLangs']) for (const option of $(id).options) {
+      const lang=LANGS.find(l=>l.code===option.value); if(lang)option.textContent=lang.name;
+    }
+    for(const [id,values] of [['style',STYLES],['mtEngine',MT_ENGINES],['providerPreset',PROVIDER_PRESETS]])
+      for(const option of $(id).options) {const item=values.find(v=>v.id===option.value);if(item)option.textContent=item.name;}
+    for(const radio of ui.querySelectorAll('#style-tiles input')) {
+      const name=STYLES.find(v=>v.id===radio.value)?.name;radio.setAttribute('aria-label',name);radio.parentElement.title=name;
+    }
+    for(const [key,title]of FEATURES) {const text=ui.querySelector(`[data-feature="${key}"] .feature-top>span`);if(text?.firstChild)text.firstChild.data=title;}
+    const show=$('show-key');if(show)show.textContent=$('apiKey')?.type==='text'?COMMON.hideKey:COMMON.showKey;
+    const preset=getPreset(profile()?.preset);if(preset)$('provider-description').textContent=preset.description;
+    siteRules.draw(); interactions?.draw();
+  }
   async function draw() {
+    refreshLanguage();
     for (const name of ['hover', 'input']) choices($(name + 'Profile'), [{ id: '', name: COPY.s7 }, ...s.provider.profiles]);
     fill('comicsSites',s.comics.canvasSites.map(site=>typeof site==='string'?site:JSON.stringify(site)).join('\n'));
     for (const id of simple) fill(id, s[id]);
@@ -453,12 +470,11 @@ export async function mountSettingsForm(root, { store, platform }) {
   });
   let interactions;
   s = await store.load();
-  interactions = installSettingsInteractions(ui,{store,platform,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,captureProfile,onSaved:showSync,notice,bind,simple,nums});
+  interactions = installSettingsInteractions(ui,{store,platform,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,refreshLanguage,captureProfile,onSaved:showSync,notice,bind,simple,nums});
   await draw(); $('save').disabled=false;
   const off = store.onChange?.(async () => {
     if (saving || closed) return;
-    if (dirty) { showSync(); return; }
-    try { s = await store.load(); if (!closed) await draw(); } catch { notice(COPY.s56, true); }
+    try { const next=await store.load(); if(closed)return; if(dirty){s={...s,uiLanguage:next.uiLanguage};refreshLanguage();showSync();return;}s=next;await draw(); } catch { notice(COPY.s56, true); }
   });
   return {
     navigateGroup: group => interactions.select(group || 'common'),

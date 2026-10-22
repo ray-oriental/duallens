@@ -1,4 +1,4 @@
-import { t as l10n } from '../shared/i18n.js';
+import { t as l10n, uiLanguage } from '../shared/i18n.js';
 const MAX_BYTES = 16*1024*1024;
 export async function fetchImage(url, pageUrl, fetchImpl = fetch) {
   const image = new URL(url), page = new URL(pageUrl);
@@ -19,7 +19,7 @@ export async function fetchImage(url, pageUrl, fetchImpl = fetch) {
   let raw=''; for (let i=0;i<bytes.length;i+=8192) raw+=String.fromCharCode(...bytes.subarray(i,i+8192));
   return { base64:btoa(raw), mime };
 }
-const TEXT = { permission: l10n('m7') };
+const TEXT = { get permission(){return l10n('m7');} };
 export function createComicHandlers(api) {
   async function permittedImage(url, pageUrl) {
     const image = new URL(url), page = new URL(pageUrl);
@@ -59,7 +59,7 @@ export function createComicHandlers(api) {
     })().finally(() => { creating=null; });
     return creating;
   }
-  async function send(msg) { await offscreen(); return api.runtime.sendMessage({ ...msg,target:'comics-offscreen' }); }
+  async function send(msg) { await offscreen(); return api.runtime.sendMessage({ ...msg,uiLanguage:uiLanguage(),target:'comics-offscreen' }); }
   return {
     async 'comic-ocr'(msg,sender) {
       if (!sender.tab || sender.frameId !== 0 || !['jpn','jpn_vert','kor','eng'].includes(msg.lang)) throw new Error(l10n('ma'));

@@ -327,14 +327,19 @@ def comics_sites(h):
     runner.check(options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")>saves and options.locator('#status').inner_text()=='','comic settings save failed: '+options.locator('#status').inner_text())
     scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")
     runner.check(set(scripts[0]['matches'])=={'http://127.0.0.1/*','https://127.0.0.1/*'},str(scripts))
-    options.locator('#comicsEnabled').uncheck()
+    # The feature checkbox saves immediately; a second synthetic submit races its
+    # storage-driven key reload and is not part of this interaction.
     saves=options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")
-    options.evaluate("document.querySelector('#settings-form').requestSubmit()")
+    options.locator('#comicsEnabled').uncheck()
     for _ in range(100):
         if options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")>saves: break
         time.sleep(.05)
     runner.check(options.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")>saves and options.locator('#status').inner_text()=='','comic disable save failed: '+options.locator('#status').inner_text())
-    runner.check(h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")==[],'disabled comics kept registration')
+    for _ in range(100):
+        scripts=h.sw_eval("() => chrome.scripting.getRegisteredContentScripts({ids:['duallens-comic-canvas']})")
+        if not scripts:break
+        time.sleep(.05)
+    runner.check(scripts==[],'disabled comics kept registration')
     options.close()
 
 @runner.case('comics_popup','Popup comic button sends the command and renders local bilingual results')

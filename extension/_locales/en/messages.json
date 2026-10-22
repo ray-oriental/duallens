@@ -2853,5 +2853,20 @@
         "content": "$1"
       }
     }
+  },
+  "uiLanguageLabel": {
+    "message": "Interface language / 界面语言"
+  },
+  "uiLanguageChinese": {
+    "message": "简体中文"
+  },
+  "uiLanguageEnglish": {
+    "message": "English"
+  },
+  "uiLanguageAuto": {
+    "message": "Follow browser / 跟随浏览器"
+  },
+  "uiLanguageInvalid": {
+    "message": "Invalid interface language"
   }
 }

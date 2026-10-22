@@ -9,7 +9,7 @@ import { isLocalUrl } from '../../shared/device-state.js';
 import { GROUPS } from './navigation.js';
 import { validateSettings } from '../validation.js';
 
-const T=Object.freeze({saved:l10n('mda'),save:l10n('mdb'),cancel:l10n('mdc'),confirm:l10n('mdd'),discard:l10n('mat'),denied:COMMON.denied,originDenied:l10n('mde'),reset:l10n('mdf'),delete:l10n('mdg'),clear:l10n('mdh'),up:l10n('m38'),down:l10n('mdi'),remove:l10n('mdj'),model:l10n('mdk'),unconfigured:l10n('mdl'),local:l10n('mdm'),destination:host=>l10n('mdn', [host]),version:l10n('mdo'),copied:l10n('mdp'),copyFallback:l10n('mdq'),free:l10n('mdr'),missing:l10n('mds'),failure:l10n('mdt')});
+const T=Object.freeze({get saved(){return l10n('mda');},get save(){return l10n('mdb');},get cancel(){return l10n('mdc');},get confirm(){return l10n('mdd');},get discard(){return l10n('mat');},get denied(){return COMMON.denied;},get originDenied(){return l10n('mde');},get reset(){return l10n('mdf');},get delete(){return l10n('mdg');},get clear(){return l10n('mdh');},get up(){return l10n('m38');},get down(){return l10n('mdi');},get remove(){return l10n('mdj');},get model(){return l10n('mdk');},get unconfigured(){return l10n('mdl');},get local(){return l10n('mdm');},destination:host=>l10n('mdn', [host]),get version(){return l10n('mdo');},get copied(){return l10n('mdp');},get copyFallback(){return l10n('mdq');},get free(){return l10n('mdr');},get missing(){return l10n('mds');},get failure(){return l10n('mdt');}});
 
 export function installSettingsInteractions(ui,ctx){
   const {store,platform,getSettings,setSettings,getDirty,setDirty,getProfile,save,draw,notice,bind,simple,nums}=ctx;
@@ -41,7 +41,7 @@ export function installSettingsInteractions(ui,ctx){
     if(value&&feature&&featureNeedsBroad(feature)&&platform.kind==='extension'&&!await requestBroad(platform.permissionAPI)){n.checked=false;notice(T.denied);drawView();return;}
     if(n.id==='mtEngine'&&platform.kind==='extension'&&!await requestMTOrigin(value,platform.permissionAPI)){n.value=before.translation.mt.engine;notice(T.originDenied);return;}
     const patch=patchFor(path,value);const previousDirty=getDirty();setDirty(true);
-    try{validateSettings(mergeSettings(before,patch));await store.save(patch);if(closed)return;setSettings(mergeSettings(getSettings(),patch));setDirty(previousDirty);n.removeAttribute('aria-invalid');ui.querySelector('#error-'+n.id)?.remove();flash();drawView();}
+    try{validateSettings(mergeSettings(before,patch));await store.save(patch);if(closed)return;setSettings(mergeSettings(getSettings(),patch));setDirty(previousDirty);if(n.id==='uiLanguage')ctx.refreshLanguage();n.removeAttribute('aria-invalid');ui.querySelector('#error-'+n.id)?.remove();flash();drawView();}
     catch(error){setSettings(before);setDirty(previousDirty);if(n.type==='checkbox')n.checked=!value;n.setAttribute('aria-invalid','true');ui.querySelector('#error-'+n.id)?.remove();const help=el('small',error.message||T.failure,{class:'field-error',id:'error-'+n.id});n.parentElement.append(help);notice(error.message||T.failure,true);}
   }
   for(const radio of ui.querySelectorAll('[name=translation-method]'))on(radio,'change',()=>{if(radio.checked){$('translationMode').value=radio.value;void persistField($('translationMode'));}});

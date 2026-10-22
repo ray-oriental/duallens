@@ -1,4 +1,4 @@
-import { t as l10n } from '../shared/i18n.js';
+import { t as l10n, message, setText, localize, setUiLanguage } from '../shared/i18n.js';
 import { engineDisclosure } from '../ui/components.js';
 import { LANGS, providerChain } from '../shared/settings.js';
 import { SHARED_CSS } from '../ui/theme.js';
@@ -43,7 +43,7 @@ export const MEDIA_CSS = SHARED_CSS + `
 `;
 
 export function element(tag, text) {
-  const node = document.createElement(tag); if (text !== undefined) node.textContent = text; return node;
+  const node = document.createElement(tag); if (text !== undefined) setText(node, text); return node;
 }
 export function field(parent, label, control) {
   const node = element('label', label); node.append(control); parent.append(node); return control;
@@ -55,27 +55,28 @@ export function selectOptions(select, options, value) {
 
 export async function mountTextForm(root, { platform }) {
   let settings = await platform.settingsStore.load();
+  setUiLanguage(settings.uiLanguage);
   platform = withSendConfirmation(platform, () => settings, {prompt:opts=>confirmationCard({...opts,root})});
   const style = element('style', MEDIA_CSS); root.append(style);
   const service = platform.translator();
   const form = element('form'); form.className = 'dl-text';
-  const heading = element('h2', l10n('ma6')); form.append(heading);
+  const heading = element('h2', message('ma6')); form.append(heading);
   const pair=element('div');pair.className='language-pair';form.append(pair);
-  const from = field(pair, l10n('ma7'), element('select')); from.name = 'text-from';
-  const to = field(pair, l10n('ma8'), element('select')); to.name = 'text-to';
-  const choicesPanel=element('details');choicesPanel.className='service-choices';choicesPanel.append(element('summary',l10n('polishService')));form.append(choicesPanel);
-  const profiles = field(choicesPanel, l10n('ma9'), element('select')); profiles.name = 'text-profile';
-  const models = field(choicesPanel, l10n('maa'), element('select')); models.name = 'text-model';
-  const load = element('button', l10n('mab')); load.type = 'button'; load.className = 'text-load-models';
-  const configure = element('button', l10n('mac')); configure.type = 'button'; configure.addEventListener('click', () => platform.openSettings());
+  const from = field(pair, message('ma7'), element('select')); from.name = 'text-from';
+  const to = field(pair, message('ma8'), element('select')); to.name = 'text-to';
+  const choicesPanel=element('details');choicesPanel.className='service-choices';choicesPanel.append(element('summary',message('polishService')));form.append(choicesPanel);
+  const profiles = field(choicesPanel, message('ma9'), element('select')); profiles.name = 'text-profile';
+  const models = field(choicesPanel, message('maa'), element('select')); models.name = 'text-model';
+  const load = element('button', message('mab')); load.type = 'button'; load.className = 'text-load-models';
+  const configure = element('button', message('mac')); configure.type = 'button'; configure.addEventListener('click', () => platform.openSettings());
   const choices = element('div'); choices.className = 'actions'; choices.append(load, configure); choicesPanel.append(choices);
-  const input = field(form, l10n('mad'), element('textarea')); input.name = 'text-input'; input.maxLength = 20000; input.required = true;
-  const translate = element('button', l10n('m6v')); translate.type = 'submit'; form.append(translate);
+  const input = field(form, message('mad'), element('textarea')); input.name = 'text-input'; input.maxLength = 20000; input.required = true;
+  const translate = element('button', message('m6v')); translate.type = 'submit'; form.append(translate);
   const status = element('p'); status.className = 'text-status'; status.setAttribute('role', 'status'); form.append(status);
-  form.append(element('h2', l10n('m53')));
+  form.append(element('h2', message('m53')));
   const output = element('output'); output.name = 'text-result'; output.setAttribute('aria-live', 'polite'); output.dir = 'auto'; form.append(output);
   const actions = element('div'); actions.className = 'actions';
-  const copy = element('button', l10n('m5g')), speak = element('button', l10n('m5i'));
+  const copy = element('button', message('m5g')), speak = element('button', message('m5i'));
   copy.type = speak.type = 'button'; copy.disabled = speak.disabled = true; actions.append(copy, speak); form.append(actions);
   const disclosure=element('div');form.append(disclosure);root.append(form);
   let disposed = false, sequence = 0, modelSequence = 0, utterance = null, pending;
@@ -151,9 +152,10 @@ export async function mountTextForm(root, { platform }) {
     const token = ++settingsSequence;
     const next = await platform.settingsStore.load();
     if (disposed || token !== settingsSequence) return;
-    settings = next; reset();choicesPanel.hidden=settings.provider.profiles.filter(p=>p.kind!=='mock'&&p.baseUrl&&p.model).length<2;
-    selectOptions(from, [['auto', l10n('m5e')], ...LANGS.map(l => [l.code, l.name])], settings.sourceLang);
-    selectOptions(to, LANGS.map(l => [l.code, l.name]), settings.targetLang);
+    const localeOnly=JSON.stringify({...settings,uiLanguage:null})===JSON.stringify({...next,uiLanguage:null});
+    settings = next; setUiLanguage(settings.uiLanguage); localize(form); if(!localeOnly)reset();choicesPanel.hidden=settings.provider.profiles.filter(p=>p.kind!=='mock'&&p.baseUrl&&p.model).length<2;
+    selectOptions(from, [['auto', l10n('m5e')], ...LANGS.map(l => [l.code, l.name])], localeOnly?from.value:settings.sourceLang);
+    selectOptions(to, LANGS.map(l => [l.code, l.name]), localeOnly?to.value:settings.targetLang);
     selectOptions(profiles, [['', l10n('mam')], ...settings.provider.profiles.map(p => [p.id, p.name || p.id])], profiles.value);
     profileModels();
   }

@@ -76,7 +76,7 @@ export function createOverlay(css=''){
 
 // ---- toast ---------------------------------------------------------------------------------
 
-const UI={close:l10n('m44'),retry:l10n('m5d')};
+const UI={get close(){return l10n('m44');},get retry(){return l10n('m5d');}};
 let toastOverlay=null;
 let toastTimer=0;
 

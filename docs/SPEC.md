@@ -1,5 +1,7 @@
 # DualLens 规格与接口契约
 
+界面语言使用同步设置 `uiLanguage: 'zh-CN' | 'en' | 'auto'`，默认简体中文；只有 `auto` 跟随浏览器（中文变体使用简体中文，其余使用英文），与翻译目标语言独立。
+
 公共接口契约。实现以本文件与设置模块为准；变更接口时同步更新规格。
 状态：v1.0.0（2026-10-22）；发布版本以 manifest 为准。多平台契约见 PLATFORMS.md，当前实现边界见 ROADMAP.md。
 
@@ -16,12 +18,12 @@
 
 ### 界面语言（v1）
 
-`shared/i18n.js` 提供 `t(key, substitutions?)`、`uiLanguage()` 与 `localize(root?)`。
-扩展使用 `_locales/en`、`_locales/zh_CN` 和 `chrome.i18n`，默认英文；所有中文浏览器环境使用简体中文，其余使用英文。
+`shared/i18n.js` 提供 `t(key, substitutions?)`、`setUiLanguage(pref)`、`uiLanguage()` 与 `localize(root?)`。
+扩展与用户脚本的界面始终使用内置中英词典，按同步的 `uiLanguage` 偏好显示，默认简体中文；只有 `auto` 跟随浏览器。manifest 的 `__MSG_…__` 元数据仍交给 `chrome.i18n` 按浏览器语言解析，`default_locale` 保持 `en`。
 `_locales/zh_TW` 是由简体中文词典生成的同文案别名，使繁体中文浏览器的 manifest 文案也显示简体中文。
-用户脚本根据 `navigator.language` 选择内置的同一套文案。界面语言不读取或修改已保存的翻译目标语言。
+用户脚本仅在 `auto` 时根据 `navigator.language` 选择界面文案。界面语言不读取或修改已保存的翻译目标语言。
 静态 HTML 用 `data-i18n` 及 `data-i18n-title/placeholder/aria-label`，只写文本与明确列出的属性，不解析标记。
-Chrome JSON 是文案源；`node scripts/sync_i18n.mjs` 更新随源码发布的用户脚本回退词典，扩展本身仍无需构建。
+Chrome JSON 是文案源；`node scripts/sync_i18n.mjs` 更新随源码发布、两种平台共用的内置词典，扩展本身仍无需构建。
 打包器按入口依赖裁剪词典，并压缩为仅含 JSON 的数据；启动包不包含上手卡片、面板和设置专用文案，预算为 345000 字节。
 共享元数据的样式名、翻译方式名和服务说明通过延迟 getter 读取；其文案只在设置资源内。
 经校验的资源通过 `registerMessages` 补充启动词典后才开放工具，不从网页或网络接收文案。

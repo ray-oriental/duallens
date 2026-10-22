@@ -1,11 +1,12 @@
-import { localize } from '../shared/i18n.js';
-localize();
+import { initUiLanguage, localize } from '../shared/i18n.js';
 import { t as l10n } from '../shared/i18n.js';
 import { getDefaultSettingsStore } from '../shared/settings.js';
 import { chromeStorageArea } from '../shared/storage-areas.js';
 import { mountPopup } from './popup-view.js';
-const TEXT={failed:l10n('mj6')};
+const TEXT={get failed(){return l10n('mj6');}};
 try {
+  const offLanguage=await initUiLanguage(getDefaultSettingsStore(),document);
+  window.addEventListener('pagehide',offLanguage,{once:true});
   const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
   const reader=tab?.url?.startsWith(chrome.runtime.getURL('pdf/viewer.html'));
   let restricted=!tab?.id||(!reader&&!/^https?:\/\//.test(tab.url||''));

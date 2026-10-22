@@ -1,4 +1,4 @@
-import { t as l10n, uiLanguage } from '../../shared/i18n.js';
+import { message as l10n, uiLanguage, setText, setAttribute } from '../../shared/i18n.js';
 import { SHARED_CSS } from '../theme.js';
 import { organizeLayout, SETTINGS_CSS } from './navigation.js';
 import { LANGS, STYLES, TRANSLATION_MODES } from '../../shared/settings.js';
@@ -143,8 +143,8 @@ export const FORM_CSS = SHARED_CSS + SETTINGS_CSS;
 export function drawLayout(root, { secretDialog = false } = {}) {
   const doc = root.ownerDocument;
   const el = (tag, text, attrs = {}) => {
-    const n = doc.createElement(tag); if (text) n.textContent = text;
-    for (const [key, value] of Object.entries(attrs)) n.setAttribute(key, value);
+    const n = doc.createElement(tag); if (text) setText(n, text);
+    for (const [key, value] of Object.entries(attrs)) setAttribute(n, key, value);
     return n;
   };
   const container = el('div', '', { class: 'dl-settings', lang:uiLanguage() });
@@ -175,6 +175,7 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   form.append(wizard);
   const sync = el('p', '', { id: 'sync-status', role: 'status' }); form.append(sync);
   const r = section(COPY.s5);
+  field(r.grid, 'uiLanguage', l10n('uiLanguageLabel'), 'select', pairs([['zh-CN',l10n('uiLanguageChinese')],['en',l10n('uiLanguageEnglish')],['auto',l10n('uiLanguageAuto')]]));
   field(r.grid, 'targetLang', COPY.s6, 'select', LANGS);
   field(r.grid, 'sourceLang', COPY.s7, 'select', [{ code: 'auto', name: COPY.s8 }, ...LANGS]);
   field(r.grid, 'displayMode', COPY.s9, 'select', pairs([['bilingual', COPY.s10], ['translation-only', COPY.s11]]));

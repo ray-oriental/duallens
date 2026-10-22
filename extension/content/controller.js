@@ -482,7 +482,7 @@ export class PageTranslator {
       // An empty draft is ignored; an empty final result keeps an existing draft instead of failing the unit.
       if(stage==='draft') return;
       if(unit.stage==='draft') this.#settleDraft(unit);
-      else this.#fail(unit,{code:ERR.PARSE,message:l10n('m4a')});
+      else this.#fail(unit,{code:ERR.PARSE,get message(){return l10n('m4a');}});
       return;
     }
     if(unit.translated===text && unit.tEl) {

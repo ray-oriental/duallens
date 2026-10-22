@@ -334,7 +334,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
       }
     }
     if(chain.some(id=>['deepl','microsoft-api'].includes(id))&&lastError)lastError.message+=l10n('m12');
-    const error = lastError ? toErrorInfo(lastError) : { code: ERR.NETWORK, message: l10n('m13') };
+    const error = lastError ? toErrorInfo(lastError) : { code: ERR.NETWORK, get message(){return l10n('m13');} };
     return job.items.map(it => results.get(it.id) || { id: it.id, error });
   }
 

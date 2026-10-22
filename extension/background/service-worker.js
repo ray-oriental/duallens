@@ -1,4 +1,4 @@
-import { t as l10n } from '../shared/i18n.js';
+import { t as l10n, initUiLanguage, setUiLanguage } from '../shared/i18n.js';
 // MV3 service worker. All listeners are registered synchronously at top level so Chrome can wake
 // the worker for them. Nothing here relies on in-memory state surviving: if the worker is
 // recycled the translate port disconnects and the content script re-sends unfinished items
@@ -33,6 +33,7 @@ import { createFrameHandlers } from './frames.js';
 import { createTabInjector } from './injection.js';
 import { createPermissionRegistry } from './permissions.js';
 
+const uiReady=initUiLanguage(getDefaultSettingsStore());
 const queue = createQueue();
 const cache = createCache();
 const getSecret = id => getDefaultSettingsStore().getSecret(id);
@@ -71,10 +72,10 @@ const canvasRegistry=createCanvasRegistry(chrome,loadSettings);
 handlers['comic-canvas-sites-sync']=async()=> {await imageRegistry.sync();return canvasRegistry.sync();};
 handlers['open-sidepanel'] = async (_msg, sender) => {
   try {
-    if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', message: l10n('m20') } };
+    if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', get message(){return l10n('m20');} } };
     await chrome.sidePanel.open({ tabId: sender.tab.id });
     return { ok: true };
-  } catch { return { ok: false, error: { code: 'unsupported', message: l10n('m20') } }; }
+  } catch { return { ok: false, error: { code: 'unsupported', get message(){return l10n('m20');} } }; }
 };
 function syncPermissions() {
   return permissionRegistry.sync().then(() => Promise.all([canvasRegistry.sync(), imageRegistry.sync()]));
@@ -131,7 +132,7 @@ chrome.runtime.onConnect.addListener((port) => {
     const reported = new Set();
     const priority = [PRIORITY.VISIBLE, PRIORITY.NEAR, PRIORITY.PREFETCH].includes(msg.priority) ? msg.priority : PRIORITY.NEAR;
     retain();
-    translator
+    uiReady.then(()=>translator
       .translate(
         { ...msg, incognito:port.sender?.tab?.incognito!==false, items, priority, reqId: `${portId}:${reqId}` },
         {
@@ -141,7 +142,7 @@ chrome.runtime.onConnect.addListener((port) => {
             post({ type: MSG_PARTIAL, reqId, results });
           },
         },
-      )
+      ))
       .catch((e) => {
         // unexpected failure: give every item that has no answer yet an error so the page is not left pending
         const error = toErrorInfo(e);
@@ -180,7 +181,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const handler = msg && handlers[msg.type];
   if (!handler) return false;
   retain();
-  handler(msg, sender)
+  (msg.type==='open-sidepanel'?handler(msg,sender):uiReady.then(()=>handler(msg,sender)))
     .then(sendResponse)
     .catch((e) => sendResponse({ ok: false, error: toErrorInfo(e) }))
     .finally(release);
@@ -217,14 +218,14 @@ const MENU = {
 let menuUpdate = Promise.resolve();
 function setupMenus() {
   menuUpdate = menuUpdate.catch(() => {}).then(async () => {
-    const settings = await loadSettings();
+    const settings = await loadSettings();setUiLanguage(settings.uiLanguage);
     await new Promise(resolve => chrome.contextMenus.removeAll(() => {
       void chrome.runtime.lastError;
       const add = props => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
-      add({ id: MENU.TOGGLE, title: l10n('m21'), contexts: ['page'] });
-      add({ id: MENU.SELECTION, title: l10n('m22'), contexts: ['selection'] });
-      add({ id: MENU.VIDEO_SUBTITLES, title: l10n('m23'), contexts: ['video'] });
-      if (settings.comics.enabled) add({ id: MENU.COMICS, title: l10n('m24'), contexts: ['image'] });
+      add({ id: MENU.TOGGLE, get title(){return l10n('m21');}, contexts: ['page'] });
+      add({ id: MENU.SELECTION, get title(){return l10n('m22');}, contexts: ['selection'] });
+      add({ id: MENU.VIDEO_SUBTITLES, get title(){return l10n('m23');}, contexts: ['video'] });
+      if (settings.comics.enabled) add({ id: MENU.COMICS, get title(){return l10n('m24');}, contexts: ['image'] });
       resolve();
     }));
   });

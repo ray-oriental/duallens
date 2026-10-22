@@ -40,7 +40,7 @@ def main():
                         # Include fractional desktop device scaling used by screenshot capture.
                         ctx=browser.new_context(locale=locale,viewport={'width':width,'height':height},is_mobile=True,has_touch=True,device_scale_factor=1.5)
                         try:
-                            ctx.add_init_script(STUB+'\n'+(REPO/'dist/duallens.user.js').read_text('utf-8'))
+                            ctx.add_init_script(STUB+'\n{const seed=GM_getValue("duallens:sync",{});Object.assign(seed.settings,'+json.dumps({'uiLanguage':'en' if locale.startswith('en') else 'zh-CN'})+');GM_setValue("duallens:sync",seed); }' +'\n'+(REPO/'dist/duallens.user.js').read_text('utf-8'))
                             page=ctx.new_page();page.goto(base+'/article.html?confirmation='+locale)
                             page.wait_for_function("__platformFixture.hasCommand('DualLens')")
                             page.evaluate("__platformFixture.settings({translation:{mode:'mt',mt:{engine:'microsoft',fallback:true}},floatBall:{enabled:false}})")

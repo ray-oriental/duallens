@@ -152,3 +152,18 @@ test('comic transport gate bounds all-tab fetching/OCR concurrency to two and re
     assert.equal(peak,2);
   } finally {globalThis.fetch=originalFetch;}
 });
+
+test('offscreen tasks receive resolved UI language without requiring offscreen storage access',async()=>{
+  const {setUiLanguage}=await import('../../extension/shared/i18n.js');
+  const messages=[];
+  const handlers=createComicHandlers({runtime:{getContexts:async()=>[{}],sendMessage:async msg=>{if(msg.type!=='comic-offscreen-ready')messages.push(msg);return {ok:true,languages:[]};}}});
+  try {
+    for(const pref of ['en','zh-CN']) {
+      setUiLanguage(pref);
+      await handlers['comic-languages-list']();
+      await handlers['comic-languages-delete']({lang:'eng'});
+      assert.equal(messages.at(-1).uiLanguage,pref);
+      assert.equal(messages.at(-2).uiLanguage,pref);
+    }
+  } finally {setUiLanguage('zh-CN');}
+});

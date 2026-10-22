@@ -30,7 +30,7 @@ export function createImageRegistry(api,getSettings) {
         if(await api.permissions.contains({origins:[`https://${host}/*`]})) addRules.push(rule);
       }
       const dnr=api.declarativeNetRequest;
-      if(!dnr) return {ok:false,error:{code:'unsupported',message:l10n('m2')}};
+      if(!dnr) return {ok:false,error:{code:'unsupported',get message(){return l10n('m2');}}};
       const current=(await dnr.getSessionRules()).filter(rule=>rule.id>=IMAGE_RULE_BASE && rule.id<IMAGE_RULE_BASE+IMAGE_RULE_LIMIT);
       if(JSON.stringify(current)!==JSON.stringify(addRules)) await dnr.updateSessionRules({removeRuleIds:current.map(rule=>rule.id),addRules});
       return {ok:true};

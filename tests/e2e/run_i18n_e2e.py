@@ -25,7 +25,7 @@ def extension(pw,base,ext,locale):
     h=Session(pw,ext,base,'i18n-'+locale,locale=locale)
     try:
         h.start()
-        h.settings({'targetLang':'ja',**{f:{'enabled':False} for f in ['selection','hover','input','floatBall','comics','subtitles']}})
+        h.settings({'uiLanguage':'zh-CN' if locale=='zh-CN' else 'en','targetLang':'ja',**{f:{'enabled':False} for f in ['selection','hover','input','floatBall','comics','subtitles']}})
         h.open('article.html?locale='+locale)
         popup=h.ctx.new_page()
         popup.set_viewport_size({'width':360,'height':900})
@@ -70,7 +70,7 @@ def extension(pw,base,ext,locale):
         original=h.page.locator('#p-plain').inner_html()
         h.command('toggle-page')
         cdp=h.ctx.new_cdp_session(h.page)
-        title='确认发送' if locale=='zh-CN' else 'Confirm sending'
+        title='将使用 Fixture AI，本页文字和标题会发送给 Fixture AI。' if locale=='zh-CN' else 'DualLens will use Fixture AI. Text and the title of this page will be sent to Fixture AI.'
         nodes=[]
         for _ in range(80):
             nodes=cdp.send('Accessibility.getFullAXTree')['nodes']
@@ -90,7 +90,7 @@ def userscript(pw,base,locale):
     browser=pw.chromium.launch(headless=True)
     context=browser.new_context(locale=locale,viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
     try:
-        context.add_init_script(STUB+'\n'+(REPO/'dist/duallens.user.js').read_text(encoding='utf-8'))
+        context.add_init_script(STUB+'\n{const seed=GM_getValue("duallens:sync",{});Object.assign(seed.settings,'+json.dumps({'uiLanguage':'zh-CN' if locale=='zh-CN' else 'en'})+');GM_setValue("duallens:sync",seed); }\n'+(REPO/'dist/duallens.user.js').read_text(encoding='utf-8'))
         page=context.new_page();page.goto(base+'/article.html?gm='+locale)
         label='翻译 / 恢复当前页面' if locale=='zh-CN' else 'Translate / Show original page'
         page.wait_for_function('label=>__platformFixture.hasCommand(label)',arg=label)
