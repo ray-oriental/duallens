@@ -283,3 +283,23 @@ test('mock: abortable', async () => {
   ctrl.abort();
   await assert.rejects(p, (e) => e.code === ERR.CANCELLED);
 });
+
+// The settings page and the userscript wrap transport in a buffered text() call with plain-object headers;
+// an OpenAI-compatible server that streams (as requested) must still parse, not fail as "not JSON".
+test('buffered SSE replies (wrapped transports, plain-object headers) are parsed as a stream', async () => {
+  const sse = (events) => events.map(e => 'data: ' + (typeof e === 'string' ? e : JSON.stringify(e)) + '\n\n').join('');
+  const chunk = (content, finish = null) => ({ choices: [{ index: 0, delta: { content }, finish_reason: finish }] });
+  const wrapped = (body, headers) => async () => ({ status: 200, headers, text: async () => body });
+  const cases = [
+    [sse([chunk('{"t":["你好，'), chunk('世界。"]}'), '[DONE]']), { 'content-type': 'text/event-stream; charset=utf-8' }],
+    [sse([chunk('{"t":["你好，'), chunk('世界。"]}', 'stop')]), {}], // no [DONE], no content-type: recognised by "data:"
+  ];
+  for (const [body, headers] of cases) {
+    const p = createProviders({ fetchImpl: wrapped(body, headers), getSecret: async () => '' });
+    const content = await p.chat({ profile: openai(), messages });
+    assert.equal(content, '{"t":["你好，世界。"]}');
+  }
+  // A truncated stream (no [DONE], no finish_reason) is still reported as incomplete.
+  const truncated = createProviders({ fetchImpl: wrapped(sse([chunk('{"t":["你好')]), {}), getSecret: async () => '' });
+  await assert.rejects(truncated.chat({ profile: openai(), messages }), e => e.code === ERR.PROVIDER);
+});

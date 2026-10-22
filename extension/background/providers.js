@@ -153,7 +153,9 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     let limit = timeoutMs;
     const reset = ms => { clearTimeout(timer); limit = ms; timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, ms); };
     reset(timeoutMs);
-    let content = '', streamed = false, done = false, carry = '';
+    let content = '', streamed = false, done = false, finished = false, carry = '';
+    // Headers are a Headers object from fetch, but a plain object from wrapped transports (settings page, GM).
+    const contentType = h => String((typeof h?.get === 'function' ? h.get('content-type') : h?.['content-type'] ?? h?.['Content-Type']) || '');
     const key = String(profile.apiKey || '').trim();
     const emitDelta = delta => {
       const text = scrub(carry + delta, profile);
@@ -180,9 +182,11 @@ export function createProviders({ fetchImpl, getSecret = async id => {
         if (content.length > 4 * 1024 * 1024) throw new DLError(ERR.PARSE, l10n('m1k'));
         emitDelta(delta.content);
       }
+      // Some OpenAI-compatible servers end with finish_reason and never send [DONE].
+      if (event.choices?.[0]?.finish_reason) finished = true;
     });
     const progress = (text, status, headers) => {
-      if (status >= 200 && status < 300 && /text\/event-stream/i.test(headers?.get('content-type') || '')) {
+      if (status >= 200 && status < 300 && /text\/event-stream/i.test(contentType(headers))) {
         streamed = true; parser.push(text);
       }
     };
@@ -204,7 +208,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
         timeoutMs, onText: progress,
       });
       let text;
-      if (onDelta && res.body?.getReader && /text\/event-stream/i.test(res.headers?.get('content-type') || '')) {
+      if (onDelta && res.body?.getReader && /text\/event-stream/i.test(contentType(res.headers))) {
         streamed = true;
         const reader = res.body.getReader(), decoder = new TextDecoder();
         try {
@@ -219,9 +223,15 @@ export function createProviders({ fetchImpl, getSecret = async id => {
         finally { reader.releaseLock(); }
         text = '';
       } else text = await res.text();
+      // A transport that buffers the whole body (no reader, no progress callback) still receives the SSE
+      // stream we asked for: parse it here instead of mistaking it for a malformed JSON reply.
+      if (!streamed && res.status >= 200 && res.status < 300 && (/text\/event-stream/i.test(contentType(res.headers)) || /^\s*data:/.test(text))) {
+        streamed = true; parser.push(text);
+      }
       if (streamed) {
         parser.end();
-        if (!done) throw new DLError(ERR.PROVIDER, l10n('m1l'), { status: 502 });
+        if (finished && !done && carry) { onDelta?.(carry); carry = ''; }
+        if (!done && !finished) throw new DLError(ERR.PROVIDER, l10n('m1l'), { status: 502 });
         text = JSON.stringify({ choices: [{ message: { content } }] });
       }
       return { status: res.status, retryAfter: res.headers && res.headers.get ? res.headers.get('retry-after') : null, text };
