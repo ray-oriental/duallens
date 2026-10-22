@@ -8,14 +8,14 @@ Usage (from the worktree root):
     python tests/e2e/run_e2e.py --list       list cases
 
 Design notes:
-- Each case gets its own temporary profile under %USERPROFILE%\\.cache\\duallens-e2e\\profile-*, removed after the case.
+- Each case gets its own temporary profile under DUALLENS_E2E_OUT/profile-*, removed after the case.
 - The extension is copied from extension/ (or --extension-dir) into a temp staging dir.
   Missing or empty manifest references fail before Chromium launches; no placeholders are synthesized.
 - Commands go through the service worker: chrome.tabs.sendMessage(tabId, {type:'command', name}). Synthetic Alt+A
   is probed separately (case probe_alt_a) and reported as INFO.
 - Settings are written into chrome.storage.local.settings with a deep merge that mirrors mergeSettings() in
   extension/shared/settings.js (arrays and scalars replace, plain objects merge).
-- Failure screenshots go to %USERPROFILE%\\.cache\\duallens-e2e\\artifacts\\<case>.png.
+- Failure screenshots go to DUALLENS_E2E_OUT/artifacts/<case>.png.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import shutil
+import tempfile
 import sys
 import threading
 import time
@@ -44,29 +45,13 @@ REPO = HERE.parents[1]
 EXT_SRC = REPO / "extension"
 FIXTURES = REPO / "tests" / "fixtures"
 
-HOME = Path(os.environ.get("USERPROFILE") or Path.home())
-E2E_ROOT = HOME / ".cache" / "duallens-e2e"
+E2E_ROOT = Path(os.environ.get("DUALLENS_E2E_OUT") or Path(tempfile.gettempdir()) / "duallens-e2e").expanduser().resolve()
 ARTIFACTS = E2E_ROOT / "artifacts"
 
 # Use the standard Playwright browser cache, or an explicit PLAYWRIGHT_BROWSERS_PATH.
-GATEWAY_HEALTH = "http://127.0.0.1:18790/health"
-REQUIRE_GATEWAY = False
 MOCK_PREFIX = "【译】"
 MT_PREFIX = "【机翻】"
 VIEWPORT = {"width": 1280, "height": 800}
-
-GATEWAY_PROFILE = {
-    "id": "gateway",
-    "kind": "gateway",
-    "name": "本机网关",
-    "baseUrl": "http://127.0.0.1:18790/v1",
-    "model": "ollama/qwen3:4b",
-    "fallbackModels": [],
-    "maxItems": 40,
-    "maxChars": 6000,
-    "concurrency": 2,
-    "timeoutMs": 90000,
-}
 
 ARTICLE_UNITS = [
     "#h-title", "#p-intro", "#h2-short", "#p-plain", "#p-links", "#p-bold",
@@ -131,13 +116,18 @@ def manifest_refs(m: dict) -> list[str]:
     return sorted(set(refs))
 
 
-def stage_extension(run_dir: Path, source: Path | None = None) -> tuple[Path, list[str]]:
+def stage_extension(run_dir: Path, source: Path | None = None, *, fixture_hosts: bool = True) -> tuple[Path, list[str]]:
     dst = run_dir / "ext"
     src = (source or EXT_SRC).resolve()
     if not src.is_dir():
         raise ValueError(f"extension source directory does not exist: {src}")
     shutil.copytree(src, dst)
     manifest = json.loads((dst / "manifest.json").read_text(encoding="utf-8-sig"))
+    if fixture_hosts:
+        # Legacy interaction cases explicitly exercise passive features and cross-origin frames.
+        # Grant access in this disposable fixture only; never alter the release manifest.
+        manifest.setdefault('host_permissions', []).append('<all_urls>')
+        (dst / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
     missing: list[str] = []
     for rel in manifest_refs(manifest):
         path = Path(rel)
@@ -167,15 +157,6 @@ def start_fixtures() -> tuple[ThreadingHTTPServer, str]:
     return httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
 
 
-def gateway_up() -> bool:
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    try:
-        with opener.open(GATEWAY_HEALTH, timeout=2) as r:
-            return r.status == 200
-    except Exception:
-        return False
-
-
 # ---------------------------------------------------------------- JS snippets
 
 JS_MANIFEST = """() => {
@@ -190,9 +171,8 @@ JS_SET_SETTINGS = """async (patch) => {
     for (const [k, v] of Object.entries(over)) out[k] = deep(out[k], v);
     return out;
   };
-  const got = await chrome.storage.local.get('settings');
-  const next = deep(got.settings || {}, patch);
-  await chrome.storage.local.set({ settings: next });
+  const { loadSettings, saveSettings } = await import('chrome-extension://' + chrome.runtime.id + '/shared/settings.js');
+  const next = await saveSettings(deep(await loadSettings(), patch));
   return next;
 }"""
 
@@ -227,7 +207,7 @@ JS_NO_TRACE = """() => document.querySelectorAll(
   'dl-t, dl-o, dl-w, dl-r, [data-dl-id], [data-dl-state], .dl-only, .dl-solo, .dl-hide').length === 0"""
 
 JS_STYLE_MUTED = """() => document.querySelectorAll('dl-t[data-dl-state="done"].dl-s-muted').length"""
-JS_STYLE_UNDERLINE = """() => document.querySelectorAll('dl-t[data-dl-state="done"].dl-s-underline').length > 0 &&
+JS_STYLE_UNDERLINE = """() => document.querySelectorAll('dl-t[data-dl-state="done"].dl-s-dashed').length > 0 &&
   document.querySelectorAll('dl-t.dl-s-muted').length === 0"""
 
 JS_LP_TRANSLATED_COUNT = """() => [...document.querySelectorAll('p.lp')].filter((p) => p.querySelector('dl-t[data-dl-state="done"]')).length"""
@@ -270,11 +250,12 @@ def get_sw(ctx, timeout_s: float = 20.0):
 
 
 class Session:
-    def __init__(self, p: Playwright, ext_dir: Path, base: str, name: str):
+    def __init__(self, p: Playwright, ext_dir: Path, base: str, name: str, locale: str = 'zh-CN'):
         self.p = p
         self.ext_dir = ext_dir
         self.base = base
         self.name = name
+        self.locale = locale
         self.profile = E2E_ROOT / f"profile-{name}-{uuid.uuid4().hex[:8]}"
         self.ctx = None
         self.page = None
@@ -288,6 +269,7 @@ class Session:
             str(self.profile),
             headless=False,  # the --headless=new flag below keeps it headless while allowing extensions
             args=[
+                f"--lang={self.locale}",
                 "--headless=new",
                 f"--disable-extensions-except={self.ext_dir}",
                 f"--load-extension={self.ext_dir}",
@@ -296,11 +278,12 @@ class Session:
             ],
             ignore_default_args=["--disable-extensions"],
             viewport=VIEWPORT,
+            locale=self.locale,
         )
         sw = get_sw(self.ctx)
         self.ext_id = sw.url.split("/")[2]
         # Legacy cases exercise the LLM path; the double-engine cases below pick their own mode.
-        self.settings({"provider": {"active": "mock"}, "translation": {"mode": "llm", "mt": {"engine": "mock"}}})
+        self.settings({"version": 3, "provider": {"active": "mock"}, "translation": {"mode": "llm", "mt": {"engine": "mock"}}, **{f: {"enabled": True} for f in ("selection", "hover", "input", "floatBall", "comics")}})
         # The worker migrates this legacy write asynchronously; a second write racing that migration can be overwritten.
         time.sleep(0.5)
 
@@ -340,7 +323,14 @@ class Session:
         raise RuntimeError(f"service worker evaluate failed: {last}")
 
     def settings(self, patch: dict) -> dict:
-        return self.sw_eval(JS_SET_SETTINGS, patch)
+        # MV3 workers cannot use dynamic import(). Use an isolated extension page
+        # to exercise the public store and await persistence before the next action.
+        bridge = self.ctx.new_page()
+        try:
+            bridge.goto(f'chrome-extension://{self.ext_id}/ui/options.html')
+            return bridge.evaluate(JS_SET_SETTINGS, patch)
+        finally:
+            bridge.close()
 
     def msg(self, message: dict) -> dict:
         return self.sw_eval(JS_SEND, {"tabId": self.tab_id, "msg": message})
@@ -366,6 +356,13 @@ class Session:
         raise AssertionError(f"timed out after {timeout:.0f}s waiting for {what}; last get-state: {shown}")
 
     def wait_ready(self, timeout: float = 20.0) -> None:
+        bridge = self.ctx.new_page()
+        try:
+            bridge.goto(f'chrome-extension://{self.ext_id}/ui/options.html')
+            result = bridge.evaluate("tabId => chrome.runtime.sendMessage({type:'tab-ensure',tabId})", self.tab_id)
+            check(result.get('ok'), f'tab-ensure failed: {result}')
+        finally:
+            bridge.close()
         end = time.time() + timeout
         last = None
         while time.time() < end:
@@ -612,6 +609,21 @@ def style_change_syncs(h: Session) -> None:
     h.wait_js(JS_STYLE_UNDERLINE, 10, what="translations switched to dl-s-underline")
 
 
+@case("quiet_defaults_explicit_selection", "更多功能关闭时无页面控件；显式右键选中文字仍可用")
+def quiet_defaults_explicit_selection(h: Session) -> None:
+    h.settings({feature: {"enabled": False} for feature in ("floatBall", "selection", "hover", "input", "comics")})
+    h.open("article.html")
+    h.page.locator("#p-plain").click(click_count=3)
+    h.page.wait_for_timeout(350)
+    check(h.js("() => document.querySelectorAll('dl-ui,dl-t').length") == 0, "disabled features created page UI or translations")
+    state = h.state()
+    check(not state['ui']['floatBall'] and not state['ui']['selectionIcon'], "quiet features are visible")
+    result = h.msg({"type": "translate-selection", "text": "Explicitly selected original text."})
+    check(result.get('response', {}).get('ok'), "explicit selection command was disabled")
+    h.wait_state(lambda s: ((s['ui'].get('selectionCard') or {}).get('text') or '').startswith(MOCK_PREFIX), 10,
+                 "explicit selection translates while passive selection stays off")
+
+
 @case("input_triple_space_textarea", "textarea 输入英文后连按三次空格，内容变成【译】…")
 def input_triple_space_textarea(h: Session) -> None:
     h.open("article.html")
@@ -728,23 +740,30 @@ def structure_mixed_and_flex(h: Session) -> None:
           "flex container translation is not wrapped in dl-w")
 
 
-@case("ui_settings", "设置页保存、订阅手选后无自动备选、密钥输入遮蔽")
+@case("ui_settings", "设置页保存、显式模型选择、密钥输入遮蔽")
 def ui_settings(h: Session) -> None:
     page = h.ctx.new_page()
     page.goto(f"chrome-extension://{h.ext_id}/ui/options.html")
-    page.locator('#status').filter(has_text='修改后').wait_for(timeout=10000)
+    page.locator('#save:not([disabled])').wait_for(state='attached', timeout=10000)
+    check(page.locator('#status').inner_text() == '', 'settings opened with a self-describing autosave notice')
     page.select_option('#targetLang', 'ja')
+    page.locator('nav a[href="#glossary"]').click()
     page.locator('#glossary').fill('kernel → 内核')
-    page.locator('#save').click()
-    page.locator('#status').filter(has_text='已保存').wait_for(timeout=10000)
+    saves = page.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")
+    page.locator('#save-glossary').click()
+    page.locator(f'#saved-toast[data-count]:not([data-count="{saves}"])').wait_for(state='attached', timeout=10000)
+    check('已保存' not in page.locator('#status').inner_text(), 'save feedback duplicated in the status line')
     s = h.sw_eval("async () => (await chrome.storage.local.get('settings')).settings")
     check(s['targetLang'] == 'ja' and s['glossary'][0]['dst'] == '内核', 'options did not persist settings')
-    page.select_option('#profile', 'gateway')
-    page.locator('#model').fill('claude/haiku')
+    page.locator('nav a[href="#ai"]').click()
+    page.select_option('#profile', 'openai')
+    page.locator('#model').fill('example/model')
+    saves = page.evaluate("() => Number(document.querySelector('#saved-toast').dataset.count||0)")
     page.locator('#save').click()
-    page.locator('#status').filter(has_text='已保存').wait_for(timeout=10000)
+    page.locator(f'#saved-toast[data-count]:not([data-count="{saves}"])').wait_for(state='attached', timeout=10000)
+    check(page.locator('#saved-toast').inner_text() == '已保存', 'missing title-row save note')
     s = h.sw_eval("async () => (await chrome.storage.local.get('settings')).settings")
-    check(s['provider']['profiles'][0]['fallbackModels'] == [], 'manual subscription selection retained fallback models')
+    check(s['provider']['profiles'][0]['fallbackModels'] == [], 'explicit model selection unexpectedly added fallback models')
     check(page.locator('#apiKey').get_attribute('type') == 'password', 'API key input not concealed')
     page.close()
 
@@ -834,7 +853,7 @@ def native_attributes_restore(h: Session) -> None:
 @case("toast_expiry_cleanup", "无焦点输入提示到期detach，设从不时立即移除提示和UI")
 def toast_expiry_cleanup(h: Session) -> None:
     h.open('article.html')
-    h.wait_state(lambda s:(s.get('ui') or {}).get('floatBall'),5,'floating ball ready')
+    h.wait_state(lambda s:(s.get('ui') or {}).get('floatBall'),5,'floating button ready')
     baseline=h.js("() => document.querySelectorAll('dl-ui').length")
     h.command('translate-input')
     h.wait_js("count => document.querySelectorAll('dl-ui').length === count + 1",5,arg=baseline,what='toast host added')
@@ -980,19 +999,6 @@ def hover_uses_machine_translation(h: Session) -> None:
         h.page.keyboard.up("Shift")
 
 
-@case("gateway_article", "本机网关 gateway + ollama/qwen3:4b 真实翻译 article.html，译文含中文（可选）")
-def gateway_article(h: Session) -> None:
-    if not gateway_up():
-        check(not REQUIRE_GATEWAY, f"required gateway is unavailable: {GATEWAY_HEALTH}")
-        raise Skip(f"{GATEWAY_HEALTH} not reachable; start the gateway to run this case")
-    h.settings({"provider": {"active": "gateway", "profiles": [GATEWAY_PROFILE]}})
-    h.open("article.html")
-    h.command("toggle-page")
-    h.wait_units(ARTICLE_UNITS, timeout=300)
-    cjk = h.js(JS_CJK_IN_TRANSLATIONS)
-    check(cjk >= 3, f"only {cjk} translations contain Chinese characters")
-
-
 # ---------------------------------------------------------------- runner
 
 def run_case(p: Playwright, name: str, fn, ext_dir: Path, base: str) -> dict:
@@ -1031,21 +1037,17 @@ def run_case(p: Playwright, name: str, fn, ext_dir: Path, base: str) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    global REQUIRE_GATEWAY, ARTIFACTS
+    global ARTIFACTS
     ap = argparse.ArgumentParser(description="DualLens E2E runner")
     ap.add_argument("--smoke", action="store_true", help="only the extension launch check")
     ap.add_argument("--only", action="append", default=[], help="substring filter on case names (repeatable)")
     ap.add_argument("--list", action="store_true", help="list cases and exit")
     ap.add_argument("--extension-dir", type=Path, default=EXT_SRC, help="read-only extension source directory to copy")
-    ap.add_argument("--require-gateway", action="store_true", help="fail rather than skip when the real gateway case cannot run")
-    ap.add_argument("--mock-only", action="store_true", help="exclude real-provider integration; no account or gateway needed")
+    ap.add_argument("--mock-only", action="store_true", help="exclude real-provider integration; no account or model service needed")
     ap.add_argument("--artifacts-dir", type=Path, help="isolated result directory, preferably outside the checkout")
     args = ap.parse_args(argv)
-    if args.mock_only and args.require_gateway:
-        ap.error("--mock-only cannot be combined with --require-gateway")
     if args.artifacts_dir:
         ARTIFACTS = args.artifacts_dir.expanduser().resolve()
-    REQUIRE_GATEWAY = args.require_gateway
 
     if args.list:
         for name, _, desc in CASES:
@@ -1057,8 +1059,6 @@ def main(argv: list[str] | None = None) -> int:
         selected = [c for c in CASES if c[0] == "smoke_launch"]
     elif args.only:
         selected = [c for c in CASES if any(o in c[0] for o in args.only)]
-    if args.mock_only:
-        selected = [c for c in selected if c[0] != "gateway_article"]
     if not selected:
         print("no matching cases")
         return 2

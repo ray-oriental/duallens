@@ -1,17 +1,153 @@
+import { message as l10n, uiLanguage, setText, setAttribute } from '../../shared/i18n.js';
+import { SHARED_CSS } from '../theme.js';
+import { organizeLayout, SETTINGS_CSS } from './navigation.js';
 import { LANGS, STYLES, TRANSLATION_MODES } from '../../shared/settings.js';
 import { PROVIDER_PRESETS } from '../../shared/presets.js';
 import { MT_ENGINES } from '../../background/mt.js';
 
-export const FORM_CSS = `.dl-settings{color-scheme:light dark;--bg:#f5f7fb;--panel:#fff;--fg:#182339;--muted:#58677d;--line:#d9e0ec;--accent:#365edd;color:var(--fg);background:var(--bg);font:14px/1.6 system-ui,sans-serif;padding:16px;max-width:960px;margin:auto;overflow-wrap:anywhere}.dl-settings *{box-sizing:border-box;min-width:0}.dl-settings section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}.dl-settings h2{font-size:18px;margin:0 0 12px}.dl-settings p{margin:8px 0}.dl-settings .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.dl-settings .wide{grid-column:1/-1}.dl-settings label{display:block;color:var(--muted)}.dl-settings input,.dl-settings select,.dl-settings textarea,.dl-settings button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;min-height:44px;max-width:100%;padding:9px}.dl-settings input,.dl-settings select,.dl-settings textarea{display:block;width:100%;margin-top:5px}.dl-settings textarea{min-height:90px;resize:vertical}.dl-settings input[type=checkbox]{display:inline-block;width:20px;min-height:20px;margin:0 8px 0 0}.dl-settings .check{display:flex;align-items:center;min-height:44px}.dl-settings .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.dl-settings button{cursor:pointer;background:var(--panel)}.dl-settings button:disabled{opacity:.6;cursor:wait}.dl-settings .primary{background:var(--accent);color:#fff}.dl-settings .hint{color:var(--muted);font-size:13px}.dl-settings a{color:var(--accent)}.dl-settings .status{min-height:24px}.dl-settings .error{color:#ba2440}.dl-settings .savebar{position:sticky;bottom:0;background:var(--panel);padding:12px;display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:12px}.dl-settings [hidden]{display:none!important}.dl-settings:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media(prefers-color-scheme:dark){.dl-settings{--bg:#111821;--panel:#1a2432;--fg:#e7edf6;--muted:#a0afc4;--line:#34435a;--accent:#365edd}.dl-settings a{color:#aac0ff}.dl-settings .error{color:#ff94a3}}@media(max-width:599px){.dl-settings{padding:8px;width:100%}.dl-settings .grid{grid-template-columns:1fr}.dl-settings section{padding:12px}.dl-settings .savebar{padding:8px}}`;
+// Localized copy shared by the extension and lazy userscript UI.
+const COPY=Object.freeze({
+  s0:l10n('mdv'),
+  s1:l10n('mdw'),
+  s2:l10n('mdx'),
+  s3:l10n('mdy'),
+  s4:l10n('mdz'),
+  s5:l10n('me0'),
+  s6:l10n('ma8'),
+  s7:l10n('ma7'),
+  s8:l10n('m5e'),
+  s9:l10n('me1'),
+  s10:l10n('me2'),
+  s11:l10n('m4f'),
+  s12:l10n('me3'),
+  s13:l10n('me4'),
+  s14:l10n('me5'),
+  s15:l10n('me6'),
+  s16:l10n('me7'),
+  s17:l10n('me8'),
+  s18:l10n('me9'),
+  s19:l10n('mea'),
+  s20:l10n('meb'),
+  s21:l10n('mec'),
+  s22:l10n('med'),
+  s23:l10n('mbs'),
+  s24:l10n('mee'),
+  s25:l10n('mef'),
+  s26:l10n('meg'),
+  s27:l10n('meh'),
+  s28:l10n('mei'),
+  s29:l10n('mej'),
+  s30:l10n('mek'),
+  s31:l10n('mel'),
+  s32:l10n('mem'),
+  s33:l10n('men'),
+  s34:l10n('meo'),
+  s35:l10n('mep'),
+  s36:l10n('meq'),
+  s37:l10n('mbv'),
+  s38:l10n('mer'),
+  s39:l10n('mes'),
+  s40:l10n('met'),
+  s41:l10n('meu'),
+  s42:l10n('mev'),
+  s43:l10n('mew'),
+  s44:l10n('mex'),
+  s45:l10n('mey'),
+  s46:l10n('mez'),
+  s47:l10n('mf0'),
+  s48:l10n('mf1'),
+  s49:l10n('mf2'),
+  s50:l10n('mf3'),
+  s51:l10n('mf4'),
+  s52:l10n('maw'),
+  s53:l10n('mf5'),
+  s54:l10n('mb0'),
+  s55:l10n('mf6'),
+  s56:l10n('mf7'),
+  s57:l10n('mf8'),
+  s58:l10n('mf9'),
+  s59:l10n('mfa'),
+  s60:l10n('mfb'),
+  s61:l10n('mfc'),
+  s62:l10n('mfd'),
+  s63:l10n('mfe'),
+  s64:l10n('mff'),
+  s65:l10n('mfg'),
+  s66:l10n('mfh'),
+  s67:l10n('mfi'),
+  s68:l10n('mfj'),
+  s69:l10n('mfk'),
+  s70:l10n('mfl'),
+  s71:l10n('ma9'),
+  s72:l10n('mfm'),
+  s73:l10n('mfn'),
+  s74:l10n('mfo'),
+  s75:l10n('mfp'),
+  s76:l10n('mfq'),
+  s77:l10n('mfr'),
+  s78:l10n('mfs'),
+  s79:l10n('mft'),
+  s80:l10n('m2s'),
+  s81:l10n('m2t'),
+  s82:l10n('m2u'),
+  s83:l10n('m2v'),
+  s84:l10n('mfu'),
+  s85:l10n('mfv'),
+  s86:l10n('mfw'),
+  s87:l10n('mfx'),
+  s88:l10n('mfy'),
+  s89:l10n('mfz'),
+  s90:l10n('mg0'),
+  s91:l10n('mg1'),
+  s92:l10n('mg2'),
+  s93:l10n('mg3'),
+  s94:l10n('mg4'),
+  s95:l10n('mg5'),
+  s96:l10n('mg6'),
+  s97:l10n('mg7'),
+  s98:l10n('mg8'),
+  s99:l10n('mg9'),
+  s100:l10n('mga'),
+  s101:l10n('mgb'),
+  s102:l10n('mgc'),
+  s103:l10n('mgd'),
+  s104:l10n('mge'),
+  s105:l10n('mgf'),
+  s106:l10n('mgg'),
+  s107:l10n('mgh'),
+  s108:l10n('mgi'),
+  s109:l10n('mgj'),
+  s110:l10n('mgk'),
+  s111:l10n('mgl'),
+  s112:l10n('mgm'),
+  s113:l10n('mgn'),
+  s114:l10n('mgo'),
+  s115:l10n('mgp'),
+  s116:l10n('mgq'),
+  s117:l10n('mgr'),
+  s118:l10n('mgs'),
+  s119:l10n('mgt'),
+  s120:l10n('mgu'),
+  s121:l10n('mgv'),
+  s122:l10n('mgw'),
+  s123:l10n('mgx'),
+  s124:l10n('mgy'),
+  s125:l10n('mgz'),
+  s126:l10n('mh0'),
+  s127:l10n('mh1'),
+  s128:l10n('mh2')
+});
+
+export const FORM_CSS = SHARED_CSS + SETTINGS_CSS;
 
 export function drawLayout(root, { secretDialog = false } = {}) {
   const doc = root.ownerDocument;
   const el = (tag, text, attrs = {}) => {
-    const n = doc.createElement(tag); if (text) n.textContent = text;
-    for (const [key, value] of Object.entries(attrs)) n.setAttribute(key, value);
+    const n = doc.createElement(tag); if (text) setText(n, text);
+    for (const [key, value] of Object.entries(attrs)) setAttribute(n, key, value);
     return n;
   };
-  const container = el('div', '', { class: 'dl-settings' });
+  const container = el('div', '', { class: 'dl-settings', lang:uiLanguage() });
   const style = el('style', FORM_CSS); container.append(style);
   const form = el('form', '', { id: 'settings-form' }); container.append(form);
   const section = title => {
@@ -19,136 +155,135 @@ export function drawLayout(root, { secretDialog = false } = {}) {
     const grid = el('div', '', { class: 'grid' }); box.append(grid); form.append(box); return { box, grid };
   };
   const field = (parent, id, title, type = 'text', choices = [], attrs = {}) => {
-    const label = el('label', '', { class: ['textarea', 'url', 'password'].includes(type) ? 'wide' : type === 'checkbox' ? 'check' : '' });
+    const label = el('label', '', { class: ['textarea', 'url', 'password'].includes(type) ? 'field wide' : type === 'checkbox' ? 'field check' : 'field' });
     const input = el(type === 'textarea' ? 'textarea' : type === 'select' ? 'select' : 'input', '', { id, ...attrs });
     if (!['textarea', 'select'].includes(type)) input.type = type;
-    if (type === 'checkbox') label.append(input, doc.createTextNode(title));
-    else { label.append(doc.createTextNode(title), input); }
-    for (const c of choices) input.append(el('option', c.name || c.label || c.id || c.code, { value: c.id ?? c.code }));
+    const text = el('span', title, { class: 'field-label' });
+    if (type === 'checkbox') label.append(input, text);
+    else { label.append(text, input); }
+    for (const c of choices) {const option=el('option', c.name || c.label || c.id || c.code, { value: c.id ?? c.code });option.hidden=c.id==='mock';input.append(option);}
     parent.append(label); return input;
   };
   const button = (parent, id, title) => { const b = el('button', title, { id, type: 'button' }); parent.append(b); return b; };
   const pairs = values => values.map(([id, name]) => ({ id, name }));
 
   const wizard = el('section', '', { id: 'wizard' });
-  wizard.append(el('h2', '首次使用向导'), el('p', '现在就能翻译：默认用机器翻译（Microsoft 免费接口，无需 key），译文秒出。'),
-    el('p', '想要更好的译文？再添加一个大模型服务，它会在后台把机翻结果无感替换成精修译文。推荐 OpenRouter 免费模型，也可选择你自己的服务。'),
-    el('p', '1 选预设 → 2 填 key → 3 获取模型 → 4 测试连接 → 5 保存'),
-    el('p', '免费模型有每分钟和每日限额；自动备选不能绕过账号限额。未点击获取或测试前不会联网。', { class: 'hint' }));
+  wizard.append(el('h2', COPY.s0), el('p', COPY.s1),
+    el('p', COPY.s2),
+    el('p', COPY.s3),
+    el('p', COPY.s4, { class: 'hint' }));
   form.append(wizard);
   const sync = el('p', '', { id: 'sync-status', role: 'status' }); form.append(sync);
-  const r = section('阅读');
-  field(r.grid, 'targetLang', '目标语言', 'select', LANGS);
-  field(r.grid, 'sourceLang', '源语言', 'select', [{ code: 'auto', name: '自动检测' }, ...LANGS]);
-  field(r.grid, 'displayMode', '显示方式', 'select', pairs([['bilingual', '双语对照'], ['translation-only', '仅译文']]));
-  field(r.grid, 'style', '译文样式', 'select', STYLES);
-  for (const [id, title] of [['minChars', '最短段落字符数'], ['inlineMaxChars', '行内译文阈值'], ['rootMarginPx', '预加载距离（px）'], ['batchDelayMs', '合批等待（ms）']]) field(r.grid, id, title, 'number');
-  field(r.grid, 'translateShortText', '翻译短文本（按钮、标签、导航项）', 'checkbox');
+  const r = section(COPY.s5);
+  field(r.grid, 'uiLanguage', l10n('uiLanguageLabel'), 'select', pairs([['zh-CN',l10n('uiLanguageChinese')],['en',l10n('uiLanguageEnglish')],['auto',l10n('uiLanguageAuto')]]));
+  field(r.grid, 'targetLang', COPY.s6, 'select', LANGS);
+  field(r.grid, 'sourceLang', COPY.s7, 'select', [{ code: 'auto', name: COPY.s8 }, ...LANGS]);
+  field(r.grid, 'displayMode', COPY.s9, 'select', pairs([['bilingual', COPY.s10], ['translation-only', COPY.s11]]));
+  field(r.grid, 'style', COPY.s12, 'select', STYLES);
+  for (const [id, title] of [['minChars', COPY.s13], ['inlineMaxChars', COPY.s14], ['rootMarginPx', COPY.s15], ['batchDelayMs', COPY.s16]]) field(r.grid, id, title, 'number');
+  field(r.grid, 'translateShortText', COPY.s17, 'checkbox');
 
-  const t = section('翻译方式');
-  field(t.grid, 'translationMode', '翻译方式', 'select', TRANSLATION_MODES);
-  field(t.grid, 'mtEngine', '机器翻译引擎', 'select', MT_ENGINES);
-  field(t.grid, 'mtFallback', '失败时自动换另一家免费引擎', 'checkbox');
-  field(t.grid, 'mtRegion', 'Microsoft Translator 区域（官方接口可选，例如 eastasia）');
+  const t = section(COPY.s18);
+  field(t.grid, 'translationMode', COPY.s18, 'select', TRANSLATION_MODES);
+  field(t.grid, 'mtEngine', COPY.s19, 'select', MT_ENGINES);
+  field(t.grid, 'mtFallback', COPY.s20, 'checkbox');
+  field(t.grid, 'mtRegion', COPY.s21);
   if (secretDialog) {
     const row = el('div', '', { id: 'mt-key-row', class: 'wide' });
-    row.append(el('p', '官方机器翻译 key（Microsoft Translator 或 DeepL；仅存本机）'), el('p', '未设置', { id: 'mt-key-status', role: 'status' }));
+    row.append(el('p', COPY.s22), el('p', COPY.s23, { id: 'mt-key-status', role: 'status' }));
     const controls = el('div', '', { class: 'actions' }); row.append(controls);
-    button(controls, 'mt-set-key', '设置 key'); button(controls, 'mt-clear-key', '清除 key');
+    button(controls, 'mt-set-key', COPY.s24); button(controls, 'mt-clear-key', COPY.s25);
     t.grid.append(row);
   } else {
-    const key = field(t.grid, 'mtKey', '官方机器翻译 key（Microsoft Translator 或 DeepL；仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
+    const key = field(t.grid, 'mtKey', COPY.s22, 'password', [], { autocomplete: 'off', spellcheck: 'false' });
     key.parentElement.id = 'mt-key-row';
   }
   const mtActions = el('div', '', { class: 'actions wide' }); t.grid.append(mtActions);
-  button(mtActions, 'mt-test', '测试机器翻译');
-  t.box.append(el('p', '机翻先显示，大模型随后原位精修；失败保留机翻。划词、悬停、输入框优先机翻，划词可「精修」。', { class: 'hint' }),
-    el('p', '免费 Microsoft/Google 为非官方接口，无可用性保证，会收到待译文字。可改用「只用大模型」或带 key 的官方引擎。', { class: 'hint' }));
+  button(mtActions, 'mt-test', COPY.s26);
+  t.box.append(el('p', COPY.s27, { class: 'hint' }),
+    el('p', COPY.s28, { class: 'hint' }));
 
-  const p = section('模型服务');
-  field(p.grid, 'profile', '编辑 / 切换服务', 'select');
-  field(p.grid, 'providerPreset', '新增服务预设', 'select', [{ id: '', name: '请选择（推荐 OpenRouter）' }, ...PROVIDER_PRESETS]);
-  button(p.grid, 'add-profile', '添加所选服务');
-  button(p.grid, 'connect-gateway', '一键接入本机网关');
-  if (!secretDialog) field(p.grid, 'pairingText', '导入配对串（视同密钥，导入后立即清空）', 'password', [], { autocomplete: 'off' });
-  button(p.grid, 'import-pairing', '导入配对串');
-  p.grid.append(el('p', '手机可导入电脑终端 pair 生成的配对串；Tailscale 远程监听须在电脑显式启用，USB 需 adb reverse。', { class: 'hint wide' }));
-  p.grid.append(el('p', '', { id: 'provider-description', class: 'hint wide' }), el('a', '服务商说明 / 获取 key', { id: 'key-link', class: 'wide', target: '_blank', rel: 'noopener noreferrer' }));
-  field(p.grid, 'profileName', '服务名称');
-  field(p.grid, 'baseUrl', '兼容 API 基础地址', 'url');
+  const p = section(COPY.s29);
+  field(p.grid, 'profile', COPY.s30, 'select');
+  field(p.grid, 'providerPreset', COPY.s31, 'select', [{ id: '', name: COPY.s32 }, ...PROVIDER_PRESETS]);
+  button(p.grid, 'add-profile', COPY.s33);
+  p.grid.append(el('p', '', { id: 'provider-description', class: 'hint wide' }), el('a', COPY.s34, { id: 'key-link', class: 'wide', target: '_blank', rel: 'noopener noreferrer' }));
+  field(p.grid, 'profileName', COPY.s35);
+  field(p.grid, 'baseUrl', COPY.s36, 'url');
   if (secretDialog) {
     const row = el('div', '', { id: 'key-row', class: 'wide' });
-    row.append(el('p', 'API key / 网关配对令牌（仅存本机）', { id: 'credential-label' }), el('p', '未设置', { id: 'key-status', role: 'status' }));
+    row.append(el('p', COPY.s37, { id: 'credential-label' }), el('p', COPY.s23, { id: 'key-status', role: 'status' }));
     const controls = el('div', '', { class: 'actions' }); row.append(controls);
-    button(controls, 'set-key', '设置 key'); button(controls, 'clear-key', '清除 key');
-    row.append(el('p', '在浏览器原生对话框中输入；修改后点击保存。', { class: 'hint' }));
+    button(controls, 'set-key', COPY.s24); button(controls, 'clear-key', COPY.s25);
+    row.append(el('p', COPY.s38, { class: 'hint' }));
     p.grid.append(row);
   } else {
-    const key = field(p.grid, 'apiKey', 'API key（仅存本机）', 'password', [], { autocomplete: 'off', spellcheck: 'false' });
+    const key = field(p.grid, 'apiKey', COPY.s37, 'password', [], { autocomplete: 'off', spellcheck: 'false' });
     key.parentElement.id = 'key-row';
-    const title = el('span', 'API key（仅存本机）', { id: 'credential-label' });
+    const title = el('span', COPY.s37, { id: 'credential-label', class: 'field-label' });
     key.parentElement.firstChild.replaceWith(title);
   }
-  field(p.grid, 'model', '模型标识', 'text', [], { list: 'models', autocomplete: 'off' });
+  field(p.grid, 'model', COPY.s39, 'text', [], { list: 'models', autocomplete: 'off' });
   p.grid.append(el('datalist', '', { id: 'models' }));
   const actions = el('div', '', { class: 'actions wide' }); p.grid.append(actions);
-  button(actions, 'load-models', '获取模型列表'); button(actions, 'test', '测试连接');
-  field(p.grid, 'fallbackModels', '同服务备选模型（每行一个）', 'textarea');
-  for (const [id, title] of [['maxItems', '每批段落上限'], ['maxChars', '每批字符上限'], ['concurrency', '并发数'], ['timeoutMs', '超时（ms）']]) field(p.grid, id, title, 'number');
-  field(p.grid, 'jsonMode', '使用 JSON 响应模式', 'checkbox');
-  field(p.grid, 'providerChain', '跨服务备选链（JSON：profileId + model，按顺序）', 'textarea');
-  p.box.append(el('p', '选择 OpenRouter 免费模型后会建议 2–3 家厂商的备选链，可自行修改。网页正文只发送到这条链中的服务。订阅模型只能手动选择。', { class: 'hint' }));
+  button(actions, 'load-models', COPY.s40); button(actions, 'test', COPY.s41);
+  field(p.grid, 'fallbackModels', COPY.s42, 'textarea');
+  for (const [id, title] of [['maxItems', COPY.s43], ['maxChars', COPY.s44], ['concurrency', COPY.s45], ['timeoutMs', COPY.s46]]) field(p.grid, id, title, 'number');
+  field(p.grid, 'jsonMode', COPY.s47, 'checkbox');
+  field(p.grid, 'providerChain', COPY.s48, 'textarea');
+  p.box.append(el('p', COPY.s49, { class: 'hint' }));
 
-  const i = section('交互');
-  for (const [id, title] of [['hoverEnabled', '悬停 / 触屏长按翻译'], ['selectionEnabled', '划词翻译'], ['showIcon', '显示划词按钮'], ['inputEnabled', '输入框翻译'], ['prefixOverride', '允许 /ja 等语言前缀'], ['floatEnabled', '显示悬浮球']]) field(i.grid, id, title, 'checkbox');
-  field(i.grid, 'hoverModifier', '悬停修饰键', 'select', pairs([['Shift', 'Shift'], ['Alt', 'Alt'], ['Control', 'Ctrl'], ['none', '停留 500ms']]));
-  field(i.grid, 'inputLang', '输入框目标语言', 'select', LANGS);
-  field(i.grid, 'inputTrigger', '输入触发', 'select', pairs([['triple-space', '三次空格或快捷键'], ['shortcut', '仅快捷键']]));
-  field(i.grid, 'inputMode', '输入框写回', 'select', pairs([['replace', '替换原文'], ['bilingual', '双语（保留原文）']]));
-  field(i.grid, 'inputOrder', '双语顺序', 'select', pairs([['source-first', '原文在前'], ['translation-first', '译文在前']]));
-  for (const [name, title] of [['hover', '悬停 / 长按'], ['input', '输入框']]) {
-    field(i.grid, name + 'Profile', title + '服务', 'select');
-    field(i.grid, name + 'Model', title + '模型（留空使用服务默认模型）', 'text', [], { maxlength: '256' });
+  const i = section(COPY.s50);
+  for (const [id, title] of [['hoverEnabled', COPY.s51], ['selectionEnabled', COPY.s52], ['showIcon', COPY.s53], ['inputEnabled', COPY.s54], ['prefixOverride', COPY.s55], ['floatEnabled', COPY.s56]]) field(i.grid, id, title, 'checkbox');
+  field(i.grid, 'hoverModifier', COPY.s57, 'select', pairs([['Shift', 'Shift'], ['Alt', 'Alt'], ['Control', 'Ctrl'], ['none', COPY.s58]]));
+  field(i.grid, 'inputLang', COPY.s59, 'select', LANGS);
+  field(i.grid, 'inputTrigger', COPY.s60, 'select', pairs([['triple-space', COPY.s61], ['shortcut', COPY.s62]]));
+  field(i.grid, 'inputMode', COPY.s63, 'select', pairs([['replace', COPY.s64], ['bilingual', COPY.s65]]));
+  field(i.grid, 'inputOrder', COPY.s66, 'select', pairs([['source-first', COPY.s67], ['translation-first', COPY.s68]]));
+  for (const [name, title] of [['hover', COPY.s69], ['input', COPY.s70]]) {
+    field(i.grid, name + 'Profile', l10n('polishFeatureService',[name==='hover'?l10n('polishHoverShort'):l10n('polishInputShort')]), 'select');
+    field(i.grid, name + 'Model', l10n('polishFeatureModel',[name==='hover'?l10n('polishHoverShort'):l10n('polishInputShort')]), 'text', [], { maxlength: '256' });
   }
-  i.box.append(el('p', '继承网页翻译时沿用网页翻译方式与备选链；指定服务时使用其大模型，仅影响该交互。双语输入以换行分隔，单行输入框以空格分隔。', { class: 'hint' }));
-  field(i.grid, 'floatSide', '悬浮球侧边', 'select', pairs([['right', '右侧'], ['left', '左侧']]));
-  const comics = section('漫画');
-  field(comics.grid,'comicsEnabled','启用漫画本地 OCR','checkbox');
-  field(comics.grid,'comicsLanguage','漫画源语言','select',pairs([['jpn','日文横排'],['jpn_vert','日文竖排'],['kor','韩文'],['eng','英文']]));
-    field(comics.grid,'comicsSites','漫画站点（域名、*.example.com 或 JSON 对象，每行一个）','textarea');
-  comics.box.append(el('p','仅名单站点安装 canvas 来源钩子；增删后刷新网页生效。原图本地识别，仅 OCR 文字发给模型。',{class:'hint'}));
+  i.box.append(el('p', COPY.s73, { class: 'hint' }));
+  field(i.grid, 'floatSide', COPY.s74, 'select', pairs([['right', COPY.s75], ['left', COPY.s76]]));
+  const comics = section(COPY.s77);
+  field(comics.grid,'comicsEnabled',COPY.s78,'checkbox');
+  field(comics.grid,'comicsLanguage',COPY.s79,'select',pairs([['jpn',COPY.s80],['jpn_vert',COPY.s81],['kor',COPY.s82],['eng',COPY.s83]]));
+    field(comics.grid,'comicsSites',COPY.s84,'textarea');
+  comics.box.append(el('p',COPY.s85,{class:'hint'}));
   comics.box.append(el('div','',{id:'comics-languages',role:'status'}));
-  button(comics.box,'comics-refresh','查看已下载语言包');
-  const pr = section('提示词与术语');
-  field(pr.grid, 'preset', '翻译风格', 'select', pairs([['general', '通用'], ['tech', '技术'], ['academic', '学术'], ['news', '新闻'], ['social', '口语'], ['custom', '自定义']]));
-  field(pr.grid, 'customPrompt', '自定义风格要求', 'textarea'); field(pr.grid, 'glossary', '术语表（每行 原词 → 译词）', 'textarea');
-  const sites = section('站点规则');
-  field(sites.grid, 'always', '自动翻译模式（每行一个）', 'textarea'); field(sites.grid, 'never', '从不自动翻译模式（每行一个）', 'textarea');
-  field(sites.grid, 'autoLangs', '这些源语言自动翻译', 'select', LANGS, { multiple: '', size: '5' });
-  sites.box.append(el('p', '* 匹配任意路径字符，区分大小写；忽略查询串/片段。最具体规则优先。「从不」允许手动，但隐藏悬浮球；功能默认沿用全局。', { class: 'hint' }));
-  field(sites.grid, 'rule-match', '新增 / 编辑路径模式');
-  field(sites.grid, 'rule-page', '网页翻译', 'select', pairs([['default','默认'],['always','自动'],['never','从不（允许手动）']]));
-  for (const [id, title] of [['selection','划词'],['hover','悬停 / 长按'],['input','输入框']]) field(sites.grid, 'rule-' + id, title, 'select', pairs([['default','默认'],['on','开'],['off','关']]));
-  button(sites.box, 'site-rule-add', '添加 / 更新此规则');
-  field(sites.grid, 'customRules', '规则列表（JSON，可修改或删除）', 'textarea');
-  const backup = section('本机缓存与配置备份');
-  field(backup.grid, 'cacheEnabled', '缓存译文', 'checkbox');
-  field(backup.grid, 'maxEntries', '缓存条数上限', 'number'); field(backup.grid, 'ttlDays', '缓存有效天数', 'number');
-  backup.box.append(el('p', '', { id: 'cache-stats' })); button(backup.box, 'cache-clear', '清空译文缓存');
-  if (secretDialog) backup.box.append(el('p', '导出或导入加密配置时，浏览器原生对话框会询问口令；导出口令留空则生成不含 key 的明文。', { class: 'hint' }));
-  else field(backup.grid, 'backupPassword', '备份口令（留空则导出不含 key 的明文）', 'password', [], { autocomplete: 'new-password' });
-  field(backup.grid, 'backupText', '配置文本（加密文件可在设备之间搬运）', 'textarea');
+  button(comics.box,'comics-refresh',COPY.s86);
+  const pr = section(COPY.s87);
+  field(pr.grid, 'preset', COPY.s88, 'select', pairs([['general', COPY.s89], ['tech', COPY.s90], ['academic', COPY.s91], ['news', COPY.s92], ['social', COPY.s93], ['custom', COPY.s94]]));
+  field(pr.grid, 'customPrompt', COPY.s95, 'textarea'); field(pr.grid, 'glossary', COPY.s96, 'textarea');
+  const sites = section(COPY.s97);
+  field(sites.grid, 'always', COPY.s98, 'textarea'); field(sites.grid, 'never', COPY.s99, 'textarea');
+  field(sites.grid, 'autoLangs', COPY.s100, 'select', LANGS, { multiple: '', size: '5' });
+  sites.box.append(el('p', COPY.s101, { class: 'hint' }));
+  field(sites.grid, 'rule-match', COPY.s102);
+  field(sites.grid, 'rule-page', COPY.s103, 'select', pairs([['default',COPY.s104],['always',COPY.s105],['never',COPY.s106]]));
+  for (const [id, title] of [['selection',COPY.s107],['hover',COPY.s69],['input',COPY.s70]]) field(sites.grid, 'rule-' + id, title, 'select', pairs([['default',COPY.s104],['on',COPY.s108],['off',COPY.s109]]));
+  button(sites.box, 'site-rule-add', COPY.s110);
+  field(sites.grid, 'customRules', COPY.s111, 'textarea');
+  const backup = section(COPY.s112);
+  field(backup.grid, 'cacheEnabled', COPY.s113, 'checkbox');
+  field(backup.grid, 'maxEntries', COPY.s114, 'number'); field(backup.grid, 'ttlDays', COPY.s115, 'number');
+  backup.box.append(el('p', '', { id: 'cache-stats' })); button(backup.box, 'cache-clear', COPY.s116);
+  if (secretDialog) backup.box.append(el('p', COPY.s117, { class: 'hint' }));
+  else field(backup.grid, 'backupPassword', COPY.s118, 'password', [], { autocomplete: 'new-password' });
+  field(backup.grid, 'backupText', COPY.s119, 'textarea');
   const ba = el('div', '', { class: 'actions' }); backup.box.append(ba);
-  button(ba, 'export', '导出配置'); button(ba, 'import-button', '导入配置文本');
-  button(ba, 'export-phone', '导出到手机'); button(ba, 'copy-backup', '复制配置文本');
-  if (secretDialog) button(ba, 'import-computer', '从电脑导入');
-  backup.box.append(el('canvas', '', { id: 'backup-qr', hidden: '', 'aria-label': '加密配置二维码' }));
+  button(ba, 'export', COPY.s120); button(ba, 'import-button', COPY.s121);
+  button(ba, 'export-phone', COPY.s122); button(ba, 'copy-backup', COPY.s123);
+  if (secretDialog) button(ba, 'import-computer', COPY.s124);
+  backup.box.append(el('canvas', '', { id: 'backup-qr', hidden: '', 'aria-label': COPY.s125 }));
   const file = el('input', '', { id: 'import-file', type: 'file', accept: '.json,.txt,application/json,text/plain', hidden: '' }); ba.append(file);
-  button(ba, 'import-file-button', '选择配置文件');
-  backup.box.append(el('p', '加密备份含所填 key，请妥善保管。口令不会保存。明文导入保留本机 key。译文缓存不会导出。', { class: 'hint' }));
+  button(ba, 'import-file-button', COPY.s126);
+  backup.box.append(el('p', COPY.s127, { class: 'hint' }));
   const bar = el('div', '', { class: 'savebar' });
   bar.append(el('div', '', { id: 'status', class: 'status', role: 'status', 'aria-live': 'polite' }));
-  const save = button(bar, 'save', '保存设置'); save.type = 'submit'; save.className = 'primary'; form.append(bar);
+  const save = button(bar, 'save', COPY.s128); save.type = 'submit'; save.className = 'primary'; form.append(bar);
+  organizeLayout(container, form, {field, button});
   root.append(container);
   return container;
 }

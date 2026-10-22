@@ -1,9 +1,10 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { qrcodegen } from './qrcodegen.js';
 
 export function drawQRCode(canvas, text) {
   let qr;
   try { qr = qrcodegen.QrCode.encodeText(text, qrcodegen.QrCode.Ecc.LOW); }
-  catch { throw new Error('配置超出单个二维码容量；请复制加密文本或传输加密文件'); }
+  catch { throw new Error(l10n('mi1')); }
   const scale = 4, border = 4, size = (qr.size + border * 2) * scale;
   canvas.width = canvas.height = size;
   canvas.style.width = '100%'; canvas.style.maxWidth = size + 'px'; canvas.style.height = 'auto';

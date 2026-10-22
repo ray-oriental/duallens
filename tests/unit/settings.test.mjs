@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SETTINGS,
+  defaultTargetLanguage,
   mergeSettings,
   hostMatches,
   siteRuleFor,
@@ -37,7 +38,7 @@ test('mergeSettings keeps defaults for fields a stored settings object lacks', (
   assert.equal(s.cache.enabled, false);
   assert.equal(s.cache.maxEntries, DEFAULT_SETTINGS.cache.maxEntries);
   assert.equal(s.cache.ttlDays, 30);
-  assert.equal(s.provider.profiles.length, 3);
+  assert.equal(s.provider.profiles.length, 2);
 });
 
 test('siteRuleFor: never beats always, custom rule is independent', () => {
@@ -61,7 +62,7 @@ test('activeProfile picks the active one and falls back to the first', () => {
   const s = mergeSettings(DEFAULT_SETTINGS, { provider: { active: 'mock' } });
   assert.equal(activeProfile(s).id, 'mock');
   const gone = mergeSettings(DEFAULT_SETTINGS, { provider: { active: 'nope' } });
-  assert.equal(activeProfile(gone).id, 'gateway');
+  assert.equal(activeProfile(gone).id, 'openai');
 });
 
 test('loadSettings / saveSettings round trip against a fake chrome.storage', async () => {
@@ -79,7 +80,8 @@ test('loadSettings / saveSettings round trip against a fake chrome.storage', asy
     },
   };
   try {
-    assert.equal((await loadSettings()).targetLang, 'zh-CN');
+    assert.equal((await loadSettings()).targetLang, defaultTargetLanguage());
+    assert.equal((await loadSettings()).uiLanguage, 'zh-CN');
     const next = await saveSettings({ targetLang: 'fr', siteRules: { always: ['x.com'] } });
     assert.equal(next.targetLang, 'fr');
     assert.deepEqual(store[SETTINGS_KEY].siteRules.always, ['x.com']);
@@ -98,7 +100,5 @@ test('fresh installation requires a configured provider instead of borrowing loc
   assert.equal(profile.kind, 'openai');
   assert.equal(profile.baseUrl, '');
   assert.equal(profile.apiKey, undefined);
-  const gateway = DEFAULT_SETTINGS.provider.profiles.find(p => p.id === 'gateway');
-  assert.equal(gateway.model, 'auto');
-  assert.deepEqual(gateway.fallbackModels, []);
+  assert.equal(DEFAULT_SETTINGS.provider.profiles.some(p => p.kind === 'gateway'), false);
 });

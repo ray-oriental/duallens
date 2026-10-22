@@ -10,7 +10,7 @@ def exercise(page, toggle, input_command):
     original = page.evaluate('document.body.outerHTML')
     page.wait_for_timeout(1200)
     assert page.locator('dl-t').count() == 0, 'never route translated automatically'
-    assert page.locator('dl-ui').count() == 0, 'never route showed floating ball'
+    assert page.locator('dl-ui').count() == 0, 'never route showed floating button'
     page.locator('#p-hover').hover()
     page.keyboard.down('Shift'); page.wait_for_timeout(650); page.keyboard.up('Shift')
     if page.evaluate("matchMedia('(pointer:coarse)').matches"):
@@ -20,10 +20,16 @@ def exercise(page, toggle, input_command):
     page.locator('#p-plain').click(click_count=3)
     page.locator('#ta').focus()
     before = page.locator('#ta').input_value()
-    input_command()
+    page.keyboard.press('Space');page.keyboard.press('Space');page.keyboard.press('Space')
     page.wait_for_timeout(400)
     assert page.locator('dl-t,dl-ui').count() == 0, 'disabled feature produced UI or translation'
-    assert page.locator('#ta').input_value() == before, 'disabled input translated'
+    assert not page.locator('#ta').input_value().startswith('【译】'), 'disabled passive input translated'
+    page.locator('#ta').fill('An explicit input command remains available.')
+    input_command()
+    page.wait_for_function("document.querySelector('#ta').value.startsWith('【译】')")
+    page.keyboard.press('Escape')
+    # Restore the editable and its value attribute before checking full document restoration.
+    page.locator('#ta').fill(before)
     toggle()
     page.wait_for_function("document.querySelector('#p-plain dl-t[data-dl-state=done]')")
     toggle(); page.wait_for_function("!document.querySelector('dl-t')")
@@ -58,11 +64,15 @@ def extension_case(h):
     # A tab-opened popup is otherwise its own active tab. Resolve the actual fixture tab.
     popup.add_init_script(f"chrome.tabs.query = async () => [await chrome.tabs.get({h.tab_id})]")
     popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
-    popup.wait_for_function("document.querySelector('#site').value==='always'")
-    popup.select_option('#site-scope', 'path')
-    popup.select_option('#site', 'never')
+    popup.locator('#onboard-skip, #site-mode').first.wait_for(state='attached')
+    if popup.locator('#onboard-skip').count():
+        popup.click('#onboard-skip')
+    popup.locator('#site-mode').wait_for(state='attached')
+    popup.wait_for_function("document.querySelector('#site-mode')?.value==='always'")
+    popup.locator('#site-path').check()
+    popup.select_option('#site-mode', 'never')
     h.wait_state(lambda s: s['dormant'], 10, 'popup path rule applied')
-    popup.wait_for_function("document.querySelector('#status').textContent==='站点规则已保存'")
+    assert popup.locator('#site-mode').input_value() == 'never'
     assert popup.locator('#toggle').is_enabled(), 'never popup blocked manual translation'
     popup.click('#toggle'); h.wait_units(['#p-plain'])
     popup.close()
@@ -77,15 +87,18 @@ def userscript_case(page, base):
     # The same visual editor must save paths and all feature flags on a narrow mobile panel.
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#rule-match').length===1")
+    page.evaluate("__platformFixture.elements('nav a[href=\"#sites\"]')[0].click()")
+    click_shadow(page, '#site-rule-new')
     page.evaluate("""() => {
       for (const [field,value] of Object.entries({match:'127.0.0.1/mail/*',page:'never',selection:'off',hover:'off',input:'off'})) {
         const input=__platformFixture.elements('#rule-'+field)[0];
         input.value=value; input.dispatchEvent(new Event('input',{bubbles:true}));
       }
     }""")
+    saves = page.evaluate("Number(__platformFixture.elements('#saved-toast')[0].dataset.count||0)")
     click_shadow(page, '#site-rule-add')
-    click_shadow(page, 'button[type=submit]')
-    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent==='设置已保存')")
+    page.wait_for_function(f"Number(__platformFixture.elements('#saved-toast')[0].dataset.count||0)>{saves}")
+    assert page.evaluate("__platformFixture.elements('#status').every(e=>e.textContent==='')"), 'site rule save reported an error'
     saved=page.evaluate("__platformFixture.data('duallens:local')['settings.sites'].siteRules")
     assert saved == rules(), 'mobile editor changed path or feature fields'
     page.keyboard.press('Escape')

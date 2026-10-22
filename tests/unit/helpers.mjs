@@ -25,7 +25,7 @@ export const FAST_QUEUE = {
 export function testProfile(over = {}) {
   return {
     id: 't',
-    kind: 'gateway',
+    kind: 'openai',
     name: 'test',
     baseUrl: 'http://127.0.0.1:1/v1',
     model: 'm1',

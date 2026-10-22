@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Authorized public-page acceptance; real free MT, optional isolated free gateway.
+"""Authorized public-page acceptance; free MT and an optional user-supplied OpenAI-compatible URL.
 
-No login, challenge bypass, real browser profile, paid LLM, or production gateway.
+No login, challenge bypass, real browser profile, implicit model-service configuration.
 See README.md for the independent coverage definition and limits of geometry checks.
 """
 from __future__ import annotations
@@ -11,16 +11,13 @@ import asyncio
 import base64
 import contextlib
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
 import re
-import socket
 import subprocess
 import sys
 import time
-import threading
 import urllib.error
 import urllib.request
 import uuid
@@ -28,7 +25,8 @@ from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-CACHE = Path.home() / '.cache' / 'duallens-e2e'
+import tempfile
+CACHE = Path(os.environ.get('DUALLENS_E2E_OUT') or Path(tempfile.gettempdir()) / 'duallens-e2e').expanduser().resolve()
 PROBE = (HERE / 'acceptance_probe.js').read_text(encoding='utf-8')
 MOBILE_UA = ('Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 '
              '(KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36')
@@ -37,7 +35,6 @@ MT_HOSTS = {'edge.microsoft.com', 'api-edge.cognitive.microsofttranslator.com', 
             'translate.googleapis.com', 'translate.google.com'}
 DESKTOP_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
               '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')
-SJTU_BUDGET = CACHE / 'v04' / 'acceptance' / 'sjtu-budget.json'
 
 
 def apply_restore_control(result, control):
@@ -62,59 +59,6 @@ def pdf_restore_verdict(result):
     return (result.get('pdf_source_dom_identical') is True and
             result.get('pdf_original_pixels_identical') is True and
             not result.get('restore_residue'))
-
-
-def gateway_policy(config):
-    """Mutate only the freshly loaded, in-memory test configuration."""
-    for backend in ('claude', 'codex'):
-        config[backend]['enabled'] = False
-    config['remote']['enabled'] = False
-    config['port'] = 18799
-    # The proxy's configured allowlist is authoritative; never add a paid model.
-    config['hermes']['models'] = [m for m in config['hermes'].get('models', []) if m.endswith(':free')]
-    if not config['hermes']['models']:
-        config['hermes']['enabled'] = False
-    config['sjtu']['daily_limit'] = min(15, config['sjtu'].get('daily_limit') or 15)
-    safe = []
-    for model in config['auto'].get('prefer', []):
-        backend, _, name = model.partition('/')
-        if backend in ('ollama', 'sjtu', 'hermes') and config[backend].get('enabled') and (
-                name in config[backend].get('models', []) or backend == 'hermes' and name == '*'):
-            safe.append(model)
-    for backend in ('hermes', 'sjtu', 'ollama'):
-        if config[backend].get('enabled'):
-            safe.extend(backend+'/'+m for m in config[backend].get('models', []) if backend+'/'+m not in safe)
-    config['auto']['prefer'] = safe
-    if not safe:
-        raise RuntimeError('No permitted configured free gateway candidates')
-    return config
-
-
-class SjtuBudget:
-    """Persistent attempt budget: count before upstream send, including failed retries.
-
-    Exclusive file lock prevents separate test processes from resetting/racing the
-    15-attempt allowance. Corrupt state or lock contention fails closed.
-    Nothing in this ledger contains source text or credentials.
-    """
-    def __init__(self, path, limit=15):
-        self.path, self.limit, self.lock = Path(path), min(15, limit), threading.Lock()
-
-    def take(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        lockfile = self.path.with_suffix('.lock')
-        with self.lock:
-            fd = os.open(lockfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            try:
-                count = json.loads(self.path.read_text(encoding='utf-8'))['attempts'] if self.path.exists() else 0
-                if not isinstance(count, int) or count < 0 or count >= self.limit:
-                    raise RuntimeError('SJTU acceptance attempt budget exhausted or invalid')
-                temp = self.path.with_suffix('.tmp')
-                temp.write_text(json.dumps({'attempts': count+1, 'limit': self.limit}), encoding='utf-8')
-                temp.replace(self.path)
-            finally:
-                os.close(fd)
-                lockfile.unlink()
 
 
 def load_sites(path=HERE / 'acceptance_sites.json'):
@@ -166,13 +110,34 @@ def write_reports(out, metadata, rows):
     return counts
 
 
-def direct_request(req):
+def validate_llm_url(value):
+    from urllib.parse import urlsplit
+    from ipaddress import ip_address, ip_network
+    if value == 'none':
+        return value
+    url = urlsplit(value)
+    local = url.hostname == 'localhost'
+    try:
+        address = ip_address(url.hostname or '')
+        local = local or address.is_loopback or address in ip_network('10.' + '0.0.0/8') or address in ip_network('172.' + '16.0.0/12') or address in ip_network('192.' + '168.0.0/16') or address in ip_network('100.64.0.0/10')
+    except ValueError:
+        pass
+    if not url.hostname or url.username or url.password or url.query or url.fragment or url.scheme not in ('http', 'https') or (url.scheme == 'http' and not local):
+        raise ValueError('LLM base URL must use HTTPS (or a local HTTP address), without credentials, query or fragment')
+    return value.rstrip('/')
+
+
+def direct_request(req, llm='none'):
     """GM-equivalent anonymous HTTP, on a worker thread. Never forward page cookies."""
     from urllib.parse import urlsplit
     url = urlsplit(req['url'])
-    if url.scheme != 'https' or url.hostname not in MT_HOSTS or url.username or url.password:
-        raise ValueError('Userscript test transport only permits free MT hosts')
+    llm = validate_llm_url(llm)
+    model_request = llm != 'none' and req['url'] in (llm + '/models', llm + '/chat/completions')
+    if not model_request and (url.scheme != 'https' or url.hostname not in MT_HOSTS or url.username or url.password):
+        raise ValueError('Test transport permits only free MT hosts or the explicit model endpoint')
     headers = {k: v for k, v in req.get('headers', {}).items() if k.lower() not in ('cookie', 'authorization', 'proxy-authorization')}
+    if model_request and os.environ.get('DUALLENS_API_KEY'):
+        headers['Authorization'] = 'Bearer ' + os.environ['DUALLENS_API_KEY']
     data = req.get('data')
     request = urllib.request.Request(req['url'], data=data.encode('utf-8') if isinstance(data, str) else None,
                                      headers=headers, method=req.get('method', 'GET'))
@@ -181,7 +146,7 @@ def direct_request(req):
     class Redirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, request, fp, code, msg, headers, newurl):
             target = urlsplit(newurl)
-            if target.scheme != 'https' or target.hostname not in MT_HOSTS:
+            if model_request or target.scheme != 'https' or target.hostname not in MT_HOSTS:
                 raise ValueError('MT redirect rejected')
             return super().redirect_request(request, fp, code, msg, headers, newurl)
     opener.add_handler(Redirect())
@@ -197,8 +162,8 @@ def direct_request(req):
         return {'status': response.code, 'responseText': body.decode('utf-8'), 'responseHeaders': str(response.headers)}
 
 
-GM_STUB = r"""(settings) => {
-  const data=new Map([['duallens:local', {'settings.core':settings}]]), listeners=new Map(), commands=new Map(), roots=[];
+GM_STUB = r"""({settings,secrets,acked}) => {
+  const data=new Map([['duallens:local', {'settings.core':settings,secrets,'ui.device':{onboarded:true,acked}}]]), listeners=new Map(), commands=new Map(), roots=[];
   const attach=Element.prototype.attachShadow;
   Element.prototype.attachShadow=function(init) {const root=attach.call(this,init);if(this.localName==='dl-ui')roots.push({host:this,root});return root;};
   window.GM_getValue=(k,d)=>structuredClone(data.get(k)??d);
@@ -228,72 +193,22 @@ PDF_SAMPLE = r"""({n,ids})=>{
       text:e.textContent,unrefined:e.title.includes('显示的是机器翻译'),visible:e.getBoundingClientRect().top<innerHeight&&e.getBoundingClientRect().bottom>0}))};}"""
 
 
-def gateway_child(repo, home):
-    """Read existing configuration in memory; all writes go to the private test home.
-
-    The serve CLI has no backend restriction flags. Instantiate its identical server
-    with an in-memory free-only policy instead of rewriting user's gateway.json.
-    """
-    if home.name != 'gateway' or not home.parent.name.startswith('run-acceptance-') or home.parent.parent != CACHE.resolve():
-        raise ValueError('Test gateway state must be inside its owned acceptance cache directory')
-    spec = importlib.util.spec_from_file_location('acceptance_gateway', repo / 'gateway' / 'duallens_gateway.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    config = module.config_load()  # never print/copy the user's configuration
-    gateway_policy(config)
-    home.mkdir(parents=True, exist_ok=True)
-    gateway = module.Gateway(home=home, config=config)
-    budget = SjtuBudget(SJTU_BUDGET)
-    count_usage = gateway.count_usage
-    def bounded_count(backend):
-        if backend == 'sjtu':
-            try:
-                budget.take()
-            except (OSError, ValueError, KeyError, RuntimeError):
-                raise module.GatewayError(429, 'daily_limit', 'Acceptance SJTU budget unavailable/exhausted', 600, local=True) from None
-        return count_usage(backend)
-    gateway.count_usage = bounded_count
-    server = module.make_server(port=18799, gateway=gateway)
-    print('ACCEPTANCE gateway ready: port=18799 policy=configured-free-only sjtu<=15', flush=True)
-    try:
-        server.serve_forever()
-    finally:
-        server.server_close()
-
-
-async def start_gateway(repo, run):
-    # Do not connect to or kill a pre-existing process occupying the test port.
-    with socket.socket() as sock:
-        if sock.connect_ex(('127.0.0.1', 18799)) == 0:
-            raise RuntimeError('Port 18799 already in use; refusing to reuse or stop it')
-    child = await asyncio.create_subprocess_exec(sys.executable, '-B', str(Path(__file__).resolve()),
-        '--gateway-child', '--repo', str(repo), '--out', str(run / 'gateway'),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
-    try:
-        line = await asyncio.wait_for(child.stdout.readline(), 15)
-        if not line.startswith(b'ACCEPTANCE gateway ready:'):
-            raise RuntimeError('Temporary gateway failed to start (configuration details withheld)')
-    except BaseException:
-        if child.returncode is None:
-            child.terminate()
-            await child.wait()
-        raise
-    return child
-
-
 class Browser:
-    def __init__(self, pw, ext, bundle, run, device, llm, headed=False):
+    def __init__(self, pw, ext, bundle, run, device, llm, headed=False, ack=True):
         self.pw, self.ext, self.bundle, self.run, self.device, self.llm = pw, ext, bundle, run, device, llm
         self.ctx = self.sw = self.ext_id = None
+        self.mobile_browser = self.bridge = None
         self.transport = {}
         self.http_tasks = {}
         self.profile = run / ('profile-' + device)
         self.headed = headed
+        self.ack = ack
+        self.network_requests = []
 
     async def start(self):
         width, height, touch = DEVICES[self.device]
-        opts = dict(headless=False, viewport={'width': width, 'height': height},
-                    args=['--no-first-run', '--no-default-browser-check', '--no-proxy-server'],
+        opts = dict(headless=False, locale='zh-CN', device_scale_factor=1, viewport={'width': width, 'height': height},
+                    args=['--no-first-run', '--no-default-browser-check', '--no-proxy-server', '--force-device-scale-factor=1'],
                     has_touch=touch, is_mobile=touch)
         if not self.headed:
             opts['args'].insert(0, '--headless=new')
@@ -303,16 +218,30 @@ class Browser:
             opts['user_agent'] = DESKTOP_UA
             opts['args'] += [f'--disable-extensions-except={self.ext}', f'--load-extension={self.ext}']
             opts['ignore_default_args'] = ['--disable-extensions']
-        self.ctx = await self.pw.chromium.launch_persistent_context(str(self.profile), **opts)
+        if touch:
+            # Mobile needs no extension profile. A fresh browser context also avoids
+            # Chromium 130's persistent --headless=new screenshot metrics reset.
+            launch_args=[a for a in opts.pop('args') if a!='--headless=new']
+            opts.pop('headless')
+            self.mobile_browser=await self.pw.chromium.launch(headless=not self.headed,args=launch_args)
+            self.ctx=await self.mobile_browser.new_context(**opts)
+        else:
+            self.ctx = await self.pw.chromium.launch_persistent_context(str(self.profile), **opts)
+        if not touch:
+            from urllib.parse import urlsplit
+            hosts = MT_HOSTS | ({urlsplit(self.llm).hostname} if self.llm != 'none' else set())
+            self.ctx.on('request', lambda req: self.network_requests.append(urlsplit(req.url).hostname)
+                        if urlsplit(req.url).hostname in hosts else None)
         if touch:
             async def http(source, req):
                 from urllib.parse import urlsplit
                 began = time.monotonic()
                 record = {'host': urlsplit(req['url']).hostname}
+                self.network_requests.append(record['host'])
                 pending = self.http_tasks.setdefault(source['page'], set())
                 pending.add(asyncio.current_task())
                 try:
-                    result = await asyncio.to_thread(direct_request, req)
+                    result = await asyncio.to_thread(direct_request, req, self.llm)
                     record['status'] = result['status']
                     return result
                 except Exception as exc:
@@ -323,6 +252,11 @@ class Browser:
                     self.transport.setdefault(source['page'], []).append(record)
                     pending.discard(asyncio.current_task())
             await self.ctx.expose_binding('__acceptanceHTTP', http)
+            # Seed manager-private device state before any target navigation;
+            # evaluating the userscript later must not reset that consent.
+            seed={'settings':settings(self.llm),'acked':acknowledged_destinations(self.llm) if self.ack else [],
+                  'secrets':{'acceptance':{'apiKey':os.environ.get('DUALLENS_API_KEY','')}} if self.llm != 'none' else {}}
+            await self.ctx.add_init_script(script='('+GM_STUB+')('+json.dumps(seed)+');')
         else:
             self.sw = next((w for w in self.ctx.service_workers if w.url.startswith('chrome-extension:')), None)
             if self.sw is None:
@@ -330,21 +264,31 @@ class Browser:
             self.ext_id = self.sw.url.split('/')[2]
             bridge = await self.ctx.new_page()
             await bridge.goto(f'chrome-extension://{self.ext_id}/ui/options.html')
-            await bridge.evaluate("""async patch=>{const {saveSettings}=await import('../shared/settings.js');await saveSettings(patch);}""", settings(self.llm))
-            await bridge.close()
+            await bridge.evaluate("""async ({patch,key})=>{const {saveSettings,getDefaultSettingsStore}=await import('../shared/settings.js');await saveSettings(patch);if(key)await getDefaultSettingsStore().setSecret('acceptance',key);}""", {'patch':settings(self.llm),'key':os.environ.get('DUALLENS_API_KEY','') if self.llm != 'none' else ''})
+            await bridge.evaluate("acked=>chrome.storage.local.set({'ui.device':{onboarded:true,acked}})", acknowledged_destinations(self.llm) if self.ack else [])
+            self.bridge = bridge
 
     async def attach(self, page):
         if self.device != 'desktop':
             # Match the canonical userscript runner: GM storage is private to this page
             # instance, real anonymous HTTP is supplied by the test host. Security of
             # Tampermonkey's isolated world is deliberately NOT claimed by this harness.
-            await page.evaluate(GM_STUB, settings(self.llm))
             await page.evaluate(self.bundle.read_text(encoding='utf-8'))
             await page.wait_for_function('window.__acceptanceGM?.ready()', timeout=20000)
             return None
         tab = await self.sw.evaluate("async u=>(await chrome.tabs.query({})).find(t=>t.url===u)?.id", page.url)
         if tab is None:
             raise RuntimeError('Extension tab not found')
+        # v0.6 has resident content scripts and no tab-ensure message. Probe the
+        # same controller state first; current on-demand pages still use ensure.
+        if await self.send(tab, {'type':'get-state'}) is not None:
+            return tab
+        try:
+            ensured = await asyncio.wait_for(self.bridge.evaluate("tabId=>chrome.runtime.sendMessage({type:'tab-ensure',tabId})",tab),20)
+        except asyncio.TimeoutError:
+            raise RuntimeError('Content injection handshake timed out') from None
+        if not ensured or not ensured.get('ok'):
+            raise RuntimeError('Content injection failed: '+str(ensured.get('reason') if ensured else 'no response'))
         for _ in range(60):
             r = await self.send(tab, {'type': 'get-state'})
             if r is not None:
@@ -366,6 +310,8 @@ class Browser:
     async def close(self):
         if self.ctx:
             await self.ctx.close()
+        if self.mobile_browser:
+            await self.mobile_browser.close()
 
     async def drain(self, page):
         tasks = list(self.http_tasks.pop(page, set()))
@@ -377,14 +323,25 @@ class Browser:
             await page.wait_for_timeout(100)
 
 
+def acknowledged_destinations(llm):
+    """Only destinations used by this harness's explicit settings, never wildcard consent."""
+    from urllib.parse import urlsplit
+    ids = ['mt:microsoft', 'mt:google']
+    if llm != 'none':
+        url = urlsplit(llm)
+        ids.append('llm:' + url.scheme + '://' + url.netloc)
+    return ids
+
+
 def settings(llm):
-    patch = {'version': 2, 'targetLang': 'zh-CN', 'sourceLang': 'auto', 'cache': {'enabled': False},
+    patch = {'version': 3, 'targetLang': 'zh-CN', 'sourceLang': 'auto', 'cache': {'enabled': False},
              'translation': {'mode': 'mt+llm', 'refineTimeoutMs': 90000, 'mt': {'engine': 'microsoft', 'fallback': True}},
-             'provider': {'active': '', 'chain': []}}
-    if llm == 'gateway':
-        patch['provider'] = {'active': 'acceptance', 'chain': [{'profileId': 'acceptance', 'model': 'auto'}],
-            'profiles': [{'id': 'acceptance', 'name': 'Temporary acceptance gateway', 'kind': 'gateway',
-                'baseUrl': 'http://127.0.0.1:18799/v1', 'model': 'auto', 'jsonMode': True,
+             'provider': {'active': '', 'chain': []},
+             **{feature:{'enabled':False} for feature in ['floatBall','selection','hover','input','comics','subtitles']}}
+    if llm != 'none':
+        patch['provider'] = {'active': 'acceptance', 'chain': [{'profileId': 'acceptance', 'model': os.environ.get('DUALLENS_MODEL', '')}],
+            'profiles': [{'id': 'acceptance', 'name': 'Acceptance model service', 'kind': 'openai',
+                'baseUrl': validate_llm_url(llm), 'model': os.environ.get('DUALLENS_MODEL', ''), 'jsonMode': True,
                 'maxItems': 12, 'maxChars': 2000, 'concurrency': 2, 'timeoutMs': 95000, 'fallbackModels': []}]}
     return patch
 
@@ -412,12 +369,20 @@ async def unreachable(page, response):
 
 async def screenshot(page, out, stem, issues):
     paths, errors = [], []
+    mobile = bool(re.search(r'-(?:phone|tablet)(?:-|$)', stem))
     async def capture(filename, clip=None):
         # Native Chromium capture avoids Playwright caret/style mutation, font
         # waits on blocked pages, and viewport-only clipping of PDF page 11.
         client = await page.context.new_cdp_session(page)
         try:
-            options = {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': True}
+            options = {'format': 'png', 'fromSurface': True, 'captureBeyondViewport': not mobile}
+            if mobile:
+                # Chromium 130's beyond-viewport capture can change mobile device
+                # metrics, reflow the page and clip fixed cards. Capture the actual
+                # compositor viewport without a clip or any emulation changes.
+                result = await asyncio.wait_for(client.send('Page.captureScreenshot', options), 12)
+                (out / filename).write_bytes(base64.b64decode(result['data']))
+                return
             if clip is None:
                 try:
                     clip = await page.evaluate('()=>({x:scrollX,y:scrollY,width:innerWidth,height:innerHeight})')
@@ -437,7 +402,7 @@ async def screenshot(page, out, stem, issues):
     except Exception:
         size = page.viewport_size or {'width': 1280, 'height': 800}
         full_clip = {'x': 0, 'y': 0, **size}
-    for label, clip in [('viewport', None), ('full', full_clip)]:
+    for label, clip in ([('viewport', None)] if mobile else [('viewport', None), ('full', full_clip)]):
         filename = stem + '-' + label + '.png'
         try:
             await capture(filename, clip)
@@ -447,6 +412,9 @@ async def screenshot(page, out, stem, issues):
     # One screenshot per issue. No scroll_into_view: screenshots must not trigger
     # additional lazy translations or alter the measured viewport cohort.
     for i, issue in enumerate(issues):
+        if mobile:
+            issue['screenshot'] = stem + '-viewport.png'
+            continue
         b = issue.get('box', {})
         if not b or b['width'] <= 0 or b['height'] <= 0:
             continue
@@ -507,6 +475,35 @@ async def restore_control(browser, site, out, theme, duration, capture_after):
         await control.close()
 
 
+async def verify_no_ack(browser, page, requests_before, baseline_width=None):
+    client = await browser.ctx.new_cdp_session(page)
+    try:
+        end = time.monotonic() + 8
+        while time.monotonic() < end:
+            tree = (await client.send('Accessibility.getFullAXTree'))['nodes']
+            dialog = next((n for n in tree if n.get('role', {}).get('value') == 'alertdialog'), None)
+            if dialog:
+                break
+            await page.wait_for_timeout(100)
+        else:
+            raise AssertionError('No first-send confirmation card')
+        await page.wait_for_timeout(750)
+        assert requests_before == 0 and len(browser.network_requests) == 0, 'Translation HTTP before consent'
+        assert await page.locator('dl-t,dl-o,dl-w,dl-r').count() == 0, 'Progress markers before consent'
+        remote=await client.send('DOM.resolveNode',{'backendNodeId':dialog['backendDOMNodeId']})
+        geometry=(await client.send('Runtime.callFunctionOn',{'objectId':remote['object']['objectId'],
+            'functionDeclaration':"function(){return {box:this.getBoundingClientRect().toJSON(),button:this.querySelector('.primary').getBoundingClientRect().toJSON(),width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,fixed:getComputedStyle(this).position==='fixed'}}",
+            'returnByValue':True}))['result']['value']
+        if geometry['fixed']:
+            for key in ['box','button']:
+                box=geometry[key]
+                assert box['left']>=16 and box['right']<=geometry['width']-16 and box['top']>=0 and box['bottom']<=geometry['height'], 'Consent outside viewport'
+            assert baseline_width is None or geometry['scroll']==baseline_width, 'Consent expanded page width'
+        return geometry
+    finally:
+        await client.detach()
+
+
 async def web_case(browser, site, out, theme, timeout):
     device = browser.device + ('-dark' if theme == 'dark' else '')
     r = {'id': site['id'], 'category': site['category'], 'device': device, 'url': site['url'],
@@ -560,7 +557,26 @@ async def web_case(browser, site, out, theme, timeout):
         r['cohort'] = await page.evaluate('__dlAcceptance.freeze()')
         await page.evaluate('__dlAcceptance.start()')
         restore_start = time.monotonic()
+        requests_before = len(browser.network_requests)
+        baseline_width = await page.evaluate('document.documentElement.scrollWidth')
         await browser.toggle(page, tab)
+        if not browser.ack:
+            r['confirmation_geometry'] = await verify_no_ack(browser,page,requests_before,baseline_width)
+            r['confirmation_visible'] = True
+            r['translation_requests'] = 0
+            if browser.device == 'desktop':
+                # Chromium 130 persistent headless capture can stall with an open
+                # top-layer popover. AX and DOM verify this gate; desktop visuals
+                # are covered by the isolated offline UI suite.
+                r['screenshots'] = []
+                r['screenshot_note'] = 'Desktop popover capture omitted; AX/geometry verified'
+            else:
+                r['screenshots'], r['screenshot_errors'] = await screenshot(page, out, site['id']+'-'+device, [])
+            await page.keyboard.press('Escape')
+            r.update(await page.evaluate('__dlAcceptance.restoreResult()'))
+            assert r['restore_identical'], 'Cancel changed original page'
+            r.update(status='PASS', acceptance_mode='first-send-confirmation')
+            return r
         deadline = time.monotonic() + timeout
         idle_since = None
         observed_start = time.monotonic()
@@ -663,7 +679,16 @@ async def pdf_case(browser, site, out, number, theme, timeout):
         source_pixels = await page.locator(original_selector).evaluate(pixel_digest)
         await page.evaluate(PROBE)
         await page.evaluate('__dlAcceptance.freeze()')
+        requests_before = len(browser.network_requests)
         await page.evaluate("window.__acceptancePdfStart=performance.now();document.querySelector('#translate').click()")
+        if not browser.ack:
+            await verify_no_ack(browser,page,requests_before)
+            r['screenshots'],r['screenshot_errors'] = await screenshot(page,out,r['id']+'-'+device,[])
+            await page.keyboard.press('Escape')
+            assert source_dom == await page.locator(original_selector).evaluate(text_layer), 'PDF source DOM changed'
+            assert source_pixels == await page.locator(original_selector).evaluate(pixel_digest), 'PDF source pixels changed'
+            r.update(status='PASS',acceptance_mode='first-send-confirmation',confirmation_visible=True,translation_requests=0,restore_identical=True)
+            return r
         end = time.monotonic() + timeout
         latest = []
         while time.monotonic() < end:
@@ -723,8 +748,6 @@ async def run(args):
         raise ValueError('Unknown --only: ' + ', '.join(sorted(unknown)))
     if args.only:
         sites = [s for s in sites if s['id'] in args.only]
-    if args.llm == 'gateway' and args.device != 'desktop':
-        raise ValueError('--llm gateway requires --device desktop (never expose loopback config to mobile)')
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:6]
     if args.resume and args.out:
         raise ValueError('--resume cannot be combined with --out')
@@ -739,13 +762,13 @@ async def run(args):
     out.mkdir(parents=True, exist_ok=True)
     run_dir = CACHE / ('run-acceptance-' + uuid.uuid4().hex[:10])
     run_dir.mkdir(parents=True)
-    rows, child = previous['rows'] if previous else [], None
+    rows = previous['rows'] if previous else []
     reports_allowed = previous is None
     completed = {(r['id'], r['device']) for r in rows}
     metadata = {'run_id': stamp, 'started_utc': datetime.now(timezone.utc).isoformat(), 'repo': str(repo),
-        'llm': args.llm, 'policy': 'real-free-MT; configured Hermes :free + Ollama + SJTU<=15 persistent attempts; no Claude/Codex',
-        'emulation_only': True, 'coverage_version': 3, 'restore_version': 2, 'headed': args.headed,
-        'timeout_seconds': args.timeout or (95 if args.llm == 'gateway' else 25),
+        'llm': args.llm, 'policy': 'free MT; optional explicit OpenAI-compatible endpoint; key read only from environment',
+        'emulation_only': True, 'coverage_version': 3, 'restore_version': 2, 'headed': args.headed, 'ack': args.ack,
+        'timeout_seconds': args.timeout or (95 if args.llm != 'none' else 25),
         'probe_sha256': hashlib.sha256(PROBE.encode('utf-8')).hexdigest(),
         'limits': ['Desktop Chromium only, not actual Chrome/Edge or physical Android',
                    'Structural Chinese-output coverage, not semantic translation quality',
@@ -756,6 +779,8 @@ async def run(args):
                    'Control is a sequential fresh navigation of matched duration, not simultaneous deterministic replay',
                    'Name/identifier/unchanged-MT exclusions are auditable heuristics, not semantic model judgements']}
     if previous:
+        if previous['metadata'].get('ack', True) != args.ack:
+            raise ValueError('Consent mode changed; use a fresh output directory')
         if previous['metadata'].get('coverage_version') != metadata['coverage_version']:
             raise ValueError('Coverage algorithm changed; use a fresh output directory')
         metadata['run_id'] = previous['metadata']['run_id']
@@ -787,12 +812,10 @@ async def run(args):
         if previous and previous['metadata']['userscript_sha256'] != metadata['userscript_sha256']:
             raise ValueError('Userscript changed since checkpoint; run into a fresh output directory')
         reports_allowed = True
-        if args.llm == 'gateway':
-            child = await start_gateway(repo, run_dir)
         async with async_playwright() as pw:
-            devices = list(DEVICES) if args.device == 'all' else [args.device]
+            devices = list(DEVICES) if not args.device or 'all' in args.device else list(dict.fromkeys(args.device))
             for device in devices:
-                browser = Browser(pw, ext, bundle, run_dir, device, args.llm, headed=args.headed)
+                browser = Browser(pw, ext, bundle, run_dir, device, args.llm, headed=args.headed, ack=args.ack)
                 try:
                     await browser.start()
                     metadata['browser_version'] = browser.ctx.browser.version if browser.ctx.browser else 'persistent Chromium'
@@ -813,47 +836,35 @@ async def run(args):
                     await browser.close()
         metadata['complete'] = True
     finally:
-        if child and child.returncode is None:
-            child.terminate()
-            await child.wait()
-        if args.llm == 'gateway':
-            metadata['gateway_stopped'] = child is not None and child.returncode is not None
-            usage = run_dir / 'gateway' / 'usage.json'
-            counts = json.loads(usage.read_text(encoding='utf-8')) if usage.exists() else {}
-            metadata['sjtu_calls'] = sum(v for k,v in counts.items() if k.endswith('/sjtu'))
-            metadata['sjtu_attempt_budget_file'] = str(SJTU_BUDGET)
-            log = run_dir / 'gateway' / 'gateway.log'
-            if log.exists():
-                # Gateway log is source-free numeric metadata, but retain only a safe
-                # aggregation, never arbitrary user configuration or response payloads.
-                events = [json.loads(x) for x in log.read_text(encoding='utf-8').splitlines()]
-                metadata['gateway_requests'] = len(events)
-                metadata['gateway_served'] = sorted({e.get('served', '') for e in events})
-                metadata['gateway_status_counts'] = {str(status): sum(e.get('status') == status for e in events) for status in sorted({e.get('status', 0) for e in events})}
         counts = write_reports(out, metadata, rows) if reports_allowed else {}
         canonical.remove_runtime_dir(run_dir)
     print('SUMMARY acceptance total=' + str(len(rows)) + ' ' + ' '.join(f'{k}={v}' for k,v in counts.items()) + ' out=' + str(out), flush=True)
     return 1 if any(r['status'] != 'PASS' for r in rows) else 0
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, default=REPO)
     parser.add_argument('--only', action='append', default=[])
-    parser.add_argument('--device', choices=['desktop', 'phone', 'tablet', 'all'], default='all')
-    parser.add_argument('--llm', choices=['none', 'gateway'], default='none')
+    parser.add_argument('--device', action='append', choices=['desktop', 'phone', 'tablet', 'all'], help='Repeat to add devices; all (default) runs desktop, phone and tablet')
+    parser.add_argument('--ack', action=argparse.BooleanOptionalAction, default=True, help='Pre-confirm selected destinations (default); --no-ack checks confirmation and zero translation HTTP')
+    parser.add_argument('--llm', default='none', metavar='BASE_URL', help='Explicit OpenAI-compatible base URL; default none. Key: DUALLENS_API_KEY; model: DUALLENS_MODEL')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--resume', type=Path, help='Resume a checkpoint directory; extension/userscript hashes must match')
-    parser.add_argument('--timeout', type=float, help='Observation deadline in seconds (default MT=25/gateway=95)')
+    parser.add_argument('--timeout', type=float, help='Observation deadline in seconds (default MT=25/LLM=95)')
     parser.add_argument('--headed', action='store_true', help='Visible Chromium; no headless flag; ordinary desktop UA')
-    parser.add_argument('--gateway-child', action='store_true', help=argparse.SUPPRESS)
-    args = parser.parse_args()
-    if args.gateway_child:
-        gateway_child(args.repo.resolve(), args.out.resolve())
-        return 0
+    args = parser.parse_args(argv)
     if args.timeout is not None and not 3 <= args.timeout <= 180:
         parser.error('--timeout must be 3..180 seconds')
+    return args
+
+
+def main():
+    args = parse_args()
     try:
+        args.llm = validate_llm_url(args.llm)
+        if args.llm != 'none' and not os.environ.get('DUALLENS_MODEL'):
+            raise ValueError('Set DUALLENS_MODEL when using --llm')
         return asyncio.run(run(args))
     except (ValueError, RuntimeError) as exc:
         print('ERROR acceptance: ' + str(exc), file=sys.stderr)

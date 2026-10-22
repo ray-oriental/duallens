@@ -2,7 +2,7 @@
 
 ## v0.1.0 — implemented
 
-Top-frame webpage bilingual/translation-only/restore, paragraph and inline formatting, viewport lazy translation, dynamic content and SPA handling, hover/selection/input interactions, 15 styles, popup/options, glossary/prompt/site preferences, cache and per-model fallback. Direct compatible endpoints, offline mock and optional loopback gateway.
+Top-frame webpage bilingual/translation-only/restore, paragraph and inline formatting, viewport lazy translation, dynamic content and SPA handling, hover/selection/input interactions, 15 styles, popup/options, glossary/prompt/site preferences, cache and per-model fallback. Direct compatible endpoints, offline mock .
 
 ## Planned P1
 
@@ -13,7 +13,6 @@ Top-frame webpage bilingual/translation-only/restore, paragraph and inline forma
 ## Planned P2
 
 - Further OCR/image/comic workflows (visual models, complex layouts) and document translation.
-- Cross-frame translation.
 - Broader site compatibility and language/UI coverage.
 
 The roadmap is a development direction, not a claim that these features are present or a promised delivery date. Use GitHub issues to propose a bounded feature with an acceptance example.
@@ -37,3 +36,11 @@ The roadmap is a development direction, not a claim that these features are pres
 - Popup width repair, optional desktop QR export and copyable encrypted mobile transfer under the unchanged 400000-byte startup limit.
 
 Real Android Edge/Tampermonkey and both physical Windows browser installations require device acceptance. Offline Chromium/GM stubs are not a claim of completed real-device validation. Store submission/review and a real OpenRouter request are separate authorized release actions. Android Chrome bookmarklet is not implemented.
+
+## v1 cleanup — current work
+
+- Settings v3: quiet defaults, one-time legacy type migration, unchanged local Bearer secret slots and compatible encrypted transfer.
+- Public presets limited to OpenAI, DeepSeek, OpenRouter, Ollama, LM Studio and custom services.
+- Remove personal infrastructure, one-off live probes and research; generic usage/validation docs and release privacy gate.
+- Right-click entries limited to page, selection, video and opted-in image translation.
+- Product/UI redesign and final release versioning are separate integration work; physical-device acceptance remains required.

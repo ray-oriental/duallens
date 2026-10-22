@@ -1,6 +1,7 @@
 // Error type shared by providers, queue and translator. `code` is one of protocol.js ERR.
 
 import { ERR } from './protocol.js';
+import { t } from './i18n.js';
 
 const KNOWN_CODES = new Set(Object.values(ERR));
 
@@ -9,14 +10,15 @@ export class DLError extends Error {
     super(message);
     this.name = 'DLError';
     this.code = code;
+    if (code === ERR.CONFIRMATION_REQUIRED && extra.destination) this.destination = extra.destination;
     if (extra.status != null) this.status = extra.status;
     if (extra.retryAfterMs != null) this.retryAfterMs = extra.retryAfterMs;
-    if (extra.serverCode != null) this.serverCode = extra.serverCode; // e.g. gateway 'backend_unavailable'
+    if (extra.serverCode != null) this.serverCode = extra.serverCode; // provider machine-readable code
   }
 }
 
 export function cancelledError() {
-  return new DLError(ERR.CANCELLED, 'cancelled');
+  return new DLError(ERR.CANCELLED, t('cancelled'));
 }
 
 export function isCancelled(e) {
@@ -25,6 +27,7 @@ export function isCancelled(e) {
 
 // Normalises anything thrown into the { code, message } shape carried on the wire.
 export function toErrorInfo(e) {
-  if (e && KNOWN_CODES.has(e.code)) return { code: e.code, message: String(e.message || e.code) };
-  return { code: ERR.PROVIDER, message: String((e && e.message) || e || 'unknown error') };
+  if (e && KNOWN_CODES.has(e.code)) return { code: e.code, message: String(e.message || e.code),
+    ...(e.code === ERR.CONFIRMATION_REQUIRED && e.destination ? {destination:e.destination} : {}) };
+  return { code: ERR.PROVIDER, message: String((e && e.message) || e || t('unknownError')) };
 }

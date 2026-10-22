@@ -1,408 +1,139 @@
-// Selection translation: a small icon beside the selected text, and a card with the translation.
-// Both live in one closed shadow root (see overlay.js).
+import { t as l10n } from '../shared/i18n.js';
+// Selection UI is created on demand, entirely inside one closed shadow root.
+import{lensIcon}from './visual.js';
+import{createOverlay}from './overlay.js';
+import{deepActiveElement,interactionRequest}from './util.js';
+import{LANGS}from '../shared/settings.js';
+const UI={get auto(){return l10n('m5e');},get translate(){return l10n('m22');},get result(){return l10n('m5f');},get copy(){return l10n('m5g');},get copied(){return l10n('m55');},get selected(){return l10n('m5h');},
+  get speak(){return l10n('m5i');},get more(){return l10n('m4e');},get close(){return l10n('m5j');},get both(){return l10n('m5k');},get only(){return l10n('m4f');},get refine(){return l10n('m5l');},get refining(){return l10n('m5m');},
+  get hint(){return l10n('m5n');},get kept(){return l10n('m5o');},
+  get profile(){return l10n('m5p');},get model(){return l10n('m5q');},get modelHint(){return l10n('m5r');},get inherit(){return l10n('m5s');},get again(){return l10n('m5t');},
+  get off(){return l10n('m5u');},get error(){return l10n('m5v');},get retry(){return l10n('m5d');},get mt(){return l10n('m5w');},get ai(){return l10n('m5x');}};
+const CSS=`.icon,.card,.selection-menu{position:fixed}.icon{display:none;width:24px;height:24px;padding:0;border-radius:6px;color:var(--fg2);box-shadow:var(--dl-pop)}.icon.show{display:grid;place-items:center}.icon:hover{color:var(--fg)}.icon svg{width:14px;height:14px}.card{display:none;width:min(360px,calc(100% - 32px));max-width:calc(100% - 32px - var(--safe-left) - var(--safe-right));max-height:70vh;overflow:auto}.card.show{display:block}.head,.foot,.services{display:flex;align-items:center;gap:2px}.head{padding:6px 8px 0 16px;cursor:move;touch-action:none}.title,.engine{flex:1;min-width:0;color:var(--dl-text-3)}.title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.engine:empty{display:none}.x{width:24px;min-width:24px;padding:0;font-size:16px;line-height:1;color:var(--dl-text-3)}.x:hover{color:var(--fg);background:var(--bg2);text-decoration:none}.body{padding:6px 16px 12px;overflow-wrap:anywhere}.src,.dst{margin:0;white-space:pre-wrap}.dst{line-height:1.6}.src{color:var(--fg2);border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.only .src{display:none}.foot{padding:0 8px 8px 16px}.foot:not(:has(.engine:not(:empty),.tool:not([hidden]))){display:none}.dst.err{color:var(--dl-danger)}.dst .retry,.dst .tb{height:24px;min-height:24px;padding:0 6px;color:var(--fg);text-decoration:underline;text-underline-offset:2px}.error-details{display:block;margin-top:8px;color:var(--fg2)}.selection-menu{width:200px;max-width:calc(100% - 32px - var(--safe-left) - var(--safe-right));max-height:60vh;overflow:auto;padding:4px}.selection-menu>button{display:flex;align-items:center;width:100%;height:32px;padding:0 10px;text-align:left;color:var(--fg)}.selection-menu>button:hover{background:var(--bg2);text-decoration:none}.services{flex-wrap:wrap;padding:6px 0 4px}.services input,.services select{width:100%;height:32px;padding:0 8px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--dl-border-strong);border-radius:6px}.services .retry{height:30px;padding:0 12px;color:var(--fg);border:1px solid var(--dl-border-strong);border-radius:8px}.services .retry:hover{background:var(--bg2)}@media(pointer:coarse){.icon{width:44px;height:44px}.icon svg{width:16px;height:16px}.tb,.retry,.dst .tb,.dst .retry{min-width:44px;min-height:44px}.x{width:44px}.selection-menu>button{height:44px}}`;
+const node=(tag,cls,text)=>{const e=document.createElement(tag);e.className=cls;if(text!=null)e.textContent=text;return e;};
+const button=(text,fn,title=text)=>{const b=node('button','tool tb',text);b.type='button';b.title=title;b.ariaLabel=title;b.onclick=fn;return b;};
+const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 
-import { lensIcon } from './visual.js';
-import { createOverlay } from './overlay.js';
-import { deepActiveElement, interactionRequest } from './util.js';
-
-const MAX_CHARS = 4000;
-
-const CSS = `.icon{position:fixed;width:28px;height:28px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);display:none;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer}.icon.show{display:flex}.icon:hover{border-color:var(--accent)}.icon svg{width:16px;height:16px}.card{position:fixed;display:none;flex-direction:column;overflow:hidden;resize:both;width:340px;height:auto;min-width:240px;min-height:110px;max-width:calc(100vw - 16px);max-height:min(70vh,520px);background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);pointer-events:auto}.card.show{display:flex}.head{display:flex;align-items:center;gap:2px;padding:4px 6px 4px 10px;cursor:move;background:var(--bg2);border-bottom:1px solid var(--line);user-select:none;flex:none}.title{font-weight:600;font-size:12px;color:var(--fg2);flex:1}.tool{border:0;background:transparent;border-radius:6px;min-width:26px;height:24px;padding:0 6px;font-size:12px;color:var(--fg2);cursor:pointer}.tool:hover{background:var(--line);color:var(--fg)}.tool[hidden]{display:none}.body{flex:1;overflow:auto;padding:10px 12px 12px;cursor:auto;user-select:text}.src{color:var(--fg2);font-size:12px;margin:0 0 8px;padding-bottom:8px;border-bottom:1px dashed var(--line);white-space:pre-wrap;word-break:break-word}.card.only .src{display:none}.dst{margin:0;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}.dst.err{color:var(--danger)}.dots::after{content:"";animation:dots 1.1s steps(4,end) infinite}@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}@media (pointer:coarse){.icon{width:44px;height:44px}.tool,.retry{min-width:44px;min-height:44px}.head{touch-action:none}}@media (prefers-reduced-motion:reduce){.dots::after{animation:none;content:"..."}}.retry{margin-top:8px;border:1px solid var(--line);background:var(--bg2);border-radius:6px;padding:2px 10px}`;
-
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-}
-
-export class SelectionUI {
-  constructor({ getSettings, platform }) {
-    this.platform = platform;
-    this.getSettings = getSettings;
-    this.ui = null;
-    this.pending = null; // { text, rect }
-    this.cardState = null; // null until first shown, then { visible, text, source }
-    this.on = false;
-    this.cardMode = null;
-    this.speakOk = false;
-
-    this.onMouseUp = (e) => {
-      if (e.button !== 0 || e.composedPath().includes(this.ui?.host)) return;
-      setTimeout(() => this.#check(), 0);
-    };
-    this.onKeyUp = (e) => {
-      if (e.shiftKey && /^(Arrow|Home|End|Page)/.test(e.key)) setTimeout(() => this.#check(), 0);
-    };
-    this.onDown = (e) => {
-      if (this.ui && e.composedPath().includes(this.ui.host)) return;
-      this.#hideIcon();
-      this.closeCard();
-    };
-    this.onKey = (e) => {
-      if (e.key === 'Escape') {
-        this.#hideIcon();
-        this.closeCard();
+export class SelectionUI{
+  constructor({getSettings,platform}){
+    this.s=getSettings;this.p=platform;this.rev=0;this.on=false;this.open=false;
+    this.event=e=>{
+      const type=e.type,sel=getSelection();
+      if(type==='keydown'||type==='pointerdown'){
+        if(type==='keydown'?e.key==='Escape':!e.composedPath().some(n=>n.localName==='dl-ui')){this.#hide();this.closeCard();}
+        return;
       }
-    };
-    this.selectionTimer = 0;
-    this.onTouchUp = (e) => { if (e.pointerType === 'touch') setTimeout(() => this.#check(), 0); };
-    this.onSelChange = () => {
-      const sel = getSelection();
-      if (!sel || sel.isCollapsed) this.#hideIcon();
-      else if (this.platform.coarse) { clearTimeout(this.selectionTimer); this.selectionTimer = setTimeout(() => { if (this.on) this.#check(); }, 100); }
-    };
-    this.hideIcon = () => this.#hideIcon();
-  }
-
-  enable() {
-    if (this.on) return;
-    this.on = true;
-    document.addEventListener('pointerup', this.onTouchUp, true);
-    document.addEventListener('mouseup', this.onMouseUp, true);
-    document.addEventListener('keyup', this.onKeyUp, true);
-    document.addEventListener('pointerdown', this.onDown, true);
-    document.addEventListener('keydown', this.onKey, true);
-    document.addEventListener('selectionchange', this.onSelChange);
-    window.addEventListener('scroll', this.hideIcon, { capture: true, passive: true });
-    window.addEventListener('resize', this.hideIcon);
-  }
-
-  disable() {
-    if (!this.on) return;
-    this.on = false;
-    clearTimeout(this.selectionTimer);
-    document.removeEventListener('pointerup', this.onTouchUp, true);
-    document.removeEventListener('mouseup', this.onMouseUp, true);
-    document.removeEventListener('keyup', this.onKeyUp, true);
-    document.removeEventListener('pointerdown', this.onDown, true);
-    document.removeEventListener('keydown', this.onKey, true);
-    document.removeEventListener('selectionchange', this.onSelChange);
-    window.removeEventListener('scroll', this.hideIcon, { capture: true });
-    window.removeEventListener('resize', this.hideIcon);
-    this.#hideIcon();
-    this.closeCard();
-    this.ui?.detach();
-  }
-
-  destroy() {
-    this.disable();
-    this.ui?.detach();
-    this.ui = null;
-  }
-
-  state() {
-    return {
-      selectionIcon: !!(this.iconEl && this.iconEl.classList.contains('show')),
-      selectionCard: this.cardState ? { ...this.cardState, visible: this.#cardVisible() } : null,
+      if(type==='scroll'||type==='resize'||!sel||sel.isCollapsed){this.#hide();return;}
+      if(type==='keyup'&&!(e.shiftKey&&/^(Arrow|Home|End|Page)/.test(e.key))||
+        type==='mouseup'&&e.button!==0||type==='pointerup'&&e.pointerType!=='touch'||
+        type==='selectionchange'&&!this.p.coarse||e.composedPath().includes(this.ui?.host))return;
+      const run=()=>{if(this.on)this.#check();};
+      if(type==='selectionchange'){clearTimeout(this.timer);this.timer=setTimeout(run,100);}else setTimeout(run,0);
     };
   }
-
-  #cardVisible() {
-    return !!(this.card && this.card.classList.contains('show'));
+  #listen(on){
+    for(const type of['mouseup','pointerup','keyup','selectionchange','keydown','pointerdown','scroll','resize'])
+      (type==='scroll'||type==='resize'?window:document)[on?'addEventListener':'removeEventListener'](type,this.event,true);
   }
-
-  // ---- building ----------------------------------------------------------------------------
-
-  #build() {
-    if (this.ui) return;
-    this.ui = createOverlay(CSS);
-    const icon = el('button', 'icon');
-    icon.type = 'button';
-    icon.setAttribute('aria-label', '翻译选中文字');
-    icon.addEventListener('pointerdown', (e) => e.preventDefault());
-    icon.title = '翻译选中文字';
-    icon.append(lensIcon(false));
-    icon.addEventListener('mousedown', (e) => e.preventDefault()); // keep the selection alive
-    icon.addEventListener('click', () => {
-      const p = this.pending;
-      this.#hideIcon();
-      if (p) this.openCard(p.text, p.rect);
+  enable(){if(!this.on){this.on=true;this.#listen(true);}}
+  disable(){this.on=false;clearTimeout(this.timer);this.#listen(false);this.#hide();this.closeCard();this.ui?.detach();}
+  destroy(){this.disable();this.ui=null;this.v=null;}
+  state(){return{selectionIcon:!!this.v?.icon.classList.contains('show'),selectionCard:this.r?{...this.r,visible:this.open}:null};}
+  #hide(){this.v?.icon.classList.remove('show');}
+  #check(){
+    const s=this.s(),sel=getSelection(),active=deepActiveElement();
+    if(!s.selection.enabled||active?.matches('input,textarea'))return;
+    const text=sel?.toString().trim();if(!text||!sel.rangeCount)return this.#hide();
+    const r=sel.getRangeAt(0),rect=[...r.getClientRects()].at(-1)||r.getBoundingClientRect();
+    if(!rect.width&&!rect.height)return;
+    this.range={text:text.slice(0,4000),rect};
+    if(!s.selection.showIcon){void this.openCard(text,rect);return;}
+    this.#build();this.ui.attach();const icon=this.v.icon,size=this.p.coarse?44:24;
+    icon.style.left=clamp(this.p.coarse?rect.left:rect.right+6,4,innerWidth-size-4)+'px';
+    icon.style.top=clamp(rect.bottom+6,4,innerHeight-size-4)+'px';icon.classList.add('show');
+  }
+  #build(){
+    if(this.ui)return;this.ui=createOverlay(CSS);const v=this.v={};
+    v.icon=button('',()=>{this.#hide();if(this.range)void this.openCard(this.range.text,this.range.rect);},UI.translate);
+    v.icon.className='icon pop';v.icon.setAttribute('aria-label',UI.translate);v.icon.append(lensIcon(true));
+    v.icon.onpointerdown=v.icon.onmousedown=e=>e.preventDefault();
+    v.card=node('section','card pop');v.card.setAttribute('role','dialog');v.card.setAttribute('aria-label',UI.result);
+    v.title=node('span','title');v.head=node('div','head');
+    v.copy=button(UI.copy,async()=>{
+      if(!this.r?.text)return;
+      try{await navigator.clipboard.writeText(this.r.text);v.copy.textContent=UI.copied;}
+      catch{const range=document.createRange();range.selectNodeContents(v.dst);const sel=this.ui.root.getSelection?.()||getSelection();sel.removeAllRanges();sel.addRange(range);v.copy.textContent=UI.selected;}
+      setTimeout(()=>{v.copy.textContent=UI.copy;},1200);
     });
-
-    const card = el('div', 'card');
-    card.setAttribute('role', 'dialog');
-    const head = el('div', 'head');
-    const title = el('span', 'title', 'DualLens');
-    const bMode = el('button', 'tool', '双语');
-    bMode.title = '切换双语 / 仅译文';
-    const bRefine = el('button', 'tool', '精修');
-    bRefine.title = '用大模型精修这段译文';
-    bRefine.hidden = true;
-    const bSpeak = el('button', 'tool', '朗读');
-    bSpeak.title = '朗读译文';
-    bSpeak.hidden = true;
-    const bCopy = el('button', 'tool', '复制');
-    const bClose = el('button', 'tool', '✕');
-    bClose.title = '关闭 (Esc)';
-    for (const b of [bMode, bRefine, bSpeak, bCopy, bClose]) b.type = 'button';
-    head.append(title, bMode, bRefine, bSpeak, bCopy, bClose);
-    const body = el('div', 'body');
-    const src = el('p', 'src');
-    const dst = el('p', 'dst');
-    const services = el('div', 'services');
-    services.style.cssText = 'display:flex;gap:4px;padding:6px;flex-wrap:wrap';
-    const profile = el('select'); profile.setAttribute('aria-label', '划词服务');
-    const model = el('input'); model.setAttribute('aria-label', '划词模型');
-    model.placeholder = '模型（留空用默认）'; model.maxLength = 256;
-    const apply = el('button', 'retry', '重新翻译'); apply.type = 'button';
-    for (const n of [profile, model, apply]) n.style.cssText = 'min-height:44px;max-width:100%;min-width:0';
-    model.style.flex = '1';
-    services.append(profile, model, apply);
-    this.serviceProfile = profile; this.serviceModel = model;
-    profile.addEventListener('change', () => { model.value = ''; });
-    apply.addEventListener('click', () => {
-      this.choice = { profileId: profile.value, model: model.value };
-      if (this.cardState?.source) this.openCard(this.cardState.source, null, true);
-    });
-    body.append(src, dst);
-    card.append(head, services, body);
-    this.ui.el.append(icon, card);
-
-    bMode.addEventListener('click', () => {
-      this.cardMode = this.cardMode === 'translation-only' ? 'bilingual' : 'translation-only';
-      this.#applyCardMode();
-    });
-    bRefine.addEventListener('click', () => this.#refine());
-    bSpeak.addEventListener('click', () => this.#speak());
-    bCopy.addEventListener('click', async () => {
-      const text = this.cardState?.text || '';
-      if (!text) return;
-      try {
-        await navigator.clipboard.writeText(text);
-        bCopy.textContent = '已复制';
-      } catch {
-        const range = document.createRange();
-        range.selectNodeContents(dst);
-        const sel = this.ui.root.getSelection ? this.ui.root.getSelection() : getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-        bCopy.textContent = '已选中';
-      }
-      setTimeout(() => (bCopy.textContent = '复制'), 1200);
-    });
-    bClose.addEventListener('click', () => this.closeCard());
-    this.#makeDraggable(head, card);
-
-    Object.assign(this, { iconEl: icon, card, src, dst, bMode, bSpeak, bRefine });
-  }
-
-  #makeDraggable(handle, card) {
-    handle.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('button,select,input')) return;
-      const r = card.getBoundingClientRect();
-      const dx = e.clientX - r.left;
-      const dy = e.clientY - r.top;
-      handle.setPointerCapture(e.pointerId);
-      const move = (ev) => {
-        card.style.left = `${Math.max(0, Math.min(innerWidth - 60, ev.clientX - dx))}px`;
-        card.style.top = `${Math.max(0, Math.min(innerHeight - 40, ev.clientY - dy))}px`;
-      };
-      const up = () => {
-        handle.removeEventListener('pointermove', move);
-        handle.removeEventListener('pointerup', up);
-      };
-      handle.addEventListener('pointermove', move);
-      handle.addEventListener('pointerup', up);
-    });
-  }
-
-  // ---- icon --------------------------------------------------------------------------------
-
-  #check() {
-    const s = this.getSettings();
-    if (!s.selection.enabled) return;
-    const ae = deepActiveElement();
-    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
-    const sel = getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount) return this.#hideIcon();
-    const text = sel.toString().trim();
-    if (!text) return this.#hideIcon();
-    const range = sel.getRangeAt(0);
-    const rects = range.getClientRects();
-    const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
-    if (!rect || (!rect.width && !rect.height)) return;
-    this.pending = { text: text.slice(0, MAX_CHARS), rect: rectOf(rect) };
-    if (s.selection.showIcon) {
-      this.#build();
-      this.ui.attach();
-      const icon = this.iconEl;
-      const size = this.platform.coarse ? 44 : 28;
-      const x = Math.min(innerWidth - size - 4, Math.max(4, this.platform.coarse ? rect.left : rect.right + 4));
-      const y = Math.min(innerHeight - size - 4, Math.max(4, rect.bottom + 6));
-      icon.style.left = `${x}px`;
-      icon.style.top = `${y}px`;
-      icon.classList.add('show');
-    } else {
-      this.openCard(this.pending.text, this.pending.rect);
-    }
-  }
-
-  #hideIcon() {
-    if (this.iconEl) this.iconEl.classList.remove('show');
-  }
-
-  // ---- card --------------------------------------------------------------------------------
-
-  // rect may be null (context-menu path without a usable selection rectangle)
-  async openCard(text, rect, keepChoice = false) {
-    const s = this.getSettings();
-    const value = String(text || '').trim().slice(0, MAX_CHARS);
-    if (!value) return;
-    this.#build();
-    if (!keepChoice) this.choice = {};
-    this.serviceProfile.replaceChildren();
-    for (const p of [{ id: '', name: '继承网页翻译' }, ...s.provider.profiles]) {
-      const option = el('option', '', p.name || p.id); option.value = p.id; this.serviceProfile.append(option);
-    }
-    this.serviceProfile.value = this.choice.profileId || '';
-    this.serviceModel.value = this.choice.model || '';
-    this.ui.attach();
-    this.cardMode = this.cardMode || s.displayMode;
-    this.src.textContent = value;
-    this.dst.textContent = '';
-    this.dst.className = 'dst dots';
-    this.cardState = { visible: true, text: '', source: value };
-    this.refineOf = null;
-    this.bRefine.hidden = true;
-    this.bRefine.textContent = '精修';
-    this.bRefine.title = '用大模型精修这段译文';
-    this.#applyCardMode();
-    this.card.classList.add('show');
-    this.#place(rect);
-    this.#checkSpeech(s.targetLang);
-    const token = (this.token = (this.token || 0) + 1);
-
-    const res = await this.platform.translator().translateText({
-      text: value,
-      to: s.targetLang,
-      from: s.sourceLang || 'auto',
-      purpose: 'selection',
-      ...interactionRequest(this.choice),
-    }).catch(() => ({ ok: false }));
-    if (token !== this.token || !this.#cardVisible()) return;
-    this.dst.replaceChildren();
-    if (res.ok) {
-      this.dst.className = 'dst';
-      this.dst.textContent = res.text;
-      this.cardState = { visible: true, text: res.text, source: value };
-      // Machine translation answered at once; offer the LLM as an explicit second opinion.
-      this.refineOf = res.by === 'mt' && ['mt+llm', 'auto'].includes(s.translation?.mode)
-        ? { value, to: s.targetLang, from: s.sourceLang || 'auto' } : null;
-      this.bRefine.hidden = !this.refineOf;
-      this.bRefine.disabled = false;
-    } else {
-      this.dst.className = 'dst err';
-      this.dst.textContent = `翻译失败：${(res.error && res.error.message) || '未知错误'}`;
-      const retry = el('button', 'retry', '重试');
-      retry.type = 'button';
-      retry.addEventListener('click', () => this.openCard(value, rect, true));
-      this.dst.append(document.createElement('br'), retry);
-    }
-    this.#place(rect, true);
-  }
-
-  // "用大模型精修": ask the LLM for this one selection. A failure leaves the machine translation in place.
-  async #refine() {
-    const job = this.refineOf;
-    if (!job || this.bRefine.disabled) return;
-    const token = this.token;
-    const draft = this.cardState?.text || '';
-    this.bRefine.disabled = true;
-    this.bRefine.textContent = '精修中…';
-    const res = await this.platform.translator().translateText({ text: job.value, to: job.to, from: job.from, purpose: 'selection', mode: 'llm' });
-    if (token !== this.token || !this.#cardVisible()) return;
-    this.bRefine.textContent = '精修';
-    if (res.ok) {
-      this.dst.className = 'dst';
-      this.dst.textContent = res.text;
-      this.cardState = { visible: true, text: res.text, source: job.value };
-      this.refineOf = null;
-      this.bRefine.hidden = true;
-    } else {
-      this.dst.textContent = draft;
-      this.bRefine.disabled = false;
-      this.bRefine.title = `大模型暂不可用（${(res.error && res.error.message) || '未知错误'}），已保留机器翻译；点击重试`;
-    }
-  }
-
-  #place(rect, keepIfMoved = false) {
-    const card = this.card;
-    if (keepIfMoved && card.dataset.placed) {
-      // the user may have dragged it; only keep it inside the viewport
-      const r = card.getBoundingClientRect();
-      if (r.bottom > innerHeight - 8) card.style.top = `${Math.max(8, innerHeight - r.height - 8)}px`;
-      return;
-    }
-    const w = Math.min(340, innerWidth - 16);
-    let left = rect ? rect.left : innerWidth - w - 24;
-    let top = rect ? rect.bottom + 10 : 24;
-    left = Math.max(8, Math.min(left, innerWidth - w - 8));
-    card.style.width = `${w}px`;
-    card.style.left = `${left}px`;
-    card.style.top = `${top}px`;
-    const h = card.getBoundingClientRect().height;
-    if (top + h > innerHeight - 8) {
-      top = rect ? Math.max(8, rect.top - h - 10) : Math.max(8, innerHeight - h - 8);
-      if (top + h > innerHeight - 8) top = Math.max(8, innerHeight - h - 8);
-      card.style.top = `${top}px`;
-    }
-    card.dataset.placed = '1';
-  }
-
-  #applyCardMode() {
-    const only = this.cardMode === 'translation-only';
-    this.card.classList.toggle('only', only);
-    this.bMode.textContent = only ? '仅译文' : '双语';
-  }
-
-  closeCard() {
-    if (!this.card) return;
-    this.token = (this.token || 0) + 1;
-    this.card.classList.remove('show');
-    delete this.card.dataset.placed;
-    if (this.cardState) this.cardState = { ...this.cardState, visible: false };
-    try {
-      speechSynthesis.cancel();
-    } catch {
-      /* no speech support */
-    }
-  }
-
-  #checkSpeech(lang) {
-    const ss = globalThis.speechSynthesis;
-    if (!ss) {
-      this.bSpeak.hidden = true;
-      return;
-    }
-    const base = String(lang).split('-')[0].toLowerCase();
-    const has = () => ss.getVoices().some((v) => v.lang.toLowerCase().startsWith(base));
-    const apply = () => {
-      this.bSpeak.hidden = !has();
+    v.say=button(UI.speak,()=>{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(this.r?.text||'');u.lang=this.s().targetLang;speechSynthesis.speak(u);});
+    v.say.hidden=!globalThis.speechSynthesis;
+    v.more=button(UI.more,()=>{v.menu.hidden=!v.menu.hidden;v.editor.hidden=true;v.more.setAttribute('aria-expanded',String(!v.menu.hidden));this.#menuPlace();});
+    v.more.setAttribute('aria-expanded','false');const x=button('×',()=>this.closeCard(),UI.close);x.className='tb x';v.head.append(v.title,v.copy,v.say,v.more,x);
+    v.src=node('p','src');v.dst=node('p','dst');v.dst.setAttribute('aria-live','polite');
+    v.body=node('div','body');v.body.append(v.dst,v.src);
+    v.by=node('span','engine');v.ai=button(UI.refine,()=>this.#refine(),UI.hint);
+    v.foot=node('div','foot');v.foot.append(v.by,v.ai);
+    v.menu=node('div','selection-menu pop');v.menu.hidden=true;v.menu.setAttribute('aria-label',UI.more);v.editor=node('div','services');v.editor.hidden=true;
+    v.mode=button(UI.both,()=>{this.mode=this.mode==='translation-only'?'bilingual':'translation-only';this.#mode();});
+    v.p=node('select','');v.p.setAttribute('aria-label',UI.profile);
+    v.m=node('input','');v.m.setAttribute('aria-label',UI.model);v.m.placeholder=UI.modelHint;v.m.maxLength=256;
+    v.p.onchange=()=>{v.m.value='';};
+    const apply=button(UI.again,()=>{this.pick={profileId:v.p.value,model:v.m.value};void this.openCard(this.r.source,null,true);});apply.className='retry';
+    v.editor.append(v.p,v.m,apply);const service=button(l10n('polishService'),()=>{v.editor.hidden=!v.editor.hidden;this.#menuPlace();});v.menu.append(v.mode,service,v.editor,button(UI.off,()=>{this.disable();void this.p.settingsStore.save({selection:{enabled:false}});}));
+    v.card.append(v.head,v.body,v.foot);this.ui.el.append(v.icon,v.card,v.menu);
+    v.head.onpointerdown=e=>{
+      if(e.target.closest('button,input,select'))return;const r=v.card.getBoundingClientRect();v.head.setPointerCapture(e.pointerId);
+      v.head.onpointermove=ev=>{this.drag=true;v.card.style.left=clamp(r.left+ev.clientX-e.clientX,16,innerWidth-r.width-16)+'px';v.card.style.top=clamp(r.top+ev.clientY-e.clientY,8,innerHeight-40)+'px';};
+      v.head.onpointerup=v.head.onpointercancel=()=>{v.head.onpointermove=null;if(v.head.hasPointerCapture(e.pointerId))v.head.releasePointerCapture(e.pointerId);};
     };
-    apply();
-    if (!ss.getVoices().length) {
-      // voices load asynchronously; the button stays hidden until we know one exists
-      const once = () => {
-        ss.removeEventListener('voiceschanged', once);
-        apply();
-      };
-      ss.addEventListener('voiceschanged', once);
+  }
+  #mode(){const only=this.mode==='translation-only';this.v.card.classList.toggle('only',only);this.v.mode.textContent=only?l10n('polishDisplayOnly'):UI.both;}
+  #menuPlace(){const r=this.v.card.getBoundingClientRect(),m=this.v.menu;m.style.left=clamp(r.right-200,16,innerWidth-216)+'px';m.style.top=clamp(r.bottom+4,8,innerHeight-m.offsetHeight-8)+'px';}
+  #place(rect,keep=false){
+    const card=this.v.card,r=card.getBoundingClientRect(),width=Math.min(360,innerWidth-32);
+    const left=keep&&this.drag?r.left:rect?.left??innerWidth-width-24;
+    let top=keep&&this.drag?r.top:rect?.bottom+10||24;
+    if(top+r.height>innerHeight-8)top=rect&&!keep?rect.top-r.height-10:innerHeight-r.height-8;
+    card.style.width=width+'px';card.style.left=clamp(left,16,innerWidth-width-16)+'px';card.style.top=Math.max(8,top)+'px';
+  }
+  #render(text){this.v.dst.className='dst';this.v.dst.textContent=text;this.r.text=text;}
+  async openCard(text,rect,keep=false){
+    const source=String(text||'').trim().slice(0,4000);if(!source)return;
+    this.abort?.abort();this.abort=new AbortController();const token=++this.rev,s=this.s();
+    this.#build();this.#hide();const v=this.v;
+    if(!keep){this.pick={};this.drag=false;v.menu.hidden=true;v.more.setAttribute('aria-expanded','false');}
+    this.mode||=s.displayMode;this.#mode();this.open=true;this.r={source,text:'',visible:true};
+    const language=code=>LANGS.find(l=>l.code===code)?.name||UI.auto;
+    v.title.textContent=language(s.sourceLang)+' → '+language(s.targetLang);v.dst.lang=s.targetLang;
+    v.src.textContent=source;v.dst.className='dst';v.dst.textContent='…';v.by.textContent='';
+    v.ai.hidden=true;v.ai.disabled=false;v.ai.textContent=UI.refine;v.ai.title=UI.hint;
+    v.p.replaceChildren(...[{id:'',name:UI.inherit},...s.provider.profiles].map(p=>{const option=node('option','',p.name||p.id);option.value=p.id;return option;}));
+    v.p.value=this.pick.profileId||'';v.m.value=this.pick.model||'';
+    v.card.classList.add('show');this.ui.attach();this.#place(rect,keep);
+    for(const type of['keydown','pointerdown'])document.addEventListener(type,this.event,true);
+    const res=await this.p.translator().translateText({text:source,to:s.targetLang,from:s.sourceLang||'auto',purpose:'selection',signal:this.abort.signal,...interactionRequest(this.pick)}).catch(()=>({ok:false}));
+    if(token!==this.rev||!this.open)return;
+    if(res.ok){
+      this.#render(res.text);v.by.textContent=res.by==='mt'?UI.mt:s.provider.profiles.find(p=>p.id===(this.pick.profileId||s.provider.active))?.name||UI.ai;
+      v.ai.hidden=!(res.by==='mt'&&['mt+llm','auto'].includes(s.translation?.mode));
+    }else{
+      if(res.error?.code==='CANCELLED'){this.closeCard();return;}
+      v.dst.className='dst err';v.dst.textContent=UI.error;
+      const retry=button(UI.retry,()=>this.openCard(source,rect,true));retry.className='retry';const details=button(l10n('polishDetails'),()=>{v.detail.hidden=!v.detail.hidden;});v.detail=node('small','error-details',res.error?.message||UI.error);v.detail.hidden=true;v.dst.append(document.createTextNode(' '),retry,details,v.detail);
     }
+    this.#place(rect,true);
   }
-
-  #speak() {
-    const text = this.cardState?.text;
-    if (!text) return;
-    const ss = globalThis.speechSynthesis;
-    if (!ss) return;
-    ss.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = this.getSettings().targetLang;
-    ss.speak(u);
+  async#refine(){
+    const v=this.v;if(v.ai.disabled||!this.r?.text)return;
+    const token=this.rev,s=this.s();v.ai.disabled=true;v.ai.textContent=UI.refining;
+    const res=await this.p.translator().translateText({text:this.r.source,to:s.targetLang,from:s.sourceLang||'auto',purpose:'selection',mode:'llm',signal:this.abort.signal}).catch(()=>({ok:false}));
+    if(token!==this.rev||!this.open)return;v.ai.textContent=UI.refine;
+    if(res.ok){this.#render(res.text);v.ai.hidden=true;}else{v.ai.disabled=false;v.ai.title=UI.kept;}
   }
-}
-
-function rectOf(r) {
-  return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+  closeCard(){
+    this.abort?.abort();this.rev++;this.open=false;if(this.r)this.r.visible=false;
+    if(this.v){this.v.card.classList.remove('show');this.v.menu.hidden=true;this.v.head.onpointerup?.();}
+    if(!this.on)for(const type of['keydown','pointerdown'])document.removeEventListener(type,this.event,true);
+    globalThis.speechSynthesis?.cancel();
+  }
 }

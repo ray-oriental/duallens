@@ -1,21 +1,22 @@
+import { t as l10n } from '../../shared/i18n.js';
 export function comicSites(values) {
-  if(!Array.isArray(values) || values.length>50) throw new Error('漫画站点名单最多 50 项');
+  if(!Array.isArray(values) || values.length>50) throw new Error(l10n('m3k'));
   const domain=value=> {
-    if(typeof value!=='string') throw new Error('漫画站点域名无效');
+    if(typeof value!=='string') throw new Error(l10n('m3l'));
     const site=value.trim().toLowerCase();
-    if(site.length>253 || !/^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(site) || site.includes('..')) throw new Error('漫画站点请填写域名或 *.example.com，不含协议、端口或路径');
+    if(site.length>253 || !/^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(site) || site.includes('..')) throw new Error(l10n('m3m'));
     return site;
   };
   const sites=values.map(value=> {
     if(typeof value==='string') return domain(value);
-    if(!value || typeof value!=='object' || Array.isArray(value)) throw new Error('漫画站点无效');
+    if(!value || typeof value!=='object' || Array.isArray(value)) throw new Error(l10n('m3n'));
     const host=domain(value.host), entry={host};
     if(value.imageHosts!==undefined || value.referer!==undefined) {
-      if(!Array.isArray(value.imageHosts) || !value.imageHosts.length || value.imageHosts.length>8) throw new Error('图片 CDN 域名最多 8 项');
+      if(!Array.isArray(value.imageHosts) || !value.imageHosts.length || value.imageHosts.length>8) throw new Error(l10n('m3o'));
       entry.imageHosts=[...new Set(value.imageHosts.map(domain))];
-      if(entry.imageHosts.some(h=>h.startsWith('*.'))) throw new Error('图片 CDN 请填写具体域名');
+      if(entry.imageHosts.some(h=>h.startsWith('*.'))) throw new Error(l10n('m3p'));
       const url=new URL(value.referer);
-      if(!['http:','https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname!=='/' || !matches(url.hostname,host)) throw new Error('Referer 必须是该漫画站点的 HTTP(S) 根地址');
+      if(!['http:','https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname!=='/' || !matches(url.hostname,host)) throw new Error(l10n('m3q'));
       entry.referer=url.href;
     }
     return entry;

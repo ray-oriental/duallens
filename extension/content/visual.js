@@ -1,14 +1,16 @@
-// Original DualLens overlapping lens symbol; built with namespace-safe DOM APIs.
-export function lensIcon(monochrome = false) {
+// DualLens page glyph: two short text lines, the second shorter, hinting at a bilingual pair.
+// Monochrome by design (currentColor); built with namespace-safe DOM APIs.
+export function lensIcon() {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('viewBox', '0 0 16 16');
   svg.setAttribute('aria-hidden', 'true');
-  for (const [cx, cy, color, alpha] of [[9, 9, '#4263eb', '.72'], [15, 15, '#20c997', '1']]) {
-    const c = document.createElementNS(ns, 'circle');
-    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', '7');
-    c.setAttribute('fill', monochrome ? '#ffffff' : color); c.setAttribute('fill-opacity', alpha);
-    svg.append(c);
-  }
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', 'M3 5.5h10M3 10.5h6.5');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '1.6');
+  path.setAttribute('stroke-linecap', 'round');
+  svg.append(path);
   return svg;
 }

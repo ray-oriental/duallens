@@ -19,19 +19,19 @@ test('missing, modified, wrongly exported and unavailable settings fail safely a
     let current = bad;
     const spec = specFor(pinned ? bad : source);
     const load = createSettingsFormLoader(() => current, spec);
-    await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR});
+    await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR()});
     if (!pinned) { current = source; assert.equal(typeof await load(),'function'); }
   }
   for (const get of [null, () => { throw Error('GM unavailable'); }]) {
     const load = createSettingsFormLoader(get, specFor(source));
-    await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR});
-    await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR});
+    await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR()});
+    await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR()});
   }
 });
 test('same-size tampering is rejected before resource code executes', async () => {
   const good = '(function(){globalThis.__resourceRan = 1; return {mountSettingsForm(){}};})();';
   const load = createSettingsFormLoader(() => good.replace('= 1','= 2'), specFor(good));
-  await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR});
+  await assert.rejects(load(), {message:SETTINGS_RESOURCE_ERROR()});
   assert.equal(globalThis.__resourceRan,undefined);
 });
 test('SHA-256 matches Node on secure and HTTP pages, including padding boundaries and UTF-8', async () => {
@@ -44,4 +44,14 @@ test('SHA-256 matches Node on secure and HTTP pages, including padding boundarie
       }
     }
   } finally { if (descriptor) Object.defineProperty(globalThis,'crypto',descriptor); else delete globalThis.crypto; }
+});
+
+test('lazy resource failure uses the current UI preference', async()=>{
+  const {setUiLanguage,t}=await import('../../extension/shared/i18n.js');
+  try {
+    for(const pref of ['en','zh-CN']) {
+      setUiLanguage(pref);
+      await assert.rejects(createSettingsFormLoader(()=>null)(),{message:t('mkb')});
+    }
+  } finally {setUiLanguage('zh-CN');}
 });

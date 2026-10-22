@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // One translation controller per page.
 
 import {siteRuleFor} from '../shared/settings.js';
@@ -16,12 +17,15 @@ import {measurePresentation,measureColor} from './presentation.js';
 import {uiTranslation} from '../shared/ui-glossary.js';
 import {metadataTranslation} from '../shared/metadata.js';
 import {FrameRoots} from './frames.js';
+import {withSendConfirmation} from './confirmation.js';
 
 const MAX_REQUEST_ITEMS=50;
 const CHURN_LIMIT=12; // re-translations of one host within a minute before we leave it alone
 
 export class PageTranslator {
   constructor({getSettings,onChange,platform,getContext,onActiveChange,canRequest=()=>true}) {
+    platform=withSendConfirmation(platform,getSettings);
+    platform.onDecline=()=>this.stop();
     this.platform=platform;
     this.canRequest=canRequest;
     this.getContext=getContext || (()=>({title:document.title,host:location.hostname,url:location.href}));
@@ -118,7 +122,17 @@ export class PageTranslator {
 
   start() {
     if(this.active) return;
+    this.activation = new AbortController();
     this.active=true;
+    const signal=this.activation.signal;
+    void this.platform.confirmSend({purpose:'page'},signal).then(ok=>{
+      if(!ok){if(!signal.aborted)this.stop();return;}
+      if(!signal.aborted&&this.active)this.#begin();
+    });
+    this.onActiveChange();
+  }
+
+  #begin() {
     this.lazy.setMargin(this.s.lazy.rootMarginPx);
     this.watch.start();
     this.frames.start();
@@ -151,6 +165,7 @@ export class PageTranslator {
   stop() {
     const was=this.active;
     this.active=false;
+    this.activation?.abort();
     this.slices.cancel();
     clearTimeout(this.flushTimer);
     this.flushTimer=0;
@@ -393,7 +408,9 @@ export class PageTranslator {
     const top=det && det.reliable && det.lang;
     if(!top) return false;
     const pct=det.percentage ?? 100;
-    if(s.sourceLang==='auto' && pct>=80) unit.from=normalizeLang(top);
+    // Browser language guesses can be wrong or unsupported by the chosen engine
+    // (e.g. an English video title guessed as co). Keep automatic source detection
+    // at the service; retain the script-based Japanese hint initialized above.
     if(pct >=70 && sameLanguage(normalizeLang(top),s.targetLang)) return true;
     if(s.sourceLang && s.sourceLang !=='auto' && pct >=80 && !sameLanguage(normalizeLang(top),s.sourceLang)) {
       return true;
@@ -447,7 +464,7 @@ export class PageTranslator {
     unit.state='error';
     unit.error=error;
     inj.markError(unit,error && error.message);
-    if((unit.retryCount||0)<2){unit.retryCount=(unit.retryCount||0)+1;setTimeout(()=>{if(!unit.dead&&this.active&&unit.state==='error'){unit.state='idle';this.lazy.watch(unit);}},error?.code===ERR.RATE_LIMITED?60000:16000);}
+    if(error?.code!=='CANCELLED'&&(unit.retryCount||0)<2){unit.retryCount=(unit.retryCount||0)+1;setTimeout(()=>{if(!unit.dead&&this.active&&unit.state==='error'){unit.state='idle';this.lazy.watch(unit);}},error?.code===ERR.RATE_LIMITED?60000:16000);}
   }
 
   // The LLM stage gave up on a unit that already shows its machine-translation draft: the draft stays.
@@ -465,7 +482,7 @@ export class PageTranslator {
       // An empty draft is ignored; an empty final result keeps an existing draft instead of failing the unit.
       if(stage==='draft') return;
       if(unit.stage==='draft') this.#settleDraft(unit);
-      else this.#fail(unit,{code:ERR.PARSE,message:'译文为空'});
+      else this.#fail(unit,{code:ERR.PARSE,get message(){return l10n('m4a');}});
       return;
     }
     if(unit.translated===text && unit.tEl) {
@@ -473,6 +490,7 @@ export class PageTranslator {
       unit.engine=engine;
       unit.state='done';
       inj.setStage(unit,stage,engine);
+      this.#refreshColor(unit);
       return;
     }
     unit.translated=text;
@@ -490,7 +508,15 @@ export class PageTranslator {
       stage,
       engine,
     });
+    this.#refreshColor(unit);
     this.lazy.scroll();
+  }
+
+  #refreshColor(unit) {
+    if(unit.attribute || !unit.tEl)return;
+    // Themes can change while waiting; layout adaptation can also change inherited table colours.
+    const color=measureColor(unit.host);
+    if(color)inj.write(()=>{unit.translationColor=color;unit.tEl.style.setProperty('--dl-fg',color);});
   }
 
   retry(id) {

@@ -45,10 +45,10 @@ test('quota and unavailable sync preserve complete local config and other device
 });
 test('v1 migration is idempotent across store recreation; newer v2 secrets win', async () => {
   const legacy = structuredClone(DEFAULT_SETTINGS); legacy.version = 1;
-  legacy.provider.active = 'openai'; legacy.provider.profiles[1].apiKey = 'sk-test-not-real';
+  legacy.provider.active = 'openai'; legacy.provider.profiles[0].apiKey = 'sk-test-not-real';
   const local = memoryArea({ settings: legacy }), sync = memoryArea();
   let store = createSettingsStore({ localArea: local, syncArea: sync });
-  assert.equal((await store.load()).version, 2);
+  assert.equal((await store.load()).version, 3);
   assert.equal(await store.getSecret('openai'), 'sk-test-not-real');
   const writes = local.writes.length + sync.writes.length;
   store = createSettingsStore({ localArea: local, syncArea: sync });
@@ -72,7 +72,7 @@ test('storage key reordering does not trigger re-migration or overwrite newer sy
 });
 test('clearing a key before migration or re-reading an old v1 snapshot cannot resurrect it', async () => {
   const legacy = structuredClone(DEFAULT_SETTINGS); legacy.version = 1;
-  legacy.provider.profiles[1].apiKey = 'sk-test-not-real';
+  legacy.provider.profiles[0].apiKey = 'sk-test-not-real';
   const { store, local } = setup(memoryArea({ settings: legacy }));
   await store.setSecret('openai', '');
   await store.load(); assert.equal(await store.getSecret('openai'), '');
@@ -105,19 +105,17 @@ test('concurrent partial saves serialize; plaintext imports cannot overwrite exi
 test('prototype keys and credential-bearing endpoints are refused before sync', async () => {
   const { store, sync } = setup();
   await assert.rejects(store.setSecret('__proto__', 'sk-test-not-real'));
-  const settings = structuredClone(DEFAULT_SETTINGS); settings.provider.profiles[1].baseUrl = 'https://example.com/v1?apiKey=sk-test-not-real';
+  const settings = structuredClone(DEFAULT_SETTINGS); settings.provider.profiles[0].baseUrl = 'https://example.com/v1?apiKey=sk-test-not-real';
   await assert.rejects(store.save(settings)); assert.equal(sync.writes.length, 0);
 });
-test('v2 chain spans profiles and subscription models remain explicit-only', () => {
+test('chain spans profiles and retains arbitrary compatible-service model names', () => {
   const s = structuredClone(DEFAULT_SETTINGS);
-  s.provider.chain = [{ profileId: 'openai', model: 'a' }, { profileId: 'mock', model: 'mock' }, { profileId: 'gateway', model: 'claude/haiku' }];
+  s.provider.chain = [{ profileId: 'openai', model: 'vendor/a' }, { profileId: 'mock', model: 'mock' }];
   assert.deepEqual(providerChain(s).map(c => c.profile.id), ['openai', 'mock']);
-  s.provider.chain.unshift({ profileId: 'gateway', model: 'codex/default' });
-  assert.equal(providerChain(s).length, 1);
 });
 test('saving an explicit chain keeps legacy active profile/model aligned with its actual head', async () => {
   const { store } = setup();
-  const s = await store.save({ provider: { chain: [{ profileId: 'mock', model: 'mock-slow' }, { profileId: 'gateway', model: 'ollama/qwen3:4b' }] } });
+  const s = await store.save({ provider: { chain: [{ profileId: 'mock', model: 'mock-slow' }, { profileId: 'openai', model: 'local/model' }] } });
   assert.equal(s.provider.active, 'mock');
   assert.equal(s.provider.profiles.find(p => p.id === 'mock').model, 'mock-slow');
   await assert.rejects(store.save({ provider: { chain: [{ profileId: 'missing', model: 'x' }] } }));

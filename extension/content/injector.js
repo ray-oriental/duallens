@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // DOM writes for translation units (SPEC §5.6-5.7). Everything that touches the page DOM on behalf
 // of a unit lives here so that restore() can promise to leave the page exactly as it was found.
 //
@@ -7,7 +8,7 @@
 // may remain outside that source range; tail keeps the translation after an excluded suffix.
 
 import {TAG_T,TAG_O,TAG_W,TAG_R} from './util.js';
-import {measurePresentation} from './presentation.js';
+import {measurePresentation,normalizeStyle} from './presentation.js';
 import {prepareLayout,fitLayout,releaseLayout} from './adaptive-layout.js';
 
 // All writes go through this hook so the mutation observer can discard its own records.
@@ -118,6 +119,9 @@ function createT(u) {
   t.setAttribute('data-dl-id',u.id);
   t.setAttribute('translate','no'); // keep browser-level translators away from our output
   if(u.lang) t.setAttribute('lang',u.lang);
+  // Keep the site's chosen fonts first; only missing CJK glyphs use our local fallbacks.
+  const family=getComputedStyle(u.host).fontFamily;
+  t.style.fontFamily=family+',"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
   return t;
 }
 
@@ -192,6 +196,9 @@ function cleanHostClass(u) {
   if(!u.hadClass && h.getAttribute('class')==='') h.removeAttribute('class');
 }
 
+// A paragraph still pending after WAIT_MS gets data-dl-wait; content.css then draws a quiet "…".
+// Nothing is shown earlier, so fast results never flash and no placeholder ever changes layout.
+const WAIT_MS=1500;
 export function markPending(u) {
   if(u.attribute) return;
   if(!u.layoutGroup) prepareLayout(u);
@@ -199,8 +206,13 @@ export function markPending(u) {
     const t=ensureT(u);
     t.className='dl-t dl-inline';
     t.setAttribute('data-dl-state','pending');
+    t.removeAttribute('data-dl-wait');
     t.replaceChildren();
     setHostState(u,'pending');
+    clearTimeout(u.waitTimer);
+    u.waitTimer=setTimeout(()=> {
+      if(u.tEl===t && t.getAttribute('data-dl-state')==='pending') write(()=>t.setAttribute('data-dl-wait',''));
+    },WAIT_MS);
   });
 }
 
@@ -227,7 +239,7 @@ export function showTranslation(u,fragment,{mode,style,inlineMaxChars,stage='fin
     }
     const t=ensureT(u);
     u.inline=decideInline(u,inlineMaxChars);
-    t.className=`dl-t ${u.inline ? 'dl-inline' : 'dl-block'} dl-s-${style}`;
+    t.className=`dl-t ${u.inline ? 'dl-inline' : 'dl-block'} dl-s-${normalizeStyle(style)}`;
     if(u.translationColor) t.style.setProperty('--dl-fg',u.translationColor);
     t.setAttribute('data-dl-state','done');
     t.setAttribute('data-dl-stage',stage);
@@ -275,8 +287,8 @@ export function markError(u,message) {
     const r=document.createElement(TAG_R);
     r.setAttribute('role','button');
     r.setAttribute('tabindex','0');
-    r.setAttribute('aria-label','重试翻译');
-    r.setAttribute('title',`翻译失败：${message || '未知错误'}（点击重试）`);
+    r.setAttribute('aria-label',l10n('m4r'));
+    r.setAttribute('title',l10n('m4t', [message || l10n('m4s')]));
     r.textContent='↻';
     t.replaceChildren(r);
     setHostState(u,'error');
@@ -312,7 +324,7 @@ export function setStyle(u,style) {
   if(!u.tEl) return;
   write(()=> {
     const t=u.tEl;
-    t.className=t.className.replace(/\bdl-s-\S+/,`dl-s-${style}`);
+    t.className=t.className.replace(/\bdl-s-\S+/,`dl-s-${normalizeStyle(style)}`);
   });
 }
 

@@ -3,7 +3,7 @@
 
 Build first: node scripts/build_userscript.mjs
 Run with the same Python/browser environment as run_e2e.py. Profiles and evidence remain
-in ~/.cache/duallens-e2e. GM/shadow instrumentation is test-only, outside the product bundle.
+under DUALLENS_E2E_OUT (system temporary directory by default). GM/shadow instrumentation is test-only, outside the product bundle.
 """
 from __future__ import annotations
 import argparse
@@ -40,7 +40,7 @@ STUB = r"""(() => {
     return root;
   };
   // Legacy cases exercise the LLM path; the machine-translation cases choose their own mode.
-  data.set('duallens:sync', {settings:{provider:{active:'mock'},translation:{mode:'llm'}}});
+  data.set('duallens:sync', {settings:{version:3,provider:{active:'mock'},translation:{mode:'llm'},selection:{enabled:true},hover:{enabled:true},input:{enabled:true},floatBall:{enabled:true},comics:{enabled:true}}});
   window.GM_getValue = (key, fallback) => structuredClone(data.get(key) ?? fallback);
   window.GM_setValue = (key, value) => {
     const old = data.get(key); data.set(key,structuredClone(value));
@@ -115,6 +115,10 @@ def rect(page, selector):
 
 
 def click_shadow(page, selector):
+    # Navigate the v1 grouped UI before exercising the actual pointer target.
+    group = page.evaluate("s=>__platformFixture.elements(s)[0]?.closest('[data-group]')?.dataset.group", selector)
+    if group:
+        page.evaluate("g=>__platformFixture.elements('[data-group-link]').find(n=>n.dataset.groupLink===g)?.click()", group)
     page.evaluate("s => __platformFixture.elements(s)[0]?.scrollIntoView({block:'center'})", selector)
     r = rect(page, selector)
     check(bool(r), 'missing UI control: ' + selector)
@@ -181,7 +185,7 @@ def desktop_cases(page, base):
     page.wait_for_function("__platformFixture.elements('.dst').some(e=>e.textContent.startsWith('【译】'))")
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('form').length===1")
-    fill_shadow(page, '目标语言', 'ja')
+    fill_shadow(page, '翻译成', 'ja')
     click_shadow(page, 'button[type=submit]')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     check(all(page.evaluate("[...document.querySelectorAll('dl-ui')].map(e=>e.shadowRoot===null)")), 'overlay must stay closed')
@@ -204,10 +208,18 @@ def desktop_cases(page, base):
 def settings_resource_case(page, base):
     ready(page, base)
     check(page.evaluate('__platformFixture.resourceReads.length') == 0, 'settings resource read at startup')
+    command(page, 'DualLens')
+    page.wait_for_function("__platformFixture.elements('#onboard-skip').length===1")
+    click_shadow(page, '#onboard-skip')
+    page.wait_for_function("__platformFixture.elements('#toggle').some(e=>!e.disabled)")
+    check(page.evaluate('__platformFixture.calls.length') == 0, 'popup sent text before a user action')
+    click_shadow(page, '#toggle'); wait_done(page)
+    click_shadow(page, '#toggle');page.wait_for_function("!document.querySelector('dl-t')")
+    page.keyboard.press('Escape')
     command(page, 'DualLens 设置')
-    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    page.wait_for_function("__platformFixture.elements('#save').some(e=>!e.disabled)&&__platformFixture.elements('#status').every(e=>e.textContent==='')")
     check(page.evaluate('__platformFixture.calls.length') == 0, 'opening settings made a network/model request')
-    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, '#save')
+    fill_shadow(page, '翻译成', 'ja'); click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     page.keyboard.press('Escape'); command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#targetLang')[0]?.value==='ja'")
@@ -216,7 +228,7 @@ def settings_resource_case(page, base):
         ready(page, base)
         page.evaluate('mode=>__platformFixture.resourceMode(mode)', mode)
         command(page, 'DualLens 设置')
-        page.wait_for_function("__platformFixture.elements('.dl-media-page').some(e=>e.textContent.includes('重新安装用户脚本'))")
+        page.wait_for_function("__platformFixture.elements('*').some(e=>e.textContent.includes('重新安装用户脚本'))")
         check(page.evaluate('__platformFixture.elements("form").length') == 0, 'unverified form mounted')
         check(page.evaluate('__platformFixture.calls.length') == 0, 'resource failure made a network request')
         page.keyboard.press('Escape')
@@ -234,7 +246,10 @@ def machine_first_case(page, base):
     # A fresh install: no model, default mode. Machine translation answers through the anonymous GM transport.
     page.evaluate("() => __platformFixture.settings({provider:{active:'',chain:[]},translation:{mode:'mt+llm'}})")
     page.wait_for_timeout(300)
-    command(page, '翻译 / 恢复当前页面'); wait_done(page)
+    command(page, '翻译 / 恢复当前页面')
+    page.wait_for_function("__platformFixture.elements('.confirm').length===1")
+    check(page.evaluate('__platformFixture.calls.length') == 0, 'MT sent text before consent')
+    click_shadow(page, '.confirm .primary'); wait_done(page)
     first = page.evaluate("() => { const t = document.querySelector('#p-plain dl-t'); return { text: t.textContent.trim(), stage: t.getAttribute('data-dl-stage') }; }")
     check(first['text'].startswith('【机翻】') and first['stage'] == 'final', 'no-LLM page translation is not a final machine translation: %r' % (first,))
     calls = page.evaluate('__platformFixture.calls')
@@ -275,7 +290,7 @@ def secret_transport_case(page, base):
       __platformFixture.settings({provider:{active:'custom',profiles:[{id:'custom',name:'Mock endpoint',kind:'openai',model:'mock',baseUrl:'https://mock.invalid/v1',concurrency:2,maxItems:12,maxChars:4000,timeoutMs:5000,jsonMode:false,fallbackModels:[]}]}});
     }""")
     command(page, 'DualLens 设置')
-    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    page.wait_for_function("__platformFixture.elements('#save').some(e=>!e.disabled)&&__platformFixture.elements('#status').every(e=>e.textContent==='')")
     check(page.evaluate("__platformFixture.elements('#apiKey').length") == 0, 'userscript rendered a key input')
     secret_prompt(page, '#set-key', 'sk-test-not-real')
     click_shadow(page, 'button[type=submit]')
@@ -284,7 +299,11 @@ def secret_transport_case(page, base):
     check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '已设置', 'saved key status missing')
     click_shadow(page, '#test')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
-    page.keyboard.press('Escape'); command(page, '翻译 / 恢复当前页面'); wait_done(page)
+    page.keyboard.press('Escape'); command(page, '翻译 / 恢复当前页面')
+    page.wait_for_function("__platformFixture.elements('.confirm').length || document.querySelector('dl-t[data-dl-state=done]')")
+    if page.evaluate("__platformFixture.elements('.confirm').length"):
+        click_shadow(page, '.confirm .primary')
+    wait_done(page)
     check(page.evaluate('__platformFixture.calls.every(c=>c.anonymous&&c.hasAuth)') is True, 'GM transport was not anonymous/authenticated')
     check(page.evaluate('localStorage.length') == 0, 'host localStorage was used')
     check(page.evaluate("document.body.outerHTML.includes('sk-test')") is False, 'key leaked into document')
@@ -314,9 +333,9 @@ def assert_secret_private(page):
 def openrouter_profile_case(page, base):
     ready(page, base)
     command(page, 'DualLens 设置')
-    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    page.wait_for_function("__platformFixture.elements('#save').some(e=>!e.disabled)&&__platformFixture.elements('#status').every(e=>e.textContent==='')")
     page.evaluate("() => {const e=__platformFixture.elements('#providerPreset')[0];e.value='openrouter';e.dispatchEvent(new Event('change',{bubbles:true}));}")
-    click_shadow(page, '#add-profile')
+    click_shadow(page, '#preset-openrouter')
     page.wait_for_function("__platformFixture.elements('#profile')[0].value==='openrouter'&&!__platformFixture.elements('#set-key')[0].disabled")
     check(page.evaluate("__platformFixture.elements('input[type=password]').length") == 0, 'userscript rendered a secret/password input')
     # A hostile page hooks composed keyboard/paste events and replaces its window.prompt.
@@ -338,8 +357,10 @@ def openrouter_profile_case(page, base):
     click_shadow(page, '#test')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
     check(page.evaluate("!__platformFixture.data('duallens:local').secrets?.openrouter"), 'draft key saved before Save')
+    saves = page.evaluate("Number(__platformFixture.elements('#saved-toast')[0].dataset.count||0)")
     click_shadow(page, '#save')
-    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('已保存'))")
+    page.wait_for_function(f"Number(__platformFixture.elements('#saved-toast')[0].dataset.count||0)>{saves}")
+    check(page.evaluate("__platformFixture.elements('#status').every(e=>!e.textContent.includes('已保存'))"), 'save feedback duplicated in the status line')
     saved = page.evaluate("__platformFixture.data('duallens:local')")
     check(saved['secrets']['openrouter']['apiKey'] == 'sk-test-not-real', 'missing GM secret')
     check(saved['settings.core']['provider']['active'] == 'openrouter', 'new preset not selected')
@@ -350,7 +371,7 @@ def openrouter_profile_case(page, base):
     check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '已设置', 'saved key status missing')
     page.keyboard.press('Escape')
     command(page, 'DualLens 设置')
-    page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    page.wait_for_function("__platformFixture.elements('#save').some(e=>!e.disabled)&&__platformFixture.elements('#status').every(e=>e.textContent==='')")
     check(page.evaluate("__platformFixture.elements('#apiKey').length") == 0, 'stored key editor appeared on reopen')
     secret_prompt(page, '#set-key', None)
     check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '已设置', 'cancel changed saved key')
@@ -358,7 +379,7 @@ def openrouter_profile_case(page, base):
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
     assert_secret_private(page)
     # Saving an unrelated field preserves the stored key; public export remains key-free.
-    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, '#save')
+    fill_shadow(page, '翻译成', 'ja'); click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'unedited key overwritten')
     secret_prompt(page, '#export', '')
@@ -366,9 +387,17 @@ def openrouter_profile_case(page, base):
     assert_secret_private(page)
     secret_prompt(page, '#export', 'e2e backup passphrase')
     page.wait_for_function("__platformFixture.elements('#backupText')[0].value.startsWith('duallens-config:v1:')")
-    click_shadow(page, '#clear-key'); click_shadow(page, '#save')
+    encrypted=page.evaluate("__platformFixture.elements('#backupText')[0].value")
+    click_shadow(page, '#clear-key')
+    check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == 'sk-test-not-real', 'clear happened before confirmation')
+    click_shadow(page, '.confirmation button:last-child')
+    click_shadow(page, '#save')
     page.wait_for_function("__platformFixture.data('duallens:local').secrets.openrouter.apiKey===''")
     check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '未设置', 'clear status missing')
+    # Group switches clear migration text. Re-enter the saved encrypted payload deliberately.
+    click_shadow(page, '[data-group-link=data]')
+    check(page.evaluate("__platformFixture.elements('#backupText')[0].value") == '', 'migration text leaked across groups')
+    page.evaluate("text=>{const input=__platformFixture.elements('#backupText')[0];input.value=text;input.dispatchEvent(new Event('input',{bubbles:true}));}", encrypted)
     # Cancellation preserves the cleared state; native passphrase import restores the key.
     secret_prompt(page, '#import-button', None)
     check(page.evaluate("__platformFixture.data('duallens:local').secrets.openrouter.apiKey") == '', 'cancel import changed key')
@@ -412,7 +441,7 @@ def isolated_prompt_case(page, base):
     evaluate(STUB + '\n' + (REPO / 'dist/duallens.user.js').read_text(encoding='utf-8'))
     wait("__platformFixture.hasCommand('DualLens 设置')")
     evaluate("__platformFixture.command('DualLens 设置')")
-    wait("__platformFixture.elements('#status').some(e=>e.textContent.includes('修改后'))")
+    wait("__platformFixture.elements('#save').some(e=>!e.disabled)&&__platformFixture.elements('#status').every(e=>e.textContent==='')")
     evaluate("__platformFixture.elements('#providerPreset')[0].value='openrouter';__platformFixture.elements('#add-profile')[0].click()")
     wait("!__platformFixture.elements('#set-key')[0].disabled")
     dialogs = []
@@ -466,15 +495,20 @@ def mobile_cases(page, base):
     check(after['x'] < 20 and abs(after['y'] - before['y']) > 30, 'ball touch drag did not persist/move')
     check(after['height'] >= 44, 'ball touch target too small')
     # Input action keeps the last focused field while tapping the more/menu controls.
+    page.evaluate("()=>__platformFixture.settings({input:{enabled:false}})");page.wait_for_timeout(200)
     page.locator('#ta').fill('Hello from the current input box.'); page.locator('#ta').focus()
-    click_shadow(page, '.more'); page.wait_for_function("__platformFixture.elements('.menu.show').length===1")
-    click_shadow(page, '.menu.show .row.btn')
+    ball=rect(page,'.ball'); x,y=ball['x']+22,ball['y']+22
+    client.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+    page.wait_for_timeout(550)
+    client.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
+    page.wait_for_function("__platformFixture.elements('.menu.show').length===1")
+    page.evaluate("()=>__platformFixture.elements('.menu.show .row').find(e=>e.textContent==='翻译当前输入框').click()")
     page.wait_for_function("document.querySelector('#ta').value.startsWith('【译】')")
     command(page, 'DualLens 设置'); page.wait_for_function("__platformFixture.elements('form').length===1")
     panel = rect(page, '.panel')
     if page.viewport_size['width'] < 600:
         check(panel['x'] == 0 and panel['y'] == 0 and panel['width'] == page.viewport_size['width'], 'narrow settings not fullscreen')
-    fill_shadow(page, '目标语言', 'ja'); click_shadow(page, 'button[type=submit]')
+    fill_shadow(page, '翻译成', 'ja'); click_shadow(page, 'button[type=submit]')
     page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].targetLang==='ja'")
     page.keyboard.press('Escape')
     # Long-page metrics include translation start and the full viewport-by-viewport scroll.
@@ -527,7 +561,7 @@ def main():
                 profile = E2E_ROOT / ('profile-userscript-' + uuid.uuid4().hex[:8])
                 context = None; started = time.time(); page = None
                 try:
-                    context = pw.chromium.launch_persistent_context(str(profile), headless=True,
+                    context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN",
                         viewport={'width': width, 'height': height}, has_touch=touch, is_mobile=touch,
                         args=['--no-first-run', '--no-default-browser-check'])
                     # Stub is installed before the real, unchanged artifact. No extension is loaded.

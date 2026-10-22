@@ -1,7 +1,8 @@
+import { localize, initUiLanguage } from '../shared/i18n.js';
 import { createExtensionPlatform } from '../platform/extension.js';
-import { mountTextForm } from './text-form.js';
-import { mountSubtitleForm } from './subtitle-form.js';
-
-const platform = createExtensionPlatform();
-const mounted = await Promise.all([mountTextForm(document.querySelector('#text'), { platform }), mountSubtitleForm(document.querySelector('#subtitles'), { platform })]);
-window.addEventListener('pagehide', () => { for (const view of mounted) view.destroy(); }, { once: true });
+import { mountMediaTabs } from './media-tabs.js';
+const platform=createExtensionPlatform();
+const offLanguage=await initUiLanguage(platform.settingsStore,document);
+window.addEventListener('pagehide',offLanguage,{once:true});
+const view=await mountMediaTabs(document.querySelector('#tools'),{platform});
+window.addEventListener('pagehide',()=>view.destroy(),{once:true});

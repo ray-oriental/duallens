@@ -1,3 +1,4 @@
+import { t as l10n } from '../../shared/i18n.js';
 export const ASR_CONFIG = Object.freeze({ splitGapMs: 1000, mergeGapMs: 1500, splitWords: 17, mergeWords: 19 });
 const MAX_EVENTS = 30000;
 const sound = /\[(?:[^\]]{0,80})\]|\((?:music|applause|laughter|laughing|silence|noise|音楽|音乐|掌声|笑声)\)/gi;
@@ -32,7 +33,7 @@ export function resegmentASR(tokens, config = ASR_CONFIG) {
 }
 
 export function parseJSON3(data, { asr = false } = {}) {
-  if (!data || !Array.isArray(data.events) || data.events.length > MAX_EVENTS) throw new Error('字幕格式无效或过大');
+  if (!data || !Array.isArray(data.events) || data.events.length > MAX_EVENTS) throw new Error(l10n('m60'));
   const events = data.events.filter(e => e && Array.isArray(e.segs) &&
     Number.isFinite(e.tStartMs) && e.tStartMs >= 0).sort((a, b) => a.tStartMs - b.tStartMs);
   const cues = [], tokens = [], seen = new Set();
@@ -42,7 +43,7 @@ export function parseJSON3(data, { asr = false } = {}) {
     const duration = Number.isFinite(event.dDurationMs) && event.dDurationMs > 0 ? event.dDurationMs :
       Math.max(1, (events[index + 1]?.tStartMs ?? start + 2000) - start);
     const end = start + duration;
-    if (event.segs.length > 5000) throw new Error('字幕片段过多');
+    if (event.segs.length > 5000) throw new Error(l10n('m61'));
     if (!asr) {
       const text = clean(event.segs.map(s => typeof s?.utf8 === 'string' ? s.utf8 : '').join(''));
       if (!text) continue;
@@ -69,7 +70,7 @@ export function parseJSON3(data, { asr = false } = {}) {
     }
   }
   const list = asr ? resegmentASR(tokens.sort((a, b) => a.start - b.start)) : cues;
-  if (list.length > 10000) throw new Error('字幕条数过多');
+  if (list.length > 10000) throw new Error(l10n('m62'));
   return list.map((cue, i) => ({ ...cue, id: `subtitle-${i}`, translation: null }));
 }
 

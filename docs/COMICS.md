@@ -4,7 +4,7 @@
 
 ## 使用与恢复
 
-悬浮球菜单或桌面右键菜单选择“翻译此页漫画”；Tampermonkey 也注册同名菜单命令。原图旁会出现可折叠的原文/译文编号列表；窄于 600px 时放在原图下方。面板可选择日文横排、日文竖排、韩文或英文，再点“识别并翻译”。首次识别会下载所选 fast 语言数据。面板内“语言包”显示本设备已下载的语言、大小及删除按钮。
+悬浮按钮菜单或桌面右键菜单选择“翻译此页漫画”；Tampermonkey 也注册同名菜单命令。原图旁会出现可折叠的原文/译文编号列表；窄于 600px 时放在原图下方。面板可选择日文横排、日文竖排、韩文或英文，再点“识别并翻译”。首次识别会下载所选 fast 语言数据。面板内“语言包”显示本设备已下载的语言、大小及删除按钮。
 
 点击“高亮区域”只绘制临时边框，原图像素、属性和子节点不变；“上移”允许校正阅读顺序。面板中的“恢复原文”关闭当前图的旁列；“恢复漫画原文”菜单或 `restore-comics` 命令移除全部旁列和边框。导航及页面离开也会清理旁列。恢复阻止迟到的 OCR 结果继续发起文字翻译，但已经开始的本地下载/OCR 会在其有界任务内结束。
 
@@ -31,7 +31,7 @@ popup 已提供“翻译此页漫画”。共享设置表单及用户脚本设�
 
 `userscript-sources.js` 以及扩展中内嵌 WASM 的 core JS 已删除。扩展只加载未修改的普通 `tesseract-core-simd-lstm.js` 加独立 `.wasm`；第一方 worker 的 locateFile 明确指向打包资产。用户脚本的 OCR 资源不进入发布 JS 或 ZIP。
 
-打包器强制用户脚本小于 400000 字节；集成版本的实际字节数以构建输出为准。代码不要求某台电脑的本地服务。用户脚本仅在名单站点尝试安装第一方 canvas 钩子，其 document-idle 启动和 MAIN 注入可能受页面 CSP 限制；第一阶段识别仍以已显示 img 为主。Android 真机加载、内存及流畅度待用户/leader 验收。
+打包器强制用户脚本不超过 345000 字节；集成版本的实际字节数以构建输出为准。代码不要求某台电脑的本地服务。用户脚本仅在名单站点尝试安装第一方 canvas 钩子，其 document-idle 启动和 MAIN 注入可能受页面 CSP 限制；第一阶段识别仍以已显示 img 为主。Android 真机加载、内存及流畅度待用户/leader 验收。
 
 ## 扩展接口（请 leader 纳入 PLATFORMS/SPEC）
 
@@ -64,26 +64,21 @@ platform.comics = {
 
 来源/版本/许可证/每文件 SHA-256 和同名参考文件的纯哈希比对见 [VENDOR.md](../extension/vendor/tesseract/VENDOR.md)。npm worker、普通 core JS 与独立 WASM 同参考文件哈希一致；tesseract.min.js 不一致。仅保留上游原件，未用参考内容替换。API 依据 [上游 v5.1.1 文档](https://github.com/naptha/tesseract.js/blob/v5.1.1/docs/api.md)，资源 API 见 [Tampermonkey 文档](https://www.tampermonkey.net/documentation.php#api:GM_getResourceText)。
 
-发布白名单已加入独立 WASM、VENDOR.md、COMICS.md、隐私/权限说明和 portable 漫画 PNG 夹具。保留集成分支的 settings v2、getSecret、promptSecret 与发布资产校验修复。
+发布白名单已加入独立 WASM、VENDOR.md、COMICS.md、隐私/权限说明和 portable 漫画 PNG 夹具。保留集成分支的 settings v3、getSecret、promptSecret 与发布资产校验修复。
 
 ## 验证与当前限制
 
-从仓库根目录运行 `npm test`、`python -B -m unittest discover -s gateway/tests -t .`、`python -B scripts/check_project.py` 和 `python -B scripts/build_release.py`。现有浏览器回归使用 `tests/e2e/run_e2e.py --mock-only`。
+从仓库根目录运行 `npm test`、`python -B scripts/check_project.py` 和 `python -B scripts/build_release.py`。现有浏览器回归使用 `tests/e2e/run_e2e.py --mock-only`。
 
 漫画专项使用相同 canonical Session/staging/cleanup：
 
 ```powershell
-$env:PLAYWRIGHT_BROWSERS_PATH="$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
-& "$env:USERPROFILE\.venvs\duallens-e2e\Scripts\python.exe" -B tests/fixtures/comics/generate.py
-& "$env:USERPROFILE\.venvs\duallens-e2e\Scripts\python.exe" -B -u tests/e2e/run_comics_e2e.py
+python -B tests/fixtures/comics/generate.py
+python -B -u tests/e2e/run_comics_e2e.py
 ```
 
-专项 E2E 的 fixed URL 响应用外部缓存中的原始上游 traineddata 离线替代，运行仍做 SHA-256 校验。首次准备数据时须将 `offscreen/languages.json` 指定的四个文件放到 `%USERPROFILE%\.cache\duallens-e2e\comics-data`，并将资源目录描述的两个固定 jsDelivr 文件放到 `%USERPROFILE%\.cache\duallens-e2e\comics-runtime`；这些缓存不进入仓库。专项不会调用模型或登录网站。它验证日/韩/英真实本地 OCR、阅读顺序、只发文本的 loopback mock 请求体、原图 DOM/像素和恢复、语言包查看/删除/重下载/复用、窄屏、高亮/调序、GM blob/arraybuffer 和 CSP 失败、canvas 切片及 Referer 403；同时验证 popup 实际点击、设置页删除、默认及增删名单、普通页面不读取 OCR 资源，以及资源 API 不可用时的私有缓存下载降级。
+专项 E2E 的 fixed URL 响应用外部缓存中的原始上游 traineddata 离线替代，运行仍做 SHA-256 校验。首次准备数据时须将 `offscreen/languages.json` 指定的四个文件放到 `DUALLENS_E2E_OUT/comics-data`，并将资源目录描述的两个固定 jsDelivr 文件放到 `DUALLENS_E2E_OUT/comics-runtime`；这些缓存不进入仓库。专项不会调用模型或登录网站。它验证日/韩/英真实本地 OCR、阅读顺序、只发文本的 loopback mock 请求体、原图 DOM/像素和恢复、语言包查看/删除/重下载/复用、窄屏、高亮/调序、GM blob/arraybuffer 和 CSP 失败、canvas 切片及 Referer 403；同时验证 popup 实际点击、设置页删除、默认及增删名单、普通页面不读取 OCR 资源，以及资源 API 不可用时的私有缓存下载降级。
 
 已观察到清晰日文夹具把「こんにちは」识别为「こんにちちは」，其余五条韩/英/日文夹具文字正确。专项以文字相似度≥0.8 检查区域对应/顺序，同时保留完整实际识别结果，不把它记成 OCR 逐字完美。最近测量单图 OCR p50 约 2.19s；首次离线语言包加载+校验+持久化约 1.51–2.60s（不是网络下载 benchmark）。采样的 offscreen JS 堆约 32.3 MiB；这不包含 Worker WASM、图片原生解码或浏览器进程 RSS，不能视作总峰值内存。
 
-2026-10-14 临时 Chromium profile 的指定 Pixiv 作品页验收通过：11 个日文 OCR 区域、11 条最终中文译文，恢复保留原图 DOM。小说页在 v0.3.1 SSE 网关和直连网络上复核通过：20 段 profile 容量、日译中两段首批，首段 1.813 秒、视口填满 11.375 秒，可见 11/11 段为中文；仅译文中新进入视口的段落 10.329 秒完成，滚动到此前未提交的段落后 5.891 秒填满。浮球启动/恢复及阅读区 DOM 一致性通过。完全一致及明显近似的日文正文回显按漏翻处理；语言检查为启发式，不能保证语义质量或任意网络/模型时延。OCR 仍会误识别，阅读顺序提示不确定。未验证用户两台 Windows Chrome/Edge、Android Edge/Tampermonkey 真机或 Android Chrome。没有气泡/面板模型、可靠 SFX 分类、复杂混合方向自动识别或云视觉；不保证其他真实站点兼容性。复杂背景样式和页面变换可能使高亮不精确，嵌套 bitmap/canvas 合成明确拒绝。动态阅读器在新图片显示后再次显式触发，不后台连续抓取。
-
-集成分支的 v2 平台接线和原生 promptSecret 已保留，popup/共享设置表单已接入。发布前由 leader 完成最终安全及真机验收。
-
-整改后回归覆盖普通站点无 MAIN 钩子、默认/修改/禁用名单、@resource 懒读取及私有 GM 下载降级；最新完整结果以交付报告和测试产物为准。合并冲突已解决，改动暂存但不自行完成合并提交。
+真实图片、复杂阅读顺序及物理设备仍需独立验收，OCR 可能误识别。不要把离线样本通过解释为所有站点兼容。

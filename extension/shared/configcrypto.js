@@ -1,4 +1,5 @@
-import { publicSettings } from './settings.js';
+import { t as l10n } from './i18n.js';
+import { publicSettings, DEFAULT_SETTINGS } from './settings.js';
 
 export const CONFIG_PREFIX = 'duallens-config:v1:';
 export const PBKDF2_ITERATIONS = 310000;
@@ -9,7 +10,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 function checkedSecrets(input = {}) {
   const secrets = {};
   for (const [id, secret] of Object.entries(input)) {
-    if (!id || ['__proto__', 'prototype', 'constructor'].includes(id) || typeof secret?.apiKey !== 'string') throw new Error('密钥配置无效');
+    if (!id || ['__proto__', 'prototype', 'constructor'].includes(id) || typeof secret?.apiKey !== 'string') throw new Error(l10n('m7q'));
     secrets[id] = { apiKey: secret.apiKey };
   }
   return secrets;
@@ -25,15 +26,16 @@ function base64url(bytes) {
   return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 function unbase64url(text) {
-  if (!/^[A-Za-z0-9_-]+$/.test(text) || text.length % 4 === 1) throw new Error('配置格式无效');
+  if (!/^[A-Za-z0-9_-]+$/.test(text) || text.length % 4 === 1) throw new Error(l10n('m7r'));
   return Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 }
 
 export async function exportConfig(settings, { password = '', secrets = {} } = {}) {
   const clean = publicSettings(settings);
   if (!password) return JSON.stringify(clean, null, 2);
+  if ([...password].length < 8) throw new Error(l10n('m7s'));
   const plaintext = encoder.encode(JSON.stringify({ settings: clean, secrets: checkedSecrets(secrets) }));
-  if (plaintext.length > MAX_BYTES) throw new Error('配置文件最大 1MB');
+  if (plaintext.length > MAX_BYTES) throw new Error(l10n('m7t'));
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await derive(password, salt);
@@ -45,21 +47,41 @@ export async function exportConfig(settings, { password = '', secrets = {} } = {
 }
 
 export async function importConfig(text, password = '') {
-  if (typeof text !== 'string' || text.length > MAX_BYTES * 2) throw new Error('配置文件过大或格式无效');
+  if (typeof text !== 'string' || text.length > MAX_BYTES * 2) throw new Error(l10n('m7u'));
   if (!text.startsWith(CONFIG_PREFIX)) {
     const data = JSON.parse(text);
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('配置格式无效');
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(l10n('m7r'));
     return { settings: publicSettings(data) }; // untrusted plaintext never imports secrets
   }
-  if (!password) throw new Error('请输入导出时使用的口令');
+  if (!password) throw new Error(l10n('m7v'));
   try {
     const bytes = unbase64url(text.slice(CONFIG_PREFIX.length));
-    if (bytes.length < 45 || bytes.length > MAX_BYTES + 44) throw new Error('配置格式无效');
+    if (bytes.length < 45 || bytes.length > MAX_BYTES + 44) throw new Error(l10n('m7r'));
     const key = await derive(password, bytes.slice(0, 16));
     const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(16, 28),
       additionalData: encoder.encode(CONFIG_PREFIX) }, key, bytes.slice(28));
     const data = JSON.parse(decoder.decode(decrypted));
-    if (!data?.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) throw new Error('配置格式无效');
+    if (!data?.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) throw new Error(l10n('m7r'));
     return { settings: publicSettings(data.settings), secrets: checkedSecrets(data.secrets) };
-  } catch { throw new Error('口令错误或加密配置已损坏'); }
+  } catch { throw new Error(l10n('m7w')); }
+}
+
+// Compact device-transfer backups; import restores omitted defaults.
+export function compactConfig(settings) {
+  const diff = (value, base) => {
+    if (JSON.stringify(value) === JSON.stringify(base)) return undefined;
+    if (value && typeof value === 'object' && !Array.isArray(value) && base && typeof base === 'object' && !Array.isArray(base)) {
+      return Object.fromEntries(Object.entries(value).flatMap(([key, v]) => {
+        const changed = diff(v, base[key]); return changed === undefined ? [] : [[key, changed]];
+      }));
+    }
+    return structuredClone(value);
+  };
+  const result = diff(settings, DEFAULT_SETTINGS) || {};
+  // A compact v3 backup must not be mistaken for a legacy backup and reset opt-ins.
+  result.version = settings.version;
+  result.provider ||= {};
+  const shape = { ...DEFAULT_SETTINGS.provider.profiles.find(p => p.kind === 'openai'), preset: '', requiresKey: false };
+  result.provider.profiles = settings.provider.profiles.map(p => diff(p, shape) || {});
+  return result;
 }

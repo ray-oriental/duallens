@@ -1,6 +1,6 @@
 # 网页视频字幕、本地字幕文件与文本侧栏（P1，待主控合并）
 
-本分支支持 YouTube 已有轨道、HTML5 标准字幕轨、用户导入的 SRT/VTT 字幕文件和自由文本翻译。不提供语音识别、私有播放器专用适配或一般文档翻译。扩展保持原生 ES 模块、零构建；用户脚本复用相同核心与用户配置的服务，无需本机网关。所有验证使用离线夹具和 mock，未验证真实服务质量或真机浏览器。
+本分支支持 YouTube 已有轨道、HTML5 标准字幕轨、用户导入的 SRT/VTT 字幕文件和自由文本翻译。不提供语音识别、私有播放器专用适配或一般文档翻译。扩展保持原生 ES 模块、零构建；用户脚本复用相同核心与用户配置的服务。所有验证使用离线夹具和 mock，未验证真实服务质量或真机浏览器。
 
 ## v0.5 通用字幕与本地文件增量
 
@@ -69,8 +69,7 @@ API 行为依据 [Chrome sidePanel 文档](https://developer.chrome.com/docs/ext
 node --test tests/unit/subtitles.test.mjs
 node --test tests/unit/subtitle-files.test.mjs
 node scripts/build_userscript.mjs
-$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
-& "$env:USERPROFILE\.venvs\duallens-e2e\Scripts\python.exe" -B -u tests/e2e/run_media_e2e.py
+python -B -u tests/e2e/run_media_e2e.py
 ```
 
 专项测试复用 canonical runner 的扩展暂存、临时 profile 和清理规则。浏览器 URL 虽为 www/m.youtube.com，但页面请求通过 Playwright route 由 `tests/fixtures/subtitles/youtube.html` 和本地 json3 回应；跨 host 后台取轨通过临时 worker 内的严格 fetch 夹具回应，GM 跨 host 请求通过 anonymous 传输桩回应。Playwright 1.48 的页面路由不涵盖扩展 worker 网络，因此必须在第一次取轨前安装该禁止外网的传输夹具。音频为标准库生成的静音 WAV（含正确的 HTTP 字节范围响应）。覆盖字幕叠加、当前位置优先、seek、全屏、字幕样式、SPA、原字幕可见性与精确恢复；扩展原生侧栏打开、文本翻译/模型选择、复制和朗读调用；用户脚本桌面、375×812 手机与 800×1280 平板文本页签和字幕流程。

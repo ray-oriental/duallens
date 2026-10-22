@@ -29,7 +29,7 @@ def write_zip(target: Path, members: dict[str, Path], replacements: dict[str, by
             archive.writestr(info, payload, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
 
 def build_release(project_root: Path, output_dir: Path | None = None, target: str = 'all') -> list[Path]:
-    if target not in {'all', 'edge-store'}:
+    if target not in {'all', 'edge-store', 'chrome-store'}:
         raise ValueError(f'unknown release target: {target}')
     project = project_root.absolute()
     # Shared reviewed PUBLIC_DOCS allowlist in check_project.py includes PDF.md;
@@ -39,24 +39,22 @@ def build_release(project_root: Path, output_dir: Path | None = None, target: st
     output = (output_dir or project / 'dist').absolute()
     check_output_path(output)
     named = {f'duallens-extension-v{version}.zip': extension, f'duallens-portable-v{version}.zip': portable}
-    edge_name = f'duallens-edge-store-v{version}.zip'
-    if target == 'edge-store' or (output / edge_name).exists():
-        edge_manifest = dict(manifest)
-        edge_manifest.pop('key', None)
-        named[edge_name] = extension
+    store_names = {f'duallens-{store}-store-v{version}.zip' for store in ('chrome','edge')}
+    store_manifest = dict(manifest); store_manifest.pop('key', None)
+    for name in sorted(store_names): named[name] = extension
     existing = [p for p in output.iterdir() if VERSIONED_ASSET_RE.fullmatch(p.name) or p.name in USERSCRIPT_ASSETS | {'SHA256SUMS'}] if output.exists() else []
     for asset in existing:
         require(not is_link(asset) and asset.is_file(), f'unsafe existing release asset: {asset.name}')
     for name in [*named, *USERSCRIPT_ASSETS, 'SHA256SUMS']:
         require(not is_link(output / name), f'linked existing output: {name}')
-    cache = Path.home() / '.cache' / 'duallens-build'
+    cache = Path(tempfile.gettempdir()) / 'duallens-build'
     check_output_path(cache)
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='duallens-release-', dir=cache) as temporary:
         stage = Path(temporary)
         require(stage.resolve().parent == cache.resolve(), 'temporary build path escaped local cache')
         for name, members in named.items():
-            replacements = {'manifest.json': json.dumps(edge_manifest, ensure_ascii=False, separators=(',', ':')).encode('utf-8')} if name == edge_name else {}
+            replacements = {'manifest.json': json.dumps(store_manifest, ensure_ascii=False, separators=(',', ':')).encode('utf-8')} if name in store_names else {}
             write_zip(stage / name, members, replacements)
         user_script = project / 'scripts' / 'build_userscript.mjs'
         release_assets = list(named)
@@ -83,7 +81,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project-dir', type=Path, default=PROJECT)
     parser.add_argument('--output-dir', type=Path)
-    parser.add_argument('--target', choices=('all', 'edge-store'), default='all')
+    parser.add_argument('--target', choices=('all', 'edge-store', 'chrome-store'), default='all')
     args = parser.parse_args(argv)
     try:
         for path in build_release(args.project_dir, args.output_dir, args.target):

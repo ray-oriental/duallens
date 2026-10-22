@@ -4,6 +4,7 @@ import subprocess
 import uuid
 import traceback
 import time
+import argparse
 from playwright.sync_api import sync_playwright
 import run_e2e as e
 from run_userscript_e2e import STUB, command
@@ -53,7 +54,11 @@ def exercise(page, toggle, mode, extension, idle_check=None, request_count=None)
     page.evaluate('replaceMailLater()')
     wait(frames['mail'], "document.querySelector('#message')?.textContent.includes('second message')")
     translated(frames['mail'])
-    assert frames['mail'].locator('dl-t').count() == 1, 'replaced document translated twice'
+    wait(frames['mail'], "document.querySelector('#message')?.textContent.includes('second message') && document.querySelectorAll('dl-t').length===1 && !!document.querySelector('dl-t[data-dl-state=done]')")
+    # document.write can emit a second lifecycle event after the first done node.
+    # Require one terminal translation to remain stable across that event boundary.
+    wait(frames['mail'], "() => {const ok=document.querySelector('#message')?.textContent.includes('second message')&&document.querySelectorAll('dl-t').length===1&&!!document.querySelector('dl-t[data-dl-state=done]');if(!ok){window.__frameStableSince=0;return false;}window.__frameStableSince||=performance.now();return performance.now()-window.__frameStableSince>400;}")
+    assert frames['mail'].locator('dl-t').count() == 1, 'replaced document translated twice: '+frames['mail'].evaluate('document.body.outerHTML')
     if extension:
         frames['cross'].goto(frames['cross'].url + '?new-message=2')
         translated(frames['cross'])
@@ -120,7 +125,10 @@ def shadow_exercise(page,toggle,mode):
     assert page.locator('#projected dl-t').count()==1, 'slot source translated more than once'
     assert page.evaluate("!shadowRoots[0].querySelector('#fallback dl-t')"), 'assigned slot fallback was translated'
     assert page.evaluate('closedNotice.innerHTML===closedExpected'), 'closed shadow root was accessed'
-    assert page.evaluate("shadowRoots.every(r=>getComputedStyle(r.querySelector('p dl-t')).color.match(/[0-9.]+/g).slice(0,3).map(Number).reduce((a,b)=>a+b)>600)"), 'shadow host dark background ignored'
+    assert page.evaluate("""()=>{const c=document.createElement('canvas').getContext('2d');
+      return shadowRoots.every(root=>{c.fillStyle=getComputedStyle(root.querySelector('p dl-t')).color;c.fillRect(0,0,1,1);
+        const rgb=[...c.getImageData(0,0,1,1).data].slice(0,3);
+        return rgb.every(v=>v>=199&&v<=205);});}"""), '78% white on #111 shadow background was not preserved'
     mode(); wait(page,"shadowRoots.every(r=>r.querySelector('p.dl-only'))")
     toggle(); wait(page,"shadowRoots.every((r,i)=>r.innerHTML===shadowExpected[i])")
     assert page.evaluate('document.body.outerHTML')==before, 'light DOM restore mismatch'
@@ -135,11 +143,13 @@ def shadow_exercise(page,toggle,mode):
 
 
 def main():
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--only',action='append',default=[]);args=parser.parse_args()
     first, base = e.start_fixtures(); second, remote = e.start_fixtures()
     remote = remote.replace('127.0.0.1', 'localhost')
     run = e.E2E_ROOT / ('run-frames-' + uuid.uuid4().hex[:8]); run.mkdir(parents=True)
     results = []
     def record(name,action):
+        if args.only and name not in args.only:return
         try:
             detail=action();results.append({'name':name,'status':'PASS','detail':detail})
             print('PASS '+name+': '+detail,flush=True)
@@ -167,7 +177,7 @@ def main():
                     h.page.wait_for_timeout(5000)
                     assert h.sw_eval('() => frameMessages')==counts, 'frame snapshot/publish messages grew during 5s idle'
                 def frame_case():
-                    h.open('frames.html?remote='+remote)
+                    h.open('frames.html?remote='+remote+'&baseline=1')
                     frame_id=h.sw_eval("""async tabId => {const rows=await chrome.scripting.executeScript({target:{tabId,allFrames:true},func:()=>window.name});return rows.find(r=>r.result==='visibility-fixture').frameId;}""",h.tab_id)
                     return exercise(h.page,lambda:h.command('toggle-page'),lambda:h.command('toggle-translation-only'),True,idle_check,
                         lambda:h.sw_eval('(id)=>frameTranslationCounts[id]||0',frame_id))
@@ -176,10 +186,61 @@ def main():
                     return shadow_exercise(h.page,lambda:h.command('toggle-page'),lambda:h.command('toggle-translation-only'))
                 record('frames-extension',frame_case)
                 record('shadow-extension',shadow_case)
+                def consent_case():
+                    h.settings({'translation':{'mode':'llm'},'provider':{'active':'consent','chain':[],
+                        'profiles':[{'id':'consent','kind':'openai','baseUrl':'https://fixture.example/v1','model':'test'}]}})
+                    h.sw_eval("""() => {globalThis.consentCalls=0;globalThis.fetch=async(url,opts)=>{
+                      consentCalls++;const payload=JSON.parse(opts.body),user=payload.messages.find(m=>m.role==='user').content;
+                      const input=JSON.parse(user.slice(user.indexOf('{'),user.lastIndexOf('}')+1));
+                      return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({t:input.t.map(t=>'【译】'+t)})}}]}),{headers:{'Content-Type':'application/json'}});
+                    };}""")
+                    h.open('frames.html?remote='+remote+'&consent=1')
+                    cross=child(h.page,'#cross');before=cross.evaluate('document.body.outerHTML')
+                    h.sw_eval("""async id=>chrome.scripting.executeScript({target:{tabId:id,allFrames:true},func:()=>{
+                      globalThis.lastFramePush=null;chrome.runtime.onMessage.addListener(msg=>{if(msg.type==='frame-state')lastFramePush=msg.state;return false;});
+                    }})""",h.tab_id)
+                    h.sw_eval("""async id=>chrome.scripting.executeScript({target:{tabId:id},func:()=>{
+                      globalThis.consentRoots=[];const original=Element.prototype.attachShadow;
+                      Element.prototype.attachShadow=function(init){const r=original.call(this,init);consentRoots.push(r);return r;};
+                    }})""",h.tab_id)
+                    def ui(action):
+                        return h.sw_eval("""async ([id,action])=>(await chrome.scripting.executeScript({target:{tabId:id},args:[action],func:action=>{
+                          const root=consentRoots.find(r=>r.host.isConnected&&r.querySelector('.confirm'));
+                          if(action==='accept')root.querySelector('.primary').click();
+                          return !!root;
+                        }}))[0].result""",[h.tab_id,action])
+                    h.command('toggle-page')
+                    deadline=time.monotonic()+10
+                    while not ui('check') and time.monotonic()<deadline:h.page.wait_for_timeout(50)
+                    assert ui('check'),'top confirmation missing'
+                    h.page.wait_for_timeout(500)
+                    assert h.sw_eval('()=>consentCalls')==0,'sent before top consent'
+                    assert cross.locator('dl-t,dl-ui').count()==0,'child translated or created consent UI'
+                    h.command('toggle-page')
+                    deadline=time.monotonic()+5
+                    while ui('check') and time.monotonic()<deadline:h.page.wait_for_timeout(50)
+                    assert not ui('check'),'restore left a pending top confirmation'
+                    h.command('toggle-page')
+                    deadline=time.monotonic()+5
+                    while not ui('check') and time.monotonic()<deadline:h.page.wait_for_timeout(50)
+                    ui('accept')
+                    try:translated(cross)
+                    except Exception:
+                        print('CONSENT DIAGNOSTIC',h.msg({'type':'frame-top-state'}),
+                            h.sw_eval('()=>({calls:consentCalls,counts:frameTranslationCounts})'),cross.evaluate('document.body.innerHTML'),
+                            h.sw_eval("""async id=>chrome.scripting.executeScript({target:{tabId:id,allFrames:true},func:()=>({url:location.href,
+                              push:globalThis.lastFramePush,ready:!!globalThis[Symbol.for('duallens.loader.ready')],
+                              size:[innerWidth,innerHeight],hidden:document.hidden})})""",h.tab_id),flush=True)
+                        raise
+                    assert cross.locator('dl-ui').count()==0
+                    h.command('toggle-page');wait(cross,"!document.querySelector('dl-t')")
+                    assert cross.evaluate('document.body.outerHTML')==before
+                    return 'remote destination: no sends/child UI before top consent; pushed acknowledgement starts child; exact restore'
+                record('frames-top-consent',consent_case)
             finally: h.close()
             browser = pw.chromium.launch(headless=True)
             try:
-                context = browser.new_context(viewport=e.VIEWPORT)
+                context = browser.new_context(viewport=e.VIEWPORT, locale="zh-CN")
                 context.add_init_script(script=STUB); context.add_init_script(path=str(bundle))
                 def userscript_case(path,shadow=False):
                     page=context.new_page()

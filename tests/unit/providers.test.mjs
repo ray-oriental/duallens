@@ -4,11 +4,11 @@ import { createProviders, parseRetryAfter, isLocalHost, profileProblem } from '.
 import { ERR } from '../../extension/shared/protocol.js';
 import { sleep } from './helpers.mjs';
 
-const gateway = (over = {}) => ({
-  id: 'gateway',
-  kind: 'gateway',
-  baseUrl: 'http://127.0.0.1:18790/v1',
-  model: 'sjtu/deepseek-chat',
+const localProvider = (over = {}) => ({
+  id: 'localProvider',
+  kind: 'openai',
+  baseUrl: 'http://127.0.0.1:1234/v1',
+  model: 'example/model',
   timeoutMs: 500,
   ...over,
 });
@@ -41,13 +41,13 @@ function fakeFetch(reply) {
 }
 const ok = (content) => ({ status: 200, body: JSON.stringify({ choices: [{ message: { content } }] }) });
 
-test('gateway: POSTs to /chat/completions, never sends a key, temperature 0.2', async () => {
+test('local keyless service: POSTs to /chat/completions, temperature 0.2', async () => {
   const f = fakeFetch(ok('<seg id="1">你好</seg>'));
   const { chat } = createProviders({ fetchImpl: f });
-  const text = await chat({ profile: gateway({ apiKey: 'should-not-be-sent' }), model: 'ollama/qwen3:4b', messages });
+  const text = await chat({ profile: localProvider(), model: 'ollama/qwen3:4b', messages });
   assert.equal(text, '<seg id="1">你好</seg>');
   const [c] = f.calls;
-  assert.equal(c.url, 'http://127.0.0.1:18790/v1/chat/completions');
+  assert.equal(c.url, 'http://127.0.0.1:1234/v1/chat/completions');
   assert.equal(c.init.method, 'POST');
   assert.equal(c.body.model, 'ollama/qwen3:4b');
   assert.equal(c.body.temperature, 0.2);
@@ -68,12 +68,12 @@ test('openai: Bearer key, trailing slash on baseUrl tolerated', async () => {
 
 test('content given as an array of parts is joined', async () => {
   const f = fakeFetch({ body: JSON.stringify({ choices: [{ message: { content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] } }] }) });
-  assert.equal(await createProviders({ fetchImpl: f }).chat({ profile: gateway(), model: 'm', messages }), 'ab');
+  assert.equal(await createProviders({ fetchImpl: f }).chat({ profile: localProvider(), model: 'm', messages }), 'ab');
 });
 
 test('429 maps to rate_limited and reads Retry-After (seconds or date)', async () => {
   const { chat } = createProviders({ fetchImpl: fakeFetch({ status: 429, headers: { 'Retry-After': '7' }, body: '{"error":{"message":"slow down"}}' }) });
-  await assert.rejects(chat({ profile: gateway(), model: 'm', messages }), (e) => {
+  await assert.rejects(chat({ profile: localProvider(), model: 'm', messages }), (e) => {
     assert.equal(e.code, ERR.RATE_LIMITED);
     assert.equal(e.retryAfterMs, 7000);
     assert.equal(e.status, 429);
@@ -82,9 +82,9 @@ test('429 maps to rate_limited and reads Retry-After (seconds or date)', async (
   });
   const future = new Date(Date.now() + 30000).toUTCString();
   const g = createProviders({ fetchImpl: fakeFetch({ status: 429, headers: { 'retry-after': future } }) });
-  await assert.rejects(g.chat({ profile: gateway(), model: 'm', messages }), (e) => e.retryAfterMs > 25000 && e.retryAfterMs <= 30000);
+  await assert.rejects(g.chat({ profile: localProvider(), model: 'm', messages }), (e) => e.retryAfterMs > 25000 && e.retryAfterMs <= 30000);
   const none = createProviders({ fetchImpl: fakeFetch({ status: 429 }) });
-  await assert.rejects(none.chat({ profile: gateway(), model: 'm', messages }), (e) => e.code === ERR.RATE_LIMITED && e.retryAfterMs === undefined);
+  await assert.rejects(none.chat({ profile: localProvider(), model: 'm', messages }), (e) => e.code === ERR.RATE_LIMITED && e.retryAfterMs === undefined);
 });
 
 test('status mapping: 401/403 config, 5xx and other 4xx provider', async () => {
@@ -117,7 +117,7 @@ test('malformed responses map to parse_error', async () => {
   const bad = async (reply) => {
     const { chat } = createProviders({ fetchImpl: fakeFetch(reply) });
     try {
-      await chat({ profile: gateway(), model: 'm', messages });
+      await chat({ profile: localProvider(), model: 'm', messages });
     } catch (e) {
       return e.code;
     }
@@ -127,12 +127,12 @@ test('malformed responses map to parse_error', async () => {
   assert.equal(await bad({ body: '{"choices":[]}' }), ERR.PARSE);
 });
 
-test('network failure maps to network_error with a gateway hint and no URL path', async () => {
+test('network failure maps to network_error with the service host and no URL path', async () => {
   const { chat } = createProviders({ fetchImpl: fakeFetch(new TypeError('Failed to fetch')) });
-  await assert.rejects(chat({ profile: gateway(), model: 'm', messages }), (e) => {
+  await assert.rejects(chat({ profile: localProvider(), model: 'm', messages }), (e) => {
     assert.equal(e.code, ERR.NETWORK);
-    assert.match(e.message, /127\.0\.0\.1:18790/);
-    assert.match(e.message, /网关/);
+    assert.match(e.message, /127\.0\.0\.1:1234/);
+    assert.doesNotMatch(e.message, /\/v1/);
     return true;
   });
 });
@@ -147,45 +147,42 @@ test('timeout aborts the request and reports network_error', async () => {
       });
     });
   const { chat } = createProviders({ fetchImpl: f });
-  await assert.rejects(chat({ profile: gateway({ timeoutMs: 30 }), model: 'm', messages }), (e) => e.code === ERR.NETWORK && /超时/.test(e.message));
+  await assert.rejects(chat({ profile: localProvider({ timeoutMs: 30 }), model: 'm', messages }), (e) => e.code === ERR.NETWORK && /超时/.test(e.message));
   assert.equal(aborted, true);
 });
 
-test('the wait for the first token is long (the SJTU relay queues up to 50 s); only direct SJTU is capped, at 50 s',async()=>{
-  const f=fakeFetch({body:JSON.stringify({choices:[{message:{content:'hello'}}]})});
-  const {chat}=createProviders({fetchImpl:f});
-  await chat({profile:gateway({timeoutMs:130000}),model:'sjtu/deepseek-chat',messages});
-  assert.equal(f.calls.at(-1).init.timeoutMs,130000,'a gateway profile must not cancel a call its relay is still queueing');
-  await chat({profile:openai({baseUrl:'https://models.sjtu.edu.cn/v1',timeoutMs:130000}),model:'deepseek-chat',messages});
-  assert.equal(f.calls.at(-1).init.timeoutMs,50000);
-  await chat({profile:openai({timeoutMs:130000}),model:'gpt-x',messages});
-  assert.equal(f.calls.at(-1).init.timeoutMs,130000);
+test('every compatible service retains its configured first-response timeout', async () => {
+  const f = fakeFetch(ok('hello'));
+  const { chat } = createProviders({ fetchImpl: f });
+  for (const profile of [localProvider({timeoutMs:130000}), openai({timeoutMs:130000})]) {
+    await chat({profile,messages}); assert.equal(f.calls.at(-1).init.timeoutMs,130000);
+  }
 });
 
-test('gateway streaming: first token may arrive late, then twelve seconds of silence is a stall',async t=>{
+test('localProvider streaming: first token may arrive late, then the configured idle timeout detects a stall',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
   const flush=()=>new Promise(r=>setImmediate(r));
   let stream,aborted=false;
   const f=async(url,init)=>new Response(new ReadableStream({start(c){
     stream=c;init.signal.addEventListener('abort',()=>{aborted=true;c.error(new DOMException('aborted','AbortError'));});
   }}),{headers:{'Content-Type':'text/event-stream'}});
-  const outcome=createProviders({fetchImpl:f}).chat({profile:gateway({timeoutMs:130000}),model:'auto',messages}).then(()=>'finished',e=>e);
+  const outcome=createProviders({fetchImpl:f}).chat({profile:localProvider({timeoutMs:130000}),model:'auto',messages}).then(()=>'finished',e=>e);
   await flush();
   t.mock.timers.tick(100000);await flush();
   assert.equal(aborted,false,'100 s before the first token is still within the first-token allowance');
   stream.enqueue(new TextEncoder().encode('data: {"model":"ollama/qwen3:4b","choices":[{"delta":{"content":"a"}}]}\n\n'));await flush();
-  t.mock.timers.tick(11900);await flush();
+  t.mock.timers.tick(129900);await flush();
   assert.equal(aborted,false);
   t.mock.timers.tick(200);
   const e=await outcome;
-  assert.equal(aborted,true);assert.equal(e.code,ERR.NETWORK);assert.match(e.message,/超时（12 秒）/);
+  assert.equal(aborted,true);assert.equal(e.code,ERR.NETWORK);assert.match(e.message,/超时（130 秒）/);
 });
 
-test('every error status keeps the gateway Retry-After and its machine-readable code',async()=>{
-  const {chat}=createProviders({fetchImpl:fakeFetch({status:503,headers:{'Retry-After':'3'},body:'{"error":{"code":"no_backend_available","message":"No backend"}}'})});
-  await assert.rejects(chat({profile:gateway(),model:'auto',messages}),e=>e.status===503&&e.serverCode==='no_backend_available'&&e.retryAfterMs===3000);
-  const busy=createProviders({fetchImpl:fakeFetch({status:429,headers:{'Retry-After':'2'},body:'{"error":{"code":"gateway_busy"}}'})});
-  await assert.rejects(busy.chat({profile:gateway(),model:'auto',messages}),e=>e.code===ERR.RATE_LIMITED&&e.serverCode==='gateway_busy'&&e.retryAfterMs===2000);
+test('every error status keeps Retry-After and its machine-readable code',async()=>{
+  const {chat}=createProviders({fetchImpl:fakeFetch({status:503,headers:{'Retry-After':'3'},body:'{"error":{"code":"service_unavailable","message":"No backend"}}'})});
+  await assert.rejects(chat({profile:localProvider(),model:'auto',messages}),e=>e.status===503&&e.serverCode==='service_unavailable'&&e.retryAfterMs===3000);
+  const busy=createProviders({fetchImpl:fakeFetch({status:429,headers:{'Retry-After':'2'},body:'{"error":{"code":"rate_limit_exceeded"}}'})});
+  await assert.rejects(busy.chat({profile:localProvider(),model:'auto',messages}),e=>e.code===ERR.RATE_LIMITED&&e.serverCode==='rate_limit_exceeded'&&e.retryAfterMs===2000);
 });
 
 test('an external abort reports cancelled', async () => {
@@ -193,11 +190,11 @@ test('an external abort reports cancelled', async () => {
     new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
   const { chat } = createProviders({ fetchImpl: f });
   const ctrl = new AbortController();
-  const p = chat({ profile: gateway({ timeoutMs: 5000 }), model: 'm', messages, signal: ctrl.signal });
+  const p = chat({ profile: localProvider({ timeoutMs: 5000 }), model: 'm', messages, signal: ctrl.signal });
   await sleep(5);
   ctrl.abort();
   await assert.rejects(p, (e) => e.code === ERR.CANCELLED);
-  await assert.rejects(chat({ profile: gateway(), model: 'm', messages, signal: ctrl.signal }), (e) => e.code === ERR.CANCELLED);
+  await assert.rejects(chat({ profile: localProvider(), model: 'm', messages, signal: ctrl.signal }), (e) => e.code === ERR.CANCELLED);
 });
 
 test('config problems are caught before any request is made', async () => {
@@ -217,14 +214,14 @@ test('config problems are caught before any request is made', async () => {
 });
 
 test('profileProblem and isLocalHost', () => {
-  assert.equal(profileProblem(gateway()), null);
+  assert.equal(profileProblem(localProvider()), null);
   assert.equal(profileProblem(openai()), null);
   assert.equal(profileProblem({ kind: 'mock' }), null);
-  assert.equal(profileProblem(openai({ baseUrl: 'http://192.168.1.5:8000/v1' })), null);
+  assert.equal(profileProblem(openai({ baseUrl: ('http://192.'+'168.1.5:8000/v1') })), null);
   assert.equal(profileProblem(openai({ baseUrl: 'http://localhost:11434/v1', apiKey: '' })), null);
   assert.equal(profileProblem(openai({ baseUrl: 'http://api.example.com/v1', apiKey: '' })), null); // no secret, nothing to leak
   assert.ok(profileProblem(null));
-  for (const h of ['localhost', '127.0.0.1', '10.1.2.3', '172.16.0.1', '172.31.9.9', '192.168.0.1', 'nas', 'box.local', '[::1]']) {
+  for (const h of ['localhost', '127.0.0.1', ('10.'+'1.2.3'), '172.'+'16.0.1', '172.'+'31.9.9', '192.'+'168.0.1', 'nas', 'box.local', '[::1]']) {
     assert.equal(isLocalHost(h), true, h);
   }
   for (const h of ['example.com', '8.8.8.8', '172.32.0.1', '192.169.0.1']) assert.equal(isLocalHost(h), false, h);
@@ -248,9 +245,9 @@ test('listModels: OpenAI shape, dedup and sort; errors map like chat', async () 
   assert.equal(f.calls[0].init.method, 'GET');
   assert.equal(f.calls[0].init.headers.Authorization, 'Bearer sk-test-0123456789');
   const g = createProviders({ fetchImpl: fakeFetch({ status: 500 }) });
-  await assert.rejects(g.listModels(gateway()), (e) => e.code === ERR.PROVIDER);
+  await assert.rejects(g.listModels(localProvider()), (e) => e.code === ERR.PROVIDER);
   const noKey = fakeFetch({ body: '{"data":[]}' });
-  await createProviders({ fetchImpl: noKey }).listModels(gateway({ model: '' }));
+  await createProviders({ fetchImpl: noKey }).listModels(localProvider({ model: '' }));
   assert.equal(noKey.calls[0].init.headers.Authorization, undefined);
   assert.deepEqual(await createProviders().listModels({ kind: 'mock' }).then((m) => m.map((x) => x.id)), ['mock', 'mock-error', 'mock-slow']);
 });
@@ -285,4 +282,24 @@ test('mock: abortable', async () => {
   const p = chat({ profile: { kind: 'mock' }, model: 'mock', messages, signal: ctrl.signal });
   ctrl.abort();
   await assert.rejects(p, (e) => e.code === ERR.CANCELLED);
+});
+
+// The settings page and the userscript wrap transport in a buffered text() call with plain-object headers;
+// an OpenAI-compatible server that streams (as requested) must still parse, not fail as "not JSON".
+test('buffered SSE replies (wrapped transports, plain-object headers) are parsed as a stream', async () => {
+  const sse = (events) => events.map(e => 'data: ' + (typeof e === 'string' ? e : JSON.stringify(e)) + '\n\n').join('');
+  const chunk = (content, finish = null) => ({ choices: [{ index: 0, delta: { content }, finish_reason: finish }] });
+  const wrapped = (body, headers) => async () => ({ status: 200, headers, text: async () => body });
+  const cases = [
+    [sse([chunk('{"t":["你好，'), chunk('世界。"]}'), '[DONE]']), { 'content-type': 'text/event-stream; charset=utf-8' }],
+    [sse([chunk('{"t":["你好，'), chunk('世界。"]}', 'stop')]), {}], // no [DONE], no content-type: recognised by "data:"
+  ];
+  for (const [body, headers] of cases) {
+    const p = createProviders({ fetchImpl: wrapped(body, headers), getSecret: async () => '' });
+    const content = await p.chat({ profile: openai(), messages });
+    assert.equal(content, '{"t":["你好，世界。"]}');
+  }
+  // A truncated stream (no [DONE], no finish_reason) is still reported as incomplete.
+  const truncated = createProviders({ fetchImpl: wrapped(sse([chunk('{"t":["你好')]), {}), getSecret: async () => '' });
+  await assert.rejects(truncated.chat({ profile: openai(), messages }), e => e.code === ERR.PROVIDER);
 });

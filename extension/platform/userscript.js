@@ -1,3 +1,4 @@
+import { t as l10n, registerMessages, setUiLanguage } from '../shared/i18n.js';
 import { createGMStorageArea } from './storage.js';
 import { createGMHttp, asFetch } from './http.js';
 import { performanceSettings } from './settings-store.js';
@@ -17,8 +18,8 @@ import { installCanvasHook } from '../content/comics/canvas-hook-runtime.js';
 import { installTimedtextObserver } from '../content/subtitles/observer-runtime.js';
 import { observeTimedtext, fetchTimedtext, fetchGMCrossHostTrack } from '../content/subtitles/observe.js';
 import { isYouTube, originalTrackURL } from '../content/subtitles/track.js';
-import { createUserscriptMediaPanel } from '../sidepanel/userscript-panel.js';
-import { createSettingsFormLoader } from '../userscript/settings-resource.js';
+import { createSettingsFormLoader, SETTINGS_RESOURCE_ERROR } from '../userscript/settings-resource.js';
+import { toast } from '../content/overlay.js';
 
 // Capture the sandbox's native prompt before any awaits; never use host-page prompt.
 const sandboxPrompt = typeof prompt === 'function' ? prompt.bind(globalThis) : null;
@@ -34,7 +35,7 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
       observe: observeTimedtext,
       fetchTrack(raw, options) {
         const url = originalTrackURL(raw, location.href);
-        if (!url) return Promise.reject(new Error('字幕轨道地址无效'));
+        if (!url) return Promise.reject(new Error(l10n('m63')));
         return new URL(url).origin === location.origin ? fetchTimedtext(url, options) :
           fetchGMCrossHostTrack(url, options, platform.http);
       },
@@ -44,14 +45,14 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
         try {
           const capability=await probeLocalOCR();
           if (!capability.ok) return { ok:false,error:{ code:'ocr_unavailable',message:capability.reason } };
-          const settings=await store.load();
+          const settings=await store.load();setUiLanguage(settings.uiLanguage);
           const blob=await createGMImageFetch(gm.xmlhttpRequest)(req.url,imageReferer(settings,location.href,req.url));
           return await (localOCR || ocr.recognize)(blob,{ lang:req.lang });
         } catch(e) { return { ok:false,error:{ code:'image_unavailable',message:e.message } }; }
       },
       languages: (lang) => ocr.languages(lang),
       async syncSites() {
-        const settings=await store.load();
+        const settings=await store.load();setUiLanguage(settings.uiLanguage);
         // Changing opt-in takes effect on the next document; do not patch the current page here.
         return {ok:true,sites:settings.comics.canvasSites};
       },
@@ -81,13 +82,24 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
     },
   };
   const store = platform.settingsStore = createSettingsStore({ syncArea, localArea });
-  const loadSettingsForm = createSettingsFormLoader(gm.getResourceText);
-  let mediaPanel;
-  const openPanel = tab => {
-    mediaPanel ||= createUserscriptMediaPanel(platform, { loadSettingsForm });
-    return mediaPanel.open(tab);
+  const loadResource = createSettingsFormLoader(gm.getResourceText);
+  const loadSettingsForm = async () => {
+    const mount = await loadResource();
+    registerMessages(mount.messages);
+    const pref=(await store.load()).uiLanguage;setUiLanguage(pref);mount.setUiLanguage(pref);
+    return mount;
   };
-  platform.openSettings = () => { void openPanel('settings'); };
+  platform.loadSettingsForm = loadSettingsForm;
+  platform.showResourceError = () => toast(SETTINGS_RESOURCE_ERROR());
+  let mediaPanel;
+  const openPanel = async tab => {
+    try {
+      const mount = await loadSettingsForm();
+      mediaPanel ||= mount.createMediaPanel(platform, { loadSettingsForm });
+      return await mediaPanel.open(tab);
+    } catch { platform.showResourceError(); }
+  };
+  platform.openSettings = group => { platform.settingsGroup = group || 'common'; void openPanel('settings'); };
   platform.openTextTranslation = () => { void openPanel('text'); };
   // The transitional userscript kept public v1 settings in another GM namespace.
   // Move them once without overwriting existing v2 settings or local secrets.
@@ -110,11 +122,11 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
         for (const p of old.settings.provider?.profiles || []) {
           if (p.apiKey && !Object.hasOwn(existing, p.id)) await store.setSecret(p.id, p.apiKey);
         }
-        await store.save(publicSettings(old.settings));
+        await store.save({ ...publicSettings(old.settings), version: old.settings.version ?? 1 });
       }
     }
     await store.load();
-    const settings=await store.load();
+    const settings=await store.load();setUiLanguage(settings.uiLanguage);
     if(typeof document!=='undefined' && settings.comics.enabled && comicSiteMatches(location.hostname,settings.comics.canvasSites)) {
       const script=document.createElement('script');script.textContent='('+installCanvasHook.toString()+')();';
       (document.head || document.documentElement).append(script);script.remove();
@@ -122,7 +134,9 @@ export function createUserscriptPlatform(gm, { openSettings = () => {}, coarse =
   })();
   const getSettings = async () => {
     await platform.ready;
-    return performanceSettings(await store.load(), coarse);
+    const settings=performanceSettings(await store.load(), coarse);
+    // Never persist a translation when the manager cannot establish a normal context.
+    return gm.info?.isIncognito===false ? settings : {...settings,cache:{...settings.cache,enabled:false}};
   };
   const getSecret = id => store.getSecret(id);
   const providers = createProviders({ fetchImpl: asFetch(platform.http), getSecret });

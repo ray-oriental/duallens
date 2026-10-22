@@ -59,7 +59,7 @@ def html5_case(pw, extension=None, width=1280, height=800):
             session.sw_eval("() => {globalThis.fetch=()=>{throw Error('Offline worker forbids network');};}")
         else:
             profile = E2E_ROOT / ('profile-standard-gm-' + uuid.uuid4().hex[:8])
-            context = pw.chromium.launch_persistent_context(str(profile), headless=True,
+            context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN",
                 viewport={'width': width, 'height': height}, has_touch=width<1000, is_mobile=width<1000)
             context.add_init_script(script=STUB + '\n' + (REPO / 'dist' / 'duallens.user.js').read_text(encoding='utf-8'))
         local_html5(context)
@@ -127,10 +127,11 @@ def subtitle_file_case(pw, extension=None):
             session = Session(pw, extension, '', 'subtitle-file'); session.start(); context = session.ctx
             context.route('https://**/*', lambda r: r.abort())
             page = context.new_page(); page.goto(f'chrome-extension://{session.ext_id}/sidepanel/index.html')
+            page.locator('[data-tab=subtitles]').check()
             page.evaluate('window.findSubtitle=s=>[...document.querySelectorAll(s)]')
         else:
             profile = E2E_ROOT / ('profile-subtitle-file-' + uuid.uuid4().hex[:8])
-            context = pw.chromium.launch_persistent_context(str(profile), headless=True, accept_downloads=True, viewport={'width':375,'height':812}, is_mobile=True, has_touch=True)
+            context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN", accept_downloads=True, viewport={'width':375,'height':812}, is_mobile=True, has_touch=True)
             local_html5(context)
             context.add_init_script(script=STUB + '\n' + (REPO / 'dist' / 'duallens.user.js').read_text(encoding='utf-8'))
             page = context.new_page(); page.goto('https://standard.test/watch')
@@ -281,9 +282,7 @@ def sidepanel_case(pw, extension):
         check(state == {'command': 'Alt+S', 'path': 'sidepanel/index.html'}, 'sidePanel registration or command missing')
         page = session.ctx.new_page(); page.goto(f'chrome-extension://{session.ext_id}/sidepanel/index.html')
         page.locator('[name=text-input]').fill('Hello <b>plain text</b>.')
-        page.locator('[name=text-profile]').select_option('mock')
-        page.locator('button.text-load-models').click(); page.get_by_role('status').first.wait_for()
-        page.locator('[name=text-model]').select_option('mock')
+        check(page.locator('.service-choices').is_hidden(), 'single service should not show provider controls')
         page.get_by_role('button', name='翻译', exact=True).click()
         expect(page.locator('output')).to_contain_text('【译】')
         check(page.locator('output b').count() == 0, 'model output became executable markup')
@@ -314,7 +313,7 @@ def sidepanel_case(pw, extension):
 def userscript_case(pw, host, width, height, touch):
     profile = E2E_ROOT / ('profile-media-gm-' + uuid.uuid4().hex[:8]); context = None; requests = []
     try:
-        context = pw.chromium.launch_persistent_context(str(profile), headless=True,
+        context = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN",
             viewport={'width': width, 'height': height}, has_touch=touch, is_mobile=touch)
         local_youtube(context, requests)
         # Equivalent GM transport for this fixture's cross-www/m caption GET. It
@@ -341,10 +340,14 @@ def userscript_case(pw, host, width, height, touch):
         check(page.evaluate("__platformFixture.elements('output b').length") == 0, 'GM model output became markup')
         if touch:
             check(page.evaluate("__platformFixture.rect('.panel').width") == width if width < 600 else True, 'mobile text panel exceeds viewport')
-            check(page.evaluate("__platformFixture.elements('.dl-text button').every(e=>e.getBoundingClientRect().height>=44)"), 'small touch control')
+            check(page.evaluate("__platformFixture.elements('.dl-text button').filter(e=>e.getClientRects().length).every(e=>e.getBoundingClientRect().height>=44)"), 'small touch control')
         click_shadow(page, '[data-tab=subtitles]')
-        page.wait_for_function("__platformFixture.elements('[name=subtitle-enabled]').length===1")
-        page.evaluate("__platformFixture.elements('[name=subtitle-enabled]')[0].value='on';__platformFixture.elements('.dl-subtitle-settings button[type=submit]')[0].click()")
+        page.wait_for_function("__platformFixture.elements('[name=subtitle-file]').length===1")
+        page.keyboard.press('Escape')
+        gm_command(page, 'DualLens 设置')
+        page.wait_for_function("__platformFixture.elements('[data-group-link=enhance]').length===1")
+        click_shadow(page, '[data-group-link=enhance]')
+        page.evaluate("()=>{const input=__platformFixture.elements('#subtitlesEnabled')[0];if(!input.checked)input.click();}")
         page.keyboard.press('Escape'); page.locator('#cc').click()
         page.wait_for_selector('dl-ui[data-dl-subtitles][data-ready]')
         check(page.evaluate("__platformFixture.elements('.target').some(e=>e.textContent.includes('Sentence 17.'))"), 'GM current cue incorrect')
@@ -360,13 +363,50 @@ def userscript_case(pw, host, width, height, touch):
         remove_runtime_dir(profile)
 
 
+def sidepanel_consent_case(pw, extension):
+    session=Session(pw,extension,'','sidepanel-consent');session.start()
+    try:
+        session.settings({'translation':{'mode':'llm'},'provider':{'active':'consent','chain':[],
+            'profiles':[{'id':'consent','kind':'openai','baseUrl':'https://fixture.example/v1','model':'test'}]}})
+        session.sw_eval("""()=>{globalThis.sideCalls=0;globalThis.fetch=async(url,opts)=>{
+          sideCalls++;const p=JSON.parse(opts.body),u=p.messages.find(m=>m.role==='user').content;
+          const input=JSON.parse(u.slice(u.indexOf('{'),u.lastIndexOf('}')+1));
+          return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({t:input.t.map(t=>'【译】'+t)})}}]}),{headers:{'Content-Type':'application/json'}});
+        };}""")
+        page=session.ctx.new_page();page.goto(f'chrome-extension://{session.ext_id}/sidepanel/index.html')
+        page.locator('[name=text-input]').fill('Private fixture text')
+        page.locator('.dl-text button[type=submit]').click()
+        page.locator('#text .dl-confirmation').wait_for()
+        assert session.sw_eval('()=>sideCalls')==0
+        assert 'fixture.example' in page.locator('.dl-confirmation').inner_text()
+        page.locator('.dl-confirmation .close').click()
+        page.wait_for_timeout(100);assert session.sw_eval('()=>sideCalls')==0
+        page.locator('.dl-text button[type=submit]').click()
+        page.locator('.dl-confirmation .primary').click()
+        page.locator('output').filter(has_text='【译】').wait_for()
+        session.sw_eval("()=>chrome.storage.local.set({'ui.device':{onboarded:true,acked:[],upgradeNoticeSeen:true}})")
+        page.locator('[data-tab=subtitles]').check()
+        page.locator('[name=subtitle-file]').set_input_files({'name':'fixture.srt','mimeType':'text/plain',
+            'buffer':b'1\n00:00:00,000 --> 00:00:01,000\nA private subtitle fixture.\n'})
+        page.locator('button').filter(has_text='翻译字幕文件').click()
+        page.locator('#subtitles .dl-confirmation').wait_for()
+        count=session.sw_eval('()=>sideCalls');page.wait_for_timeout(100)
+        assert session.sw_eval('()=>sideCalls')==count
+        page.locator('#subtitles .dl-confirmation .primary').click()
+        page.locator('.subtitle-preview').filter(has_text='【译】').wait_for()
+        assert session.sw_eval('()=>sideCalls')>count
+        return 'text + subtitle file: inline first-send confirmation; close sends nothing, accept persists and dispatches'
+    finally:session.close()
+
+
 def main():
     E2E_ROOT.mkdir(parents=True, exist_ok=True); ARTIFACTS.mkdir(parents=True, exist_ok=True)
     run = E2E_ROOT / ('run-media-' + uuid.uuid4().hex[:8]); run.mkdir(); results = []
     try:
         extension, missing = stage_extension(run); check(not missing, 'missing extension assets')
         with sync_playwright() as pw:
-            cases = [('extension_www', lambda: extension_case(pw, extension, 'www.youtube.com')),
+            cases = [('sidepanel_consent', lambda: sidepanel_consent_case(pw, extension)),
+                     ('extension_www', lambda: extension_case(pw, extension, 'www.youtube.com')),
                      ('html5_extension', lambda: html5_case(pw, extension)),
                      ('html5_userscript_phone', lambda: html5_case(pw, width=375, height=812)),
                      ('html5_userscript_tablet', lambda: html5_case(pw, width=800, height=1280)),

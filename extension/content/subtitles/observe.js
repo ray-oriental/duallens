@@ -1,3 +1,4 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { isYouTube, originalTrackURL } from './track.js';
 
 // Resource timing is a passive fallback for requests before userscript document-idle
@@ -31,7 +32,7 @@ export function observeTimedtext(callback, win = window) {
 
 export async function fetchTimedtext(raw, { signal } = {}) {
   const url = originalTrackURL(raw, location.href);
-  if (!url) throw new Error('字幕轨道地址无效');
+  if (!url) throw new Error(l10n('m63'));
   const response = await fetch(url, { signal, credentials: 'omit', redirect: 'error' });
   return readTimedtextResponse(response);
 }
@@ -40,7 +41,7 @@ export async function readTimedtextResponse(response) {
   const size = Number(response.headers.get('content-length'));
   if (!response.ok || size > 4 * 1024 * 1024) {
     await response.body?.cancel().catch(() => {});
-    throw new Error('无法读取字幕轨道或轨道过大，请重新打开播放器字幕');
+    throw new Error(l10n('m64'));
   }
   // Bound the body while streaming, rather than allocating an arbitrary response.
   const reader = response.body.getReader();
@@ -51,7 +52,7 @@ export async function readTimedtextResponse(response) {
       const part = await reader.read();
       if (part.done) break;
       bytes += part.value.byteLength;
-      if (bytes > 4 * 1024 * 1024) throw new Error('字幕轨道过大');
+      if (bytes > 4 * 1024 * 1024) throw new Error(l10n('m65'));
       text += decoder.decode(part.value, { stream: true });
     }
     return JSON.parse(text + decoder.decode());
@@ -60,10 +61,10 @@ export async function readTimedtextResponse(response) {
 
 export async function fetchGMCrossHostTrack(raw, { signal } = {}, http, base = location.href) {
   const url = originalTrackURL(raw, base);
-  if (!url) throw new Error('字幕轨道地址无效');
+  if (!url) throw new Error(l10n('m63'));
   const response = await http({ url, method: 'GET', headers: {}, signal, timeoutMs: 20000 });
   if (response.status !== 200 || new TextEncoder().encode(response.text).byteLength > 4 * 1024 * 1024) {
-    throw new Error('无法读取字幕轨道或轨道过大');
+    throw new Error(l10n('m66'));
   }
   return JSON.parse(response.text);
 }

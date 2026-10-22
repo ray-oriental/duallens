@@ -1,14 +1,15 @@
+import { t as l10n } from '../shared/i18n.js';
 import { canvasMatches, comicSiteEntries } from '../content/comics/sites.js';
 export const CANVAS_SCRIPT_ID='duallens-comic-canvas';
 export const IMAGE_RULE_BASE=10000;
 export const IMAGE_RULE_LIMIT=400; // 50 sites, at most 8 CDN hosts each.
 export function imageRefererRules(settings,extensionId) {
-  if(!/^[a-p]{32}$/.test(extensionId)) throw new Error('扩展身份无效');
+  if(!/^[a-p]{32}$/.test(extensionId)) throw new Error(l10n('m0'));
   if(settings.comics?.enabled===false) return [];
   const hosts=new Map();
   for(const site of comicSiteEntries(settings.comics?.canvasSites || [])) {
     for(const host of site.imageHosts || []) {
-      if(hosts.has(host) && hosts.get(host)!==site.referer) throw new Error('图片 CDN 的 Referer 配置冲突');
+      if(hosts.has(host) && hosts.get(host)!==site.referer) throw new Error(l10n('m1'));
       hosts.set(host,site.referer);
     }
   }
@@ -22,9 +23,14 @@ export function createImageRegistry(api,getSettings) {
   let pending=Promise.resolve();
   return {sync() {
     const task=pending.then(async()=> {
-      const addRules=imageRefererRules(await getSettings(),api.runtime.id);
+      const candidates=imageRefererRules(await getSettings(),api.runtime.id);
+      const addRules=[];
+      for(const rule of candidates) {
+        const host=rule.condition.requestDomains[0];
+        if(await api.permissions.contains({origins:[`https://${host}/*`]})) addRules.push(rule);
+      }
       const dnr=api.declarativeNetRequest;
-      if(!dnr) return {ok:false,error:{code:'unsupported',message:'此浏览器无法设置图片 Referer'}};
+      if(!dnr) return {ok:false,error:{code:'unsupported',get message(){return l10n('m2');}}};
       const current=(await dnr.getSessionRules()).filter(rule=>rule.id>=IMAGE_RULE_BASE && rule.id<IMAGE_RULE_BASE+IMAGE_RULE_LIMIT);
       if(JSON.stringify(current)!==JSON.stringify(addRules)) await dnr.updateSessionRules({removeRuleIds:current.map(rule=>rule.id),addRules});
       return {ok:true};
@@ -36,7 +42,9 @@ export function createCanvasRegistry(api,getSettings) {
   let pending=Promise.resolve();
   return { sync() {
     const task=pending.then(async()=> {
-      const matches=canvasMatches(await getSettings());
+      const candidates=canvasMatches(await getSettings());
+      const matches=[];
+      for(const pattern of candidates) if(await api.permissions.contains({origins:[pattern]})) matches.push(pattern);
       const [current]=await api.scripting.getRegisteredContentScripts({ids:[CANVAS_SCRIPT_ID]});
       if(!matches.length) {
         if(current) await api.scripting.unregisterContentScripts({ids:[CANVAS_SCRIPT_ID]});

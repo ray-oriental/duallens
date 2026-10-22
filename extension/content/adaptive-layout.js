@@ -18,7 +18,7 @@ function free(el,u) {
   const cs=getComputedStyle(el),props={},full=!u.layoutFacts?.interactive||u.layoutFacts.title;
   if(full&&cs.minWidth==='auto') props['min-width']='0';
   if(full&&el===u.host) props['overflow-wrap']='anywhere';
-  if(full&&u.layoutFacts?.title) {props['white-space']='normal';props['line-height']='1.3';}
+  if(full&&u.layoutFacts?.title) props['white-space']='normal';
   if(full&&(/hidden|clip/.test(cs.overflowX)||/hidden|clip/.test(cs.overflowY))) {props.overflow='visible';props['overflow-x']='visible';props['overflow-y']='visible';}
   if(cs.webkitLineClamp&&cs.webkitLineClamp!=='none') props['-webkit-line-clamp']='unset';
   if(cs.display.includes('webkit')) props.display='block';

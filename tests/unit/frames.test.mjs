@@ -32,7 +32,7 @@ test('frame roots discover nested blank/srcdoc documents once, skip tiny/cross-o
 });
 
 test('only a top-frame publisher can broadcast the same public snapshot fields to its own tab',async()=>{
-  const calls=[],state={active:true,settings:{displayMode:'bilingual'},context:{host:'top.example'}};
+  const calls=[],state={active:true,confirmedDestinations:['mt:microsoft','mt:google'],settings:{displayMode:'bilingual'},context:{host:'top.example'}};
   const handler=createFrameHandlers({tabs:{async sendMessage(...args){calls.push(args);}}})['frame-publish'];
   for(const sender of [{},{tab:{id:7},frameId:1}])assert.deepEqual(await handler({state},sender),{ok:false});
   assert.deepEqual(await handler({state,tabId:99},{tab:{id:7},frameId:0}),{ok:true});

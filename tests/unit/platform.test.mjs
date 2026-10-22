@@ -107,7 +107,7 @@ test('userscript migrates the transitional GM namespace once and retains newer l
   await platform.settingsStore.save({ targetLang: 'en' });
   const second = createUserscriptPlatform(gm); await second.ready;
   assert.equal((await second.settingsStore.load()).targetLang, 'en');
-  assert.equal(gm.values.get('duallens:local')['settings.core'].version, 2);
+  assert.equal(gm.values.get('duallens:local')['settings.core'].version, 3);
 });
 
 test('extension platform follows sync-only v2 updates and uses the shared whole-store local fallback', async () => {
@@ -255,4 +255,14 @@ test('extension adapter preserves language confidence and one-shot message shape
   api.runtime.onMessage.emit({ type: 'get-state' }, { id: 'other-extension' }, () => {});
   api.runtime.onMessage.emit({ type: 'get-state' }, { id: 'test-extension' }, () => {});
   off(); assert.equal(calls, 1);
+});
+
+test('userscript incognito and unknown manager contexts never persist translation cache',async()=>{
+ for(const info of [{isIncognito:true},undefined,{isIncognito:false}]){
+  const gm=fakeGM();gm.info=info;const p=createUserscriptPlatform(gm);await p.ready;
+  await p.settingsStore.save({provider:{active:'mock'},translation:{mode:'llm'}});
+  assert.equal((await p.translator().translateText({text:'Synthetic test paragraph.'})).ok,true);
+  const stored=gm.values.get('duallens:local')||{};
+  assert.equal((stored['translation-cache']||[]).length>0,info?.isIncognito===false);
+ }
 });

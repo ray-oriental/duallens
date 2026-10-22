@@ -1,3 +1,4 @@
+import { t as l10n, initUiLanguage, setUiLanguage } from '../shared/i18n.js';
 // MV3 service worker. All listeners are registered synchronously at top level so Chrome can wake
 // the worker for them. Nothing here relies on in-memory state surviving: if the worker is
 // recycled the translate port disconnects and the content script re-sends unfinished items
@@ -15,11 +16,12 @@ import {
   COMMANDS,
   PRIORITY,
 } from '../shared/protocol.js';
-import { loadSettings, saveSettings, getDefaultSettingsStore } from '../shared/settings.js';
+import { loadSettings, getDefaultSettingsStore } from '../shared/settings.js';
 import { toErrorInfo } from '../shared/errors.js';
 import { createProviders } from './providers.js';
 import { createQueue } from './queue.js';
 import { createCache } from './cache.js';
+import { createConfirmationGuard } from '../shared/destinations.js';
 import { createTranslator } from './translator.js';
 import { createHandlers } from './handlers.js';
 import { createComicHandlers } from './comics.js';
@@ -28,20 +30,34 @@ import { createPDFEntries } from './pdf.js';
 import { registerSidePanelCommand } from './media.js';
 import { createSubtitleHandlers } from './subtitles.js';
 import { createFrameHandlers } from './frames.js';
+import { createTabInjector } from './injection.js';
+import { createPermissionRegistry } from './permissions.js';
 
+const uiReady=initUiLanguage(getDefaultSettingsStore());
 const queue = createQueue();
 const cache = createCache();
 const getSecret = id => getDefaultSettingsStore().getSecret(id);
 const providers = createProviders({ getSecret });
-const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings, getSecret });
+const translator = createTranslator({ provider: providers.chat, cache, queue, getSettings: loadSettings, getSecret, confirmRequest:createConfirmationGuard(chrome.storage.local) });
 const handlers = createHandlers({
   translator,
   cache,
   providers,
   getSettings: loadSettings,
+  // Side panels have no sender.tab: avoid persistence unless a normal tab is authoritative.
+  privateContext: sender => sender?.tab?.incognito !== false,
   openOptions: () => chrome.runtime.openOptionsPage(),
 });
 Object.assign(handlers,createFrameHandlers(chrome));
+handlers['open-options'] = async msg => {
+  const group=['common','ai','enhance','sites','glossary','data','about'].includes(msg.group)?msg.group:'common';
+  await chrome.tabs.create({url:chrome.runtime.getURL('ui/options.html#'+group)});
+  return {ok:true};
+};
+const tabInjector = createTabInjector(chrome);
+const permissionRegistry = createPermissionRegistry(chrome, getDefaultSettingsStore());
+handlers['tab-ensure'] = (msg, sender) => sender.url?.startsWith(chrome.runtime.getURL('')) ?
+  tabInjector.ensure(msg.tabId) : Promise.resolve({ ok: false, reason: 'no-access' });
 const imageRegistry=createImageRegistry(chrome,loadSettings);
 const comicHandlers=createComicHandlers(chrome);
 Object.assign(handlers,comicHandlers);
@@ -51,19 +67,23 @@ handlers['comic-ocr']=async(msg,sender)=> {
 };
 const pdfEntries = createPDFEntries(chrome);
 Object.assign(handlers, pdfEntries.handlers);
-Object.assign(handlers, createSubtitleHandlers());
+Object.assign(handlers, createSubtitleHandlers({ api: chrome }));
 const canvasRegistry=createCanvasRegistry(chrome,loadSettings);
 handlers['comic-canvas-sites-sync']=async()=> {await imageRegistry.sync();return canvasRegistry.sync();};
 handlers['open-sidepanel'] = async (_msg, sender) => {
   try {
-    if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } };
+    if (sender.tab?.id == null || !chrome.sidePanel?.open) return { ok: false, error: { code: 'unsupported', get message(){return l10n('m20');} } };
     await chrome.sidePanel.open({ tabId: sender.tab.id });
     return { ok: true };
-  } catch { return { ok: false, error: { code: 'unsupported', message: '请使用 Alt+S 或浏览器侧栏入口' } }; }
+  } catch { return { ok: false, error: { code: 'unsupported', get message(){return l10n('m20');} } }; }
 };
-getDefaultSettingsStore().onChange(()=>{void canvasRegistry.sync().catch(()=>{});void imageRegistry.sync().catch(()=>{});});
-void canvasRegistry.sync().catch(()=>{});
-void imageRegistry.sync().catch(()=>{});
+function syncPermissions() {
+  return permissionRegistry.sync().then(() => Promise.all([canvasRegistry.sync(), imageRegistry.sync()]));
+}
+getDefaultSettingsStore().onChange(() => { void syncPermissions().catch(() => {}); });
+chrome.permissions.onAdded.addListener(() => { void syncPermissions().catch(() => {}); });
+chrome.permissions.onRemoved.addListener(() => { void syncPermissions().catch(() => {}); });
+void syncPermissions().catch(() => {});
 
 // A pending fetch alone does not stop Chrome from stopping an idle worker after ~30s; any
 // extension API call resets that timer, so poke one while work is in flight.
@@ -112,9 +132,9 @@ chrome.runtime.onConnect.addListener((port) => {
     const reported = new Set();
     const priority = [PRIORITY.VISIBLE, PRIORITY.NEAR, PRIORITY.PREFETCH].includes(msg.priority) ? msg.priority : PRIORITY.NEAR;
     retain();
-    translator
+    uiReady.then(()=>translator
       .translate(
-        { ...msg, items, priority, reqId: `${portId}:${reqId}` },
+        { ...msg, incognito:port.sender?.tab?.incognito!==false, items, priority, reqId: `${portId}:${reqId}` },
         {
           signal: ctrl.signal,
           onPartial: (results) => {
@@ -122,7 +142,7 @@ chrome.runtime.onConnect.addListener((port) => {
             post({ type: MSG_PARTIAL, reqId, results });
           },
         },
-      )
+      ))
       .catch((e) => {
         // unexpected failure: give every item that has no answer yet an error so the page is not left pending
         const error = toErrorInfo(e);
@@ -161,7 +181,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const handler = msg && handlers[msg.type];
   if (!handler) return false;
   retain();
-  handler(msg, sender)
+  (msg.type==='open-sidepanel'?handler(msg,sender):uiReady.then(()=>handler(msg,sender)))
     .then(sendResponse)
     .catch((e) => sendResponse({ ok: false, error: toErrorInfo(e) }))
     .finally(release);
@@ -170,8 +190,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // ---- tab messaging, shortcuts, context menu ------------------------------------------------
 
-function sendToTab(tabId, message) {
+async function sendToTab(tabId, message) {
   if (tabId == null) return Promise.resolve(null);
+  if (!(await tabInjector.ensure(tabId)).ok) return null;
   return chrome.tabs.sendMessage(tabId, message, { frameId: 0 }).catch(() => null);
 }
 
@@ -188,68 +209,41 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 });
 
 const MENU = {
-  TEXT: 'dl-open-text',
-  SUBTITLES: 'dl-toggle-subtitles',
   VIDEO_SUBTITLES: 'dl-toggle-video-subtitles',
   COMICS: 'dl-translate-comics',
   TOGGLE: 'dl-toggle-page',
   SELECTION: 'dl-translate-selection',
-  ALWAYS: 'dl-site-always',
-  NEVER: 'dl-site-never',
 };
 
+let menuUpdate = Promise.resolve();
 function setupMenus() {
-  chrome.contextMenus.removeAll(() => {
-    void chrome.runtime.lastError;
-    const add = (props) => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
-    add({ id: MENU.TOGGLE, title: '翻译此页 / 恢复原文', contexts: ['page', 'link', 'image'] });
-    add(pdfEntries.menu);
-    add({ id: MENU.TEXT, title: 'DualLens 文本翻译', contexts: ['page', 'selection'] });
-    // YouTube's player swallows the video context menu, so it keeps a page-level entry; other sites expose <video>.
-    add({ id: MENU.SUBTITLES, title: '启用 / 恢复视频双语字幕', contexts: ['page'], documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*'] });
-    add({ id: MENU.VIDEO_SUBTITLES, title: '启用 / 恢复视频双语字幕', contexts: ['video'] });
-    add({ id: MENU.COMICS, title: '翻译此页漫画', contexts: ['page', 'image'] });
-    add({ id: MENU.SELECTION, title: '翻译选中文字', contexts: ['selection'] });
-    add({ id: MENU.ALWAYS, title: '总是翻译此网站', contexts: ['page'] });
-    add({ id: MENU.NEVER, title: '从不翻译此网站', contexts: ['page'] });
+  menuUpdate = menuUpdate.catch(() => {}).then(async () => {
+    const settings = await loadSettings();setUiLanguage(settings.uiLanguage);
+    await new Promise(resolve => chrome.contextMenus.removeAll(() => {
+      void chrome.runtime.lastError;
+      const add = props => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
+      add({ id: MENU.TOGGLE, get title(){return l10n('m21');}, contexts: ['page'] });
+      add({ id: MENU.SELECTION, get title(){return l10n('m22');}, contexts: ['selection'] });
+      add({ id: MENU.VIDEO_SUBTITLES, get title(){return l10n('m23');}, contexts: ['video'] });
+      if (settings.comics.enabled) add({ id: MENU.COMICS, get title(){return l10n('m24');}, contexts: ['image'] });
+      resolve();
+    }));
   });
+  return menuUpdate;
 }
-chrome.runtime.onInstalled.addListener(setupMenus);
-chrome.runtime.onStartup.addListener(setupMenus);
-
-function hostnameOf(url) {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'http:' || u.protocol === 'https:' ? u.hostname.toLowerCase() : '';
-  } catch {
-    return '';
-  }
-}
-
-// Moves `host` into the `mode` list ('always' | 'never') and out of the other one.
-async function setSiteRule(host, mode) {
-  const { siteRules } = await loadSettings();
-  const always = siteRules.always.filter((p) => p !== host);
-  const never = siteRules.never.filter((p) => p !== host);
-  (mode === 'always' ? always : never).push(host);
-  await saveSettings({ siteRules: { always, never } });
-}
+chrome.runtime.onInstalled.addListener(() => { void setupMenus(); });
+chrome.runtime.onStartup.addListener(() => { void setupMenus(); });
+getDefaultSettingsStore().onChange(() => { void setupMenus(); });
+void setupMenus();
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const tabId = tab && tab.id;
   switch (info.menuItemId) {
-    case pdfEntries.menu.id:
-      await pdfEntries.openFromMenu(tab);
-      break;
-    case MENU.TEXT:
-      await chrome.sidePanel.open({ tabId }).catch(() => {});
-      break;
-    case MENU.SUBTITLES:
     case MENU.VIDEO_SUBTITLES:
       await sendToTab(tabId, { type: MSG_COMMAND, name: 'toggle-subtitles' });
       break;
     case MENU.COMICS:
-      await sendToTab(tabId, { type: MSG_COMMAND, name: 'translate-comics' });
+      if ((await loadSettings()).comics.enabled) await sendToTab(tabId, { type: MSG_COMMAND, name: 'translate-comics' });
       break;
     case MENU.TOGGLE:
       await sendToTab(tabId, { type: MSG_COMMAND, name: COMMANDS.TOGGLE_PAGE });
@@ -257,16 +251,5 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     case MENU.SELECTION:
       if (info.selectionText) await sendToTab(tabId, { type: MSG_TRANSLATE_SELECTION, text: info.selectionText });
       break;
-    case MENU.ALWAYS:
-    case MENU.NEVER: {
-      const host = hostnameOf(info.pageUrl || (tab && tab.url));
-      if (!host) break;
-      const always = info.menuItemId === MENU.ALWAYS;
-      await setSiteRule(host, always ? 'always' : 'never');
-      // act on the current page right away so the choice is visible
-      const state = await sendToTab(tabId, { type: MSG_GET_STATE });
-      if (state && state.translated !== always) await sendToTab(tabId, { type: MSG_COMMAND, name: COMMANDS.TOGGLE_PAGE });
-      break;
-    }
   }
 });

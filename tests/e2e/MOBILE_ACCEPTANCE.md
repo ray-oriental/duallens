@@ -10,8 +10,7 @@ Use the Python and Playwright browser environment described in README.md. Build 
 
 ```powershell
 node scripts/build_userscript.mjs
-$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\SjtuGymAutoBook\browsers"
-& "$env:USERPROFILE\.venvs\duallens-e2e\Scripts\python.exe" -B -u tests/e2e/run_userscript_e2e.py
+python -B -u tests/e2e/run_userscript_e2e.py
 ```
 
 This runs without loading an extension. A GM stub and test-only closed-shadow instrumentation
@@ -21,7 +20,7 @@ translation/restore/only mode, dynamic append/SPA, selection, settings and GM HT
 selection placement, input-menu action, settings and scrolling all 220 long-fixture paragraphs to the final bottom.
 `PerformanceObserver` reports the number of tasks exceeding 50 ms, maximum duration and the fraction
 of the observed interval outside long tasks. It cannot count every task below 50 ms or guarantee performance
-on arbitrary sites. Profiles and JSON evidence are under `~/.cache/duallens-e2e`, not in source.
+on arbitrary sites. Profiles and JSON evidence are under `DUALLENS_E2E_OUT`, not in source.
 
 Use `run_e2e.py --mock-only` for source-extension acceptance. The source manifest already lists
 `platform/*.js`; the historical `run_platform_extension_e2e.py` staging preview is no longer needed.
@@ -33,7 +32,7 @@ also creates an OpenRouter preset with a fake key through the shared form and ch
 1. On both phone and tablet, record Android/Edge/Tampermonkey versions. Install the reviewed
    `duallens.user.js` artifact in Tampermonkey. Confirm it runs only in the top-level document.
 2. Start with the mock profile if provisioned by the shared form. Open a public English page;
-   tap the floating ball, switch to only mode, then restore. Confirm the original links and layout remain.
+   tap the floating button, switch to only mode, then restore. Confirm the original links and layout remain.
 3. Hold a plain paragraph for 500 ms. Confirm only that paragraph translates; tap/short hold,
    scroll, and two-finger gestures must not translate. Disable hover/long-press and confirm the hold stops working.
 4. Select text. Confirm the translation icon sits below the selection and is easy to tap without

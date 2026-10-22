@@ -1,64 +1,66 @@
+import { t as l10n } from './i18n.js';
 // Settings schema, defaults and storage helpers.
-// v2 contract: docs/PLATFORMS.md §3. Credentials stay in localArea only.
+// v3 contract: docs/PLATFORMS.md §3. Credentials stay in localArea only.
 import { chromeStorageArea } from './storage-areas.js';
 import { sha256Hex } from './hash.js';
 import { parsePattern, patternMatches, comparePatterns } from './site-pattern.js';
 
 export const SETTINGS_KEY = 'settings';
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 export const SETTINGS_KEYS = ['settings.core', 'settings.glossary', 'settings.sites'];
 export const SECRETS_KEY = 'secrets';
 const STORAGE_KEY = 'settings.storage';
 
 export const LANGS = Object.freeze([
-  { code: 'zh-CN', name: '简体中文' },
-  { code: 'zh-TW', name: '繁體中文' },
+  { code: 'zh-CN', get name(){return l10n('m8r');} },
+  { code: 'zh-TW', get name(){return l10n('m8s');} },
   { code: 'en', name: 'English' },
-  { code: 'ja', name: '日本語' },
-  { code: 'ko', name: '한국어' },
-  { code: 'fr', name: 'Français' },
-  { code: 'de', name: 'Deutsch' },
-  { code: 'es', name: 'Español' },
-  { code: 'ru', name: 'Русский' },
-  { code: 'pt', name: 'Português' },
-  { code: 'it', name: 'Italiano' },
-  { code: 'ar', name: 'العربية' },
-  { code: 'vi', name: 'Tiếng Việt' },
-  { code: 'th', name: 'ไทย' },
+  { code: 'ja', get name(){return l10n('m8t');} },
+  { code: 'ko', get name(){return l10n('languageKo');} },
+  { code: 'fr', get name(){return l10n('languageFr');} },
+  { code: 'de', get name(){return l10n('languageDe');} },
+  { code: 'es', get name(){return l10n('languageEs');} },
+  { code: 'ru', get name(){return l10n('languageRu');} },
+  { code: 'pt', get name(){return l10n('languagePt');} },
+  { code: 'it', get name(){return l10n('languageIt');} },
+  { code: 'ar', get name(){return l10n('languageAr');} },
+  { code: 'vi', get name(){return l10n('languageVi');} },
+  { code: 'th', get name(){return l10n('languageTh');} },
 ]);
+
+// Match the browser UI language once for fresh settings; persisted choices always win.
+export function defaultTargetLanguage(language = globalThis.navigator?.language) {
+  const tag = String(language || '').toLowerCase().replace(/_/g, '-');
+  const exact = LANGS.find(l => l.code.toLowerCase() === tag);
+  if (exact) return exact.code;
+  if (/^zh(?:-|$)/.test(tag)) return /(?:tw|hk|mo|hant)/.test(tag) ? 'zh-TW' : 'zh-CN';
+  return LANGS.find(l => l.code.toLowerCase() === tag.split('-')[0])?.code || 'zh-CN';
+}
 
 // Visual styles for inserted translations; CSS lives in styles/content.css as .dl-s-<id>.
 export const STYLES = Object.freeze([
-  { id: 'plain', name: '无装饰' },
-  { id: 'muted', name: '弱化（灰色）' },
-  { id: 'underline', name: '下划线' },
-  { id: 'dashed', name: '虚线下划线' },
-  { id: 'dotted', name: '点状下划线' },
-  { id: 'wavy', name: '波浪线' },
-  { id: 'highlight', name: '背景高亮' },
-  { id: 'marker', name: '马克笔' },
-  { id: 'quote', name: '引用块' },
-  { id: 'card', name: '卡片' },
-  { id: 'divider', name: '分隔线' },
-  { id: 'italic', name: '斜体' },
-  { id: 'bold', name: '加粗' },
-  { id: 'blur', name: '模糊（悬停显示）' },
-  { id: 'mask', name: '遮罩（悬停显示）' },
+  { id: 'muted', get name() { return l10n('m8u'); }, legacyIds: ['italic', 'bold'] },
+  { id: 'plain', get name() { return l10n('m8v'); } },
+  { id: 'dashed', get name() { return l10n('m8w'); }, legacyIds: ['underline', 'dotted', 'wavy'] },
+  { id: 'highlight', get name() { return l10n('m8x'); }, legacyIds: ['marker', 'card'] },
+  { id: 'blur', get name() { return l10n('m8y'); }, legacyIds: ['mask'] },
+  { id: 'quote', get name() { return l10n('m8z'); }, legacyIds: ['divider'] },
 ]);
 
 export const PROMPT_PRESETS = Object.freeze(['general', 'tech', 'academic', 'news', 'social', 'custom']);
 
 // translation.mode (SPEC §8.1). The default needs no key: with no usable LLM it behaves as 'mt'.
 export const TRANSLATION_MODES = Object.freeze([
-  { id: 'mt+llm', name: '机翻先出，大模型精修（推荐）' },
-  { id: 'mt', name: '只用机器翻译（最快）' },
-  { id: 'llm', name: '只用大模型' },
-  { id: 'auto', name: '大模型优先，慢或失败时机翻兜底' },
+  { id: 'mt+llm', get name() { return l10n('m90'); } },
+  { id: 'mt', get name() { return l10n('m91'); } },
+  { id: 'llm', get name() { return l10n('m92'); } },
+  { id: 'auto', get name() { return l10n('m93'); } },
 ]);
 
 export const DEFAULT_SETTINGS = Object.freeze({
   version: SETTINGS_VERSION,
-  targetLang: 'zh-CN',
+  uiLanguage: 'zh-CN',
+  targetLang: defaultTargetLanguage(),
   sourceLang: 'auto',
   displayMode: 'bilingual', // 'bilingual' | 'translation-only'
   style: 'muted',
@@ -66,7 +68,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   translateShortText: true,
   inlineMaxChars: 24, // units shorter than this get the inline layout
   lazy: { rootMarginPx: 600, batchDelayMs: 80 },
-  comics: { enabled:true, language: 'jpn', canvasSites:['*.pixiv.net'], visionEnabled: false },
+  comics: { enabled:false, language: 'jpn', canvasSites:['*.pixiv.net'], visionEnabled: false },
   subtitles: { enabled: false, mode: 'bilingual', fontSize: 22, position: 'bottom' },
   // Double-engine translation: machine translation (MT) shows a draft at once, the LLM refines it.
   // mt.engine: microsoft | google (free, unofficial) | microsoft-api | deepl (keyed) | mock (tests).
@@ -78,22 +80,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
     chain: [],
     profiles: [
       {
-        id: 'gateway',
-        kind: 'gateway', // Optional pairing credential uses the local secrets slot, like API keys.
-        name: '本机网关',
-        baseUrl: 'http://127.0.0.1:18790/v1',
-        model: 'auto', // Subscription models remain explicit-only.
-        fallbackModels: [],
-        jsonMode: true,
-        maxItems: 20, // SJTU: keep one batch's output under ~900 tokens so a call stays < 1 min
-        maxChars: 3000,
-        concurrency: 2,
-        timeoutMs: 130000,
-      },
-      {
         id: 'openai',
         kind: 'openai', // any OpenAI-compatible endpoint the user supplies
-        name: '自定义 OpenAI 兼容接口',
+        get name(){return l10n('m8o');},
         baseUrl: '',
         model: '',
         fallbackModels: [],
@@ -106,7 +95,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
       {
         id: 'mock',
         kind: 'mock', // deterministic fake translation, no network; for tests and demos
-        name: '演示（不调用模型）',
+        get name(){return l10n('m94');},
         model: 'mock',
         fallbackModels: [],
         maxItems: 50,
@@ -120,16 +109,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   prompt: { preset: 'general', custom: '' },
   glossary: [], // [{ src, dst }]
 
-  hover: { enabled: true, modifier: 'Shift', profileId: '', model: '' }, // empty = inherit page
-  selection: { enabled: true, showIcon: true },
+  hover: { enabled: false, modifier: 'Shift', profileId: '', model: '' }, // empty = inherit page
+  selection: { enabled: false, showIcon: true },
   // A leading "/xx " (e.g. "/ja ") overrides targetLang for that one translation.
-  input: { enabled: true, trigger: 'triple-space', targetLang: 'en', prefixOverride: true,
+  input: { enabled: false, trigger: 'triple-space', targetLang: 'en', prefixOverride: true,
     mode: 'replace', order: 'source-first', profileId: '', model: '' },
-  floatBall: { enabled: true, side: 'right', topRatio: 0.6 },
+  floatBall: { autoHide: true, enabled: false, side: 'right', topRatio: 0.6 },
 
   siteRules: {
     always: [], // host patterns to auto-translate on load
-    never: [], // patterns blocking automatic page translation and the floating ball
+    never: [], // patterns blocking automatic page translation and the floating button
     custom: [], // [{ match, page?, selection?, hover?, input?, include?, exclude?, style? }]
   },
   autoTranslateLangs: [], // page languages that trigger auto-translate everywhere
@@ -152,13 +141,24 @@ export function mergeSettings(base, patch) {
   return out;
 }
 
+// Shared by extension storage, GM storage and configuration import. Never mutate input.
+export function migrateSettings(input) {
+  const s = mergeSettings(DEFAULT_SETTINGS, input);
+  for (const p of s.provider.profiles) if (p.kind === 'gateway') p.kind = 'openai';
+  if ((input?.version ?? 1) < 3) {
+    for (const feature of ['floatBall', 'selection', 'hover', 'input', 'comics']) s[feature].enabled = false;
+  }
+  s.version = SETTINGS_VERSION;
+  return s;
+}
+
 // Also used for plaintext exports. Never mutate a caller's settings.
 export function publicSettings(value) {
   if (Array.isArray(value)) return value.map(publicSettings);
   if (!isPlainObject(value)) return value;
   const out = {};
   for (const [key, val] of Object.entries(value)) {
-    if (/^(secrets|apiKey|api_key|pairingToken|remote_token|token|password|authorization|proxy_token|__proto__|constructor|prototype)$/i.test(key)) continue;
+    if (/^(ui(?:\..*)?|secrets|apiKey|api_key|pairingToken|remote_token|token|password|authorization|proxy_token|__proto__|constructor|prototype)$/i.test(key)) continue;
     out[key] = publicSettings(val);
   }
   return out;
@@ -176,9 +176,6 @@ export function providerChain(s) {
     const model = entry.model;
     const key = JSON.stringify([entry.profileId, model]);
     if (!profile || typeof model !== 'string' || !model.trim() || seen.has(key)) return [];
-    // Subscription tools are explicit-only, including when settings came from an older caller.
-    if (/^(claude|codex)\//.test(selected[0]?.model || '') && entry !== selected[0]) return [];
-    if (entry !== selected[0] && /^(claude|codex)\//.test(model)) return [];
     seen.add(key);
     return [{ profile, model }];
   });
@@ -191,6 +188,7 @@ function splitSettings(s) {
 }
 function combine(items) {
   return mergeSettings(DEFAULT_SETTINGS, { ...items['settings.core'],
+    version: items['settings.core']?.version ?? 1,
     glossary: items['settings.glossary'] || [], ...items['settings.sites'] });
 }
 function fitsSync(items) {
@@ -198,7 +196,7 @@ function fitsSync(items) {
   return bytes.every(n => n <= 8192) && bytes.reduce((a, b) => a + b, 0) <= 102400;
 }
 function safeId(id) {
-  if (typeof id !== 'string' || !id || ['__proto__', 'constructor', 'prototype'].includes(id)) throw new Error('接口标识无效');
+  if (typeof id !== 'string' || !id || ['__proto__', 'constructor', 'prototype'].includes(id)) throw new Error(l10n('m95'));
   return id;
 }
 function mirrorDigest(value) {
@@ -208,8 +206,8 @@ function mirrorDigest(value) {
   return sha256Hex(JSON.stringify(canonical(value)));
 }
 
-export function createSettingsStore({ syncArea, localArea }) {
-  if (!localArea) throw new Error('需要本机设置存储');
+export function createSettingsStore({ syncArea, localArea, browserLanguage }) {
+  if (!localArea) throw new Error(l10n('m96'));
   let serial = Promise.resolve();
   let status = { synced: false, reason: 'unavailable' };
   const exclusive = fn => {
@@ -217,24 +215,32 @@ export function createSettingsStore({ syncArea, localArea }) {
     serial = next.catch(() => {});
     return next;
   };
-  async function persist(input, legacySecrets = {}) {
-    const s = publicSettings(mergeSettings(DEFAULT_SETTINGS, input));
+  async function persist(input, legacySecrets = {}, preserveProvider = false) {
+    preserveProvider ||= (input?.version ?? 1) < SETTINGS_VERSION;
+    if (input && (input.version ?? 1) < 3 && ['floatBall','selection','hover','input','comics'].some(f => input[f]?.enabled)) {
+      const state = (await localArea.get('ui.device'))['ui.device'];
+      if (!state) await localArea.set({ 'ui.device': { onboarded: true, acked: [], upgradeNoticeSeen: false } });
+    }
+    const s = publicSettings(migrateSettings(input));
     s.version = SETTINGS_VERSION;
+    if (!['zh-CN','en','auto'].includes(s.uiLanguage)) throw new Error(l10n('uiLanguageInvalid'));
     validateSiteRules(s.siteRules);
     validateInteractionSettings(s);
     for (const p of s.provider.profiles) {
       safeId(p.id);
       if (p.baseUrl) {
         const u = new URL(p.baseUrl);
-        if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error('接口地址不能包含凭据或查询参数');
+        if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error(l10n('m1d'));
       }
     }
     if (s.provider.chain.length) {
       const head = s.provider.chain[0];
       const primary = s.provider.profiles.find(p => p.id === head.profileId);
-      if (!primary || typeof head.model !== 'string' || !head.model.trim()) throw new Error('备选链的首个接口或模型无效');
-      s.provider.active = primary.id;
-      primary.model = head.model;
+      if (!primary || typeof head.model !== 'string' || !head.model.trim()) throw new Error(l10n('m97'));
+      if (!preserveProvider) {
+        s.provider.active = primary.id;
+        primary.model = head.model;
+      }
     }
     if (Object.keys(legacySecrets).length) {
       const got = await localArea.get(SECRETS_KEY);
@@ -268,16 +274,18 @@ export function createSettingsStore({ syncArea, localArea }) {
         const synced = await syncArea.get(SETTINGS_KEYS);
         if (synced['settings.core']) {
           status = { synced: true, reason: null };
-          return publicSettings(combine(synced));
+          const combined = combine(synced);
+          return combined.version < SETTINGS_VERSION ? persist(combined) : publicSettings(combined);
         }
         status = { synced: false, reason: 'unavailable' };
       } catch { status = { synced: false, reason: 'unavailable' }; }
     }
-    return publicSettings(got['settings.core'] ? combine(got) : structuredClone(DEFAULT_SETTINGS));
+    const combined = got['settings.core'] ? combine(got) : {...structuredClone(DEFAULT_SETTINGS),targetLang:defaultTargetLanguage(browserLanguage)};
+    return combined.version < SETTINGS_VERSION ? persist(combined) : publicSettings(combined);
   }
   const store = {
     load: () => exclusive(read),
-    save: patch => exclusive(async () => {
+    save: (patch, { preserveProvider = false } = {}) => exclusive(async () => {
       const current = await read();
       const next = mergeSettings(current, publicSettings(patch));
       // Preserve legacy profile switching semantics when no explicit v2 chain was supplied.
@@ -289,7 +297,7 @@ export function createSettingsStore({ syncArea, localArea }) {
         secrets[safeId(p.id)] = { apiKey: String(p.apiKey || '') };
         await localArea.set({ [SECRETS_KEY]: { ...(got[SECRETS_KEY] || {}), ...secrets } });
       }
-      return persist(next);
+      return persist(next, {}, preserveProvider);
     }),
     getSecret: id => exclusive(async () => {
       safeId(id);
@@ -319,10 +327,10 @@ export function createSettingsStore({ syncArea, localArea }) {
 let defaultStore, defaultStorage;
 export function getDefaultSettingsStore() {
   const storage = globalThis.chrome?.storage;
-  if (!storage?.local) throw new Error('默认扩展存储不可用，请传入 SettingsStore');
+  if (!storage?.local) throw new Error(l10n('m98'));
   if (defaultStorage !== storage) {
     defaultStorage = storage;
-    defaultStore = createSettingsStore({ localArea: chromeStorageArea(storage.local, 'local', storage.onChanged),
+    defaultStore = createSettingsStore({ browserLanguage:globalThis.chrome?.i18n?.getUILanguage?.(),localArea: chromeStorageArea(storage.local, 'local', storage.onChanged),
       syncArea: storage.sync && chromeStorageArea(storage.sync, 'sync', storage.onChanged) });
   }
   return defaultStore;
@@ -379,24 +387,25 @@ export function setSitePageRule(s, match, mode) {
 }
 
 export function validateSiteRules(rules) {
-  if (!rules || !['always', 'never', 'custom'].every(k => Array.isArray(rules[k]))) throw new Error('站点规则须使用列表');
-  const valid = p => { if (!parsePattern(p)) throw new Error('站点模式无效：如 example.com/docs/*，可加 HTTP(S) 和端口；不能含空白、查询串、片段或凭据'); };
+  if (!rules || !['always', 'never', 'custom'].every(k => Array.isArray(rules[k]))) throw new Error(l10n('m99'));
+  const valid = p => { if (!parsePattern(p)) throw new Error(l10n('m9a')); };
   rules.always.forEach(valid); rules.never.forEach(valid);
   for (const r of rules.custom) {
-    if (!r || typeof r !== 'object') throw new Error('站点规则须包含 match');
+    if (!r || typeof r !== 'object') throw new Error(l10n('m9b'));
     valid(r.match);
-    if (r.page != null && !['always', 'never', 'default'].includes(r.page)) throw new Error('网页规则须为自动、从不或默认');
-    for (const f of ['selection', 'hover', 'input']) if (r[f] != null && !['on', 'off', 'default'].includes(r[f])) throw new Error('划词、悬停和输入框规则须为开、关或默认');
+    if (r.page != null && !['always', 'never', 'default'].includes(r.page)) throw new Error(l10n('m9c'));
+    for (const f of ['selection', 'hover', 'input']) if (r[f] != null && !['on', 'off', 'default'].includes(r[f])) throw new Error(l10n('m9d'));
   }
 }
 
 export function validateInteractionSettings(s) {
+  if (typeof s.floatBall?.autoHide !== 'boolean') throw new Error(l10n('m9e'));
   if (!['replace', 'bilingual'].includes(s.input?.mode) ||
-      !['source-first', 'translation-first'].includes(s.input?.order)) throw new Error('输入框双语模式或顺序无效');
+      !['source-first', 'translation-first'].includes(s.input?.order)) throw new Error(l10n('m9f'));
   for (const name of ['hover', 'input']) {
     const c = s[name];
     if (typeof c?.profileId !== 'string' || typeof c.model !== 'string' ||
         c.model.length > 256 || /[\x00-\x1f\x7f]/.test(c.model) ||
-        c.profileId && !s.provider?.profiles?.some(p => p.id === c.profileId)) throw new Error('交互服务或模型选择无效');
+        c.profileId && !s.provider?.profiles?.some(p => p.id === c.profileId)) throw new Error(l10n('m9g'));
   }
 }

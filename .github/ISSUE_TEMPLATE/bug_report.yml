@@ -1,5 +1,5 @@
 name: Bug report / 问题反馈
-description: 可复现的扩展、网关或安装问题
+description: 可复现的扩展、用户脚本或安装问题
 title: "[Bug] "
 labels: [bug]
 body:
@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: DualLens 版本
-      placeholder: "0.1.0"
+      placeholder: "浏览器扩展详情页显示的版本"
     validations:
       required: true
   - type: input
@@ -30,9 +30,9 @@ body:
         - 演示 mock（不联网）
         - 自定义 OpenAI 兼容接口
         - 本机 Ollama
-        - SJTU
-        - Hermes 零价模型
-        - 手动选择的 Claude/Codex 订阅
+        - 免费机器翻译
+        - 官方 Microsoft Translator / DeepL
+        - OpenAI / DeepSeek / OpenRouter
         - 与模型无关的安装/页面问题
     validations:
       required: true

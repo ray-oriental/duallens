@@ -1,1 +1,0 @@
-"""DualLens local translation gateway."""

@@ -1,3 +1,4 @@
+import { t as l10n } from '../../shared/i18n.js';
 import { discoverImages } from './discovery.js';
 import { cleanRegions, readingOrder } from './order.js';
 import { createPanel } from './panel.js';
@@ -70,7 +71,7 @@ export class ComicTranslator {
           const result=await this.platform.comics?.syncSites?.();
           return !result || result.ok;
         } : null,
-        onLanguages:(language)=>this.platform.comics?.languages(language) || Promise.resolve({ ok:false,error:{message:'此平台暂不支持语言包管理'} }) });
+        onLanguages:(language)=>this.platform.comics?.languages(language) || Promise.resolve({ ok:false,error:{get message(){return l10n('m2m');}} }) });
       this.panels.set(candidate.element,entry);
       // Explicit page command runs only the bounded visible set and one upcoming image.
       this.nearby.observe(candidate.element);
@@ -81,12 +82,12 @@ export class ComicTranslator {
     if(entry.running) return;
     entry.running=true; const version=++entry.version;const generation=this.generation;
     const alive=()=>generation===this.generation&&entry.version===version&&entry.panel.host.isConnected&&this.navigationURL===this.locationKey();
-    const { panel,candidate }=entry;panel.busy(true);panel.setStatus('本机下载与识别中…');
+    const { panel,candidate }=entry;panel.busy(true);panel.setStatus(l10n('m2n'));
     try {
-      if(!this.platform.comics?.recognize) throw new Error('此页无法本地识别');
+      if(!this.platform.comics?.recognize) throw new Error(l10n('m2f'));
       const recognized=await this.platform.comics.recognize({ url:candidate.url,slices:candidate.slices,width:candidate.width,height:candidate.height,lang:panel.lang() });
       if(!alive()) return;
-      if(!recognized.ok) throw new Error(recognized.error?.message || '此页无法本地识别');
+      if(!recognized.ok) throw new Error(recognized.error?.message || l10n('m2f'));
       const ordered=readingOrder(cleanRegions(recognized.regions,panel.lang()),{ lang:panel.lang(),width:recognized.width,height:recognized.height });
       panel.render(ordered.regions,ordered.uncertain);entry.metrics=recognized.metrics;
       panel.setMode(this.getSettings().displayMode);
@@ -96,7 +97,7 @@ export class ComicTranslator {
         to:this.getSettings().targetLang,from:({ jpn:'ja',jpn_vert:'ja',kor:'ko',eng:'en' })[panel.lang()],priority:0,
         context:{ title:'',host:'',url:'' } },(results)=> {
         if(!alive()) return;
-        for(const result of results) byID.get(result.id)?.show(result.error?'文字翻译失败':result.text,!!result.error);
+        for(const result of results) byID.get(result.id)?.show(result.error?l10n('m2o'):result.text,!!result.error);
       });
       entry.request=req;this.requests.add(req);
       await req.done;this.requests.delete(req);

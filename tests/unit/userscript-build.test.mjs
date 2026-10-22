@@ -36,6 +36,15 @@ test('shared export helper preserves live function bindings',async()=>{
   });
 });
 
+test('compact private export slots preserve aliases, namespace names and public resource exports',async()=>{
+  await fixture({'dep.js':'export const longPrivateName=7; export const other=9;',
+    'entry.js':'import {longPrivateName as first,other as second} from "./dep.js"; export function publicResource(){return first+second;}'},async root=>{
+    const code=await buildBundle(path.join(root,'entry.js'),{root,entryExports:['publicResource']});
+    const out=vm.runInNewContext(code,{});assert.equal(out.publicResource(),16);
+    assert.ok(!code.includes('"longPrivateName":()=>'));
+  });
+});
+
 test('unused export getters are omitted while side effects and imported getters remain',async()=>{
   await fixture({'dep.js':'globalThis.effect=7; export const unusedGetterName=1; export const used=2;',
     'entry.js':'import {used} from "./dep.js";globalThis.result=used;'},async root=>{
@@ -103,9 +112,9 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
-    // Soft target below the 360 KB hard budget in the builder; v0.6 (HTML5 subtitles + input modes) lands at ~333 KB.
-    assert.ok(Buffer.byteLength(content)<=340000,'startup bundle exceeds the 340 KB slimming target');
-    for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js']) {
+    // Both UI languages must fit without pulling the lazy settings catalogue into startup.
+    assert.ok(Buffer.byteLength(content)<=345000,'startup bundle exceeds the 345 KB i18n budget');
+    for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js', 'ui/popup-view.js', 'ui/popup-theme.js', 'userscript/panel.js', 'sidepanel/text-form.js', 'sidepanel/subtitle-form.js', 'sidepanel/userscript-panel.js']) {
       assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
     }
     assert.ok(content.includes('@grant        GM_getResourceText'));

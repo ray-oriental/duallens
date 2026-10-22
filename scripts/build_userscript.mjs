@@ -13,6 +13,44 @@ const identifier = /^[A-Za-z_$][\w$]*$/;
 const operators=/^(?:>>>=|===|!==|\*\*=|&&=|\|\|=|\?\?=|>>>|<<=|>>=|=>|==|!=|<=|>=|\+\+|--|\*\*|&&|\|\||\?\?|\?\.|<<|>>|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|\.\.\.)/;
 const fail = (file, message) => { throw new Error(`${file}: ${message}`); };
 
+// Data-only LZW keeps both language variants within the mobile startup budget.
+// The decoder restores JSON, never JavaScript. No evaluator or remote resource is involved.
+export function packLocale(messages) {
+  const bytes = Buffer.from(JSON.stringify(messages));
+  const dict = new Map(); let next = 256, word = '', codes = [];
+  for (const byte of bytes) {
+    const char = String.fromCharCode(byte), joined = word + char;
+    if (word === '' || dict.has(joined)) { word = joined; continue; }
+    codes.push(word.length === 1 ? word.charCodeAt(0) : dict.get(word));
+    if (next < 8192) dict.set(joined,next++);
+    word = char;
+  }
+  if (word) codes.push(word.length === 1 ? word.charCodeAt(0) : dict.get(word));
+  const out = []; let bits = 0, buffer = 0;
+  for (const code of codes) {
+    buffer |= code << bits; bits += 13;
+    while (bits >= 8) { out.push(buffer & 255); buffer >>>= 8; bits -= 8; }
+  }
+  if (bits) out.push(buffer & 255);
+  return Buffer.from(out).toString('base64');
+}
+
+export function unpackLocale(packed) {
+  const input = atob(packed), dict = [], parts = [];
+  let next = 256, previous = '', bits = 0, buffer = 0, i = 0;
+  while (i < input.length || bits >= 13) {
+    while (bits < 13 && i < input.length) { buffer |= input.charCodeAt(i++) << bits; bits += 8; }
+    if (bits < 13) break;
+    const code = buffer & 8191; buffer >>>= 13; bits -= 13;
+    const word = code < 256 ? String.fromCharCode(code) : dict[code] ?? previous + previous[0];
+    parts.push(word);
+    if (previous && next < 8192) dict[next++] = previous + word[0];
+    previous = word;
+  }
+  const bytes = Uint8Array.from(parts.join(''), char => char.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
 // Keep offsets into the original source. Comments, strings, templates and regex literals must
 // never accidentally become module declarations. Template expressions are checked recursively.
 export function tokens(source, file = '<source>') {
@@ -231,7 +269,10 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
     if (active.has(file)) fail(file, 'cyclic modules are unsupported');
     if (graph.has(file)) return file;
     active.add(file);
-    const source = (await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    let source = (await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    // Locale data is specialized after the graph is known. UI-only messages must not
+    // enter the startup bundle through the common translation/settings modules.
+    if (rel.replaceAll('\\','/') === 'shared/i18n-messages.js') source = 'export const messages = {};';
     const mod = path.extname(file) === '.css'
       ? parseModule(`export default ${JSON.stringify(source)};`, rel)
       : path.extname(file) === '.js' || path.extname(file) === '.mjs' ? parseModule(source, rel) : fail(file, 'unsupported module type');
@@ -245,6 +286,29 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
     active.delete(file); return file;
   }
   const entryFile = await visit(entry);
+  const dictionary = [...graph.keys()].find(file => path.relative(root,file).replaceAll('\\','/') === 'shared/i18n-messages.js');
+  if (dictionary) {
+    const keys = new Set();
+    for (const mod of graph.values()) for (const match of mod.source.matchAll(/\b(?:l10n|t|message)\(\s*['"]([\w]+)['"]/g)) keys.add(match[1]);
+    // These shared metadata labels are getters, read only by the lazy forms. Page
+    // translation uses their stable ids/capabilities, and never reads their UI names.
+    // The verified UI resource registers its dictionary before exposing those tools.
+    const lazyMetadata = [
+      'm8u','m8v','m8w','m8x','m8y','m8z', // STYLES names
+      'm90','m91','m92','m93', // TRANSLATION_MODES names
+      'mk','ml','mm','mn','mo', // MT_ENGINES names
+      'm8j','m8k','m8l','m8m','m8n','m8p', // PROVIDER_PRESETS descriptions
+    ];
+    if (path.relative(root,entryFile).replaceAll('\\','/') === 'userscript/entry.js') for (const key of lazyMetadata) keys.delete(key);
+    const locale = JSON.parse(await fs.readFile(path.join(root,'_locales/en/messages.json'),'utf8'));
+    const zh = JSON.parse(await fs.readFile(path.join(root,'_locales/zh_CN/messages.json'),'utf8'));
+    const expand = record => record.message.replace(/\$(\w+)\$/g, (_,name) => record.placeholders?.[name.toLowerCase()]?.content ?? '');
+    const subset = Object.fromEntries([...keys].sort().map(key => {
+      if (!locale[key] || !zh[key]) fail(dictionary, `missing locale key ${key}`);
+      return [key,[expand(zh[key]),expand(locale[key])]];
+    }));
+    graph.set(dictionary,parseModule(unpackLocale.toString()+'\nexport const messages = unpackLocale('+JSON.stringify(packLocale(subset))+');',dictionary));
+  }
   // Emit only getters consumed by this static graph; namespace imports keep every getter.
   // Module bodies still run unchanged, including side effects and live bindings.
   const used=new Map([...graph.keys()].map(file=>[file,new Set()]));
@@ -258,6 +322,11 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
   }
   const ids=new Map([...graph.keys()].map((file,i)=>[file,i]));
   const id=file=>ids.get(file);
+  // Private named imports use compact property ids; namespace and public resource
+  // exports retain their names. Source bindings and live getters remain unchanged.
+  const named=new Set(entryExports.length?[entryFile]:[]);
+  for(const mod of graph.values())for(const item of mod.imports)if(item.namespace)named.add(item.file);
+  const slots=new Map([...graph].map(([file,mod])=>[file,new Map(mod.exports.map((e,i)=>[e.local,named.has(file)?e.local:i]))]));
   const factories = [];
   for (const [file, mod] of graph) {
     let code = mod.source;
@@ -267,12 +336,12 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
         const item = mod.imports[edit.importIndex];
         const require = `__r(${JSON.stringify(id(item.file))})`;
         replacement = item.namespace ? `const ${item.namespace} = ${require};` : item.bindings.length
-          ? `const { ${item.bindings.map((b) => b.imported===b.local ? b.local : `${b.imported}: ${b.local}`).join(', ')} } = ${require};` : `${require};`;
+          ? `const { ${item.bindings.map((b) => `${JSON.stringify(slots.get(item.file).get(b.imported))}: ${b.local}`).join(', ')} } = ${require};` : `${require};`;
       }
       code = code.slice(0, edit.start) + replacement + code.slice(edit.end);
     }
     code = compactSource(code, path.relative(root,file));
-    code += '\n__x(__e,{' + mod.exports.filter(e=>used.get(file).has(e.local)).map(e=>`${JSON.stringify(e.local)}:()=>${e.imported}`).join(',') + '});';
+    code += '\n__x(__e,{' + mod.exports.filter(e=>used.get(file).has(e.local)).map(e=>`${JSON.stringify(slots.get(file).get(e.local))}:()=>${e.imported}`).join(',') + '});';
     factories.push(`${JSON.stringify(id(file))}:function(__e,__r){\n${code}\n}`);
   }
   const bundle = `// Modules: ${JSON.stringify([...graph.keys()].map(f=>path.relative(root,f).replaceAll('\\','/')))}\n(function() {\n'use strict';\nfunction __x(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __r(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __r);\n return out;\n}\n${entryExports.length ? 'return ' : ''}__r(${JSON.stringify(id(entryFile))});\n})();\n`;
@@ -285,10 +354,12 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
 export function metadata(version, resources = []) {
   if (!/^\d+(?:\.\d+){0,3}$/.test(version)) throw new Error('Invalid manifest version');
   return `// ==UserScript==
-// @name         DualLens 双语对照翻译
+// @name         DualLens bilingual translation
+// @name:zh-CN   DualLens 双语对照翻译
 // @namespace    https://github.com/ray-oriental/duallens
 // @version      ${version}
-// @description  使用自己的模型服务进行网页双语翻译
+// @description  Bilingual webpage translation with your own translation service
+// @description:zh-CN 使用自己的模型服务进行网页双语翻译
 // @license      MIT
 // @match        *://*/*
 // @run-at       document-idle
@@ -312,7 +383,7 @@ ${resources.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).joi
 
 export async function buildUserscript({ project = PROJECT, output = path.join(project, 'dist', 'duallens.user.js') } = {}) {
   const manifest = JSON.parse((await fs.readFile(path.join(project, 'extension', 'manifest.json'), 'utf8')).replace(/^\uFEFF/, ''));
-  const settings = await buildBundle(path.join(project, 'extension', 'ui', 'forms', 'index.js'), {
+  const settings = await buildBundle(path.join(project, 'extension', 'userscript', 'ui-resource.js'), {
     root: path.join(project, 'extension'), entryExports: ['mountSettingsForm'],
   });
   const resource = { name: 'duallens-settings', file: 'duallens-settings.js', bytes: Buffer.byteLength(settings),
@@ -322,7 +393,7 @@ export async function buildUserscript({ project = PROJECT, output = path.join(pr
   const marker = "'__DUALLENS_SETTINGS_RESOURCE__'";
   if (bundle.split(marker).length !== 2) throw new Error('Settings resource descriptor placeholder missing or duplicated');
   const content = metadata(manifest.version, [resource]) + bundle.replace(marker, JSON.stringify(resource));
-  if(Buffer.byteLength(content)>360000) throw new Error('Userscript exceeds the 360 KB startup budget');
+  if(Buffer.byteLength(content)>345000) throw new Error('Userscript exceeds the 345 KB startup budget');
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(path.join(path.dirname(output), resource.file), settings, 'utf8');
   await fs.writeFile(output, content, 'utf8');

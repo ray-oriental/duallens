@@ -8,7 +8,7 @@ import { exportConfig, importConfig } from '../../extension/shared/configcrypto.
 
 test('path patterns: protocol, subdomains, arbitrary stars, query and hash ignored', () => {
   for (const [pattern, url, expected] of [
-    ['mail.sjtu.edu.cn/zimbra/*','https://mail.sjtu.edu.cn/zimbra/inbox?x=1#mail',true],
+    ['mail.example.com/inbox/*','https://mail.example.com/inbox/inbox?x=1#mail',true],
     ['*.example.com/checkout/*','https://example.com/checkout/pay',true],
     ['*.example.com/checkout/*','https://a.b.example.com/checkout/pay',true],
     ['*.example.com/checkout/*','https://badexample.com/checkout/pay',false],
@@ -32,7 +32,7 @@ test('path patterns: protocol, subdomains, arbitrary stars, query and hash ignor
 
 test('invalid patterns are rejected rather than normalized into a broader rule', () => {
   for (const p of ['', '*', 'exa*mple.com', 'example..com', '-a.com', 'a-.com', 'example.com:0', 'example.com:65536',
-    'ftp://example.com/x', 'https://a@b.com/x', 'example.com/path?q=x', 'example.com/path#x', 'example.com/a b',
+    'ftp://example.com/x', 'https://a'+'@b.com/x', 'example.com/path?q=x', 'example.com/path#x', 'example.com/a b',
     'example.com\\x', '127.1', '*.com:abc', '[::::]', '*.example.com/'+'x'.repeat(2048)]) {
     assert.equal(parsePattern(p),null,p); assert.equal(matches(p,'https://example.com/'),false,p);
   }

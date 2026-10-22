@@ -1,3 +1,4 @@
+import { t as l10n } from '../shared/i18n.js';
 // One-shot message handlers (SPEC §4.2), kept free of chrome.* so they can be unit tested.
 // Every handler resolves to { ok: true, ... } or { ok: false, error: { code, message } } and never rejects.
 
@@ -20,7 +21,7 @@ const MAX_TEXT_CHARS = 20000;
 export const MSG_MT_TEST = 'mt-test';
 const PURPOSES = new Set(['page', 'selection', 'input', 'hover', 'text', 'pdf']);
 
-export function createHandlers({ translator, cache, providers, getSettings, openOptions = async () => {}, now = () => Date.now() }) {
+export function createHandlers({ translator, cache, providers, getSettings, openOptions = async () => {}, privateContext = sender => sender?.tab?.incognito === true, now = () => Date.now() }) {
   const wrap = (fn) => async (msg, sender) => {
     try {
       return await fn(msg || {}, sender);
@@ -32,18 +33,18 @@ export function createHandlers({ translator, cache, providers, getSettings, open
   async function profileById(id) {
     const settings = await getSettings();
     const profile = settings.provider.profiles.find((p) => p.id === id);
-    if (!profile) throw new DLError(ERR.CONFIG, `找不到模型配置：${id}`);
+    if (!profile) throw new DLError(ERR.CONFIG, l10n('mg', [id]));
     return profile;
   }
 
   return {
-    [MSG_TRANSLATE_TEXT]: wrap(async (msg) => {
+    [MSG_TRANSLATE_TEXT]: wrap(async (msg, sender) => {
       const text = typeof msg.text === 'string' ? msg.text : '';
-      if (!text.trim()) throw new DLError(ERR.CONFIG, '没有要翻译的文字');
-      if (text.length > MAX_TEXT_CHARS) throw new DLError(ERR.CONFIG, `文字太长（上限 ${MAX_TEXT_CHARS} 字）`);
+      if (!text.trim()) throw new DLError(ERR.CONFIG, l10n('mh'));
+      if (text.length > MAX_TEXT_CHARS) throw new DLError(ERR.CONFIG, l10n('mi', [MAX_TEXT_CHARS]));
       const settings = await getSettings();
       const out = await translator.translateTextEx({
-        text,
+        text, incognito:privateContext(sender),
         to: msg.to || settings.targetLang,
         from: msg.from || settings.sourceLang,
         ...(PURPOSES.has(msg.purpose) ? { purpose: msg.purpose } : {}),
@@ -89,7 +90,7 @@ export function createHandlers({ translator, cache, providers, getSettings, open
       const content = await providers.chat({ profile, model: profile.model, messages });
       const latencyMs = now() - started;
       const parsed=parseSegments(content,idMap);
-      if(parsed.missing.length) throw new DLError(ERR.PARSE,'模型返回了非 JSON 内容（可能是思考型模型）');
+      if(parsed.missing.length) throw new DLError(ERR.PARSE,l10n('mj'));
       return { ok: true, latencyMs, sample: [...parsed.results.values()].map(stripMarkup).join(' / ').trim().slice(0,200) };
     }),
 
