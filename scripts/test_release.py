@@ -273,7 +273,8 @@ await fs.writeFile(output,(await fs.readFile(output,'utf8')).replace('// ==/User
         except OSError:
             self.skipTest('symbolic link creation unavailable on this host')
         try:
-            with self.assertRaisesRegex(CheckError,'linked extension entry'):
+            # The public-file privacy scan may reject the link before the extension walk does; either refusal counts.
+            with self.assertRaisesRegex(CheckError,r'linked (extension|public source) entry: .*linked\.txt'):
                 self.build()
         finally:
             linked.unlink()
