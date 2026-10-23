@@ -6,7 +6,7 @@ body { margin: 0; background: var(--dl-bg); }
 .dl-popup :where(button) { min-height: 32px; }
 .dl-popup .dl-text-button { min-height: 0; }
 .dl-popup .dl-hero { min-height: 34px; }
-.dl-popup .dl-segment span { min-height: 26px; }
+.dl-popup .dl-segment span { min-height: 26px; padding: 0 8px; }
 .dl-popup:not([data-keyboard]) :focus-visible { outline: none; }
 .dl-popup p { margin: 0; }
 .dl-popup .dl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 28px; margin-bottom: 12px; }
@@ -21,6 +21,8 @@ body { margin: 0; background: var(--dl-bg); }
 .dl-popup .display-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 12px; }
 .dl-popup .display-row .dl-segment { flex: none; }
 .dl-popup .target-pick { display: flex; align-items: baseline; gap: 2px; min-width: 0; color: var(--dl-text-2); }
+/* Same optical inset as the site select below, so both carets share one right edge. */
+.dl-popup .target-pick select { margin-right: -6px; }
 .dl-popup select { min-height: 28px; max-width: 160px; padding: 2px 22px 2px 6px; background-position: right 12px center, right 8px center; border-color: transparent; border-radius: var(--dl-r-xs); background-color: transparent; color: var(--dl-text); font-size: 13px; field-sizing: content; }
 .dl-popup select:hover:not(:disabled) { background-color: var(--dl-inset); }
 .dl-popup select:disabled { color: var(--dl-text-3); opacity: 1; cursor: default; }

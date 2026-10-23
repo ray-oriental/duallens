@@ -70,7 +70,9 @@ export function createHandlers({ translator, cache, providers, getSettings, open
 
     [MSG_LIST_MODELS]: wrap(async (msg) => {
       const profile = msg.presetId ? profileFromPreset(msg.presetId) : await profileById(msg.profileId);
-      return { ok: true, models: await providers.listModels(profile, { freeOnly: msg.freeOnly !== false }) };
+      const result = { ok: true };
+      result.models = await providers.listModels(profile, { freeOnly: msg.freeOnly !== false, onBaseUrl: url => { result.baseUrl = url; } });
+      return result;
     }),
 
     [MSG_PROVIDER_TEST]: wrap(async (msg) => {
@@ -87,11 +89,12 @@ export function createHandlers({ translator, cache, providers, getSettings, open
         glossary: [],
       });
       const started = now();
-      const content = await providers.chat({ profile, model: profile.model, messages });
+      let baseUrl;
+      const content = await providers.chat({ profile, model: profile.model, messages, onBaseUrl: url => { baseUrl = url; } });
       const latencyMs = now() - started;
       const parsed=parseSegments(content,idMap);
       if(parsed.missing.length) throw new DLError(ERR.PARSE,l10n('mj'));
-      return { ok: true, latencyMs, sample: [...parsed.results.values()].map(stripMarkup).join(' / ').trim().slice(0,200) };
+      return { ok: true, latencyMs, sample: [...parsed.results.values()].map(stripMarkup).join(' / ').trim().slice(0,200), ...(baseUrl ? { baseUrl } : {}) };
     }),
 
     [MSG_CACHE_STATS]: wrap(async () => ({ ok: true, entries: await cache.count() })),

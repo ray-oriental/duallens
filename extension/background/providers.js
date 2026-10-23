@@ -8,7 +8,7 @@ import { createSSEParser } from '../shared/stream.js';
 import { profileFromPreset } from '../shared/presets.js';
 
 const TEMPERATURE = 0.2;
-const MODELS_TIMEOUT_MS = 15000;
+const MODEL_TIMEOUT = 15000;
 
 export function parseRetryAfter(value, nowMs = Date.now()) {
   if (value == null) return undefined;
@@ -53,9 +53,17 @@ export function profileProblem(profile) {
   return null;
 }
 
-function endpoint(profile, path) {
-  return String(profile.baseUrl).replace(/\/+$/, '') + path;
+export function normalizeBaseUrl(value, { completeRoot = false } = {}) {
+  const base = String(value || '').trim().replace(/\/+$/, '');
+  // Only a literal HTTP(S) authority: validation still rejects malformed hosts.
+  return completeRoot && /^https?:\/\/[^/?#@\\\s]+$/i.test(base) ? base + '/v1' : base;
 }
+
+function endpoint(profile, path) {
+  return normalizeBaseUrl(profile.baseUrl) + path;
+}
+
+const isHtml = res => /text\/html/i.test(res.type) || /^\s*</.test(res.text);
 
 function headersFor(profile) {
   const h = { 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -66,7 +74,7 @@ function headersFor(profile) {
 
 function scrub(text, profile) {
   let s = String(text ?? '');
-  const key = profile && profile.apiKey ? String(profile.apiKey).trim() : '';
+  const key = String(profile?.apiKey || '').trim();
   if (key) s = s.split(key).join('***');
   return s;
 }
@@ -75,7 +83,7 @@ function serverMessage(bodyText, profile) {
   let msg = '';
   try {
     const j = JSON.parse(bodyText);
-    const e = j && (j.error ?? j);
+    const e = j?.error ?? j;
     msg = typeof e === 'string' ? e : (e && (e.message || e.detail || e.msg)) || '';
     if (typeof msg !== 'string') msg = JSON.stringify(msg);
   } catch {
@@ -108,11 +116,11 @@ function abortableSleep(ms, signal) {
 }
 
 function assistantText(json) {
-  const choice = json && Array.isArray(json.choices) ? json.choices[0] : null;
-  const content = choice && choice.message ? choice.message.content : choice && choice.text;
+  const choice = Array.isArray(json?.choices) ? json.choices[0] : null;
+  const content = choice?.message ? choice.message.content : choice?.text;
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    return content.map((p) => (typeof p === 'string' ? p : p && typeof p.text === 'string' ? p.text : '')).join('');
+    return content.map(p => typeof p === 'string' ? p : typeof p?.text === 'string' ? p.text : '').join('');
   }
   return null;
 }
@@ -155,7 +163,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     reset(timeoutMs);
     let content = '', streamed = false, done = false, finished = false, carry = '';
     // Headers are a Headers object from fetch, but a plain object from wrapped transports (settings page, GM).
-    const contentType = h => String((typeof h?.get === 'function' ? h.get('content-type') : h?.['content-type'] ?? h?.['Content-Type']) || '');
+    const mime = h => String((typeof h?.get === 'function' ? h.get('content-type') : h?.['content-type'] ?? h?.['Content-Type']) || '');
     const key = String(profile.apiKey || '').trim();
     const emitDelta = delta => {
       const text = scrub(carry + delta, profile);
@@ -186,7 +194,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       if (event.choices?.[0]?.finish_reason) finished = true;
     });
     const progress = (text, status, headers) => {
-      if (status >= 200 && status < 300 && /text\/event-stream/i.test(contentType(headers))) {
+      if (status >= 200 && status < 300 && /text\/event-stream/i.test(mime(headers))) {
         streamed = true; parser.push(text);
       }
     };
@@ -208,7 +216,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
         timeoutMs, onText: progress,
       });
       let text;
-      if (onDelta && res.body?.getReader && /text\/event-stream/i.test(contentType(res.headers))) {
+      if (onDelta && res.body?.getReader && /text\/event-stream/i.test(mime(res.headers))) {
         streamed = true;
         const reader = res.body.getReader(), decoder = new TextDecoder();
         try {
@@ -225,7 +233,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       } else text = await res.text();
       // A transport that buffers the whole body (no reader, no progress callback) still receives the SSE
       // stream we asked for: parse it here instead of mistaking it for a malformed JSON reply.
-      if (!streamed && res.status >= 200 && res.status < 300 && (/text\/event-stream/i.test(contentType(res.headers)) || /^\s*data:/.test(text))) {
+      if (!streamed && res.status >= 200 && res.status < 300 && (/text\/event-stream/i.test(mime(res.headers)) || /^\s*data:/.test(text))) {
         streamed = true; parser.push(text);
       }
       if (streamed) {
@@ -234,7 +242,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
         if (!done && !finished) throw new DLError(ERR.PROVIDER, l10n('m1l'), { status: 502 });
         text = JSON.stringify({ choices: [{ message: { content } }] });
       }
-      return { status: res.status, retryAfter: res.headers && res.headers.get ? res.headers.get('retry-after') : null, text };
+      return { status: res.status, type: mime(res.headers), retryAfter: res.headers?.get?.('retry-after'), text };
     } catch (e) {
       if (signal && signal.aborted) throw cancelledError();
       if (e instanceof DLError) throw e;
@@ -246,19 +254,45 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     }
   }
 
-  function httpError(profile, res) {
+  function httpError(profile, res, json) {
     const detail = serverMessage(res.text, profile);
     const suffix = detail ? l10n('errorDetail', [detail]) : '';
-    let serverCode;
-    try { serverCode = JSON.parse(res.text)?.error?.code; } catch {}
-    const extra = { status: res.status, serverCode, retryAfterMs: parseRetryAfter(res.retryAfter) };
+    const extra = { status: res.status, serverCode: json?.error?.code, retryAfterMs: parseRetryAfter(res.retryAfter) };
     if (res.status === 429) {
       return new DLError(ERR.RATE_LIMITED, l10n('m1o', [suffix]), extra);
     }
     if ((res.status === 401 || res.status === 403)) {
-      return new DLError(ERR.CONFIG, l10n('m1p', [res.status, suffix]), extra);
+      return new DLError(ERR.CONFIG, l10n('endpointAuth', [res.status]), extra);
     }
+    if (res.status === 404) return new DLError(ERR.PROVIDER, l10n('endpointNotFound', [res.status]), extra);
+    if (isHtml(res) || json === undefined) return badJSON(profile, res, extra, ERR.PROVIDER);
     return new DLError(ERR.PROVIDER, l10n('m1q', [res.status, suffix]), extra);
+  }
+
+  function badJSON(profile, res, extra = { status: res.status }, code = ERR.PARSE) {
+    return new DLError(code, isHtml(res) ? l10n('endpointHtml') : l10n('endpointParse',
+      [res.status, scrub(res.text, profile).replace(/\s+/g, ' ').trim().slice(0, 80)]), extra);
+  }
+
+  function readJSON(profile, res) {
+    let json;
+    try { json = JSON.parse(res.text); } catch { /* Report the bounded, scrubbed body below. */ }
+    if (res.status < 200 || res.status >= 300) throw httpError(profile, res, json);
+    if (isHtml(res) || json === undefined) throw badJSON(profile, res);
+    return json;
+  }
+
+  // Root addresses that only answered under /v1: later calls go there directly instead of probing the root again.
+  const rootFixed = new Set();
+  async function sendAPI(profile, send) {
+    const root = normalizeBaseUrl(profile.baseUrl), baseUrl = normalizeBaseUrl(root, { completeRoot: true });
+    let res = rootFixed.has(root) ? null : await send(profile);
+    if (!res || baseUrl !== root && ![401, 403].includes(res.status) && (res.status === 404 || isHtml(res))) {
+      profile = { ...profile, baseUrl }; res = await send(profile);
+      if (res.status > 199 && res.status < 300 && !isHtml(res)) rootFixed.add(root);
+      return { profile, res, baseUrl };
+    }
+    return { profile, res };
   }
 
   async function mockChat({ model, messages, signal }) {
@@ -275,74 +309,67 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     return text.replace(/<seg id="(\d+)">([\s\S]*?)<\/seg>/g, '<seg id="$1">【译】$2</seg>');
   }
 
-  async function chat({ profile, model, messages, signal, onDelta, beforeSend }) {
+  async function chat({ profile, model, messages, signal, onDelta, beforeSend, onBaseUrl }) {
     if (signal && signal.aborted) throw cancelledError();
-    if (profile && profile.kind === 'mock') return mockChat({ model: model || profile.model, messages, signal });
+    if (profile?.kind === 'mock') return mockChat({ model: model || profile.model, messages, signal });
     profile = await withSecret(profile);
     profile = { ...profile, model: model || profile.model };
     const problem = profileProblem(profile);
     if (problem) throw new DLError(ERR.CONFIG, problem);
     if (profile.requiresKey && !profile.apiKey) throw new DLError(ERR.CONFIG, l10n('m1w'));
-    const payload={ model: model || profile.model, messages, temperature:TEMPERATURE, stream:true,
+    const payload={ model: profile.model, messages, temperature:TEMPERATURE, stream:true,
       max_tokens:Math.min(4096, Math.max(256, messages.filter(m=>m.role==='user').reduce((n,m)=>n+String(m.content).length,0)*2+256)) };
-    const jsonKey=profile.id+'|'+profile.baseUrl+'|'+(model||profile.model);
-    if (noStream.has(jsonKey)) payload.stream = false;
-    if(profile.jsonMode!==false&&!noJson.has(jsonKey)) payload.response_format={type:'json_object'};
-    const send=()=>request(profile, {
-      url: endpoint(profile, '/chat/completions'),
+    const slot=profile.id+'|'+profile.baseUrl+'|'+profile.model;
+    if (noStream.has(slot)) payload.stream = false;
+    if(profile.jsonMode!==false&&!noJson.has(slot)) payload.response_format={type:'json_object'};
+    const send=(target = profile)=>request(target, {
+      url: endpoint(target, '/chat/completions'),
       method: 'POST',
       body: JSON.stringify(payload),
         timeoutMs: profile.timeoutMs > 0 ? profile.timeoutMs : 60000,
       signal, beforeSend, onDelta: onDelta || (() => {}),
     });
-    let res=await send();
+    const reply = await sendAPI(profile, send);
+    profile = reply.profile;
+    let res = reply.res;
     if(res.status===400&&payload.response_format&&!/stream/i.test(serverMessage(res.text, profile))) {
-      delete payload.response_format; noJson.add(jsonKey); res=await send();
+      delete payload.response_format; noJson.add(slot); res=await send();
     }
     if (payload.stream && [400, 422, 501].includes(res.status)) {
       payload.stream = false;
       res = await send();
       if (res.status === 400 && payload.response_format) {
-        delete payload.response_format; noJson.add(jsonKey); res = await send();
+        delete payload.response_format; noJson.add(slot); res = await send();
       }
-      if (res.status >= 200 && res.status < 300) noStream.add(jsonKey);
+      if (res.status >= 200 && res.status < 300) noStream.add(slot);
     }
-    if (res.status < 200 || res.status >= 300) throw httpError(profile, res);
-    let json;
-    try {
-      json = JSON.parse(res.text);
-    } catch {
-      throw new DLError(ERR.PARSE, l10n('m1x'));
-    }
+    const json = readJSON(profile, res);
     const content = assistantText(json);
     if (content == null) throw new DLError(ERR.PARSE, l10n('m1y'));
+    if (reply.baseUrl) onBaseUrl?.(reply.baseUrl);
     return scrub(content, profile);
   }
 
-  async function listModels(profile, { signal, freeOnly = true } = {}) {
+  async function listModels(profile, { signal, freeOnly = true, onBaseUrl } = {}) {
     if (typeof profile === 'string') profile = profileFromPreset(profile);
-    if (profile && profile.kind === 'mock') {
+    if (profile?.kind === 'mock') {
       return ['mock', 'mock-error', 'mock-slow'].map((id) => ({ id, label: id }));
     }
     // OpenRouter's public catalog must not receive a user's Authorization header.
     profile = isOpenRouter(profile) ? { ...profile, apiKey: '' } : await withSecret(profile);
-    const problem = profileProblem({ ...profile, model: profile && (profile.model || 'x') });
+    const problem = profileProblem({ ...profile, model: profile?.model || 'x' });
     if (problem) throw new DLError(ERR.CONFIG, problem);
-    const res = await request(profile, {
-      url: endpoint(profile, '/models'),
+    const reply = await sendAPI(profile, target => request(target, {
+      url: endpoint(target, '/models'),
       method: 'GET',
-      timeoutMs: Math.min(profile.timeoutMs > 0 ? profile.timeoutMs : MODELS_TIMEOUT_MS, MODELS_TIMEOUT_MS),
+      timeoutMs: Math.min(profile.timeoutMs > 0 ? profile.timeoutMs : MODEL_TIMEOUT, MODEL_TIMEOUT),
       signal,
-    });
-    if (res.status < 200 || res.status >= 300) throw httpError(profile, res);
-    let json;
-    try {
-      json = JSON.parse(res.text);
-    } catch {
-      throw new DLError(ERR.PARSE, l10n('m1x'));
-    }
-    const list = Array.isArray(json) ? json : Array.isArray(json && json.data) ? json.data : json && json.models;
+    }));
+    profile = reply.profile;
+    const json = readJSON(profile, reply.res);
+    const list = Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : json?.models;
     if (!Array.isArray(list)) throw new DLError(ERR.PARSE, l10n('m1z'));
+    if (reply.baseUrl) onBaseUrl?.(reply.baseUrl);
     if (isOpenRouter(profile) && freeOnly) return freeOpenRouterModels(list);
     const seen = new Set();
     const out = [];
@@ -350,7 +377,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       const id = typeof m === 'string' ? m : m && (m.id || m.name || m.model);
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      out.push({ id: String(id), label: String((m && m.name) || id) });
+      out.push({ id: String(id), label: String(m?.name || id) });
     }
     return out.sort((a, b) => a.id.localeCompare(b.id));
   }

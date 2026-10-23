@@ -45,8 +45,8 @@ export interface Platform {
 export interface TranslatorService {
   translateBatch({ items, to, from, priority, context, draft?, purpose?, mode? }, onPartial): { cancel(), done? };
   translateText({ text, to, from, purpose, mode?, profileId?, model? }): Promise<{ ok, text?, by?, engine?, error? }>;
-  listModels(profileId): Promise<{ ok, models? }>;
-  testProvider(profileId): Promise<{ ok, latencyMs?, sample?, error? }>;
+  listModels(profileId): Promise<{ ok, models?, baseUrl? }>;
+  testProvider(profileId): Promise<{ ok, latencyMs?, sample?, baseUrl?, error? }>;
 }
 ```
 
@@ -205,6 +205,23 @@ slot 分配内容只在 light DOM 源位置扫描；存在分配内容时不扫�
   用户脚本启动产物硬上限收紧到 345000 字节；不包含二维码编码器、PDF.js / PDF 阅读页或扩展侧栏入口；共用的文本/字幕页签仍保留。
 - 非机密字幕偏好 `subtitles = { enabled:false, mode:'bilingual', fontSize:22, position:'bottom' }` 随公共设置同步与备份。
   `mode` 为 `bilingual` / `translation-only`，字号为 16–48 的整数，位置为 `top` / `bottom`；旧备份缺少该字段时恢复默认值。
+
+### 自定义 API 地址与操作反馈（v1 修复）
+
+根地址（无路径或 `/`）在模型发现、chat 请求返回 HTML 或 HTTP 404 时，仅加 `/v1` 重试一次；
+401/403 直接提示密钥或权限问题，不进行地址重试。显式路径从不补 `/v1`，网络/超时也不触发地址重试。
+成功解析后可选 `baseUrl` 返回规范地址，设置表单更新输入并说明自动补全；失败不改输入。
+同一 provider 实例记住已证实需补 `/v1` 的根地址，之后直接请求 `/v1`，不再每批先探根地址。
+保存当前服务时只移除地址末尾 `/`：部分服务确实在根地址提供接口，未经探测不补 `/v1`。不新增权限或固定服务依赖。
+provider 内部 `listModels` 选项及 `chat` 参数接受可选 `onBaseUrl(url)`，仅在成功后回调；
+既有模型数组、chat 字符串返回类型保持不变，不原地修改传入 profile。
+
+网页响应提示 API 地址通常以 `/v1` 结尾；其他非 JSON 提示 HTTP 状态和脱敏后的前 80 字符（压成单行），
+401/403、404 分别给出可操作提示；设置页「测试连接」缺少模型时引导先获取模型（运行时仍用简短的「尚未选择模型」，以守住用户脚本启动预算）。中英词典由同一同步脚本生成，扩展与用户脚本共用。
+共享设置表单的异步按钮立即禁用、替换进行中文案并清空旧结果，结束恢复按钮；
+结果在 `aria-live="polite"` 区域显示 `HH:MM:SS · 文案` 并淡入 150ms，减少动效时不播放。
+保存成功仍只使用页标题旁的「已保存」。
+
 
 ## 4. 移动端体验
 
