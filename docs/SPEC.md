@@ -200,6 +200,10 @@ siteRules: {
 | `cache-stats` / `cache-clear` | `{}` | `{ ok, entries }` |
 | `open-options` | `{group?:'common'|'ai'|'enhance'|'sites'|'glossary'|'data'|'about'}` | `{ ok }`；background 打开 `ui/options.html#<group>`，非法分组回退 common |
 
+`list-models` 与 `provider-test` 成功响应可附带 `baseUrl`：仅代表根地址响应 HTML/404 后，
+补 `/v1` 的一次重试成功。设置表单据此更新地址并提示；不自动写入持久设置。
+provider 的可选 `onBaseUrl` 回调、保存规范化、错误分类和异步反馈约定见 PLATFORMS §3「自定义 API 地址与操作反馈」。
+
 ### 4.3 background → content（`chrome.tabs.sendMessage`）
 
 | type | 说明 |

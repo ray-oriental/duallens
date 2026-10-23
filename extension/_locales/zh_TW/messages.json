@@ -229,17 +229,6 @@
       }
     }
   },
-  "m1p": {
-    "message": "认证失败（$p1$），请检查 API key$p2$",
-    "placeholders": {
-      "p1": {
-        "content": "$1"
-      },
-      "p2": {
-        "content": "$2"
-      }
-    }
-  },
   "m1q": {
     "message": "接口返回 $p1$$p2$",
     "placeholders": {
@@ -259,9 +248,6 @@
   },
   "m1w": {
     "message": "此设备尚未填写 API key，请打开设置"
-  },
-  "m1x": {
-    "message": "接口返回的不是 JSON"
   },
   "m1y": {
     "message": "接口返回里没有译文内容"
@@ -1505,9 +1491,6 @@
   "mcc": {
     "message": "填写密钥，获取模型并测试；最后保存。"
   },
-  "mcd": {
-    "message": "正在获取模型列表…"
-  },
   "mce": {
     "message": "未获得服务访问权限。"
   },
@@ -1516,9 +1499,6 @@
   },
   "mcg": {
     "message": "获取失败"
-  },
-  "mch": {
-    "message": "正在翻译测试文本…"
   },
   "mci": {
     "message": "接口没有返回有效的翻译 JSON"
@@ -1531,9 +1511,6 @@
   },
   "mcl": {
     "message": "此平台不能直接测试机器翻译"
-  },
-  "mcm": {
-    "message": "正在测试机器翻译…"
   },
   "mcn": {
     "message": "配置导出口令（留空导出不含密钥的明文；取消停止导出）"
@@ -2874,5 +2851,55 @@
   },
   "popupReload": {
     "message": "重新加载"
+  },
+  "endpointHtml": {
+    "message": "这个地址返回的是网页，不是 API。基础地址通常以 /v1 结尾"
+  },
+  "endpointParse": {
+    "message": "接口返回的内容无法解析（HTTP $p1$）：$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "endpointAuth": {
+    "message": "密钥无效或没有权限（HTTP $p1$）",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "endpointNotFound": {
+    "message": "找不到这个接口（HTTP $p1$），请检查基础地址",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "endpointCompleted": {
+    "message": "已自动补全为 $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "testNeedsModel": {
+    "message": "请先点「获取模型」选择一个模型，或手动填写模型名"
+  },
+  "actionFetching": {
+    "message": "正在获取…"
+  },
+  "actionTesting": {
+    "message": "正在测试…"
+  },
+  "actionWorking": {
+    "message": "正在处理…"
   }
 }

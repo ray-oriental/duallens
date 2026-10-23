@@ -229,17 +229,6 @@
       }
     }
   },
-  "m1p": {
-    "message": "Authentication failed ($p1$). Check the API key$p2$",
-    "placeholders": {
-      "p1": {
-        "content": "$1"
-      },
-      "p2": {
-        "content": "$2"
-      }
-    }
-  },
   "m1q": {
     "message": "Service returned $p1$$p2$",
     "placeholders": {
@@ -259,9 +248,6 @@
   },
   "m1w": {
     "message": "No API key is set on this device. Open Settings"
-  },
-  "m1x": {
-    "message": "The service response is not JSON"
   },
   "m1y": {
     "message": "The service returned no translation text"
@@ -1041,10 +1027,10 @@
     "message": "Unknown service preset"
   },
   "m8r": {
-    "message": "Chinese (Simplified)"
+    "message": "Simplified Chinese"
   },
   "m8s": {
-    "message": "Chinese (Traditional)"
+    "message": "Traditional Chinese"
   },
   "m8t": {
     "message": "Japanese"
@@ -1505,9 +1491,6 @@
   "mcc": {
     "message": "Enter a key, get models and test, then save."
   },
-  "mcd": {
-    "message": "Getting model list…"
-  },
   "mce": {
     "message": "Service access was not granted."
   },
@@ -1516,9 +1499,6 @@
   },
   "mcg": {
     "message": "Could not retrieve data"
-  },
-  "mch": {
-    "message": "Translating test text…"
   },
   "mci": {
     "message": "The service did not return valid translation JSON"
@@ -1531,9 +1511,6 @@
   },
   "mcl": {
     "message": "This platform cannot test machine translation directly"
-  },
-  "mcm": {
-    "message": "Testing machine translation…"
   },
   "mcn": {
     "message": "Export passphrase (blank for plaintext without keys; cancel to stop)"
@@ -2874,5 +2851,55 @@
   },
   "popupReload": {
     "message": "Reload"
+  },
+  "endpointHtml": {
+    "message": "This address returns a webpage, not an API. The base URL usually ends in /v1"
+  },
+  "endpointParse": {
+    "message": "Cannot parse the API response (HTTP $p1$): $p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "endpointAuth": {
+    "message": "The API key is invalid or lacks permission (HTTP $p1$)",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "endpointNotFound": {
+    "message": "API endpoint not found (HTTP $p1$). Check the base URL",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "endpointCompleted": {
+    "message": "Base URL completed to $p1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "testNeedsModel": {
+    "message": "Click “Get models” to choose a model first, or type a model name"
+  },
+  "actionFetching": {
+    "message": "Fetching…"
+  },
+  "actionTesting": {
+    "message": "Testing…"
+  },
+  "actionWorking": {
+    "message": "Working…"
   }
 }

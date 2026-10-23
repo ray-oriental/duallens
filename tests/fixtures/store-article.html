@@ -5,17 +5,18 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>The Quiet Work of Better Interfaces</title>
   <style>
-    :root { color-scheme: light; }
-    body { margin: 0; background: #f4f1eb; color: #27313a; font: 17px/1.65 Georgia, serif; }
-    .shell { max-width: 920px; margin: 0 auto; padding: 30px 46px 70px; background: #fffdf9; min-height: 100vh; }
-    .kicker { color: #a4613e; text-transform: uppercase; letter-spacing: .14em; font: 12px system-ui, sans-serif; }
-    h1 { max-width: 720px; margin: 10px 0 12px; font: 700 42px/1.08 system-ui, sans-serif; letter-spacing: -.03em; color: #17242d; }
-    .dek { max-width: 680px; color: #63727a; font-size: 20px; }
-    .byline { border-top: 1px solid #ded8ce; border-bottom: 1px solid #ded8ce; padding: 11px 0; margin: 24px 0; font: 13px system-ui, sans-serif; color: #6b716f; }
+    :root { color-scheme: light dark; --paper:#fafaf9; --ink:#1c1c1e; --muted:#5f6066; --line:#d9d9d9; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 Georgia, serif; }
+    .shell { max-width: 920px; margin: 0 auto; padding: 36px 46px 70px; min-height: 100vh; }
+    .kicker { color: var(--muted); text-transform: uppercase; letter-spacing: .14em; font: 12px system-ui, sans-serif; }
+    h1 { max-width: 820px; margin: 12px 0; font: 600 32px/1.2 system-ui, sans-serif; letter-spacing: -.02em; }
+    .dek { max-width: 820px; color: var(--muted); font-size: 18px; }
+    .byline { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 11px 0; margin: 20px 0; font: 13px system-ui, sans-serif; color: var(--muted); }
     article { max-width: 720px; }
-    h2 { margin-top: 30px; font: 700 24px/1.2 system-ui, sans-serif; color: #23343c; }
-    .pull { margin: 28px 0; padding: 15px 22px; border-left: 4px solid #c87952; background: #fbf2e9; font-size: 21px; color: #754630; }
-    .note { float: right; width: 210px; margin: 4px 0 18px 24px; padding: 14px; background: #eef3f0; font: 13px/1.45 system-ui, sans-serif; color: #52625c; }
+    h2 { margin-top: 30px; font: 600 24px/1.2 system-ui, sans-serif; }
+    .pull { margin: 28px 0; padding: 0 0 0 22px; border-left: 2px solid var(--line); font-size: 21px; }
+    .note { float: right; width: 210px; margin: 4px 0 18px 24px; padding: 14px; font: 13px/1.45 system-ui, sans-serif; color: var(--muted); }
+    @media (prefers-color-scheme: dark) { :root { --paper:#1b1b1d; --ink:#ececee; --muted:#a1a1a6; --line:#454549; } }
     @media (max-width: 600px) { .shell { padding: 22px 18px 50px; } h1 { font-size: 32px; } .note { float: none; width: auto; margin: 18px 0; } }
   </style>
 </head>
@@ -24,7 +25,7 @@
     <div class="kicker">Field Notes · Product &amp; Culture</div>
     <h1>The Quiet Work of Better Interfaces</h1>
     <p class="dek">A good interface does not ask for attention all the time. It makes the next useful action feel obvious, then gets out of the way.</p>
-    <div class="byline">By Mira Chen · October 13, 2026 · 7 min read</div>
+    <div class="byline">An original demonstration article · 7 min read</div>
     <article>
       <aside class="note">A small experiment: remove one control from a page and watch what readers choose without it.</aside>
       <p id="lead">The most valuable parts of a digital product are often the quietest ones: a sensible default, a readable paragraph, or a status message that arrives exactly when it is needed.</p>

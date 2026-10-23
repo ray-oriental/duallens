@@ -1,12 +1,13 @@
 import { t as l10n, setUiLanguage, localize } from '../../shared/i18n.js';
 import { mountPopup } from '../popup-view.js';
 import { installSettingsInteractions } from './interactions.js';
+import { createFeedback } from './feedback.js';
 import { requestOrigin, requestBroad, requestMTOrigin } from '../../shared/permissions.js';
 import { acknowledge,llmDestination } from '../../shared/device-state.js';
 import { LANGS, STYLES, providerChain } from '../../shared/settings.js';
 import { PROVIDER_PRESETS, getPreset, profileFromPreset, recommendedFreeChain } from '../../shared/presets.js';
 import { exportConfig, importConfig } from '../../shared/configcrypto.js';
-import { createProviders, profileProblem } from '../../background/providers.js';
+import { createProviders, profileProblem, normalizeBaseUrl } from '../../background/providers.js';
 import { createMT, MT_ENGINES, MT_SECRET_IDS } from '../../background/mt.js';
 import { buildMessages, parseSegments } from '../../shared/prompt.js';
 import { stripMarkup } from '../../shared/markup.js';
@@ -44,16 +45,13 @@ const COPY=Object.freeze({
   get s24(){return l10n('mca');},
   get s25(){return l10n('mcb');},
   get s26(){return l10n('mcc');},
-  get s27(){return l10n('mcd');},
   get s28(){return l10n('mce');},
   get s29(){return l10n('mcf');},
   get s30(){return l10n('mcg');},
-  get s31(){return l10n('mch');},
   get s32(){return l10n('mci');},
   get s33(){return l10n('mcj');},
   get s34(){return l10n('mck');},
   get s35(){return l10n('mcl');},
-  get s36(){return l10n('mcm');},
   get s37(){return l10n('mcn');},
   get s38(){return l10n('mco');},
   get s39(){return l10n('mcp');},
@@ -127,7 +125,8 @@ export async function mountSettingsForm(root, { store, platform }) {
     preset: 'prompt.preset', customPrompt: 'prompt.custom', cacheEnabled: 'cache.enabled', maxEntries: 'cache.maxEntries', ttlDays: 'cache.ttlDays',
     comicsEnabled:'comics.enabled',comicsLanguage:'comics.language',
   };
-  const notice = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('error', error); };
+  const feedback = createFeedback(ui);
+  const notice = feedback.notice;
   const fill = (id, value) => { if ($(id).type === 'checkbox') $(id).checked = !!value; else $(id).value = value ?? ''; if(id==='providerChain') interactions?.draw(); };
   const read = id => $(id).type === 'checkbox' ? $(id).checked : nums.has(id) ? Number($(id).value) : $(id).value;
   const profile = () => s.provider.profiles.find(p => p.id === pid);
@@ -142,12 +141,10 @@ export async function mountSettingsForm(root, { store, platform }) {
   }
   const on = (id, event, fn) => { $(id).addEventListener(event, fn); unbind.push(() => $(id).removeEventListener(event, fn)); };
   function action(id, fn) {
-    on(id, 'click', async () => {
-      $(id).disabled = true;
-      const report=(message,error=false)=>{notice(message,error);if(['test','load-models','mt-test'].includes(id)){let result=$('result-'+id);if(!result){result=root.ownerDocument.createElement('span');result.id='result-'+id;result.className='status';result.setAttribute('role','status');$(id).after(result);}result.textContent=message;result.classList.toggle('error',error);}};
-      try { await fn(report); } catch (e) { report(e.message || COPY.s2, true); }
-      finally { if (!closed) $(id).disabled = false; }
-    });
+    on(id, 'click', () => feedback.run($(id), fn, {
+      busy: id === 'load-models' ? l10n('actionFetching') : ['test','mt-test'].includes(id) ? l10n('actionTesting') : l10n('actionWorking'),
+      inline: ['test','load-models','mt-test'].includes(id),
+    }));
   }
   function showSync() {
     $('sync-status').textContent = store.syncStatus?.synced ? COPY.s3 : COPY.s4;
@@ -158,7 +155,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     loadingKey = true;
     const ids = ['profileName', 'baseUrl', ...(dialog ? ['set-key', 'clear-key'] : ['apiKey']), 'model', 'fallbackModels', 'jsonMode', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs'];
     for (const id of ids) $(id).disabled = !p;
-    $('load-models').disabled = !p; $('test').disabled = !p;
+    $('load-models').disabled = !p || feedback.pending.has('load-models'); $('test').disabled = !p || feedback.pending.has('test');
     if (!p) { ids.filter(id => !['set-key', 'clear-key'].includes(id)).forEach(id => fill(id, '')); $('key-row').hidden = true; loadingKey = false; return; }
     for (const id of ['model', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs']) fill(id, p[id]);
     fill('profileName', p.name); fill('baseUrl', p.baseUrl); fill('jsonMode', p.jsonMode ?? false);
@@ -253,6 +250,9 @@ export async function mountSettingsForm(root, { store, platform }) {
   async function save() {
     if (loadingKey) throw new Error(COPY.s10);
     const next = collect();
+    const selected = next.provider.profiles.find(p => p.id === pid);
+    // Only trim here: /v1 is added after a probe proves the root is a webpage, since some services do serve the root.
+    if (selected?.kind === 'openai') selected.baseUrl = normalizeBaseUrl(selected.baseUrl);
     if(platform.kind==='extension' && !await requestMTOrigin(next.translation.mt.engine,platform.permissionAPI))throw new Error(COPY.s28);
     const chosen=next.provider.profiles.find(p=>p.id===next.provider.active);
     if(chosen?.baseUrl && platform.kind==='extension' && !await requestOrigin(chosen.baseUrl,platform.permissionAPI)) throw new Error(COPY.s28);
@@ -260,6 +260,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     saving = true;
     try {
       s = await store.save(next);
+      if (selected?.kind === 'openai') fill('baseUrl', selected.baseUrl);
       const registration=await platform.comics?.syncSites?.();
       if(registration && !registration.ok) throw new Error(registration.error?.message || COPY.s11);
       for (const id of edited) await store.setSecret(id, drafts.get(id));
@@ -284,12 +285,10 @@ export async function mountSettingsForm(root, { store, platform }) {
     if(!result.languages.length) output.textContent=COPY.s14;
     for(const pack of result.languages) {
       const row=root.ownerDocument.createElement('p');row.textContent=`${pack.lang} · ${(pack.bytes/1048576).toFixed(2)} MiB `;
-      const button=root.ownerDocument.createElement('button');button.type='button';button.textContent=COPY.s15;
-      button.addEventListener('click',async()=> {
-        button.disabled=true;
-        try {const deleted=await platform.comics.languages(pack.lang);if(!deleted.ok)throw new Error(COPY.s16);row.remove();}
-        catch(error){notice(error.message,true);button.disabled=false;}
-      });
+      const button=root.ownerDocument.createElement('button');button.type='button';button.textContent=COPY.s15;button.id='comics-remove-'+pack.lang;
+      button.addEventListener('click',()=>feedback.run(button,async()=> {
+        const deleted=await platform.comics.languages(pack.lang);if(!deleted.ok)throw new Error(COPY.s16);row.remove();
+      }));
       row.append(button);output.append(row);
     }
   }
@@ -328,9 +327,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     });
   }
   on('settings-form', 'submit', async e => {
-    e.preventDefault(); $('save').disabled = true;
-    try { await save(); } catch (error) { notice(error.message, true); }
-    finally { if (!closed) $('save').disabled = false; }
+    e.preventDefault(); await feedback.run($('save'), save);
   });
   on('profile', 'change', async () => {
     captureProfile(); pid = read('profile'); s.provider.active = pid; dirty = true;
@@ -356,15 +353,18 @@ export async function mountSettingsForm(root, { store, platform }) {
     if(['ollama','lmstudio'].includes(preset)){s.translation.mode='llm';fill('translationMode','llm');}
     await drawProfile(); setSelectedChain(); notice(''); $('provider-hint').textContent = ['ollama','lmstudio'].includes(preset) ? l10n('polishLocalReady') : COPY.s26; interactions?.draw();
   });
-  action('load-models', async () => {
-    captureProfile(); const p = profile(); notice(COPY.s27);
-    let models;
+  action('load-models', async report => {
+    captureProfile(); const p = profile();
+    let models, normalized;
+    const base = p?.baseUrl;
     if (platform.kind==='extension' && p?.baseUrl && !await requestOrigin(p.baseUrl,platform.permissionAPI)) throw new Error(COPY.s28);
-    if (providers) models = await providers.listModels(p,{freeOnly:$('freeModels').checked});
+    if (providers) models = await providers.listModels(p,{freeOnly:$('freeModels').checked,onBaseUrl: url => { normalized = url; }});
     else {
       if (dirty) throw new Error(COPY.s29);
-      const r = await service().listModels(pid); if (!r.ok) throw new Error(r.error?.message || COPY.s30); models = r.models;
+      const r = await service().listModels(pid); if (!r.ok) throw new Error(r.error?.message || COPY.s30); models = r.models; normalized = r.baseUrl;
     }
+    if (closed || profile() !== p || read('baseUrl').trim() !== base) return;
+    if (normalized) { p.baseUrl = normalized; fill('baseUrl', normalized); dirty = true; }
     choices($('models'), models || []);
     discovered.set(p.id, models || []);
     if (p.preset === 'openrouter' && models?.length && !p.model) {
@@ -372,30 +372,37 @@ export async function mountSettingsForm(root, { store, platform }) {
       p.jsonMode = !!models.find(m => m.id === p.model)?.jsonMode;
       fill('model', p.model); fill('jsonMode', p.jsonMode); fill('providerChain', JSON.stringify(chain, null, 2));
     }
-    notice(l10n('md7', [models?.length || 0]));
+    report([l10n('md7', [models?.length || 0]), normalized && l10n('endpointCompleted', [normalized])].filter(Boolean).join(' '));
   });
   action('test', async report => {
-    captureProfile(); const p = profile(); report(COPY.s31);
+    captureProfile(); const p = profile();
+    if (!p?.model) throw new Error(l10n('testNeedsModel'));
+    let normalized;
+    const base = p.baseUrl;
+    const complete = message => {
+      if (closed || profile() !== p || read('baseUrl').trim() !== base) return;
+      if (normalized) { p.baseUrl = normalized; fill('baseUrl', normalized); dirty = true; }
+      report([message, normalized && l10n('endpointCompleted', [normalized])].filter(Boolean).join(' '));
+    };
     if (platform.kind==='extension' && p?.baseUrl && !await requestOrigin(p.baseUrl,platform.permissionAPI)) throw new Error(COPY.s28);
     if (providers) {
       const { messages, idMap } = buildMessages({ items: [{ id: 1, text: 'Hello, world.' },{ id:2,text:'The library is quiet.' }], to: 'zh-CN', from: 'en', context: {}, preset: 'general', custom: '', glossary: [] });
-      const start = Date.now(); const content = await providers.chat({ profile: p, model: p.model, messages });
+      const start = Date.now(); const content = await providers.chat({ profile: p, model: p.model, messages, onBaseUrl: url => { normalized = url; } });
       const parsed = parseSegments(content, idMap),sample=parsed.results.get(1);
       if (parsed.results.size!==2 || parsed.missing.length || parsed.invalidJSON || !sample) throw new Error(COPY.s32);
-      report(l10n('md8', [Date.now() - start, stripMarkup(sample).slice(0, 200)]));
+      complete(l10n('md8', [Date.now() - start, stripMarkup(sample).slice(0, 200)]));
     } else {
       if (dirty) throw new Error(COPY.s33);
       const r = await service().testProvider(pid); if (!r.ok) throw new Error(r.error?.message || COPY.s34);
-      report(l10n('md8', [r.latencyMs, r.sample || '']));
+      normalized = r.baseUrl; complete(l10n('md8', [r.latencyMs, r.sample || '']));
     }
   });
-  action('mt-test', async () => {
+  action('mt-test', async report => {
     if (!mtProbe) throw new Error(COPY.s35);
     const engine = read('mtEngine');
     if(platform.kind==='extension'&&!await requestMTOrigin(engine,platform.permissionAPI))throw new Error(COPY.s28);
-    notice(COPY.s36);
     const r = await mtProbe.test({ engine, region: read('mtRegion').trim() });
-    notice(l10n('md9', [engine, r.latencyMs, r.sample]));
+    report(l10n('md9', [engine, r.latencyMs, r.sample]));
   });
   action('export', async () => {
     const password = dialog ? await platform.promptSecret(COPY.s37) : read('backupPassword');
@@ -456,21 +463,20 @@ export async function mountSettingsForm(root, { store, platform }) {
     return importText(text);
   });
   action('import-file-button', async () => $('import-file').click());
-  on('import-file', 'change', async () => {
+  on('import-file', 'change', () => feedback.run($('import-file-button'), async () => {
     try {
       const file = $('import-file').files[0]; if (!file) return;
       if (file.size > 2 * 1024 * 1024) throw new Error(COPY.s52);
       await importText(await file.text());
-    } catch (e) { notice(e.message, true); }
-    finally { $('import-file').value = ''; }
-  });
+    } finally { $('import-file').value = ''; }
+  }));
   action('cache-clear', async () => {
     if (!platform.clearCache) throw new Error(COPY.s53);
     await platform.clearCache(); $('cache-stats').textContent = COPY.s54; notice(COPY.s54);
   });
   let interactions;
   s = await store.load();
-  interactions = installSettingsInteractions(ui,{store,platform,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,refreshLanguage,captureProfile,onSaved:showSync,notice,bind,simple,nums});
+  interactions = installSettingsInteractions(ui,{store,platform,feedback,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,refreshLanguage,captureProfile,onSaved:showSync,notice,bind,simple,nums});
   await draw(); $('save').disabled=false;
   const off = store.onChange?.(async () => {
     if (saving || closed) return;
@@ -480,7 +486,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     navigateGroup: group => interactions.select(group || 'common'),
     canClose: () => !dirty || interactions.ask(COMMON.discard),
     refresh: async () => { s = await store.load(); drafts.clear(); edited.clear(); dirty = false; await draw(); },
-    destroy() { interactions.destroy(); closed = true; drawToken++; off?.(); unbind.forEach(fn => fn()); ui.remove(); drafts.clear(); edited.clear(); },
+    destroy() { interactions.destroy(); feedback.destroy(); closed = true; drawToken++; off?.(); unbind.forEach(fn => fn()); ui.remove(); drafts.clear(); edited.clear(); },
   };
 }
 

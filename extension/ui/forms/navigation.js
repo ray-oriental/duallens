@@ -96,7 +96,10 @@ export const SETTINGS_CSS=`
 .dl-settings .field.wide>:is(input,textarea,select,.field-controls){display:flex;width:100%;margin-top:8px}
 .dl-settings .field.wide>textarea{display:block}
 .dl-settings select[multiple]{min-height:120px}
-.dl-settings .field-controls{display:flex;align-items:center;gap:8px}
+.dl-settings .field-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.dl-settings .field-controls>.status{flex:1 0 100%;min-height:0;margin:0}
+.dl-settings .field-controls>.status:empty{display:none}
+.dl-settings .frow:has(>.field-controls>.status:not(:empty)){align-items:baseline}
 .dl-settings .field-controls>input{flex:1;min-width:0}
 .dl-settings .field-controls>button{flex:none;white-space:nowrap}
 .dl-settings .field-error{grid-column:1/-1;margin-top:4px;color:var(--dl-danger);font-size:12.5px}

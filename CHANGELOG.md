@@ -8,6 +8,7 @@
 - Quiet defaults, device-local destination confirmation, on-demand permissions and bilingual settings.
 - Page, selection, input, hover, PDF, subtitle and local image-text translation with configurable AI services.
 - Separate extension/store and Android userscript distributions with reproducible offline checks.
+- Custom AI services: a root base URL that serves a webpage is completed to `/v1` after a probe; clearer errors for webpages, unparseable replies, auth and 404; every settings action shows a busy state and a timestamped result.
 
 ## Earlier versions
 

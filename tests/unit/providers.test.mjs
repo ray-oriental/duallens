@@ -108,7 +108,7 @@ test('the API key never appears in error messages, even when the server echoes i
   const { chat } = createProviders({ fetchImpl: fakeFetch({ status: 401, body: JSON.stringify({ error: { message: `Incorrect API key provided: ${key}` } }) }) });
   await assert.rejects(chat({ profile: openai({ apiKey: key }), model: 'm', messages }), (e) => {
     assert.doesNotMatch(e.message, /sk-test-0123456789/);
-    assert.match(e.message, /\*\*\*/);
+    assert.match(e.message, /HTTP 401/);
     return true;
   });
 });
