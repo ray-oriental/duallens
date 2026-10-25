@@ -22,6 +22,9 @@
 
 商店版与"加载已解压"版的扩展 ID 不同，设置不会互通；Android Chrome 暂不支持。
 
+用户脚本安装时请允许 Tampermonkey 缓存同版本的 `duallens-settings.js` 与 `duallens-features.js` 资源。
+面板/设置、视频字幕及 OCR 实现按需读取本地缓存，校验后才运行；出现资源缺失或校验失败提示时，从官方 Release 重新安装即可。
+
 ## 三步上手
 
 1. 点工具栏的 DualLens 图标。第一次会出现三步卡片：选目标语言、选翻译方式（并看到文字会发给谁）。

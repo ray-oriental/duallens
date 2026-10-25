@@ -113,23 +113,50 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
     // Both UI languages must fit without pulling the lazy settings catalogue into startup.
-    assert.ok(Buffer.byteLength(content)<=345000,'startup bundle exceeds the 345 KB i18n budget');
+    assert.ok(Buffer.byteLength(content)<=320000,'startup bundle exceeds the v1.1 320 KB target');
+    for (const module of ['content/comics/userscript-ocr.js','offscreen/detector.js','offscreen/language-store.js',
+      'content/subtitles/controller.js','content/subtitles/youtube.js','content/subtitles/html5.js','content/subtitles/json3.js']) {
+      assert.ok(!content.includes('"'+module+'"'), `optional feature was bundled into startup: ${module}`);
+    }
     for (const module of ['ui/forms/', 'ui/validation.js', 'shared/configcrypto.js', 'vendor/pdfjs/', 'pdf/viewer.js', 'sidepanel/index.js', 'platform/extension.js', 'ui/popup-view.js', 'ui/popup-theme.js', 'userscript/panel.js', 'sidepanel/text-form.js', 'sidepanel/subtitle-form.js', 'sidepanel/userscript-panel.js']) {
       assert.ok(!content.includes('"' + module), `extension-only module was bundled: ${module}`);
     }
     assert.ok(content.includes('@grant        GM_getResourceText'));
-    assert.equal((content.match(/^\/\/ @resource\s+/gm)||[]).length,3);
-    assert.equal((content.match(/#sha256=[a-f0-9]{64}/g)||[]).length,3);
+    assert.equal((content.match(/^\/\/ @resource\s+/gm)||[]).length,4);
+    assert.equal((content.match(/#sha256=[a-f0-9]{64}/g)||[]).length,4);
     const panel = await fs.readFile(path.join(root, a.resource.file), 'utf8');
     assert.equal(Buffer.byteLength(panel), a.resource.bytes);
     assert.equal(createHash('sha256').update(panel).digest('hex'), a.resource.sha256);
     assert.ok(content.includes(`@resource     duallens-settings https://github.com/ray-oriental/duallens/releases/download/v${a.version}/duallens-settings.js#sha256=${a.resource.sha256}`));
     assert.equal(typeof new Function('return (\n' + panel.trim().replace(/;$/, '') + '\n);')().mountSettingsForm, 'function');
+    const features = await fs.readFile(path.join(root,a.featureResource.file),'utf8');
+    assert.equal(Buffer.byteLength(features),a.featureResource.bytes);
+    assert.equal(createHash('sha256').update(features).digest('hex'),a.featureResource.sha256);
+    assert.ok(content.includes(`@resource     duallens-features ${a.featureResource.url}#sha256=${a.featureResource.sha256}`));
+    const featureModule = vm.runInNewContext(features,{atob,TextDecoder,Uint8Array});
+    assert.equal(typeof featureModule.VideoSubtitles,'function');
+    assert.equal(typeof featureModule.createUserscriptOCR,'function');
+    assert.ok(Object.keys(featureModule.messages).length > 0);
     for (const module of ['ui/forms/index.js', 'ui/forms/validation.js', 'ui/validation.js']) assert.ok(panel.includes('"' + module + '"'));
     const vendor=path.resolve('extension/vendor/tesseract');
     for(const file of ['worker.min.js','tesseract-core-simd-lstm.js']) assert.ok(!content.includes(await fs.readFile(path.join(vendor,file),'utf8')),'OCR source was inlined');
     for (const grant of ['GM_xmlhttpRequest', 'GM_getValue', 'GM_setValue', 'GM_deleteValue', 'GM_registerMenuCommand', 'GM_addValueChangeListener']) assert.ok(content.includes('@grant        ' + grant));
     assert.ok(content.includes('@version      ' + a.version)); assert.ok(content.includes('@noframes'));
     assert.throws(() => metadata('invalid'), /Invalid/);
+  });
+});
+
+test('module aliases are opt-in, validate exports and cannot escape the root',async()=>{
+  await fixture({'entry.js':'import {value} from "./dep.js"; globalThis.result=value;',
+    'dep.js':'export const value=1;','lazy.js':'export const value=2;'},async root=>{
+    const normal={},aliased={},modules=[];
+    vm.runInNewContext(await buildBundle(path.join(root,'entry.js'),{root}),normal);
+    const bundle=await buildBundle(path.join(root,'entry.js'),{root,moduleAliases:{'dep.js':'lazy.js'},onModule:item=>modules.push(item)});
+    vm.runInNewContext(bundle,aliased);assert.equal(normal.result,1);assert.equal(aliased.result,2);
+    assert.deepEqual(modules.map(m=>m.file),['entry.js','lazy.js']);
+    assert.ok(modules.every(m=>m.bytes>0));
+    await fs.writeFile(path.join(root,'lazy.js'),'export const other=3;');
+    await assert.rejects(buildBundle(path.join(root,'entry.js'),{root,moduleAliases:{'dep.js':'lazy.js'}}),/missing export value/);
+    await assert.rejects(buildBundle(path.join(root,'entry.js'),{root,moduleAliases:{'dep.js':path.resolve('scripts/build_userscript.mjs')}}),/escapes module root/);
   });
 });

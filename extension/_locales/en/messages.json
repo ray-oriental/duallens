@@ -2401,6 +2401,9 @@
   "mkb": {
     "message": "Settings resource is missing or invalid. Reinstall the userscript from the official release and allow Tampermonkey to cache resources."
   },
+  "budgetResourceError": {
+    "message": "Feature resource is missing or invalid. Reinstall the userscript from the official release and allow Tampermonkey to cache resources."
+  },
   "appName": {
     "message": "DualLens bilingual translation"
   },

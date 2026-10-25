@@ -27,6 +27,7 @@ Chrome JSON 是文案源；`node scripts/sync_i18n.mjs` 更新随源码发布、
 打包器按入口依赖裁剪词典，并压缩为仅含 JSON 的数据；启动包不包含上手卡片、面板和设置专用文案，预算为 345000 字节。
 共享元数据的样式名、翻译方式名和服务说明通过延迟 getter 读取；其文案只在设置资源内。
 经校验的资源通过 `registerMessages` 补充启动词典后才开放工具，不从网页或网络接收文案。
+v1.1 的字幕/OCR 功能专用文案随 `duallens-features.js` 按需加载，资源内的界面语言在调用和字幕设置变更时与启动上下文同步。
 
 ## 1. 总体结构
 
@@ -55,6 +56,12 @@ Android Edge + Tampermonkey                         │
 不改变可直接加载的 `extension/`。用户脚本的页内面板经 `mountForm` 复用 `mountSettingsForm`，关闭调用 `destroy()`。
 v0.5 共享表单单独打包为 `duallens-settings.js`，通过带 SHA-256 的版本固定 `@resource` 缓存，
 首次打开用户脚本的弹出页、设置或文本/字幕工具时本地校验并加载，错误按界面语言显示重新安装说明；扩展 options 仍直接导入。详见 PLATFORMS §2。
+v1.1 增加 `userscript/features-resource.js` → `duallens-features.js`，公开 `VideoSubtitles`、`createUserscriptOCR`、
+`messages`、`setUiLanguage`；只在字幕启用或 OCR 调用时读取。资源必须匹配启动包内描述符的名称、文件、字节数、SHA-256 和版本固定 URL，
+校验失败不执行，也不从网络补取功能代码；同文档并发读取合并、成功缓存、失败可重试。
+字幕代理保留同步的启用/关闭与状态接口，等待校验时关闭会使迟到的启用失效。OCR 保留异步方法及原有核心/语言包校验与私有缓存。
+扩展源模块不变；构建期只将用户脚本的字幕控制器和 OCR 工厂导入替换为轻量代理，按需资源内部仍使用原实现。
+启动包目标 ≤320000 字节，发布硬预算保持 345000；`--report` 报告模块、词典及封装开销。
 
 ## 2. 文件归属（并行开发时谁写哪里）
 
