@@ -14,9 +14,8 @@ def exercise(page, toggle, input_command):
     page.locator('#p-hover').hover()
     page.keyboard.down('Shift'); page.wait_for_timeout(650); page.keyboard.up('Shift')
     if page.evaluate("matchMedia('(pointer:coarse)').matches"):
-        page.locator('#p-hover').dispatch_event('pointerdown', {'pointerType':'touch','isPrimary':True,'pointerId':1})
-        page.wait_for_timeout(650)
-        page.locator('#p-hover').dispatch_event('pointerup', {'pointerType':'touch','isPrimary':True,'pointerId':1})
+        from trusted_input import touch_hold
+        touch_hold(page, '#p-hover')
     page.locator('#p-plain').click(click_count=3)
     page.locator('#ta').focus()
     before = page.locator('#ta').input_value()

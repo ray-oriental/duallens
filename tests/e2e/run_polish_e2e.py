@@ -172,7 +172,8 @@ def mobile(pw,base,locale):
         page.keyboard.press('Escape')
         page.evaluate("__platformFixture.settings({selection:{enabled:true,showIcon:true}})")
         page.locator('#p-plain').scroll_into_view_if_needed()
-        page.evaluate("()=>{const range=document.createRange();range.selectNodeContents(document.querySelector('#p-plain'));const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new MouseEvent('mouseup',{button:0,bubbles:true}));}")
+        page.evaluate("()=>{const range=document.createRange();range.selectNodeContents(document.querySelector('#p-plain'));const selection=getSelection();selection.removeAllRanges();selection.addRange(range);}")
+        page.mouse.up()
         page.wait_for_function("__platformFixture.elements('.icon.show').length===1");click_shadow(page,'.icon.show')
         page.wait_for_function("__platformFixture.elements('.dst').some(n=>n.textContent.includes('【译】'))")
         for theme in ['light','dark']:

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- 页面内输入框、划词、悬停翻译与原位重试仅接受真实用户输入，忽略网页脚本伪造的触发事件。
+
 ## [1.0.0] - 2026-10-22
 
 - Redesigned, quiet interface (monochrome, no boxed cards) in English and Simplified Chinese.

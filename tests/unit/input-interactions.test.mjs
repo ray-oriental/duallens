@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_SETTINGS, mergeSettings, validateInteractionSettings, createSettingsStore } from '../../extension/shared/settings.js';
-import { inputOutput, inputAccessor } from '../../extension/content/inputbox.js';
+import { InputBox, inputOutput, inputAccessor } from '../../extension/content/inputbox.js';
 import { interactionRequest, hoverService } from '../../extension/content/util.js';
 import { importSettings } from '../../extension/ui/validation.js';
 import { memoryArea } from './storage-memory.mjs';
@@ -85,6 +85,35 @@ function fieldFixture() {
   const el = new Field(); el.events=[]; el.ownerDocument={defaultView:{HTMLTextAreaElement:Field,InputEvent},execCommand:()=>false};
   return el;
 }
+
+test('triple-space needs three real key presses; synthetic events cannot complete the gesture', () => {
+  const input = new InputBox({getSettings:()=>({input:{enabled:true,trigger:'triple-space'}}),platform:{}});
+  const field = {nodeType:1,tagName:'TEXTAREA'};
+  const calls = [];
+  input.run = (...args)=>calls.push(args);
+  const key = isTrusted => ({isTrusted,key:' ',composedPath:()=>[field],preventDefault(){},stopImmediatePropagation(){}});
+  for(let i=0;i<3;i++)input.key(key(false));
+  assert.deepEqual(calls,[]);
+  input.key(key(true));input.key(key(true));
+  for(let i=0;i<3;i++)input.key(key(false));
+  assert.deepEqual(calls,[]);
+  input.key(key(true));
+  assert.deepEqual(calls,[[field,false]]);
+});
+
+test('real triple-space remains suppressed during IME composition and recovers afterwards', () => {
+  const input = new InputBox({getSettings:()=>({input:{enabled:true,trigger:'triple-space'}}),platform:{}});
+  const field = {nodeType:1,tagName:'TEXTAREA'};
+  const calls = [];
+  input.run = (...args)=>calls.push(args);
+  const key = {isTrusted:true,key:' ',composedPath:()=>[field],preventDefault(){},stopImmediatePropagation(){}};
+  input.composition({...key,type:'compositionstart'});
+  for(let i=0;i<3;i++)input.key(key);
+  assert.deepEqual(calls,[]);
+  input.composition({...key,type:'compositionend'});
+  for(let i=0;i<3;i++)input.key(key);
+  assert.deepEqual(calls,[[field,false]]);
+});
 
 test('controlled input native setter bypasses own setter and confirms whole value including outside selection', async () => {
   const el=fieldFixture(); Object.defineProperty(el,'value',{get(){return this.data;},set(){throw Error('tracked setter');}});

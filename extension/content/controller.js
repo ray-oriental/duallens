@@ -52,6 +52,8 @@ export class PageTranslator {
 
     inj.setWriteGuard((fn)=> this.watch.guard(fn));
     this.retryHandler=(e)=> {
+      // Retry markers live in the page's DOM, so the page could click them itself; act on real input only.
+      if(!e.isTrusted) return;
       const r=e.target && e.target.closest ? e.target.closest('dl-r'):null;
       if(!r) return;
       if(e.type==='keydown' && e.key !=='Enter' && e.key !==' ') return;

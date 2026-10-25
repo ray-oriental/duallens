@@ -157,13 +157,15 @@ def wait_done(page, selector='#p-plain'):
 
 
 def select_text(page, selector='#p-plain'):
-    return page.evaluate("""s => {
+    result = page.evaluate("""s => {
       const el=document.querySelector(s); const text=[...el.childNodes].find(n=>n.nodeType===3&&n.textContent.trim());
       const range=document.createRange();range.setStart(text,0);range.setEnd(text,Math.min(50,text.length));
       const selection=getSelection();selection.removeAllRanges();selection.addRange(range);
-      const r=range.getBoundingClientRect();document.dispatchEvent(new MouseEvent('mouseup',{button:0,bubbles:true}));
+      const r=range.getBoundingClientRect();
       return {bottom:r.bottom,left:r.left};
     }""", selector)
+    page.mouse.up()
+    return result
 
 
 def ready(page, base, fixture='article.html'):
