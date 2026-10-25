@@ -64,7 +64,8 @@ def run(pw,base,dark):
         check(elements(page,'.confirm')==0,'same destination prompted twice')
         command(page,'翻译 / 恢复当前页面');page.wait_for_function("!document.querySelector('dl-t')")
         # Selection icon/card and the explicit close-feature path.
-        page.evaluate("()=>{const r=document.createRange();r.selectNodeContents(document.querySelector('#p-intro'));const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new MouseEvent('mouseup',{button:0,bubbles:true}));}")
+        page.evaluate("()=>{const r=document.createRange();r.selectNodeContents(document.querySelector('#p-intro'));const s=getSelection();s.removeAllRanges();s.addRange(r);}")
+        page.mouse.up()
         page.wait_for_function("__platformFixture.elements('.icon.show').length===1")
         shot(page,theme+'-selection-icon');click_shadow(page,'.icon.show')
         page.wait_for_function("__platformFixture.elements('.dst').some(e=>e.textContent.includes('【译】'))")

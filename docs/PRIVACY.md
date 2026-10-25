@@ -5,6 +5,9 @@
 **开发者不接收任何数据。** DualLens 没有服务器、账号、统计或远程配置。你触发翻译或启用自动翻译规则后，待译文字由你的浏览器**直接**发给你选择的翻译服务；开发者看不到这些内容。
 
 **发送什么、发给谁**
+
+页面内输入框、划词、悬停翻译与原位重试只响应真实用户输入，忽略网页脚本合成的触发事件；触屏划词的选区变化需发生在最近一次真实输入后的 10 秒内。
+
 - 机器翻译（默认）：待译文字（含用于保留格式的占位符）、源/目标语言。默认发往微软 Edge 使用的免费非官方端点 `edge.microsoft.com`（必要时 `api-edge.cognitive.microsofttranslator.com`），失败时发往谷歌 `clients5.google.com`。选用官方 Microsoft Translator 或 DeepL 时发往其官方接口并带上你的 key；官方引擎失败时直接报错，不会回退到免费端点。免费引擎之间的备用默认开启，可在设置里关闭。
 - AI 服务（可选）：待译文字、**页面标题（最多 200 字）**、与待译文字相关的术语表条目、你写的自定义提示，以及你的 API key（作为 `Authorization` 头，仅发往你配置的地址）。不发送网址或 cookie；不自动收集表单和密码框内容。用户明确执行输入框翻译时发送该字段的文字，密码框始终跳过。
 - 以上请求都不带 cookie（`credentials: omit`）；服务商能看到你的 IP 地址、浏览器 User-Agent 与请求来源标识。这些免费端点不是微软/谷歌面向第三方的正式服务，可能随时变动或失效，其对文字的处理由各自条款决定；DualLens 与这两家公司没有隶属关系。
@@ -37,6 +40,9 @@
 The developer receives no data. DualLens has no servers, accounts, analytics or remote configuration. When you trigger translation or enable an automatic translation rule, your browser sends the text directly to the service you selected.
 
 What is sent
+
+In-page input-box, selection, hover translation and in-place retry respond only to real user input and ignore trigger events synthesized by page scripts; on touch devices a selection change counts only within 10 seconds of the last real input.
+
 - Machine translation (default): the text to translate (with placeholder tags that preserve formatting) and the source/target languages, to Microsoft's free unofficial endpoint (edge.microsoft.com, and api-edge.cognitive.microsofttranslator.com if needed), then Google's (clients5.google.com) if that fails. With official Microsoft Translator or DeepL the text and your key go to their official APIs; official engines fail with an error and never fall back to free endpoints. Fallback between free engines is enabled by default and can be disabled in Settings.
 - AI service (optional): the text, the page title (up to 200 characters), glossary entries that match the text, your custom prompt, and your API key as an Authorization header, only to the address you configured. URLs and cookies are not sent. Form contents are not automatically collected; explicitly translating an input sends that field’s text. Password fields are always skipped.
 - Requests carry no cookies. Providers can see your IP address, User-Agent and the extension origin. The free endpoints are not official third-party services of Microsoft or Google, may change or stop at any time, and are governed by those companies' terms. DualLens is not affiliated with either.

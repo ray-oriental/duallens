@@ -13,12 +13,16 @@ const CSS=`.icon,.card,.selection-menu{position:fixed}.icon{display:none;width:2
 const node=(tag,cls,text)=>{const e=document.createElement(tag);e.className=cls;if(text!=null)e.textContent=text;return e;};
 const button=(text,fn,title=text)=>{const b=node('button','tool tb',text);b.type='button';b.title=title;b.ariaLabel=title;b.onclick=fn;return b;};
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+const REAL_MS=10000;
 
 export class SelectionUI{
   constructor({getSettings,platform}){
     this.s=getSettings;this.p=platform;this.rev=0;this.on=false;this.open=false;
     this.event=e=>{
       const type=e.type,sel=getSelection();
+      // selectionchange is trusted even when a page script moved the selection, so on touch devices it
+      // only counts shortly after a real touch or key press; other synthetic triggers never count.
+      if(e.isTrusted&&(type==='keydown'||type==='keyup'||type==='pointerdown'||type==='pointerup'||type==='mouseup'))this.real=performance.now();
       if(type==='keydown'||type==='pointerdown'){
         if(type==='keydown'?e.key==='Escape':!e.composedPath().some(n=>n.localName==='dl-ui')){this.#hide();this.closeCard();}
         return;
@@ -26,7 +30,8 @@ export class SelectionUI{
       if(type==='scroll'||type==='resize'||!sel||sel.isCollapsed){this.#hide();return;}
       if(type==='keyup'&&!(e.shiftKey&&/^(Arrow|Home|End|Page)/.test(e.key))||
         type==='mouseup'&&e.button!==0||type==='pointerup'&&e.pointerType!=='touch'||
-        type==='selectionchange'&&!this.p.coarse||e.composedPath().includes(this.ui?.host))return;
+        type==='selectionchange'&&!this.p.coarse||e.composedPath().includes(this.ui?.host)||
+        !e.isTrusted||type==='selectionchange'&&!(performance.now()-this.real<REAL_MS))return;
       const run=()=>{if(this.on)this.#check();};
       if(type==='selectionchange'){clearTimeout(this.timer);this.timer=setTimeout(run,100);}else setTimeout(run,0);
     };

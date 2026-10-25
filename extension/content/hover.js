@@ -73,7 +73,7 @@ export class HoverTranslate{
 
   #touchDown(e){
     this.#cancelTouch();
-    if(e.pointerType!=='touch'||!e.isPrimary||!this.isActive())return;
+    if(!e.isTrusted||e.pointerType!=='touch'||!e.isPrimary||!this.isActive())return;
     const target=e.composedPath()[0];
     if(!target?.closest||target.closest('dl-ui,a,button,input,textarea,select,[contenteditable]')||editableOf(target))return;
     this.touch={id:e.pointerId,x:e.clientX,y:e.clientY};
@@ -100,7 +100,7 @@ export class HoverTranslate{
   }
 
   #move(e){
-    if(this.p.coarse||!this.s().hover.enabled)return;
+    if(!e.isTrusted||this.p.coarse||!this.s().hover.enabled)return;
     if(e.clientX===this.x&&e.clientY===this.y)return; // layout-induced move events
     this.x=e.clientX;
     this.y=e.clientY;
@@ -133,7 +133,8 @@ export class HoverTranslate{
 
   #keydown(e){
     const cfg=this.s().hover;
-    if(!cfg.enabled)return;
+    // Synthetic key and pointer events from the page never translate; only disarming paths accept them.
+    if(!cfg.enabled||!e.isTrusted)return;
     if(cfg.modifier==='none'){
       if(e.key==='Escape'&&this.target)this.page.hoverToggle(this.target,'collapse');
       return;

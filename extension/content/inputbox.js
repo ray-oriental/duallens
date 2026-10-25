@@ -189,6 +189,8 @@ export class InputBox{
   #keydown(e){
     const cfg=this.s().input;
     if(!cfg.enabled||cfg.trigger!=='triple-space')return;
+    // Only real key presses may send a field's text: a page can dispatch synthetic keydown events at any field.
+    if(!e.isTrusted)return;
     if(e.isComposing||e.keyCode===229||this.ime.has(editableOf(e.composedPath()[0]))){
       this.hits.length=0;
       return;
