@@ -1,6 +1,6 @@
 import { t } from '../../shared/i18n.js';
 
-// Shared async states for desktop options and the userscript's settings panel.
+// Shared async states for settings, popup and explicitly opened tools.
 export function createFeedback(ui) {
   const $ = id => ui.querySelector('#' + id);
   const pending = new Set();
@@ -12,7 +12,7 @@ export function createFeedback(ui) {
     node.classList.toggle('error', error);
     node.setAttribute('aria-live', 'polite');
     node.setAttribute('aria-atomic', 'true');
-    if (message && !ui.ownerDocument.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    if (message && !ui.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
       node.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 150 });
   }
   function notice(message, error = false, inline) {
@@ -21,14 +21,14 @@ export function createFeedback(ui) {
     paint(inline, message, error, stamp);
   }
   async function run(button, fn, { busy = t('actionWorking'), inline = false } = {}) {
-    if (!button || closed || pending.has(button.id)) return;
-    pending.add(button.id);
+    if (!button || closed || button.disabled || pending.has(button)) return;
+    pending.add(button);
     const label = button.textContent;
     button.disabled = true;
     button.textContent = busy;
     button.setAttribute('aria-busy', 'true');
     let result;
-    if (inline) {
+    if (inline && button.id) {
       result = $('result-' + button.id);
       if (!result) {
         result = ui.ownerDocument.createElement('span');
@@ -40,10 +40,10 @@ export function createFeedback(ui) {
     }
     notice('', false, result);
     const report = (message, error = false) => notice(message, error, result);
-    try { await fn(report); }
+    try { return await fn(report); }
     catch (error) { report(error.message || t('maq'), true); }
     finally {
-      pending.delete(button.id);
+      pending.delete(button);
       if (!closed) {
         button.textContent = label;
         button.removeAttribute('aria-busy');

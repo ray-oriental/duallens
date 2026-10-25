@@ -259,13 +259,13 @@
     "message": "Use Alt+S or the browser sidebar"
   },
   "m21": {
-    "message": "Translate this page / Show original"
+    "message": "Translate page / Show original"
   },
   "m22": {
     "message": "Translate selected text"
   },
   "m23": {
-    "message": "Bilingual video subtitles"
+    "message": "Video subtitles"
   },
   "m24": {
     "message": "Translate image text"
@@ -518,7 +518,7 @@
     "message": "The translation is empty"
   },
   "m4b": {
-    "message": "Translate / Show original"
+    "message": "Translate page / Show original"
   },
   "m4c": {
     "message": "Translate page"
@@ -530,7 +530,7 @@
     "message": "More"
   },
   "m4f": {
-    "message": "Translation"
+    "message": "Translation only"
   },
   "m4g": {
     "message": "This site"
@@ -616,10 +616,10 @@
     "message": "Copied"
   },
   "m56": {
-    "message": "Translate / Show original page"
+    "message": "Translate page / Show original"
   },
   "m57": {
-    "message": "Switch bilingual / Translation only"
+    "message": "Switch display"
   },
   "m58": {
     "message": "Toggle hover / Long-press translation"
@@ -1117,7 +1117,7 @@
     "message": "Display mode"
   },
   "m9l": {
-    "message": "Original + Translation"
+    "message": "Bilingual"
   },
   "m9m": {
     "message": "Subtitle position"
@@ -1291,7 +1291,7 @@
     "message": "Hold Shift to translate a paragraph"
   },
   "mb0": {
-    "message": "Input box translation"
+    "message": "Input translation"
   },
   "mb1": {
     "message": "Press Space three times in a text field"
@@ -1636,7 +1636,7 @@
     "message": "Enter a fallback model"
   },
   "mdl": {
-    "message": "Do not use an AI service"
+    "message": "No AI service"
   },
   "mdm": {
     "message": "Text goes only to your local service and stays on this device."
@@ -2022,7 +2022,7 @@
     "message": "General"
   },
   "mh4": {
-    "message": "More"
+    "message": "More features"
   },
   "mh5": {
     "message": "Site rules"
@@ -2545,10 +2545,10 @@
     "message": "Open the DualLens text translation sidebar"
   },
   "commandTogglePage": {
-    "message": "Translate / Show original page"
+    "message": "Translate page / Show original"
   },
   "commandToggleMode": {
-    "message": "Switch bilingual / Translation only"
+    "message": "Switch display"
   },
   "commandTranslateInput": {
     "message": "Translate focused input"
@@ -2663,16 +2663,16 @@
     }
   },
   "polishInputShort": {
-    "message": "Input box"
+    "message": "Input translation"
   },
   "polishSubtitlesShort": {
     "message": "Video subtitles"
   },
   "polishSelectionShort": {
-    "message": "Selection"
+    "message": "Selection translation"
   },
   "polishHoverShort": {
-    "message": "Hover"
+    "message": "Hover translation"
   },
   "polishService": {
     "message": "Choose service"
@@ -2783,7 +2783,7 @@
     }
   },
   "lookHoverRow": {
-    "message": "Hover ($p1$)",
+    "message": "Hover translation ($p1$)",
     "placeholders": {
       "p1": {
         "content": "$1"
@@ -2904,5 +2904,103 @@
   },
   "actionWorking": {
     "message": "Working…"
+  },
+  "uxSwitchDisplay": {
+    "message": "Switch display"
+  },
+  "uxStartShortcut": {
+    "message": "Click Translate page, or press $p1$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxStartButton": {
+    "message": "Click Translate page to start."
+  },
+  "uxPDFOpened": {
+    "message": "PDF reader opened."
+  },
+  "uxPageRequested": {
+    "message": "Page action sent. Check the page."
+  },
+  "uxTargetRetranslate": {
+    "message": "Target language saved. Translated pages will be translated again."
+  },
+  "uxSettingSaved": {
+    "message": "Saved."
+  },
+  "uxSiteApplied": {
+    "message": "Site rule saved and applied to this page."
+  },
+  "uxGlossaryEmpty": {
+    "message": "No terms yet. Add preferred translations for words you use."
+  },
+  "uxGlossaryPlaceholder": {
+    "message": "Source → translation (one per line)"
+  },
+  "uxGlossaryImport": {
+    "message": "Import glossary"
+  },
+  "uxGlossaryExport": {
+    "message": "Export glossary"
+  },
+  "uxGlossaryStaged": {
+    "message": "Loaded $p1$ terms. Click Save to apply.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxGlossaryExported": {
+    "message": "Exported $p1$ terms.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxAutoSave": {
+    "message": "Option changes save automatically."
+  },
+  "uxManualSave": {
+    "message": "Click Save to apply edits; Cancel discards unsaved changes."
+  },
+  "uxShortcutSettings": {
+    "message": "View or change bindings on the browser’s extension shortcuts page."
+  },
+  "uxShortcutMobile": {
+    "message": "Open tools from the Tampermonkey menu."
+  },
+  "uxInputShortcut": {
+    "message": "Use the browser shortcut bound to Translate input."
+  },
+  "uxTextSwap": {
+    "message": "Swap languages"
+  },
+  "uxTextClear": {
+    "message": "Clear"
+  },
+  "uxTextEmpty": {
+    "message": "Enter text, then click Translate."
+  },
+  "uxTextSwapUnknown": {
+    "message": "Translate once to detect the source language, or select it manually."
+  },
+  "uxTextDetected": {
+    "message": "Detected source: $p1$.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxTextCleared": {
+    "message": "Cleared."
+  },
+  "uxTextCancelled": {
+    "message": "Translation cancelled."
   }
 }

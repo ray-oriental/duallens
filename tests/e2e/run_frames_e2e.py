@@ -245,9 +245,9 @@ def main():
                 def userscript_case(path,shadow=False):
                     page=context.new_page()
                     try:
-                        page.goto(base+'/'+path);wait(page,"__platformFixture.hasCommand('翻译 / 恢复当前页面')")
-                        toggle=lambda:command(page,'翻译 / 恢复当前页面')
-                        mode=lambda:command(page,'切换双语 / 仅译文')
+                        page.goto(base+'/'+path);wait(page,"__platformFixture.hasCommand('翻译此页 / 显示原文')")
+                        toggle=lambda:command(page,'翻译此页 / 显示原文')
+                        mode=lambda:command(page,'切换显示方式')
                         return shadow_exercise(page,toggle,mode) if shadow else exercise(page,toggle,mode,False)
                     finally: page.close()
                 record('frames-userscript',lambda:userscript_case('frames.html?remote='+remote))

@@ -293,7 +293,7 @@ def sidepanel_case(pw, extension):
         # linkage is also checked offline in the worker regression unit test.
         session.ctx.grant_permissions(['clipboard-read', 'clipboard-write'])
         page.get_by_role('button', name='复制', exact=True).click()
-        expect(page.locator('.text-status')).to_have_text('已复制')
+        expect(page.locator('.text-status')).to_have_text(re.compile(r'\d\d:\d\d:\d\d · 已复制'))
         check(page.evaluate('navigator.clipboard.readText()').startswith('【译】'), 'clipboard text missing')
         result = page.evaluate("""async () => {
           const [tab]=await chrome.tabs.query({active:true,currentWindow:true});

@@ -14,6 +14,7 @@ import { stripMarkup } from '../../shared/markup.js';
 import { validateSettings, importSettings, lines, terms } from './validation.js';
 import { drawLayout } from './layout.js';
 import { mountSiteRules } from './site-rules.js';
+import { parseGlossary, formatGlossary } from './glossary.js';
 import { compactConfig } from '../../shared/configcrypto.js';
 import { TEXT as COMMON, FEATURES } from '../components.js';
 
@@ -79,7 +80,7 @@ export async function mountSettingsForm(root, { store, platform }) {
   let s = await store.load(); setUiLanguage(s.uiLanguage);
   const dialog = platform.kind !== 'extension';
   const ui = drawLayout(root, { secretDialog:dialog });
-  const siteRules=mountSiteRules(ui);
+  const siteRules=mountSiteRules(ui,{save:button=>feedback.run(button,save),notice:(message,error)=>feedback.notice(message,error)});
   const $ = id => ui.querySelector('#' + id);
   $('save').disabled=true;
   let pid = '', dirty = false, saving = false, closed = false, drawToken = 0, loadingKey = false;
@@ -155,7 +156,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     loadingKey = true;
     const ids = ['profileName', 'baseUrl', ...(dialog ? ['set-key', 'clear-key'] : ['apiKey']), 'model', 'fallbackModels', 'jsonMode', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs'];
     for (const id of ids) $(id).disabled = !p;
-    $('load-models').disabled = !p || feedback.pending.has('load-models'); $('test').disabled = !p || feedback.pending.has('test');
+    $('load-models').disabled = !p || feedback.pending.has($('load-models')); $('test').disabled = !p || feedback.pending.has($('test'));
     if (!p) { ids.filter(id => !['set-key', 'clear-key'].includes(id)).forEach(id => fill(id, '')); $('key-row').hidden = true; loadingKey = false; return; }
     for (const id of ['model', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs']) fill(id, p[id]);
     fill('profileName', p.name); fill('baseUrl', p.baseUrl); fill('jsonMode', p.jsonMode ?? false);
@@ -474,13 +475,30 @@ export async function mountSettingsForm(root, { store, platform }) {
     if (!platform.clearCache) throw new Error(COPY.s53);
     await platform.clearCache(); $('cache-stats').textContent = COPY.s54; notice(COPY.s54);
   });
+  on('glossary','input',()=>{$('glossary-empty').hidden=!!read('glossary').trim();});
+  action('glossary-import',async()=>$('glossary-file').click());
+  on('glossary-file','change',()=>feedback.run($('glossary-import'),async report=>{
+    try{
+      const file=$('glossary-file').files[0];if(!file)return;
+      if(file.size>2*1024*1024)throw new Error(COPY.s52);
+      const glossary=parseGlossary(await file.text());if(closed)return;
+      fill('glossary',formatGlossary(glossary));dirty=true;$('glossary-empty').hidden=!!glossary.length;
+      report(l10n('uxGlossaryStaged',[glossary.length]));
+    }finally{$('glossary-file').value='';}
+  }));
+  action('glossary-export',async report=>{
+    const glossary=parseGlossary(read('glossary'));
+    const url=URL.createObjectURL(new Blob([formatGlossary(glossary)],{type:'text/plain;charset=utf-8'}));
+    const a=root.ownerDocument.createElement('a');a.href=url;a.download='duallens-glossary.tsv';a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);report(l10n('uxGlossaryExported',[glossary.length]));
+  });
   let interactions;
   s = await store.load();
   interactions = installSettingsInteractions(ui,{store,platform,feedback,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,refreshLanguage,captureProfile,onSaved:showSync,notice,bind,simple,nums});
   await draw(); $('save').disabled=false;
   const off = store.onChange?.(async () => {
     if (saving || closed) return;
-    try { const next=await store.load(); if(closed)return; if(dirty){s={...s,uiLanguage:next.uiLanguage};refreshLanguage();showSync();return;}s=next;await draw(); } catch { notice(COPY.s56, true); }
+    try { const next=await store.load(); if(closed)return; if(dirty){const changed=s.uiLanguage!==next.uiLanguage;s={...s,uiLanguage:next.uiLanguage};if(changed)refreshLanguage();showSync();return;}s=next;await draw(); } catch { notice(COPY.s56, true); }
   });
   return {
     navigateGroup: group => interactions.select(group || 'common'),

@@ -360,7 +360,7 @@
     "message": "识别并翻译"
   },
   "m2x": {
-    "message": "恢复原文"
+    "message": "显示原文"
   },
   "m2y": {
     "message": "语言包"
@@ -518,7 +518,7 @@
     "message": "译文为空"
   },
   "m4b": {
-    "message": "翻译 / 显示原文"
+    "message": "翻译此页 / 显示原文"
   },
   "m4c": {
     "message": "翻译此页"
@@ -616,10 +616,10 @@
     "message": "已复制"
   },
   "m56": {
-    "message": "翻译 / 恢复当前页面"
+    "message": "翻译此页 / 显示原文"
   },
   "m57": {
-    "message": "切换双语 / 仅译文"
+    "message": "切换显示方式"
   },
   "m58": {
     "message": "开关悬停 / 长按翻译"
@@ -1117,7 +1117,7 @@
     "message": "显示模式"
   },
   "m9l": {
-    "message": "原文 + 译文"
+    "message": "双语对照"
   },
   "m9m": {
     "message": "字幕位置"
@@ -2545,10 +2545,10 @@
     "message": "打开 DualLens 文本翻译侧栏"
   },
   "commandTogglePage": {
-    "message": "翻译 / 恢复当前页面"
+    "message": "翻译此页 / 显示原文"
   },
   "commandToggleMode": {
-    "message": "切换双语对照 / 仅显示译文"
+    "message": "切换显示方式"
   },
   "commandTranslateInput": {
     "message": "翻译当前输入框的内容"
@@ -2904,5 +2904,103 @@
   },
   "actionWorking": {
     "message": "正在处理…"
+  },
+  "uxSwitchDisplay": {
+    "message": "切换显示方式"
+  },
+  "uxStartShortcut": {
+    "message": "点「翻译此页」，或按 $p1$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxStartButton": {
+    "message": "点「翻译此页」开始。"
+  },
+  "uxPDFOpened": {
+    "message": "已打开 PDF 阅读器。"
+  },
+  "uxPageRequested": {
+    "message": "已发送页面操作，请查看页面。"
+  },
+  "uxTargetRetranslate": {
+    "message": "目标语言已保存；已翻译页面将重新翻译。"
+  },
+  "uxSettingSaved": {
+    "message": "已保存。"
+  },
+  "uxSiteApplied": {
+    "message": "网站规则已保存，当前页即时生效。"
+  },
+  "uxGlossaryEmpty": {
+    "message": "术语表为空。可填写常用词的固定译法。"
+  },
+  "uxGlossaryPlaceholder": {
+    "message": "原词 → 译词（每行一条）"
+  },
+  "uxGlossaryImport": {
+    "message": "导入术语表"
+  },
+  "uxGlossaryExport": {
+    "message": "导出术语表"
+  },
+  "uxGlossaryStaged": {
+    "message": "已读取 $p1$ 条术语；点击「保存」后生效。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxGlossaryExported": {
+    "message": "已导出 $p1$ 条术语。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxAutoSave": {
+    "message": "选项改动即时保存。"
+  },
+  "uxManualSave": {
+    "message": "编辑后点击「保存」生效；「取消」放弃未保存的改动。"
+  },
+  "uxShortcutSettings": {
+    "message": "快捷键以浏览器的扩展快捷键页为准，可在那里修改。"
+  },
+  "uxShortcutMobile": {
+    "message": "可从 Tampermonkey 菜单打开功能。"
+  },
+  "uxInputShortcut": {
+    "message": "使用浏览器已绑定的「翻译输入框」快捷键。"
+  },
+  "uxTextSwap": {
+    "message": "交换语言"
+  },
+  "uxTextClear": {
+    "message": "清空"
+  },
+  "uxTextEmpty": {
+    "message": "输入文字后，点击「翻译」。"
+  },
+  "uxTextSwapUnknown": {
+    "message": "先翻译一次以检测源语言，或手动选择源语言。"
+  },
+  "uxTextDetected": {
+    "message": "检测到源语言：$p1$。",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "uxTextCleared": {
+    "message": "已清空。"
+  },
+  "uxTextCancelled": {
+    "message": "已取消翻译。"
   }
 }

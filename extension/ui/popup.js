@@ -26,7 +26,7 @@ try {
       const result=await chrome.runtime.sendMessage({type:'pdf-open',tabId:tab.id});
       if(!result?.ok)throw new Error(result?.error?.message||TEXT.failed);
     },
-    shortcut:commands.find(c=>c.name==='toggle-page')?.shortcut||'',pageMessage:msg=>chrome.tabs.sendMessage(tab.id,msg,{frameId:0}),
+    commands,shortcut:commands.find(c=>c.name==='toggle-page')?.shortcut||'',pageMessage:msg=>chrome.tabs.sendMessage(tab.id,msg,{frameId:0}),
     onSettings:group=>chrome.tabs.create({url:chrome.runtime.getURL(`ui/options.html#${group}`)}),onText:()=>chrome.sidePanel?.open({tabId:tab.id})});
   window.addEventListener('pagehide',()=>view.destroy(),{once:true});
 }catch{document.body.textContent=TEXT.failed;}

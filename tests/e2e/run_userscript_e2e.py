@@ -170,23 +170,23 @@ def select_text(page, selector='#p-plain'):
 
 def ready(page, base, fixture='article.html'):
     page.goto(base + '/' + fixture)
-    page.wait_for_function("__platformFixture.hasCommand('翻译 / 恢复当前页面')")
+    page.wait_for_function("__platformFixture.hasCommand('翻译此页 / 显示原文')")
     page.wait_for_function("!!__platformFixture.rect('.ball')")
 
 
 def desktop_cases(page, base):
     ready(page, base)
     original = page.evaluate('document.body.outerHTML')
-    command(page, '翻译 / 恢复当前页面'); wait_done(page)
+    command(page, '翻译此页 / 显示原文'); wait_done(page)
     check('【译】' in page.locator('#p-plain dl-t').inner_text(), 'missing mock translation')
     check(page.locator('#p-links dl-t a').count() > 0, 'inline links were lost')
-    command(page, '切换双语 / 仅译文')
+    command(page, '切换显示方式')
     page.wait_for_function("document.querySelector('#p-plain').classList.contains('dl-only')")
     check(page.locator('#p-plain dl-o').evaluate("e=>getComputedStyle(e).display") == 'none', 'source remains visible')
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     page.wait_for_function("!document.querySelector('dl-t')")
     check(page.evaluate('document.body.outerHTML') == original, 'restore is not DOM-identical')
-    command(page, '切换双语 / 仅译文')
+    command(page, '切换显示方式')
     select_text(page)
     page.wait_for_function("!!__platformFixture.rect('.icon.show')")
     click_shadow(page, '.icon.show')
@@ -205,10 +205,10 @@ def desktop_cases(page, base):
     page.keyboard.press('Escape')
     # Dynamic fixture exercises timed appends and SPA updates using the same controller.
     ready(page, base, 'dynamic.html')
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     wait_done(page, '#dyn-1')
     page.locator('#nav-btn').click(); wait_done(page, '#spa-route-2-1')
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     page.wait_for_function("!document.querySelector('dl-t')")
     return 'translation, exact restore, only mode, selection, settings, dynamic append/SPA'
 
@@ -309,7 +309,7 @@ def machine_first_case(page, base):
     # A fresh install: no model, default mode. Machine translation answers through the anonymous GM transport.
     page.evaluate("() => __platformFixture.settings({provider:{active:'',chain:[]},translation:{mode:'mt+llm'}})")
     page.wait_for_timeout(300)
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     page.wait_for_function("__platformFixture.elements('.confirm').length===1")
     check(page.evaluate('__platformFixture.calls.length') == 0, 'MT sent text before consent')
     click_shadow(page, '.confirm .primary'); wait_done(page)
@@ -318,16 +318,16 @@ def machine_first_case(page, base):
     calls = page.evaluate('__platformFixture.calls')
     check(calls and all(c['anonymous'] and not c['hasAuth'] and c['url'].startswith('https://edge.microsoft.com/') for c in calls), 'machine translation must use anonymous, keyless GM requests: %r' % (calls[:2],))
     page.screenshot(path=str(shots / (tag + '-machine.png')))
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     page.wait_for_function("!document.querySelector('dl-t')")
     # Now add a model: the LLM text replaces the machine draft in place.
     page.evaluate("() => __platformFixture.settings({provider:{active:'mock'}})")
     page.wait_for_timeout(300)
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     page.wait_for_function("document.querySelector('#p-plain dl-t')?.getAttribute('data-dl-stage')==='final' && document.querySelector('#p-plain dl-t').textContent.startsWith('【译】')")
     page.wait_for_function("document.querySelectorAll('dl-t[data-dl-stage=draft]').length === 0")
     page.screenshot(path=str(shots / (tag + '-refined.png')))
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     page.wait_for_function("!document.querySelector('dl-t')")
     # Exercise the actual closed-shadow refinement button, not just its backend message.
     select_text(page)
@@ -362,7 +362,7 @@ def secret_transport_case(page, base):
     check(page.evaluate("__platformFixture.elements('#key-status')[0].textContent") == '已设置', 'saved key status missing')
     click_shadow(page, '#test')
     page.wait_for_function("__platformFixture.elements('#status').some(e=>e.textContent.includes('连接正常'))")
-    page.keyboard.press('Escape'); command(page, '翻译 / 恢复当前页面')
+    page.keyboard.press('Escape'); command(page, '翻译此页 / 显示原文')
     page.wait_for_function("__platformFixture.elements('.confirm').length || document.querySelector('dl-t[data-dl-state=done]')")
     if page.evaluate("__platformFixture.elements('.confirm').length"):
         click_shadow(page, '.confirm .primary')
@@ -576,7 +576,7 @@ def mobile_cases(page, base):
     page.keyboard.press('Escape')
     # Long-page metrics include translation start and the full viewport-by-viewport scroll.
     ready(page, base, 'long.html')
-    start = page.evaluate('performance.now()'); command(page, '翻译 / 恢复当前页面')
+    start = page.evaluate('performance.now()'); command(page, '翻译此页 / 显示原文')
     page.wait_for_timeout(1000)
     # Translation changes document height. Re-read it after each slice so "bottom" means
     # the actual final bottom, not the shorter pre-translation document's old height.
@@ -596,7 +596,7 @@ def mobile_cases(page, base):
         sourceParagraphs:document.querySelectorAll('p[id^=lp-]').length,nonLongTimeRatio:1-ms/(end-start)};
     }""", {'start': start, 'end': end})
     check(metrics['translated'] >= metrics['sourceParagraphs'], 'long-page scroll did not translate all paragraphs')
-    command(page, '翻译 / 恢复当前页面')
+    command(page, '翻译此页 / 显示原文')
     page.wait_for_function("!document.querySelector('dl-t')")
     return metrics
 
