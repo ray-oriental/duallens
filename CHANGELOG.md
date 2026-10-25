@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- PDF 一次性交接缓存在后台初始化、浏览器启动、扩展安装／更新及读写时清理过期副本；明确区分五分钟逻辑过期与物理删除时机，不新增权限。
+- PDF 阅读器支持在本机导出双栏对照或仅译文 PDF，包含范围选择、逐页翻译进度和取消；导出件为图像版式。
+- 扫描 PDF 可显式开启本机 OCR，复用经大小与 SHA-256 校验的语言包；低置信度文字保留原像素，识别分块仅存阅读会话。
+
 ## [1.0.0] - 2026-10-22
 
 - Redesigned, quiet interface (monochrome, no boxed cards) in English and Simplified Chinese.

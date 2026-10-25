@@ -44,3 +44,8 @@ body[data-view=reflow] .pdf-page{width:auto}
 .rf-t{display:block;margin:-4px 0 14px;padding-left:12px;border-left:3px solid var(--accent);color:var(--accent);line-height:1.75;font-family:var(--tr-font)}.rf-t[data-stage=draft]{opacity:.75}.rf-t.error{color:#c03737;border-color:#c03737;cursor:pointer}
 .page-note{color:var(--muted);font-size:13px}
 @media(max-width:760px){header{position:static;padding:8px 10px}.hint{display:none}#pdf-pages{padding:10px 4px 40px}body[data-view=reflow] .reflow{padding:14px 14px;border-radius:0}}
+.pdf-panel{padding:12px 0;border-top:1px solid var(--dl-border-strong,var(--line));margin-top:8px;font-size:13px;color:var(--fg)}
+.pdf-panel label{display:inline-flex;gap:8px;align-items:center;margin:4px 16px 8px 0}.pdf-panel p{margin:4px 0 8px}.pdf-panel .hint{display:block;cursor:default}
+[hidden],.pdf-panel [hidden]{display:none!important}.pdf-panel input[type=checkbox]{min-height:0;width:16px;height:16px;margin:0}
+.export-sheet{position:fixed;left:-32000px;top:0;display:block!important;visibility:hidden;pointer-events:none;box-shadow:none;contain:strict}
+.export-sheet .tb{opacity:1}

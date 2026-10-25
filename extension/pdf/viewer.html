@@ -8,7 +8,22 @@
 <label><span data-i18n="pdfZoom"></span><select id="zoom"><option value="fit" selected data-i18n="pdfFit"></option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
 <label class="page-jump"><span data-i18n="pdfPage"></span><input id="page-number" type="number" min="1" value="1" data-i18n-aria-label="pdfPageNumber"><span id="page-count">/ 0</span></label><button id="jump" data-i18n="pdfJump"></button>
 <label><span data-i18n="pdfTheme"></span><select id="theme"><option value="auto" data-i18n="pdfAuto"></option><option value="light" data-i18n="pdfLight"></option><option value="dark" data-i18n="pdfDark"></option></select></label>
-<button id="settings" data-i18n="pdfSettings"></button><label class="file-button"><span data-i18n="pdfLocal"></span><input id="local-file" type="file" accept="application/pdf,.pdf"></label></div></div>
+<button id="export-pdf" disabled aria-expanded="false" aria-controls="export-panel" data-i18n="pdfExportPDF"></button><button id="settings" data-i18n="pdfSettings"></button><label class="file-button"><span data-i18n="pdfLocal"></span><input id="local-file" type="file" accept="application/pdf,.pdf"></label></div></div>
+<section id="export-panel" class="pdf-panel" hidden data-i18n-aria-label="pdfExportPDF">
+<label><span data-i18n="pdfExportLayout"></span><select id="export-layout"><option value="side" data-i18n="pdfSide"></option><option value="translated" data-i18n="pdfTranslated"></option></select></label>
+<label><span data-i18n="pdfExportScope"></span><select id="export-scope"><option value="all" data-i18n="pdfExportAll"></option><option value="range" data-i18n="pdfExportRange"></option></select></label>
+<label id="export-range-label" hidden><span data-i18n="pdfExportRange"></span><input id="export-range" type="text" placeholder="1-5, 8" autocomplete="off"></label>
+<label id="export-long" hidden><input id="export-long-confirm" type="checkbox"><span data-i18n="pdfExportLong"></span></label>
+<p class="hint" data-i18n="pdfExportHint"></p><p id="export-status" role="status" aria-live="polite"></p>
+<div><button id="export-start" class="primary" data-i18n="pdfExportStart"></button> <button id="export-cancel" data-i18n="pdfExportCancel"></button></div>
+</section>
+<button id="ocr-toggle" hidden aria-expanded="false" aria-controls="ocr-panel" data-i18n="pdfOCRTitle"></button>
+<section id="ocr-panel" class="pdf-panel" hidden data-i18n-aria-label="pdfOCRTitle">
+<p data-i18n="pdfOCRTitle"></p><label><span data-i18n="pdfOCRLanguage"></span><select id="ocr-language"><option value="eng" data-i18n="pdfOCREnglish"></option><option value="jpn" data-i18n="pdfOCRJapanese"></option><option value="kor" data-i18n="pdfOCRKorean"></option></select></label>
+<p class="hint" data-i18n="pdfOCRHint"></p><p id="ocr-pack" class="hint"></p>
+<label id="ocr-download-label" hidden><input id="ocr-download" type="checkbox"><span data-i18n="pdfOCRDownloadConfirm"></span></label>
+<button id="ocr-start" data-i18n="pdfOCRTitle"></button> <button id="ocr-cancel" hidden data-i18n="pdfExportCancel"></button><p id="ocr-status" role="status" aria-live="polite"></p>
+</section>
 <div class="info"><p id="status" role="status" aria-live="polite" data-i18n="pdfOpening"></p>
 <p class="hint" id="privacy" data-i18n="pdfPrivacy"></p></div></header>
 <main id="pdf-pages" data-i18n-aria-label="pdfPages"></main><script type="module" src="viewer.js"></script></body></html>

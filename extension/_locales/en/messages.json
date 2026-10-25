@@ -2904,5 +2904,121 @@
   },
   "actionWorking": {
     "message": "Working…"
+  },
+  "pdfExportPDF": {
+    "message": "Export PDF"
+  },
+  "pdfExportLayout": {
+    "message": "Layout"
+  },
+  "pdfExportScope": {
+    "message": "Pages"
+  },
+  "pdfExportAll": {
+    "message": "All pages"
+  },
+  "pdfExportRange": {
+    "message": "Page range"
+  },
+  "pdfExportStart": {
+    "message": "Export"
+  },
+  "pdfExportCancel": {
+    "message": "Cancel"
+  },
+  "pdfExportHint": {
+    "message": "The file is generated on this device as images without searchable or selectable text. Text from untranslated selected pages is sent to your current translation service in order."
+  },
+  "pdfExportLong": {
+    "message": "More than 50 pages may take several minutes and use substantial memory. Continue exporting."
+  },
+  "pdfExportInvalidRange": {
+    "message": "Invalid pages. Use page numbers from 1 to $arg1$, such as 1-5, 8; ranges must be ascending with no empty entries.",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      }
+    }
+  },
+  "pdfExportProgress": {
+    "message": "Translating page $arg1$ / $arg2$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      },
+      "arg2": {
+        "content": "$2"
+      }
+    }
+  },
+  "pdfExportGenerating": {
+    "message": "Generating PDF"
+  },
+  "pdfExportDone": {
+    "message": "PDF generated and handed to the browser for download."
+  },
+  "pdfExportCancelled": {
+    "message": "Cancelled. No file was downloaded."
+  },
+  "pdfExportFailed": {
+    "message": "Export did not finish; no file was generated. Retry, select fewer pages, or check your translation service."
+  },
+  "pdfExportScan": {
+    "message": "Selected pages include scans. Choose ?Recognize text (on-device OCR)? first, then export again."
+  },
+  "pdfOCRTitle": {
+    "message": "Recognize text (on-device OCR)"
+  },
+  "pdfOCRLanguage": {
+    "message": "Recognition language"
+  },
+  "pdfOCREnglish": {
+    "message": "English"
+  },
+  "pdfOCRJapanese": {
+    "message": "Japanese"
+  },
+  "pdfOCRKorean": {
+    "message": "Korean"
+  },
+  "pdfOCRHint": {
+    "message": "This document may contain scanned pages. Once enabled, current and subsequently requested scans are recognized on this device; only high-confidence text is sent for translation. English is used when automatic language detection is unavailable; Japanese and Korean can be selected. Applies to this reading session only."
+  },
+  "pdfOCRPack": {
+    "message": "Requires a $arg1$ MB language pack from $arg2$. It is checked by size and SHA-256, stored on this device, and can be deleted in Settings.",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      },
+      "arg2": {
+        "content": "$2"
+      }
+    }
+  },
+  "pdfOCRPackReady": {
+    "message": "Language pack installed and verified; no download needed."
+  },
+  "pdfOCRDownloadConfirm": {
+    "message": "Download the language pack described above"
+  },
+  "pdfOCRDownloadNeeded": {
+    "message": "Confirm the language pack download and retry."
+  },
+  "pdfOCRProgress": {
+    "message": "Recognizing page $arg1$ on this device",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      }
+    }
+  },
+  "pdfOCRFailed": {
+    "message": "Could not recognize enough reliable text. Retry or change the recognition language; low-confidence content keeps its original pixels."
+  },
+  "pdfOCRDone": {
+    "message": "Recognized. Later scans are processed on demand; change the language and use this button to recognize the current page again."
+  },
+  "pdfOCRPermission": {
+    "message": "Language download was not permitted. Choose recognition again to grant access, or use an installed language."
   }
 }

@@ -9,7 +9,7 @@ import { t as l10n } from '../shared/i18n.js';
 // original pixels; inline formulas are cropped from the original page. Model output only ever
 // becomes text nodes.
 
-import { getDocument, GlobalWorkerOptions, TextLayer } from '../vendor/pdfjs/pdf.min.js';
+import { getDocument, GlobalWorkerOptions, TextLayer, OPS } from '../vendor/pdfjs/pdf.min.js';
 import { createExtensionPlatform } from '../platform/extension.js';
 import { PRIORITY } from '../shared/protocol.js';
 import { blockSource } from './segments.js';
@@ -20,6 +20,12 @@ import { withSendConfirmation } from '../content/confirmation.js';
 import { engineSummary } from '../ui/components.js';
 import { createOverlay } from '../content/overlay.js';
 import { lensIcon } from '../content/visual.js';
+import { PdfImageWriter } from './writer.js';
+import { parsePageRange, exportFilename } from './ranges.js';
+import { abortable, waitForTranslations, runExport } from './export-job.js';
+import { paintOverlay, jpegBytes } from './raster.js';
+import { ocrLanguage, ocrSegments } from './ocr.js';
+import { languageRecord, verifyLanguage } from '../offscreen/language-store.js';
 
 GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.js', import.meta.url).href;
 const rawPlatform = createExtensionPlatform();
@@ -36,6 +42,10 @@ updatePrivacy();
 let view = initialView();
 let pdf, task, pages = [], epoch = 0, revision = 0, sourceRequest = 0, scale = 1;
 let busy = false, nearObserver, visibleObserver, scrollFrame = 0, requestTimer = 0;
+let exportJob = null, readerAbort = new AbortController(), ocrAction = null;
+let documentName = '', pdfLanguage = '', ocrEnabled = false, ocrReady = false, ocrPrompted = false;
+const downloadAllowed = new Set();
+const languageManifest = await fetch('../offscreen/languages.json').then(response => response.json());
 const resident = new Set(), near = new Set(), visible = new Set();
 const paintQueue = new Set();
 let paintFrame = 0;
@@ -277,7 +287,7 @@ async function pump() {
   try {
     await renderPage(page, generation, rev);
   } catch (error) {
-    if (generation === epoch && error?.name !== 'RenderingCancelledException') {
+    if (generation === epoch && !['RenderingCancelledException','AbortError'].includes(error?.name)) {
       page.orig.replaceChildren(placeholder(l10n('m75')));
       page.failed = true;
       message(l10n('m76'), true);
@@ -292,14 +302,58 @@ async function pump() {
 }
 
 async function extract(page, proxy) {
-  if (page.segments) return;
+  const opened=epoch,documentSignal=readerAbort.signal;
+  const current=()=>{if(opened!==epoch || documentSignal.aborted)throw new DOMException('Cancelled','AbortError');};
+  const automaticOCR = async () => {
+    try { current();await recognizePage(page,proxy,exportJob?.signal || documentSignal); }
+    catch { /* Keep the source page visible; the OCR panel supplies retry/language controls. */ }
+  };
+  if (page.segments) {
+    if (page.scan && ocrEnabled && session.active && !page.ocrDone && !page.ocrFailed) await automaticOCR();
+    return;
+  }
   page.text ??= await proxy.getTextContent();
+  current();
   const base = proxy.getViewport({ scale: 1 });
   page.segments = await localSegments(displayItems(page.text.items, base.transform, base.height),
     { pageWidth: base.width, pageHeight: base.height, styles: page.text.styles });
+  current();
   page.sources = new Map();
   for (const block of page.segments.blocks) if (block.kind === 'text') page.sources.set(block.id, blockSource(block));
   if (!page.segments.blocks.some(block => block.kind === 'text') && !page.ready) page.trans.replaceChildren(transPlaceholder(page));
+  const chars = page.text.items.reduce((n, item) => n + String(item.str || '').trim().length, 0);
+  if(chars && settings.sourceLang==='auto' && !pdfLanguage && !ocrPrompted) {
+    try {
+      const detected=await platform.detectLanguage(page.text.items.map(item=>item.str || '').join(' ').slice(0,2000));
+      current();
+      if(detected?.reliable){pdfLanguage=detected.lang;$('ocr-language').value=ocrLanguage(pdfLanguage);}
+    } catch { /* Unavailable automatic detection keeps the English fallback. */ }
+  }
+  // Empty text is an OCR candidate. Sparse text additionally needs a substantial image.
+  if (chars < 60) {
+    const ops = chars ? await proxy.getOperatorList() : null;
+    current();
+    page.scan = chars === 0 || majorImage(ops, base.width * base.height);
+    if (page.scan) {
+      showOCR();
+      if (ocrEnabled && session.active && !page.ocrFailed) await automaticOCR();
+    }
+  }
+}
+
+function majorImage(ops, area) {
+  let matrix = [1,0,0,1,0,0]; const stack = [];
+  for (let i = 0; i < (ops?.fnArray.length || 0); i++) {
+    const fn = ops.fnArray[i], a = ops.argsArray[i];
+    if (fn === OPS.save) stack.push([...matrix]);
+    else if (fn === OPS.restore) matrix = stack.pop() || [1,0,0,1,0,0];
+    else if (fn === OPS.transform) {
+      const m = matrix;
+      matrix = [m[0]*a[0]+m[2]*a[1],m[1]*a[0]+m[3]*a[1],m[0]*a[2]+m[2]*a[3],m[1]*a[2]+m[3]*a[3],0,0];
+    } else if ([OPS.paintImageXObject,OPS.paintInlineImageXObject,OPS.paintImageMaskXObject].includes(fn) &&
+      Math.abs(matrix[0]*matrix[3]-matrix[1]*matrix[2]) > area * .4) return true;
+  }
+  return false;
 }
 
 async function renderPage(page, generation, rev) {
@@ -639,7 +693,7 @@ function requestSoon() {
   requestTimer = setTimeout(requestTranslations, 60);
 }
 function requestTranslations() {
-  if (!session.active || !pages.length) return;
+  if (!session.active || !pages.length || exportJob) return;
   const shown = [...visible].map(page => page.number).sort((a, b) => a - b);
   if (!shown.length) return;
   // Jumping far away must not leave the new page queued behind pages nobody is reading.
@@ -681,6 +735,8 @@ async function activate() {
   stateChanged();
 }
 function deactivate() {
+  exportJob?.abort(); ocrAction?.abort();
+  readerAbort.abort();readerAbort=new AbortController();
   consent?.abort();consent=null;
   session.stop();
   paintQueue.clear();
@@ -790,13 +846,20 @@ function watchPages() {
 
 // ---- open ----------------------------------------------------------------------------------
 async function open(data) {
+  exportJob?.abort(); ocrAction?.abort(); readerAbort.abort(); readerAbort = new AbortController();
+  ocrEnabled = ocrPrompted = ocrReady = false; pdfLanguage=''; downloadAllowed.clear();
+  $('ocr-panel').hidden = true; $('ocr-status').textContent = ''; $('ocr-download').checked = false;
+  $('ocr-toggle').hidden=true;$('ocr-toggle').setAttribute('aria-expanded','false');
+  $('export-panel').hidden=true;$('export-pdf').setAttribute('aria-expanded','false');
+  $('export-status').textContent='';$('export-scope').value='all';$('export-range').value='';$('export-long-confirm').checked=false;
+  $('ocr-language').value = ocrLanguage(settings.sourceLang);
   const generation = ++epoch;
   revision++;
   metrics.opened = performance.now(); metrics.firstPage = 0;
   nearObserver?.disconnect(); visibleObserver?.disconnect();
   session.stop(); paintQueue.clear();
   for (const page of pages) { page.renderTask?.cancel(); evict(page); }
-  $('translate').disabled = true; $('restore').disabled = true; ball.disabled = true;
+  $('translate').disabled = true; $('restore').disabled = true; $('export-pdf').disabled = true; ball.disabled = true;
   pdf = null;
   await task?.destroy();
   if (generation !== epoch) return;
@@ -813,6 +876,10 @@ async function open(data) {
   pdf = opened;
   if (pdf.numPages > 2000) { await task.destroy(); pdf = null; throw new Error(l10n('m7d')); }
   const first = await pdf.getPage(1);
+  try {
+    const metadata = await pdf.getMetadata();
+    if (settings.sourceLang === 'auto') {pdfLanguage=metadata.metadata?.get('dc:language') || '';$('ocr-language').value=ocrLanguage(pdfLanguage);}
+  } catch { /* Recognition falls back to English; the session language can be changed. */ }
   const base = first.getViewport({ scale: 1 });
   const size = { w: base.width, h: base.height };
   if (generation !== epoch) return;
@@ -827,7 +894,7 @@ async function open(data) {
   }
   $('pdf-pages').append(fragment);
   watchPages();
-  $('translate').disabled = false; ball.disabled = false;
+  $('translate').disabled = false; $('export-pdf').disabled = false; ball.disabled = false;
   stateChanged();
   message(l10n('m7e', [pdf.numPages]));
 }
@@ -836,6 +903,204 @@ async function guarded(fn, request = sourceRequest) {
     if (request === sourceRequest) message(l10n('m7f'), true);
   }
 }
+
+// ---- local PDF OCR -------------------------------------------------------------------------
+function showOCR() {
+  if (ocrPrompted) return;
+  ocrPrompted = true; $('ocr-toggle').hidden = false;
+  void refreshOCRPack();
+}
+async function refreshOCRPack() {
+  const lang = $('ocr-language').value, opened = epoch;
+  let ready=false;
+  ocrReady = false; $('ocr-start').disabled = true; $('ocr-download').checked = false;
+  try {
+    const cached = await languageRecord(lang);
+    if (cached) { await verifyLanguage(cached.data, languageManifest[lang]); ready = true; }
+  } catch { /* Missing/corrupt language data requires a fresh explicit download confirmation. */ }
+  if (opened !== epoch || lang !== $('ocr-language').value) return;
+  ocrReady=ready;
+  const spec = languageManifest[lang];
+  $('ocr-pack').textContent = ocrReady ? l10n('pdfOCRPackReady') : l10n('pdfOCRPack', [(spec.bytes / 1e6).toFixed(2), new URL(spec.url).hostname]);
+  $('ocr-download-label').hidden = ocrReady;
+  $('ocr-start').disabled = !!exportJob || !!ocrAction;
+}
+
+async function pageRaster(proxy, signal) {
+  const base = proxy.getViewport({ scale:1 });
+  const dpi = Math.min(150/72, Math.sqrt(12e6/(base.width*base.height)), 8192/Math.max(base.width,base.height));
+  const viewport = proxy.getViewport({ scale:dpi });
+  const canvas = el('canvas'); canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+  const rendering = proxy.render({ canvasContext:canvas.getContext('2d',{alpha:false,willReadFrequently:true}),viewport,annotationMode:0 });
+  const abort = () => rendering.cancel();
+  signal.addEventListener('abort',abort,{once:true});
+  try {
+    if (signal.aborted) throw new DOMException('Cancelled','AbortError');
+    await rendering.promise;
+    if (signal.aborted) throw new DOMException('Cancelled','AbortError');
+    return { canvas, dpi, base };
+  } catch (error) { canvas.width=canvas.height=0; throw error; }
+  finally { signal.removeEventListener('abort',abort); }
+}
+
+async function recognizePage(page, proxy, signal) {
+  if (page.ocrDone) return;
+  if (page.ocrPending) return page.ocrPending;
+  const opened = epoch, lang = $('ocr-language').value;
+  page.ocrPending = (async () => {
+    $('ocr-status').textContent = l10n('pdfOCRProgress',[page.number]);
+    const { canvas, base } = await pageRaster(proxy,signal);
+    const jobId = crypto.randomUUID();
+    const abort = () => { void chrome.runtime.sendMessage({type:'pdf-ocr-cancel',jobId}).catch(()=>{}); };
+    try {
+      const base64 = canvas.toDataURL('image/png').split(',')[1];
+      canvas.width=canvas.height=0;
+      if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+      signal.addEventListener('abort',abort,{once:true});
+      const result = await abortable(chrome.runtime.sendMessage({type:'pdf-ocr',jobId,lang,base64,allowDownload:downloadAllowed.has(lang)}),signal);
+      if(signal.aborted || opened !== epoch)throw new DOMException('Cancelled','AbortError');
+      if (!result?.ok) throw new Error('ocr');
+      const segments = ocrSegments(result.regions,base.width,base.height);
+      if (!segments.blocks.some(block => block.kind === 'text')) throw new Error('ocr');
+      const oldIds = (page.segments?.blocks || []).map(block => blockId(page,block));
+      session.forget(oldIds);
+      page.segments = segments; page.sources = new Map();
+      for (const block of segments.blocks) if(block.kind==='text')page.sources.set(block.id,blockSource(block));
+      page.ocrDone = true; page.ocrFailed = false; page.colors = null; page.bold = null;
+      page.reflowBuilt = false; page.reflow.replaceChildren(); page.rfEls = new Map();
+      if(page.transBuilt)clearTranslated(page);
+      if(page.ready && session.active)scheduleSheet(page);
+      $('ocr-status').textContent=l10n('pdfOCRDone');
+    } catch(error) {
+      if(!signal.aborted && opened===epoch){page.ocrFailed=true;$('ocr-status').textContent=l10n('pdfOCRFailed');}
+      throw error;
+    } finally {
+      canvas.width=canvas.height=0;signal.removeEventListener('abort',abort);
+    }
+  })().finally(()=>{page.ocrPending=null;});
+  return page.ocrPending;
+}
+
+$('ocr-toggle').addEventListener('click',()=>{
+  $('ocr-panel').hidden=!$('ocr-panel').hidden;
+  $('ocr-toggle').setAttribute('aria-expanded',String(!$('ocr-panel').hidden));
+});
+$('ocr-language').addEventListener('change',()=>{
+  ocrEnabled=false;
+  for(const page of pages)if(page.scan){page.ocrDone=false;page.ocrFailed=false;}
+  void refreshOCRPack();
+});
+$('ocr-cancel').addEventListener('click',()=>ocrAction?.abort());
+$('ocr-start').addEventListener('click',async()=>{
+  if (!pdf || ocrAction || exportJob) return;
+  if (!ocrReady && !$('ocr-download').checked) { $('ocr-status').textContent=l10n('pdfOCRDownloadNeeded');return; }
+  const lang=$('ocr-language').value;
+  if (!ocrReady) {
+    const {requestOrigin}=await import('../shared/permissions.js');
+    if(!await requestOrigin(languageManifest[lang].url)){$('ocr-status').textContent=l10n('pdfOCRPermission');return;}
+    downloadAllowed.add(lang);
+  }
+  const ctrl=ocrAction=new AbortController();
+  $('ocr-start').disabled=true;$('ocr-language').disabled=true;$('ocr-cancel').hidden=false;
+  try {
+    const page=pages[currentPage()-1], proxy=await pdf.getPage(page.number);
+    ocrEnabled=true;page.ocrDone=false;page.ocrFailed=false;
+    await recognizePage(page,proxy,ctrl.signal);
+    if(!ctrl.signal.aborted){ await activate(); void pump(); }
+  } catch { if(ctrl.signal.aborted){ocrEnabled=false;$('ocr-status').textContent=l10n('pdfExportCancelled');} }
+  finally {
+    if(ocrAction===ctrl)ocrAction=null;
+    $('ocr-start').disabled=false;$('ocr-language').disabled=false;$('ocr-cancel').hidden=true;
+    void refreshOCRPack();
+  }
+});
+
+// ---- explicit, sequential image-only export -------------------------------------------------
+async function exportPage(number, signal, layout, renderScale) {
+  const page=pages[number-1], proxy=await pdf.getPage(number);
+  if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+  await extract(page,proxy);
+  if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+  if(page.scan) {
+    if(!ocrEnabled)throw new Error('scan');
+    if(page.ocrFailed)throw new Error('ocr');
+    await recognizePage(page,proxy,signal);
+  }
+  const list=page.segments.blocks.filter(block=>block.kind==='text').map(block=>({id:blockId(page,block),source:page.sources.get(block.id)}));
+  session.request(list,PRIORITY.VISIBLE);
+  await waitForTranslations(session,list.map(item=>item.id),signal);
+  const {canvas,dpi,base}=await pageRaster(proxy,signal);
+  const sheet=el('div','sheet export-sheet'),overlay=el('div','overlay');
+  sheet.style.width=base.width*renderScale+'px';sheet.style.height=base.height*renderScale+'px';
+  overlay.lang=settings.targetLang;sheet.append(overlay);document.body.append(sheet);
+  const local={...page,proxy,canvas,renderScale,ratio:dpi/renderScale,overlay,colors:null,colorsPending:null,
+    whited:new Set(),blockEls:new Map(),atomGeometry:null};
+  try {
+    const original=layout==='side'?await jpegBytes(canvas):null;
+    await ensureColors(local);
+    for(const block of page.segments.blocks) { if(signal.aborted)throw new DOMException('Cancelled','AbortError');if(block.kind==='text')paintBlock(local,block);await yieldMain(); }
+    await paintOverlay(canvas,overlay,dpi/renderScale,signal);
+    const translated=await jpegBytes(canvas);
+    const image=(jpeg,x)=>({jpeg,width:canvas.width,height:canvas.height,x,y:0,drawWidth:base.width,drawHeight:base.height});
+    return {width:base.width*(layout==='side'?2:1),height:base.height,
+      images:original?[image(original,0),image(translated,base.width)]:[image(translated,0)]};
+  } finally { canvas.width=canvas.height=0;for(const atom of overlay.querySelectorAll('canvas'))atom.width=atom.height=0;sheet.remove(); }
+}
+function exportSelection() {
+  if($('export-scope').value==='range' && !$('export-range').value.trim())throw new Error('range');
+  return parsePageRange($('export-scope').value==='all'?'':$('export-range').value,pages.length);
+}
+function updateExportRange() {
+  $('export-range-label').hidden=$('export-scope').value!=='range';
+  try { $('export-long').hidden=exportSelection().length<=50; }
+  catch { $('export-long').hidden=true; }
+}
+$('export-pdf').addEventListener('click',()=>{
+  $('export-panel').hidden=!$('export-panel').hidden;
+  $('export-pdf').setAttribute('aria-expanded',String(!$('export-panel').hidden));updateExportRange();
+});
+$('export-scope').addEventListener('change',updateExportRange);
+$('export-range').addEventListener('input',updateExportRange);
+$('export-cancel').addEventListener('click',()=>{
+  if(exportJob)exportJob.abort();else{$('export-panel').hidden=true;$('export-pdf').setAttribute('aria-expanded','false');}
+});
+$('export-start').addEventListener('click',async()=>{
+  if(!pdf || exportJob || ocrAction)return;
+  let selected;
+  try { selected=exportSelection(); } catch { $('export-status').textContent=l10n('pdfExportInvalidRange',[pages.length]);return; }
+  if(selected.length>50 && !$('export-long-confirm').checked){$('export-status').textContent=l10n('pdfExportLong');return;}
+  const ctrl=exportJob=new AbortController(),opened=epoch,wasActive=session.active,generation=session.generation;
+  const layout=$('export-layout').value,renderScale=scale,name=exportFilename(documentName,layout);
+  const controls=['export-start','export-layout','export-scope','export-range','local-file','ocr-start','ocr-language'];
+  controls.forEach(id=>$(id).disabled=true);
+  try {
+    if(!await platform.confirmSend({purpose:'pdf'},ctrl.signal) || ctrl.signal.aborted)throw new DOMException('Cancelled','AbortError');
+    session.start();
+    await runExport({pages:selected,writer:new PdfImageWriter(),signal:ctrl.signal,
+      render:(number,signal)=>exportPage(number,signal,layout,renderScale),
+      progress:(stage,index,total)=>{$('export-status').textContent=stage==='generate'?l10n('pdfExportGenerating'):l10n('pdfExportProgress',[index,total]);},
+      download:blob=>{
+        if(ctrl.signal.aborted || opened!==epoch)throw new DOMException('Cancelled','AbortError');
+        const url=URL.createObjectURL(blob),link=el('a');link.href=url;link.download=name;
+        document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+      }});
+    $('export-status').textContent=l10n('pdfExportDone');
+  } catch(error) {
+    session.cancelRequests();
+    if(opened===epoch)$('export-status').textContent=ctrl.signal.aborted || error.name==='AbortError'?l10n('pdfExportCancelled'):l10n(error.message==='scan'?'pdfExportScan':'pdfExportFailed');
+  } finally {
+    if(exportJob===ctrl)exportJob=null;
+    controls.forEach(id=>$(id).disabled=false);
+    if(opened===epoch){
+      if(session.generation===generation)session.active=wasActive;
+      if(!session.active)for(const page of pages){
+        if(page.transBuilt)clearTranslated(page);
+        for(const node of page.rfEls.values())node.remove();page.rfEls=new Map();
+      }
+      stateChanged();requestSoon();
+    }
+  }
+});
 
 // ---- controls ------------------------------------------------------------------------------
 $('translate').addEventListener('click', activate);
@@ -867,14 +1132,14 @@ $('local-file').addEventListener('change', () => {
   if (file) void guarded(async () => {
     if (file.size > MAX_PDF_BYTES) throw new Error('too large');
     const data = new Uint8Array(await file.arrayBuffer());
-    if (request === sourceRequest) await open(data);
+    if (request === sourceRequest) { documentName = file.name; await open(data); }
   }, request);
   $('local-file').value = '';
 });
 const unsubscribe = platform.settingsStore.onChange(() => { void guarded(async () => {
   const previous = settings; settings = await platform.settingsStore.load(); setUiLanguage(settings.uiLanguage);localize();updatePrivacy();
   const strip = value => JSON.stringify({ ...value, uiLanguage:null, displayMode: null, style: null, floatBall: null });
-  if (strip(previous) !== strip(settings)) retranslate();
+  if (strip(previous) !== strip(settings)) { exportJob?.abort(); ocrAction?.abort(); retranslate(); }
   // The shared "bilingual / translation only" switch (popup, options) maps onto the PDF views.
   if (previous.displayMode !== settings.displayMode && view !== 'reflow') {
     applyView(settings.displayMode === 'translation-only' ? 'translated' : 'side');
@@ -896,6 +1161,7 @@ const removeMessages = platform.onMessage((msg, reply) => {
   stateChanged(); reply({ ok: true }); return false;
 });
 window.addEventListener('pagehide', () => {
+  exportJob?.abort(); ocrAction?.abort(); readerAbort.abort();
   epoch++; sourceRequest++; unsubscribe(); nearObserver?.disconnect(); visibleObserver?.disconnect();
   session.stop(); removeMessages(); floating.detach();
   segmentWorker?.terminate(); segmentWorker = null;
@@ -912,14 +1178,14 @@ if (token) {
   history.replaceState(null,'',location.pathname);
   void guarded(async()=>{
     const {createPDFHandoff}=await import('./handoff.js');
-    const data=await createPDFHandoff().take(token);
-    if(request===sourceRequest)await open(data);
+    const data=await createPDFHandoff().takeFile(token);
+    if(request===sourceRequest){documentName=data.name;await open(data.bytes);}
   },request);
 } else if (file) {
   const request = ++sourceRequest;
   const read = () => guarded(async () => {
     const data = await readPDFURL(file, { fileAccess: () => chrome.extension.isAllowedFileSchemeAccess() });
-    if (request === sourceRequest) await open(data);
+    if (request === sourceRequest) { try { documentName=decodeURIComponent(new URL(file).pathname.split('/').at(-1)); } catch { documentName=''; } await open(data); }
   }, request);
   void (async()=>{
     const {hasOrigin,requestOrigin}=await import('../shared/permissions.js');
