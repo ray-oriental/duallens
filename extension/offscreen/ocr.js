@@ -15,6 +15,7 @@ globalThis.Worker = class extends nativeWorker {
 let seq = 0;
 let active = 0;
 const queue = [];
+const pdfJobs = new Map();
 function schedule(task) {
   return new Promise((resolve,reject) => { queue.push({ task,resolve,reject }); drain(); });
 }
@@ -30,11 +31,17 @@ function imageBlob(base64, type) {
   for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
   return new Blob([bytes], { type });
 }
-async function recognize(msg) {
+async function recognize(msg, control) {
+  const check = () => { if (control?.aborted) throw new Error('OCR cancelled'); };
+  check();
   const manifest = await manifestReady;
   const lang = msg.lang;
-  const loading = await ensureLanguage(lang,manifest);
-  const job = String(++seq); let worker, timer; const bitmaps = [];
+  const loading = await ensureLanguage(lang,manifest,control ? (url,options) => {
+    if (msg.allowDownload !== true) throw new Error(l10n('pdfOCRDownloadNeeded'));
+    return fetch(url,{...options,signal:AbortSignal.any([options.signal,control.abortController.signal])});
+  } : fetch);
+  check();
+  const job = String(++seq); let worker, timer, pageCanvas; const bitmaps = [];
   let peakHeapBytes=performance.memory?.usedJSHeapSize ?? null;
   const heapSampler=setInterval(()=> { const value=performance.memory?.usedJSHeapSize;if(value!=null) peakHeapBytes=Math.max(peakHeapBytes||0,value); },100);
   const start = performance.now();
@@ -52,6 +59,7 @@ async function recognize(msg) {
       if (!(width > 0 && height > 0) || width*height > 24e6 || bitmaps.some((b) => b.width*b.height>24e6)) throw new Error(l10n('m6e'));
       const scale = Math.min(1, Math.sqrt(6e6/(width*height)), 3200/Math.max(width,height));
       const canvas = document.createElement('canvas');
+      pageCanvas = canvas;
       canvas.width = Math.round(width*scale); canvas.height = Math.round(height*scale);
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.scale(scale,scale);
       if (msg.slices?.length) {
@@ -78,10 +86,11 @@ async function recognize(msg) {
       const detectionScale=Math.min(1,800/Math.max(canvas.width,canvas.height));
       detection.width=Math.round(canvas.width*detectionScale);detection.height=Math.round(canvas.height*detectionScale);
       const detectCtx=detection.getContext('2d',{willReadFrequently:true});detectCtx.drawImage(canvas,0,0,detection.width,detection.height);
-      const boxes=detectTextRegions(detectCtx.getImageData(0,0,detection.width,detection.height),{vertical:lang==='jpn_vert'});
+      // PDF pages use full-page segmentation; comic region detection is unchanged.
+      const boxes=msg.type === 'pdf-ocr-local' ? [] : detectTextRegions(detectCtx.getImageData(0,0,detection.width,detection.height),{vertical:lang==='jpn_vert'});
       detection.width=detection.height=1;
       const regions=[];
-      await worker.setParameters({ tessedit_pageseg_mode: lang === 'jpn_vert' ? '5' : boxes.length ? '7' : '11', user_defined_dpi: '150' });
+      await worker.setParameters({ tessedit_pageseg_mode: msg.type === 'pdf-ocr-local' ? '3' : lang === 'jpn_vert' ? '5' : boxes.length ? '7' : '11', user_defined_dpi: '150' });
       if(boxes.length) {
         for(const bbox of boxes) {
           if(cancelled) throw new Error(l10n('m3y'));
@@ -93,7 +102,7 @@ async function recognize(msg) {
         }
       } else {
         const {data}=await worker.recognize(canvas,{}, {text:true,blocks:true,hocr:false,tsv:false});
-        for(const p of data.paragraphs || []) regions.push({text:p.text,confidence:p.confidence,
+        for(const p of (msg.type === 'pdf-ocr-local' ? data.lines : data.paragraphs) || []) regions.push({text:p.text,confidence:p.confidence,
           bbox:{x0:p.bbox.x0/canvas.width,y0:p.bbox.y0/canvas.height,x1:p.bbox.x1/canvas.width,y1:p.bbox.y1/canvas.height}});
       }
       canvas.width = canvas.height = 1;
@@ -102,11 +111,14 @@ async function recognize(msg) {
         heapBytes: performance.memory?.usedJSHeapSize ?? null,peakHeapBytes } };
     })();
     return await Promise.race([work,new Promise((_,reject) => {
+      if (control) control.cancel = () => { cancelled=true; workers.get(job)?.terminate(); reject(new Error('OCR cancelled')); };
+      if (control?.aborted) control.cancel();
       timer = setTimeout(() => { cancelled=true; workers.get(job)?.terminate(); reject(new Error(l10n('m6g'))); },20000);
     })]);
   } finally {
     clearTimeout(timer); cancelled=true;
     clearInterval(heapSampler);
+    if (pageCanvas) pageCanvas.width = pageCanvas.height = 0;
     for (const bitmap of bitmaps) bitmap.close();
     if (worker) await worker.terminate();
     workers.get(job)?.terminate(); workers.delete(job);
@@ -115,7 +127,14 @@ async function recognize(msg) {
 chrome.runtime.onMessage.addListener((msg,sender,reply) => {
   if (sender.id !== chrome.runtime.id || sender.tab || (sender.url && sender.url !== chrome.runtime.getURL('background/service-worker.js')) || msg?.target !== 'comics-offscreen') return false;
   if (msg.type === 'comic-offscreen-ready') { reply({ ok:true }); return false; }
-  const task = msg.type === 'comic-ocr-local' ? () => recognize(msg) : async () => {
+  if (msg.type === 'pdf-ocr-cancel') {
+    const control = pdfJobs.get(msg.jobId);
+    if (control) { control.aborted=true; control.abortController.abort(); control.cancel?.(); }
+    reply({ok:true}); return false;
+  }
+  const control = msg.type === 'pdf-ocr-local' ? { aborted:false,abortController:new AbortController() } : null;
+  if (control) pdfJobs.set(msg.jobId, control);
+  const task = ['comic-ocr-local','pdf-ocr-local'].includes(msg.type) ? () => recognize(msg, control) : async () => {
     const manifest = await manifestReady;
     if (msg.type === 'comic-languages-delete') {
       if (!manifest[msg.lang]) throw new Error(l10n('m3r'));
@@ -125,6 +144,6 @@ chrome.runtime.onMessage.addListener((msg,sender,reply) => {
     return { ok: true, languages: all.map(({ lang,bytes }) => ({ lang,bytes })) };
   };
   schedule(async()=>{setUiLanguage(msg.uiLanguage);return task();}).then(reply).catch((e) => reply({ ok:false,error:{ code:'ocr_failed',message:
-    /^(语言包|本地 OCR|图片|画布|不支持|无法打开|OCR 语言|Language pack|Local OCR|Image|Canvas|Invalid canvas|Unsupported|Could not open|OCR language)/.test(e?.message) ? l10n('m6h', [e.message]) : l10n('m6i') } }));
+    /^(语言包|本地 OCR|图片|画布|不支持|无法打开|OCR 语言|Language pack|Local OCR|Image|Canvas|Invalid canvas|Unsupported|Could not open|OCR language)/.test(e?.message) ? l10n('m6h', [e.message]) : l10n('m6i') } })).finally(() => { if(control)pdfJobs.delete(msg.jobId); });
   return true;
 });

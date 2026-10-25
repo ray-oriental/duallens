@@ -25,35 +25,44 @@ export function createPDFHandoff({ database = globalThis.indexedDB, now = Date.n
       run(store, value => { result = value; });
     });
   }
+  function sweep(store, done) {
+    const request = store.openCursor(), entries = [], cutoff = now();
+    let removed = 0;
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) { done({ entries, removed }); return; }
+      const expires = cursor.value?.expires;
+      if (!Number.isFinite(expires) || expires <= cutoff) { cursor.delete(); removed++; }
+      else entries.push({ key:cursor.key, expires });
+      cursor.continue();
+    };
+  }
   return {
-    async put(bytes) {
+    async prune() { return transact((store, done) => sweep(store, ({ removed }) => done(removed))); },
+    async put(bytes, name = '') {
       checkPDFBytes(bytes);
       const token = randomUUID();
       await transact((store, done) => {
-        const request = store.openCursor(), entries = [];
-        request.onsuccess = () => {
-          const cursor = request.result;
-          if (cursor) {
-            if (cursor.value.expires <= now()) cursor.delete();
-            else entries.push({key:cursor.key, expires:cursor.value.expires});
-            cursor.continue(); return;
-          }
-          // At most three abandoned handoffs, with five-minute expiry checked on every access.
+        sweep(store, ({ entries }) => {
+          // Purge expired bytes before inserting, keeping at most three live handoffs.
           entries.sort((a,b)=>a.expires-b.expires);
           for (const entry of entries.slice(0, Math.max(0, entries.length - 2))) store.delete(entry.key);
-          store.put({bytes, expires:now()+TTL}, token); done(token);
-        };
+          store.put({bytes, name:String(name).slice(0,200), expires:now()+TTL}, token); done(token);
+        });
       });
       return token;
     },
-    async take(token) {
+    async take(token) { return (await this.takeFile(token)).bytes; },
+    async takeFile(token) {
       if (!valid(token)) throw new Error(l10n('pdfTokenInvalid'));
       const value = await transact((store, done) => {
-        const request = store.get(token);
-        request.onsuccess = () => { store.delete(token); done(request.result); };
+        sweep(store, () => {
+          const request = store.get(token);
+          request.onsuccess = () => { store.delete(token); done(request.result); };
+        });
       });
       if (!value || value.expires <= now()) throw new Error(l10n('pdfTokenExpired'));
-      return checkPDFBytes(new Uint8Array(value.bytes));
+      return { bytes:checkPDFBytes(new Uint8Array(value.bytes)), name:value.name || '' };
     },
     async remove(token) { if(valid(token))await transact(store=>store.delete(token)); },
   };

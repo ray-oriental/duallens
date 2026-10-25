@@ -10,7 +10,7 @@
 - `scripting`：按需注入幂等 loader、按用户授权动态注册常驻脚本；YouTube 轨道观察器及名单内漫画 canvas 来源记录器使用随包发布的原创 MAIN 脚本。全部关闭时取消注册。
 - `contextMenus`：提供翻译此页 / 显示原文、选中文字、视频字幕，以及开启图片文字后的图片入口。当前版本没有 PDF 右键菜单。
 - `sidePanel`：用户通过 Alt+S 或侧栏入口打开独立文本翻译工具。
-- `offscreen`：仅在请求本地 OCR 时创建扩展文档进行图像解码和 Worker 识别，不上传图像。
+- `offscreen`：仅在用户请求图片文字或 PDF 扫描页 OCR 时创建扩展文档进行图像解码和 Worker 识别，不上传图像；缺少语言包时先确认体积和来源，再按需申请下载来源权限。不新增权限。
 - `declarativeNetRequestWithHostAccess`：仅在已拥有目标 CDN 主机权限时，为本扩展 ID 发起的 `xmlhttprequest` / `other` 请求设置漫画站点公开根地址 Referer。规则不匹配网页请求；关闭图片文字、删除站点或撤销主机权限后移除相应会话规则。
 
 必需主机仅为 `edge.microsoft.com`、`api-edge.cognitive.microsofttranslator.com`、`clients5.google.com`，用于默认免费非官方机翻。官方 Microsoft/DeepL 及 AI 服务均使用可选来源权限，保存或测试时按需申请。
@@ -40,7 +40,7 @@ Installation does not request access to all websites and declares no static cont
 - `scripting`: on-demand injection, permission-gated resident registration, and packaged original MAIN-world YouTube/canvas hooks.
 - `contextMenus`: explicit page, selection and video actions; an image action only when image text is enabled. There is currently no PDF menu item.
 - `sidePanel`: user-opened text translation via Alt+S or the browser sidebar.
-- `offscreen`: local image decoding and OCR Workers only after an OCR request.
+- `offscreen`: local image decoding and OCR Workers only after an explicit image-text or scanned-PDF OCR request. Missing language data discloses size/source and requests the download origin after confirmation. No additional permissions are introduced.
 - `declarativeNetRequestWithHostAccess`: host-gated session rules set a public site-root Referer only for this extension's XHR/other requests to selected comic CDNs. Website requests are unaffected; disabling comics, deleting a site or losing host permission removes the rules.
 
 Required HTTPS hosts are limited to `edge.microsoft.com`, `api-edge.cognitive.microsofttranslator.com` and `clients5.google.com`. They serve free unofficial Microsoft/Google translation. Official Microsoft/DeepL and all AI provider hosts are optional and requested when saving or testing the service. Unofficial services may change or fail.

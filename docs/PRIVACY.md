@@ -13,7 +13,7 @@
 - 以上请求都不带 cookie（`credentials: omit`）；服务商能看到你的 IP 地址、浏览器 User-Agent 与请求来源标识。这些免费端点不是微软/谷歌面向第三方的正式服务，可能随时变动或失效，其对文字的处理由各自条款决定；DualLens 与这两家公司没有隶属关系。
 - 首次向某个服务发送前，上手、设置或当前翻译工具会先说明去向并由你确认；尚未确认时，页面卡片需点"继续翻译"后才发送。仅发往本机回环地址（`localhost`/`127.0.0.1`/`::1`）的本地模型不需要确认。
 
-**保存在本机什么**：设置、术语表、站点规则（可由浏览器同步，不含密钥）；API key（扩展用 chrome.storage.local，用户脚本用脚本管理器存储；仅本机，**未加密**保存，不同步、不进明文导出）；译文缓存（默认 30 天、最多 50000 条，可一键清除；隐身/InPrivate 请求不读写缓存；侧栏等无法确认窗口状态的上下文也停用缓存；用户脚本以管理器提供的隐身标志判断，未知时同样停用；译文可能来自你浏览的私密页面）；已下载的 OCR 语言包；打开网页 PDF 时用于交接的临时副本（有效期 5 分钟，读取后即删，过期副本在下次访问暂存区时清除）。
+**保存在本机什么**：设置、术语表、站点规则（可由浏览器同步，不含密钥）；API key（扩展用 chrome.storage.local，用户脚本用脚本管理器存储；仅本机，**未加密**保存，不同步、不进明文导出）；译文缓存（默认 30 天、最多 50000 条，可一键清除；隐身/InPrivate 请求不读写缓存；侧栏等无法确认窗口状态的上下文也停用缓存；用户脚本以管理器提供的隐身标志判断，未知时同样停用；译文可能来自你浏览的私密页面）；已下载的 OCR 语言包；打开网页 PDF 时用于交接的临时副本（五分钟后逻辑过期并拒绝读取，读取成功即删除；后台初始化、浏览器启动、扩展安装／更新及下次写入或读取交接缓存时清理过期副本，无严格定时物理删除保证）。
 
 **浏览器同步**：设置、术语表、站点规则、自定义提示、服务地址与模型名会通过你浏览器自带的同步服务在你的设备间同步（由浏览器厂商运营，不经过 DualLens）。API key 与"已确认的去向"不同步。
 
@@ -25,7 +25,9 @@
 
 设置页中主动点击「获取模型」会向所选服务请求模型列表；「测试连接」发送固定的示例文字，不包含网页内容。显式测试操作本身授权这次测试，不替代网页文字的首次发送确认。
 
-弹出页只在无法注入当前页（例如内置 PDF 查看器）或网址路径以 `.pdf` 结尾时检查 PDF 类型；`.pdf` 路径无需探测，否则向原站完整 URL 发送匿名 HEAD，必要时 Range GET（最多读取文件头），不跟随重定向。点击打开 PDF 才下载完整文件（上限 64 MiB）；暂存最多 3 份，读取即删，过期项在下一次访问暂存区时清除。选择的本地文件只在内存解析；翻译只发送文本块，不上传 PDF、文件名或 URL。图片也仅下载到本机用于 OCR，不上传像素。
+弹出页只在无法注入当前页（例如内置 PDF 查看器）或网址路径以 `.pdf` 结尾时检查 PDF 类型；`.pdf` 路径无需探测，否则向原站完整 URL 发送匿名 HEAD，必要时 Range GET（最多读取文件头），不跟随重定向。点击打开 PDF 才下载完整文件（上限 64 MiB）；暂存最多 3 份，读取即删，过期项在后台初始化、浏览器启动、扩展安装／更新及下次写入或读取交接缓存时清理；无活动上下文时可能保留到下次清理。选择的本地文件只在内存解析；翻译只发送文本块，不上传 PDF、文件名或 URL。图片也仅下载到本机用于 OCR，不上传像素。
+
+PDF 导出完全在本机生成，不上传 PDF 或页面图像；显式开启扫描页 OCR 后，页面只在本机识别，识别分块仅存本次阅读的内存，只有置信度较高的文字发送给所选翻译服务。缺少 OCR 语言包时先说明来源和体积，经确认才下载与校验。
 
 所有能读取浏览器配置文件的人或程序都可能读到未加密的密钥；请保护系统账户。明文导出虽不含密钥，仍可能包含服务地址、站点规则、术语表和自定义提示，请勿公开。加密备份含密钥，使用至少 8 字符口令，通过 PBKDF2-SHA256 与 AES-GCM 加密；口令不保存。删除扩展或清除对应存储可删除本机数据；浏览器同步副本请同时通过浏览器的同步设置管理。
 
@@ -48,7 +50,7 @@ In-page input-box, selection, hover translation and in-place retry respond only 
 - Requests carry no cookies. Providers can see your IP address, User-Agent and the extension origin. The free endpoints are not official third-party services of Microsoft or Google, may change or stop at any time, and are governed by those companies' terms. DualLens is not affiliated with either.
 - Before text is first sent to a service, setup, Settings or the current translation tool explains the destination and asks you to confirm. An unacknowledged destination shows a card and text goes out only after Continue. Local models on a loopback address (localhost, 127.0.0.1, ::1) need no confirmation.
 
-Stored on your device: settings, glossary, site rules (synced by your browser, no keys); API keys (device only in chrome.storage.local or userscript-manager storage, stored unencrypted, never synced or in plaintext exports); translation cache (30 days and up to 50,000 entries by default, disabled for incognito/InPrivate requests and contexts without an authoritative normal-window flag (including unknown userscript-manager state), may contain translations of private pages, clearable); downloaded OCR language data; a temporary copy of a web PDF while the reader tab opens (valid for five minutes, deleted when read; expired copies are purged on the next handoff access).
+Stored on your device: settings, glossary, site rules (synced by your browser, no keys); API keys (device only in chrome.storage.local or userscript-manager storage, stored unencrypted, never synced or in plaintext exports); translation cache (30 days and up to 50,000 entries by default, disabled for incognito/InPrivate requests and contexts without an authoritative normal-window flag (including unknown userscript-manager state), may contain translations of private pages, clearable); downloaded OCR language data; a temporary copy of a web PDF while the reader tab opens (logically expires after five minutes and cannot then be read; consumed bytes are deleted immediately, while expired copies are purged on worker initialization, browser startup, extension install/update, or the next handoff write/read; no exact physical-deletion timer is guaranteed).
 
 Browser sync carries settings, glossary, site rules, custom prompt, service URLs and model names via your browser vendor's sync service, not DualLens. Keys and "confirmed destinations" never sync.
 
@@ -60,7 +62,9 @@ Contact and changes: see the GitHub repository (Issues / Security Advisories). C
 
 Deliberately clicking Fetch models requests a model list; Test connection sends fixed sample sentences, without webpage content. Such explicit tests authorize that test request and do not acknowledge future webpage translation.
 
-The popup checks PDF type only if injection fails (such as the built-in PDF viewer) or the URL path ends in .pdf. A .pdf path needs no probe; otherwise an anonymous HEAD, then if needed a Range GET for the header, goes to the original full URL without redirects. Full PDF bytes are fetched only on Open (64 MiB maximum); up to three temporary copies expire after five minutes, are deleted when consumed, and expired records are removed on the next handoff access. Selected local files are processed in memory. Only text blocks are translated, without PDF bytes, filename or URL. Images are downloaded for local OCR; pixels are never uploaded.
+The popup checks PDF type only if injection fails (such as the built-in PDF viewer) or the URL path ends in .pdf. A .pdf path needs no probe; otherwise an anonymous HEAD, then if needed a Range GET for the header, goes to the original full URL without redirects. Full PDF bytes are fetched only on Open (64 MiB maximum); up to three temporary copies logically expire after five minutes and are deleted immediately when consumed. Expired records are purged on worker initialization, browser startup, extension install/update, or the next handoff write/read; without an active context, bytes may remain until the next cleanup. Selected local files are processed in memory. Only text blocks are translated, without PDF bytes, filename or URL. Images are downloaded for local OCR; pixels are never uploaded.
+
+PDF export is generated entirely on this device, without uploading PDFs or page images. After you explicitly enable scanned-page OCR, images are recognized on this device and recognition blocks stay in reading-session memory; only high-confidence text is sent to your selected translation service. Missing language packs disclose their source and size and are downloaded and verified only after confirmation.
 
 Anyone able to read the browser profile may read unencrypted keys. Protect your OS account. Plaintext exports omit keys but can contain service addresses, site rules, glossary and custom prompts; do not post them publicly. Encrypted exports include keys, use PBKDF2-SHA256/AES-GCM and require at least eight passphrase characters; passphrases are not stored. Uninstalling or clearing extension storage removes device data; manage browser-sync copies through the browser vendor’s sync settings as well.
 
