@@ -6,6 +6,7 @@ import uuid
 from playwright.sync_api import sync_playwright
 import run_e2e as e2e
 from run_userscript_e2e import STUB
+from trusted_input import touch_hold
 
 ROOTS = """(() => {
   const roots=[]; const attach=Element.prototype.attachShadow;
@@ -79,6 +80,13 @@ class Harness:
     def wait_value(self, selector, expected):
         self.page.wait_for_function("({selector,expected})=>{const el=document.querySelector(selector);return (el.value??el.innerText)===expected;}", arg={'selector': selector, 'expected': expected}, timeout=6000)
 
+    def wait_ui(self, predicate):
+        for _ in range(60):
+            if self.ui(predicate):
+                return
+            self.page.wait_for_timeout(100)
+        raise AssertionError('Timed out waiting for UI: ' + predicate)
+
 
 def cases(h, calls):
     p = h.page
@@ -89,6 +97,33 @@ def cases(h, calls):
         count += 1
         PASSED.append((h.mode, name))
         print(f'PASS input {h.mode} {name}', flush=True)
+
+    # No real input has occurred since navigation, including on the touch fixture.
+    h.settings({'selection': {'enabled': True, 'showIcon': False}})
+    before = len(calls())
+    p.evaluate("""()=>{const r=document.createRange();r.selectNodeContents(document.querySelector('#p-bold'));
+      getSelection().removeAllRanges();getSelection().addRange(r);
+      for(const type of ['mouseup','keyup','pointerup'])document.dispatchEvent(type==='keyup'
+        ?new KeyboardEvent(type,{bubbles:true,key:'ArrowRight',shiftKey:true})
+        :type==='pointerup'?new PointerEvent(type,{bubbles:true,pointerType:'touch',isPrimary:true})
+        :new MouseEvent(type,{bubbles:true,button:0}));}""")
+    p.wait_for_timeout(650)
+    assert not h.ui("f=>f.elements('.card.show,.icon.show').length")
+    assert len(calls()) == before
+    passed('synthetic_selection_no_icon_no_card_or_request')
+    p.mouse.up()
+    h.wait_ui("f=>f.elements('.card.show .dst').some(e=>e.textContent.startsWith('【译】'))")
+    passed('trusted_mouseup_direct_selection')
+    p.keyboard.press('Escape')
+    h.settings({'selection': {'showIcon': True}})
+    if h.mode == 'userscript':
+        box = p.locator('#p-bold').bounding_box()
+        p.touchscreen.tap(box['x'] + 5, box['y'] + 5)
+        p.evaluate("""()=>{const r=document.createRange();r.selectNodeContents(document.querySelector('#p-bold'));
+          getSelection().removeAllRanges();getSelection().addRange(r);}""")
+        p.wait_for_function("()=>__platformFixture.elements('.icon.show').length===1")
+        passed('trusted_touch_allows_following_selectionchange')
+        p.keyboard.press('Escape')
 
     h.settings({'input': {'mode': 'bilingual', 'order': 'source-first', 'profileId': '', 'model': ''}})
     h.field('#controlled', 'hello'); h.command()
@@ -142,6 +177,20 @@ def cases(h, calls):
     assert any(c['model'] == 'input-model' and c['url'] == 'https://input.duallens.invalid/v1/chat/completions' for c in calls())
     passed('input_service_identity_overrides_mixed_mt')
 
+    h.settings({'input': {'enabled': True, 'trigger': 'triple-space'}})
+    before = len(calls()); h.field('#single', 'synthetic space fixture')
+    p.eval_on_selector('#single', """el=>{for(let i=0;i<3;i++)
+      el.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:' ',code:'Space'}));}""")
+    p.wait_for_timeout(650)
+    assert len(calls()) == before
+    assert p.locator('#single').input_value() == 'synthetic space fixture'
+    passed('synthetic_triple_space_no_request_or_writeback')
+    for _ in range(3):
+        p.keyboard.press('Space')
+    h.wait_value('#single', '【译】synthetic space fixture')
+    assert len(calls()) > before
+    passed('trusted_triple_space_translates')
+
     h.field('#single', 'waiting'); h.command(); p.locator('#single').press('End'); p.locator('#single').press('x'); p.wait_for_timeout(450)
     assert p.locator('#single').input_value() == 'waitingx'
     passed('continued_typing_no_overwrite')
@@ -153,9 +202,11 @@ def cases(h, calls):
     p.eval_on_selector('#single', "el=>el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))")
     h.command()
     for _ in range(3):
-        p.eval_on_selector('#single', "el=>el.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:' '}))")
+        p.keyboard.press('Space')
     p.wait_for_timeout(200); assert len(calls()) == before
     p.eval_on_selector('#single', "el=>el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}))")
+    assert p.locator('#single').input_value() == 'IME text   '
+    h.field('#single', 'IME text')
     h.command(); h.wait_value('#single', '【译】IME text')
     passed('IME_blocks_command_and_triple_space_then_recovers')
 
@@ -167,11 +218,40 @@ def cases(h, calls):
     assert p.locator('#single').input_value() == 'deliberate failure'
     passed('failed_translation_no_writeback')
 
-    h.settings({'hover': {'modifier': 'none', 'profileId': 'interaction-test', 'model': 'hover-model'}})
+    h.settings({'hover': {'enabled': True, 'modifier': 'Shift', 'profileId': 'interaction-test', 'model': 'hover-model'}})
     p.evaluate('()=>{document.activeElement.blur();getSelection().removeAllRanges();}')
+    before = len(calls())
+    p.eval_on_selector('#p-plain', """el=>{const r=el.getBoundingClientRect();
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Shift',shiftKey:true,bubbles:true}));
+      el.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,shiftKey:true,clientX:r.x+10,clientY:r.y+10}));
+      el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerType:'touch',isPrimary:true,pointerId:91}));}""")
+    p.wait_for_timeout(700)
+    assert len(calls()) == before and p.locator('#p-plain dl-t').count() == 0
+    passed('synthetic_shift_move_and_touch_no_hover_request')
+    if h.mode == 'extension':
+        # Isolate the key and move gates: a trusted pointer must not make a fake key real,
+        # nor may a real held modifier authorize a page-script move to another paragraph.
+        p.locator('#p-plain').hover()
+        p.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Shift',shiftKey:true,bubbles:true}))")
+        p.wait_for_timeout(450)
+        assert len(calls()) == before and p.locator('#p-plain dl-t').count() == 0
+        passed('trusted_pointer_synthetic_shift_no_hover_request')
+        p.keyboard.down('Shift')
+        try:
+            p.wait_for_function("()=>document.querySelector('#p-plain dl-t[data-dl-state=done]')")
+            passed('trusted_pointer_and_shift_translate')
+            before = len(calls())
+            p.eval_on_selector('#p-bold', """el=>{const r=el.getBoundingClientRect();
+              el.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,shiftKey:true,clientX:r.x+10,clientY:r.y+10}));}""")
+            p.wait_for_timeout(450)
+            assert len(calls()) == before and p.locator('#p-bold dl-t').count() == 0
+            passed('trusted_shift_synthetic_move_no_hover_request')
+        finally:
+            p.keyboard.up('Shift')
+    h.settings({'hover': {'modifier': 'none'}})
     p.locator('#p-plain').hover()
     if h.mode == 'userscript':
-        p.dispatch_event('#p-plain', 'pointerdown', {'pointerType': 'touch', 'isPrimary': True, 'pointerId': 91, 'clientX': 100, 'clientY': 300})
+        touch_hold(p, '#p-plain')
     p.wait_for_function("()=>document.querySelector('#p-plain dl-t[data-dl-state=done]')")
     assert any(c['model'] == 'hover-model' for c in calls())
     passed('hover_service_identity')
@@ -179,7 +259,8 @@ def cases(h, calls):
     if h.session:
         h.session.msg({'type': 'translate-selection', 'text': 'selection service'})
     else:
-        p.eval_on_selector('#p-bold', "el=>{const r=document.createRange();r.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(r);el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));}")
+        p.eval_on_selector('#p-bold', "el=>{const r=document.createRange();r.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(r);}")
+        p.mouse.up()
         p.wait_for_timeout(80)
         h.ui("f=>f.elements('.icon').find(e=>e.classList.contains('show')).click()")
     p.wait_for_timeout(150)
@@ -207,6 +288,36 @@ def cases(h, calls):
         assert p.evaluate('()=>document.documentElement.scrollWidth<=innerWidth')
         p.keyboard.press('Escape')
         passed('mobile_settings_resource_saves_all_new_fields')
+
+    # A genuine failed paragraph supplies a retry marker in page-controlled DOM.
+    h.settings({'hover': {'enabled': False}, 'selection': {'enabled': False},
+                'provider': {'active': 'interaction-test', 'chain': [{'profileId': 'interaction-test', 'model': 'retry-model'}]},
+                'translation': {'mode': 'llm'},
+                'siteRules': {'custom': [{'match': '127.0.0.1/*', 'include': '#trusted-retry'}]}})
+    p.evaluate("""()=>{const el=document.createElement('p');el.id='trusted-retry';
+      el.textContent='deliberate failure for trusted retry';document.body.prepend(el);}""")
+    if h.session:
+        h.session.command('toggle-page')
+    else:
+        p.evaluate("()=>__platformFixture.command('翻译 / 恢复当前页面')")
+    marker = p.locator('#trusted-retry dl-r')
+    marker.wait_for()
+    p.wait_for_timeout(500)
+    before = len(calls())
+    marker.evaluate("""el=>{el.click();for(const key of ['Enter',' '])
+      el.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key}));}""")
+    p.wait_for_timeout(700)
+    assert len(calls()) == before
+    assert p.locator('#trusted-retry dl-t[data-dl-state=error] dl-r').count() == 1
+    passed('synthetic_inline_retry_click_and_keys_no_request')
+    marker.click()
+    p.wait_for_timeout(700)
+    assert len(calls()) > before
+    passed('trusted_inline_retry_click_sends_request')
+    before = len(calls())
+    marker.focus(); p.keyboard.press('Enter'); p.wait_for_timeout(700)
+    assert len(calls()) > before
+    passed('trusted_inline_retry_enter_sends_request')
     return count
 
 
