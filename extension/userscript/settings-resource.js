@@ -9,6 +9,15 @@ export const SETTINGS_RESOURCE_ERROR = () => l10n('mkb');
 export { sha256Digest as resourceDigest };
 
 export function createSettingsFormLoader(getResourceText, spec = RESOURCE) {
+  const read = createResourceLoader(getResourceText, spec, module => typeof module?.mountSettingsForm === 'function', SETTINGS_RESOURCE_ERROR);
+  let pending;
+  return () => pending ||= read().then(module => {
+    module.mountSettingsForm.version=spec.version || spec.url?.match(/\/v([^/]+)\/duallens-settings\.js$/)?.[1] || null;
+    return module.mountSettingsForm;
+  }).catch(error => { pending = null; throw error; });
+}
+
+export function createResourceLoader(getResourceText, spec, validate, errorMessage) {
   let pending;
   return () => {
     if (!pending) pending = Promise.resolve().then(async () => {
@@ -19,10 +28,9 @@ export function createSettingsFormLoader(getResourceText, spec = RESOURCE) {
         if (bytes.length !== spec.bytes || await sha256Digest(bytes) !== spec.sha256) throw new Error();
         // Only the pinned, verified release code runs in this sandbox. No DOM script/global bridge.
         const module = new Function('return (\n' + source.trim().replace(/;$/, '') + '\n);')();
-        if (typeof module?.mountSettingsForm !== 'function') throw new Error();
-        module.mountSettingsForm.version=spec.version || spec.url?.match(/\/v([^/]+)\/duallens-settings\.js$/)?.[1] || null;
-        return module.mountSettingsForm;
-      } catch { pending = null; throw new Error(SETTINGS_RESOURCE_ERROR()); }
+        if (!validate(module)) throw new Error();
+        return module;
+      } catch { pending = null; throw new Error(errorMessage()); }
     });
     return pending;
   };

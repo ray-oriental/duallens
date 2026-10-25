@@ -259,11 +259,13 @@ function parseModule(source, file) {
   return { source, imports, exports, edits };
 }
 
-export async function buildBundle(entry, { root = path.dirname(entry), entryExports = [] } = {}) {
+export async function buildBundle(entry, { root = path.dirname(entry), entryExports = [], onModule = () => {}, moduleAliases = {} } = {}) {
   root = await fs.realpath(root);
   const graph = new Map(), active = new Set();
   async function visit(file) {
     file = await fs.realpath(file);
+    const alias = moduleAliases[path.relative(root,file).replaceAll('\\','/')];
+    if (alias) file = await fs.realpath(path.resolve(root,alias));
     const rel = path.relative(root, file);
     if (rel.startsWith('..') || path.isAbsolute(rel)) fail(file, 'dependency escapes module root');
     if (active.has(file)) fail(file, 'cyclic modules are unsupported');
@@ -342,7 +344,9 @@ export async function buildBundle(entry, { root = path.dirname(entry), entryExpo
     }
     code = compactSource(code, path.relative(root,file));
     code += '\n__x(__e,{' + mod.exports.filter(e=>used.get(file).has(e.local)).map(e=>`${JSON.stringify(slots.get(file).get(e.local))}:()=>${e.imported}`).join(',') + '});';
-    factories.push(`${JSON.stringify(id(file))}:function(__e,__r){\n${code}\n}`);
+    const factory = `${JSON.stringify(id(file))}:function(__e,__r){\n${code}\n}`;
+    factories.push(factory);
+    onModule({ file: path.relative(root,file).replaceAll('\\','/'), bytes: Buffer.byteLength(factory) });
   }
   const bundle = `// Modules: ${JSON.stringify([...graph.keys()].map(f=>path.relative(root,f).replaceAll('\\','/')))}\n(function() {\n'use strict';\nfunction __x(out,values){for(const [key,get] of Object.entries(values))Object.defineProperty(out,key,{enumerable:true,get});}\nconst __modules = {\n${factories.join(',\n')}\n};\nconst __cache = Object.create(null);\nfunction __r(id) {\n if (__cache[id]) return __cache[id];\n const out = __cache[id] = Object.create(null);\n __modules[id](out, __r);\n return out;\n}\n${entryExports.length ? 'return ' : ''}__r(${JSON.stringify(id(entryFile))});\n})();\n`;
   // Validate before touching the output. Unsupported/unrewritten ESM and top-level await fail.
@@ -381,30 +385,58 @@ ${resources.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).joi
 `;
 }
 
-export async function buildUserscript({ project = PROJECT, output = path.join(project, 'dist', 'duallens.user.js') } = {}) {
+export async function buildUserscript({ project = PROJECT, output = path.join(project, 'dist', 'duallens.user.js'), report = false } = {}) {
+  const modules = { startup: [], settings: [], features: [] };
   const manifest = JSON.parse((await fs.readFile(path.join(project, 'extension', 'manifest.json'), 'utf8')).replace(/^\uFEFF/, ''));
   const settings = await buildBundle(path.join(project, 'extension', 'userscript', 'ui-resource.js'), {
-    root: path.join(project, 'extension'), entryExports: ['mountSettingsForm'],
+    root: path.join(project, 'extension'), entryExports: ['mountSettingsForm'], onModule: item => modules.settings.push(item),
   });
   const resource = { name: 'duallens-settings', file: 'duallens-settings.js', bytes: Buffer.byteLength(settings),
     sha256: createHash('sha256').update(settings).digest('hex'),
     url: `https://github.com/ray-oriental/duallens/releases/download/v${manifest.version}/duallens-settings.js` };
-  const bundle = await buildBundle(path.join(project, 'extension', 'userscript', 'entry.js'), { root: path.join(project, 'extension') });
+  const features = await buildBundle(path.join(project,'extension/userscript/features-resource.js'), {
+    root: path.join(project,'extension'), entryExports: ['VideoSubtitles','createUserscriptOCR','messages','setUiLanguage'],
+    onModule: item => modules.features.push(item),
+  });
+  const featureResource = { name: 'duallens-features', file: 'duallens-features.js', bytes: Buffer.byteLength(features),
+    sha256: createHash('sha256').update(features).digest('hex'),
+    url: `https://github.com/ray-oriental/duallens/releases/download/v${manifest.version}/duallens-features.js` };
+  const bundle = await buildBundle(path.join(project, 'extension', 'userscript', 'entry.js'), {
+    root: path.join(project, 'extension'), onModule: item => modules.startup.push(item),
+    moduleAliases: {
+      'content/comics/userscript-ocr.js': 'userscript/lazy-ocr.js',
+      'content/subtitles/controller.js': 'userscript/lazy-subtitles.js',
+    },
+  });
   const marker = "'__DUALLENS_SETTINGS_RESOURCE__'";
   if (bundle.split(marker).length !== 2) throw new Error('Settings resource descriptor placeholder missing or duplicated');
-  const content = metadata(manifest.version, [resource]) + bundle.replace(marker, JSON.stringify(resource));
+  const featureMarker = "'__DUALLENS_FEATURES_RESOURCE__'";
+  if (bundle.split(featureMarker).length !== 2) throw new Error('Features resource descriptor placeholder missing or duplicated');
+  const content = metadata(manifest.version, [resource,featureResource]) + bundle.replace(marker, JSON.stringify(resource)).replace(featureMarker,JSON.stringify(featureResource));
+  if (report) for (const [name, total] of [['startup', Buffer.byteLength(content)], ['settings', resource.bytes], ['features', featureResource.bytes]]) {
+    console.log(`REPORT ${name}: ${total} bytes`);
+    for (const item of [...modules[name]].sort((a,b) => b.bytes-a.bytes || a.file.localeCompare(b.file,'en'))) console.log(`${String(item.bytes).padStart(8)}  ${item.file}`);
+    console.log(`${String(total-modules[name].reduce((sum,item) => sum+item.bytes,0)).padStart(8)}  metadata / module index / framing / descriptor`);
+  }
   if(Buffer.byteLength(content)>345000) throw new Error('Userscript exceeds the 345 KB startup budget');
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(path.join(path.dirname(output), resource.file), settings, 'utf8');
+  await fs.writeFile(path.join(path.dirname(output), featureResource.file), features, 'utf8');
   await fs.writeFile(output, content, 'utf8');
-  return { output, bytes: Buffer.byteLength(content), version: manifest.version, resource };
+  return { output, bytes: Buffer.byteLength(content), version: manifest.version, resource, featureResource, modules };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    if (args.length && !(args.length === 2 && args[0] === '--output')) throw new Error('Usage: node scripts/build_userscript.mjs [--output path]');
-    const result = await buildUserscript(args.length ? { output: path.resolve(args[1]) } : {});
-    console.log(`PASS userscript v${result.version}: ${result.bytes} bytes; settings resource: ${result.resource.bytes} bytes; syntax valid`);
+    const options = {};
+    while (args.length) {
+      const arg = args.shift();
+      if (arg === '--report' && !options.report) options.report = true;
+      else if (arg === '--output' && args.length && !options.output) options.output = path.resolve(args.shift());
+      else throw new Error('Usage: node scripts/build_userscript.mjs [--report] [--output path]');
+    }
+    const result = await buildUserscript(options);
+    console.log(`PASS userscript v${result.version}: ${result.bytes} / 345000 bytes; settings resource: ${result.resource.bytes} bytes; features resource: ${result.featureResource.bytes} bytes; syntax valid`);
   } catch (error) { console.error(`FAIL userscript: ${error.message}`); process.exitCode = 1; }
 }

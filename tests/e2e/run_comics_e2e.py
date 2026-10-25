@@ -238,7 +238,7 @@ def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
     h.page.set_viewport_size({'width':375,'height':812})
     h.js("() => document.querySelectorAll('figure').forEach(f=>{if(f.firstElementChild.id!=='eng')f.style.display='none'})")
     before=h.js('() => document.body.outerHTML')
-    h.js("""() => {
+    h.js("""featureSource => {
       const settings={version:3,provider:{active:'mock',chain:[]},translation:{mode:'llm',mt:{engine:'mock'}},comics:{enabled:true,language:'eng'},floatBall:{enabled:false}};
       // Current v3 fixture opts into OCR explicitly and uses manager-private storage.
       const values={'duallens:local':{settings,'settings.core':settings}};
@@ -247,6 +247,7 @@ def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
       window.fixtureResourceReads=[];
       window.GM_getResourceText=name=>{
         window.fixtureResourceReads.push(name);
+        if(name==='duallens-features')return featureSource;
         const file=name==='duallensOcrCore'?'tesseract-core-simd-lstm.wasm.js':'worker.min.js';
         return fetch('/comics-runtime/'+file).then(res=>res.text());
       };
@@ -264,9 +265,9 @@ def comics_userscript(h,blocked=False,fallback=False,allow_sites=False):
           req.onload({status:res.status,response,responseText:typeof response==='string'?response:'',responseHeaders:'content-type: '+res.headers.get('content-type')});
         }).catch(()=>req.onerror());return {abort:()=>ctrl.abort()};
       };
-    }""")
+    }""", (runner.REPO/'dist/duallens-features.js').read_text(encoding='utf-8'))
     if allow_sites: h.js("() => {window.fixtureStorage['duallens:local'].settings.comics.canvasSites=['127.0.0.1']}")
-    if fallback: h.js("() => {window.GM_getResourceText=()=>{throw Error('Resource API unavailable')}}")
+    if fallback: h.js("() => {const read=GM_getResourceText;window.GM_getResourceText=name=>{if(name==='duallens-features')return read(name);throw Error('OCR resource API unavailable');}}")
     h.page.add_script_tag(url=h.base+'/comics-bundle.js')
     wait_csp_safe(h,"() => !!window.fixtureCommands['翻译此页漫画']")
     runner.check(h.js('() => window.fixtureResourceReads.length')==0,'ordinary page parsed/read OCR resources at startup')

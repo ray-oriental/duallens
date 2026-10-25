@@ -115,6 +115,8 @@ const hash=createHash('sha256').update(panel).digest('hex');
 const line='// @resource duallens-settings https://github.com/ray-oriental/duallens/releases/download/v'+version+'/duallens-settings.js#sha256='+hash+'\n';
 await fs.writeFile(path.join(path.dirname(output),'duallens-settings.js'),panel);
 await fs.writeFile(output,(await fs.readFile(output,'utf8')).replace('// ==/UserScript==',line+'// ==/UserScript=='));
+const settingsDescriptor={name:'duallens-settings',file:'duallens-settings.js',bytes:Buffer.byteLength(panel),sha256:hash,url:'https://github.com/ray-oriental/duallens/releases/download/v'+version+'/duallens-settings.js'};
+await fs.appendFile(output,'const settingsSpec='+JSON.stringify(settingsDescriptor)+';\n');
 """, encoding='utf-8')
         return builder
 
@@ -151,6 +153,55 @@ await fs.writeFile(output,(await fs.readFile(output,'utf8')).replace('// ==/User
         self.userscript_builder(); self.build()
         self.assertFalse((self.out / 'duallens-settings.js').exists())
         verify_release(self.project, self.out)
+
+    def test_settings_resource_descriptor_matches_size_and_is_required(self):
+        builder = self.settings_builder()
+        original = builder.read_text(encoding='utf-8')
+        for replacement in ['JSON.stringify({...settingsDescriptor,bytes:1})', "'{}'"]:
+            builder.write_text(original.replace('JSON.stringify(settingsDescriptor)', replacement), encoding='utf-8')
+            with self.assertRaisesRegex(CheckError, 'settings resource descriptor'): self.build()
+
+    def features_builder(self):
+        builder = self.settings_builder()
+        builder.write_text(builder.read_text(encoding='utf-8') + r"""
+const feature='(function(){return {VideoSubtitles(){},createUserscriptOCR(){}};})();\n';
+const descriptor={name:'duallens-features',file:'duallens-features.js',bytes:Buffer.byteLength(feature),sha256:createHash('sha256').update(feature).digest('hex'),url:'https://github.com/ray-oriental/duallens/releases/download/v'+version+'/duallens-features.js'};
+await fs.writeFile(path.join(path.dirname(output),descriptor.file),feature);
+const metadata='// @resource duallens-features '+descriptor.url+'#sha256='+descriptor.sha256+'\n';
+await fs.writeFile(output,(await fs.readFile(output,'utf8')).replace('// ==/UserScript==',metadata+'// ==/UserScript==')+'const featureSpec='+JSON.stringify(descriptor)+';\n');
+""", encoding='utf-8')
+        return builder
+
+    def test_features_resource_is_packaged_verified_and_removed_when_obsolete(self):
+        self.features_builder()
+        self.assertIn(self.out / 'duallens-features.js', self.build())
+        self.assertIn('  duallens-features.js\n', (self.out / 'SHA256SUMS').read_text())
+        verify_release(self.project, self.out)
+        asset = self.out / 'duallens-features.js'
+        asset.write_text(asset.read_text() + '// changed\n')
+        with self.assertRaisesRegex(CheckError, 'checksum mismatch'): verify_release(self.project, self.out)
+        self.rehash()
+        with self.assertRaisesRegex(CheckError, 'rebuilt source'): verify_release(self.project, self.out)
+        self.build(); asset.unlink()
+        with self.assertRaisesRegex(CheckError, 'missing release asset'): verify_release(self.project, self.out)
+        self.build(); self.settings_builder(); self.build()
+        self.assertFalse(asset.exists())
+        verify_release(self.project, self.out)
+
+    def test_features_resource_metadata_descriptor_and_size_fail_before_replacing_release(self):
+        builder = self.features_builder()
+        original = builder.read_text(encoding='utf-8')
+        self.build()
+        before = {p.name:p.read_bytes() for p in self.out.iterdir()}
+        for code, error in [
+            (original.replace("+'#sha256='+descriptor.sha256", "+'#sha256='+'0'.repeat(64)"), 'features resource metadata'),
+            (original.replace('JSON.stringify(descriptor)', 'JSON.stringify({...descriptor,bytes:1})'), 'features resource descriptor'),
+            (original.replace('JSON.stringify(descriptor)', "'{}'"), 'features resource descriptor'),
+            (original.replace("const feature='", "const feature='x'.repeat(128001)+'"), 'features resource exceeds'),
+        ]:
+            builder.write_text(code, encoding='utf-8')
+            with self.assertRaisesRegex(CheckError, error): self.build()
+            self.assertEqual({p.name:p.read_bytes() for p in self.out.iterdir()}, before)
 
     def test_userscript_hash_metadata_and_rebuild_are_all_checked(self):
         self.userscript_builder()

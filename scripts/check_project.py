@@ -26,7 +26,7 @@ PUBLIC_DOCS = ('docs/ARCHITECTURE.md', 'docs/COMICS.md', 'docs/DESIGN.md', 'docs
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
 VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store|chrome-store)-v\d+(?:\.\d+){0,3}\.zip')
-USERSCRIPT_ASSETS = {'duallens.user.js', 'duallens-settings.js'}
+USERSCRIPT_ASSETS = {'duallens.user.js', 'duallens-settings.js', 'duallens-features.js'}
 
 class CheckError(ValueError):
     pass
@@ -171,6 +171,8 @@ USERSCRIPT_ONLY = frozenset({
     'sidepanel/userscript-panel.js', 'ui/common.js', 'ui/ui.css',
     'userscript/entry.js', 'userscript/menu.js', 'userscript/panel.js',
     'userscript/settings-resource.js', 'userscript/ui-resource.js',
+    'userscript/features-resource.js', 'userscript/features-loader.js',
+    'userscript/lazy-ocr.js', 'userscript/lazy-subtitles.js',
 })
 
 def extension_runtime_assets(assets):
@@ -300,17 +302,26 @@ def rebuild_userscript_assets(project: Path) -> dict[str, bytes]:
                                 capture_output=True, check=False)
         require(result.returncode == 0 and output.is_file(), 'userscript rebuild failed')
         assets = {'duallens.user.js': output.read_bytes()}
-        panel = Path(temporary) / 'duallens-settings.js'
+        require(len(assets['duallens.user.js']) <= 345000, 'userscript exceeds startup byte budget')
         text = assets['duallens.user.js'].decode('utf-8')
-        refs = re.findall(r'^//\s*@resource\s+duallens-settings\s+(\S+)\s*$', text, re.M)
-        if panel.exists() or refs:
-            require(panel.is_file() and not is_link(panel), 'settings resource rebuild missing or linked')
+        version = read_manifest(project / 'extension')['version']
+        for label, limit in [('settings', 345000), ('features', 128000)]:
+            name = f'duallens-{label}'
+            panel = Path(temporary) / f'{name}.js'
+            refs = re.findall(r'^//\s*@resource\s+' + name + r'\s+(\S+)\s*$', text, re.M)
+            if not panel.exists() and not refs:
+                continue
+            require(panel.is_file() and not is_link(panel), f'{label} resource rebuild missing or linked')
             content = panel.read_bytes()
-            version = read_manifest(project / 'extension')['version']
+            require(0 < len(content) <= limit, f'{label} resource exceeds byte budget or is empty')
             digest = hashlib.sha256(content).hexdigest()
-            require(refs == [f'https://github.com/ray-oriental/duallens/releases/download/v{version}/duallens-settings.js#sha256={digest}'],
-                    'settings resource metadata differs from rebuilt asset')
-            assets['duallens-settings.js'] = content
+            url = f'https://github.com/ray-oriental/duallens/releases/download/v{version}/{name}.js'
+            require(refs == [f'{url}#sha256={digest}'], f'{label} resource metadata differs from rebuilt asset')
+            descriptors = re.findall(r'\{"name":"' + name + r'",[^{}\n]*\}', text)
+            require(len(descriptors) == 1, f'{label} resource descriptor missing or duplicated')
+            require(json.loads(descriptors[0]) == {'name':name, 'file':f'{name}.js', 'bytes':len(content), 'sha256':digest, 'url':url},
+                    f'{label} resource descriptor differs from rebuilt asset')
+            assets[f'{name}.js'] = content
         return assets
 
 

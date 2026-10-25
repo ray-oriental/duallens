@@ -2401,6 +2401,9 @@
   "mkb": {
     "message": "设置资源缺失或校验失败，请重新安装用户脚本（从官方 Release 安装，并允许 Tampermonkey 缓存资源）。"
   },
+  "budgetResourceError": {
+    "message": "功能资源缺失或校验失败，请重新安装用户脚本（从官方 Release 安装，并允许 Tampermonkey 缓存资源）。"
+  },
   "appName": {
     "message": "DualLens 双语对照翻译"
   },

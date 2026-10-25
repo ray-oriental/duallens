@@ -25,13 +25,17 @@ STUB = r"""(() => {
   const calls = [];
   const tasks = [];
   const resourceReads = [];
-  let resourceMode = 'valid';
-  const settingsSource = '__DUALLENS_RESOURCE_TEXT__';
+  const resourceModes = new Map();
+  const pendingResources = new Map();
+  const resources = '__DUALLENS_RESOURCE_TEXT__';
   window.GM_getResourceText = name => {
     resourceReads.push(name);
+    const resourceMode = resourceModes.get(name) || 'valid';
     if (resourceMode === 'throw') throw Error('fixture resource unavailable');
-    if (resourceMode === 'missing' || name !== 'duallens-settings') return '';
-    return resourceMode === 'tampered' ? settingsSource.replace('const ', 'let   ') : settingsSource;
+    const source = resources[name];
+    if (resourceMode === 'delayed') return new Promise(resolve=>pendingResources.set(name,()=>resolve(source)));
+    if (resourceMode === 'missing' || !source) return '';
+    return resourceMode === 'tampered' ? source.replace('const ', 'let   ') : source;
   };
   const original = Element.prototype.attachShadow;
   Element.prototype.attachShadow = function(init) {
@@ -96,14 +100,16 @@ STUB = r"""(() => {
     rect(selector) { const el=this.elements(selector).find(e=>getComputedStyle(e).display!=='none'); if(!el)return null;const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}; },
     data(key) { return structuredClone(data.get(key)); },
     calls, tasks, resourceReads,
-    resourceMode(mode) { resourceMode = mode; },
+    resourceMode(mode, name='duallens-settings') { resourceModes.set(name,mode); },
+    releaseResource(name) { pendingResources.get(name)?.(); pendingResources.delete(name); },
   };
 })();"""
 
 # Emulate the manager's install-time resource cache. No runtime request is made.
-_settings_asset = REPO / 'dist' / 'duallens-settings.js'
 STUB = STUB.replace("'__DUALLENS_RESOURCE_TEXT__'", json.dumps(
-    _settings_asset.read_text(encoding='utf-8') if _settings_asset.is_file() else '', ensure_ascii=True))
+    {name: (REPO / 'dist' / (name + '.js')).read_text(encoding='utf-8')
+     for name in ['duallens-settings', 'duallens-features']
+     if (REPO / 'dist' / (name + '.js')).is_file()}, ensure_ascii=True))
 
 
 def command(page, label):
@@ -237,6 +243,61 @@ def settings_resource_case(page, base):
         page.wait_for_function("__platformFixture.elements('form').length===1")
         page.keyboard.press('Escape')
     return 'offline cache: lazy verified load, save/reopen, no network; missing/tampered/GM error show reinstall guidance and recover'
+
+
+def features_resource_case(page, base):
+    def video():
+        page.evaluate("""() => {
+          const player=document.createElement('div'), video=document.createElement('video');
+          player.append(video);document.body.append(player);
+          const track=video.addTextTrack('subtitles','English','en');track.mode='showing';
+          track.addCue(new VTTCue(0,10,'A local subtitle for feature loading.'));
+        }""")
+    ready(page, base)
+    check(page.evaluate('__platformFixture.resourceReads.length') == 0, 'feature resource read at startup')
+    video()
+    for _ in range(2):
+        command(page, '启用 / 恢复视频双语字幕')
+        page.wait_for_selector('dl-ui[data-dl-subtitles][data-ready]')
+        command(page, '启用 / 恢复视频双语字幕')
+        page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
+    check(page.evaluate('__platformFixture.resourceReads') == ['duallens-features'], 'feature resource cache not reused')
+    check(page.evaluate('document.querySelector("video").textTracks[0].mode') == 'showing', 'native track was not restored')
+    for mode in ['missing', 'tampered', 'throw']:
+        ready(page, base)
+        video()
+        page.evaluate("mode=>__platformFixture.resourceMode(mode,'duallens-features')", mode)
+        command(page, '启用 / 恢复视频双语字幕')
+        page.wait_for_function("__platformFixture.elements('*').some(e=>e.textContent.includes('功能资源缺失或校验失败'))")
+        check(page.locator('dl-ui[data-dl-subtitles]').count() == 0, 'unverified feature code ran')
+        check(page.evaluate('__platformFixture.calls.length') == 0, 'feature resource failure made a network request')
+        command(page, '启用 / 恢复视频双语字幕')
+        page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].subtitles.enabled===false")
+        page.evaluate("__platformFixture.resourceMode('valid','duallens-features')")
+        command(page, '启用 / 恢复视频双语字幕')
+        page.wait_for_selector('dl-ui[data-dl-subtitles][data-ready]')
+        check(page.evaluate('__platformFixture.resourceReads') == ['duallens-features'] * 2, 'failed feature resource did not retry')
+        command(page, '启用 / 恢复视频双语字幕')
+        page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
+        command(page, '翻译 / 恢复当前页面'); wait_done(page)
+        command(page, '翻译 / 恢复当前页面')
+        page.wait_for_function('!document.querySelector("dl-t")')
+    # Delay a valid cached read, then turn the preference off while verification is pending.
+    ready(page, base)
+    video()
+    page.evaluate("__platformFixture.resourceMode('delayed','duallens-features')")
+    command(page, '启用 / 恢复视频双语字幕')
+    page.wait_for_function('__platformFixture.resourceReads.length===1')
+    command(page, '启用 / 恢复视频双语字幕')
+    page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].subtitles.enabled===false")
+    page.evaluate("__platformFixture.releaseResource('duallens-features')")
+    page.wait_for_timeout(300)
+    check(page.locator('dl-ui[data-dl-subtitles]').count() == 0, 'late resource completion re-enabled subtitles')
+    check(page.evaluate('__platformFixture.calls.length') == 0, 'late feature load translated after disable')
+    command(page, '启用 / 恢复视频双语字幕')
+    page.wait_for_selector('dl-ui[data-dl-subtitles][data-ready]')
+    check(page.evaluate('__platformFixture.resourceReads') == ['duallens-features'], 'verified late resource was not cached')
+    return 'lazy cached subtitles; missing/same-size tampering/GM error reject execution and retry; disable cancels pending enable; page translation survives'
 
 
 def machine_first_case(page, base):
@@ -545,7 +606,8 @@ def main():
     args = ap.parse_args()
     bundle = REPO / 'dist' / 'duallens.user.js'
     check(bundle.is_file(), 'build dist/duallens.user.js first')
-    cases = [('desktop', 1280, 800, False, desktop_cases), ('settings_resource', 1280, 800, False, settings_resource_case), ('secret_transport', 1280, 800, False, secret_transport_case),
+    cases = [('desktop', 1280, 800, False, desktop_cases), ('settings_resource', 1280, 800, False, settings_resource_case),
+             ('features_resource', 1280, 800, False, features_resource_case), ('secret_transport', 1280, 800, False, secret_transport_case),
              ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
              ('isolated_prompt', 1280, 800, False, isolated_prompt_case),
              ('mobile_375', 375, 812, True, mobile_cases), ('tablet_800', 800, 1280, True, mobile_cases),
