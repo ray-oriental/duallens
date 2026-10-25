@@ -77,7 +77,8 @@ test('429 maps to rate_limited and reads Retry-After (seconds or date)', async (
     assert.equal(e.code, ERR.RATE_LIMITED);
     assert.equal(e.retryAfterMs, 7000);
     assert.equal(e.status, 429);
-    assert.match(e.message, /slow down/);
+    assert.doesNotMatch(e.message, /slow down/);
+    assert.equal(e.category, 'rate');
     return true;
   });
   const future = new Date(Date.now() + 30000).toUTCString();
@@ -127,11 +128,12 @@ test('malformed responses map to parse_error', async () => {
   assert.equal(await bad({ body: '{"choices":[]}' }), ERR.PARSE);
 });
 
-test('network failure maps to network_error with the service host and no URL path', async () => {
+test('network failure maps to network_error without exposing the service URL or host', async () => {
   const { chat } = createProviders({ fetchImpl: fakeFetch(new TypeError('Failed to fetch')) });
   await assert.rejects(chat({ profile: localProvider(), model: 'm', messages }), (e) => {
     assert.equal(e.code, ERR.NETWORK);
-    assert.match(e.message, /127\.0\.0\.1:1234/);
+    assert.equal(e.category, 'network');
+    assert.doesNotMatch(e.message, /127\.0\.0\.1:1234/);
     assert.doesNotMatch(e.message, /\/v1/);
     return true;
   });

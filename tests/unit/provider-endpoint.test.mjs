@@ -57,7 +57,7 @@ for (const method of ['listModels','chat']) {
     await assert.rejects(invoke(api,method,profile,{onBaseUrl:()=>assert.fail('must only report success')}),e=>e.message===t('endpointHtml'));
     assert.equal(calls.length,2);
   });
-  test(`${method}: auth/404, other non-JSON, snippet and key scrubbing in both UI languages`,async()=>{
+  test(`${method}: auth/404, other non-JSON and no response-body disclosure in both UI languages`,async()=>{
     for(const lang of ['zh-CN','en']) {
       setUiLanguage(lang);
       for(const status of [401,403,404]) {
@@ -72,8 +72,7 @@ for (const method of ['listModels','chat']) {
       for (const status of [200,502]) {
         const body='sk-test-not-real\r\nraw\t'+ 'x'.repeat(100);
         const {api}=provider([{status,text:body}]);
-        const snippet=('*** raw '+ 'x'.repeat(100)).slice(0,80);
-        await assert.rejects(invoke(api,method),e=>e.message===t('endpointParse',[status,snippet])&&!e.message.includes(profile.apiKey));
+        await assert.rejects(invoke(api,method),e=>e.message===t(status===502?'errServer':'errParse')&&!e.message.includes(profile.apiKey));
       }
       assert.equal(profileProblem({...profile,model:''}),t('m1e'));
     }

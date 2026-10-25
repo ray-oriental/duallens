@@ -3020,5 +3020,108 @@
   },
   "pdfOCRPermission": {
     "message": "Language download was not permitted. Choose recognition again to grant access, or use an installed language."
+  },
+  "errOffline": {
+    "message": "This device is offline. Reconnect and retry."
+  },
+  "errNetwork": {
+    "message": "Cannot reach the service; a redirect may be blocked. Check your connection and use the final address in Settings, then retry."
+  },
+  "errTimeout": {
+    "message": "The translation service timed out. Retry later or choose another model."
+  },
+  "errRate": {
+    "message": "The translation service is rate limiting requests. Retry later."
+  },
+  "errRateWait": {
+    "message": "The translation service is rate limiting requests. Retry in about $value$ seconds.",
+    "placeholders": {
+      "value": {
+        "content": "$1"
+      }
+    }
+  },
+  "errServer": {
+    "message": "The translation service is temporarily unavailable. Retry later."
+  },
+  "errAuth": {
+    "message": "The key is invalid or lacks access. Check your key and service permissions in Settings."
+  },
+  "errAddress": {
+    "message": "The service endpoint was not found. Check the service address in Settings (usually ending in /v1)."
+  },
+  "errParse": {
+    "message": "The translation service returned an unreadable response. Retry or choose another model."
+  },
+  "errHtml": {
+    "message": "The service returned a webpage. Check the API address in Settings (usually ending in /v1)."
+  },
+  "errModel": {
+    "message": "The selected model does not exist or is unavailable. Refresh and select a model in Settings."
+  },
+  "errQuota": {
+    "message": "The translation service has insufficient quota or credit. Check your service account or choose another service."
+  },
+  "errRefused": {
+    "message": "The translation service rejected this text under its content policy. Adjust the selected text or choose another service."
+  },
+  "errConfig": {
+    "message": "The translation service setup is incomplete. Check its address, key and model in Settings."
+  },
+  "errConfirmation": {
+    "message": "Confirm the destination before sending text. Continue or change service in the confirmation prompt."
+  },
+  "errPermission": {
+    "message": "Site access was denied and the feature remains off. Enable it again and allow the required permission."
+  },
+  "errRestricted": {
+    "message": "This page is restricted (browser pages, stores or native PDF). Open a webpage or the DualLens PDF reader."
+  },
+  "errInjection": {
+    "message": "Could not connect to this page. Reload the page and retry."
+  },
+  "errStorage": {
+    "message": "Device storage is full and saving failed. Clear the cache in Settings and retry."
+  },
+  "errPartial": {
+    "message": "$value$ paragraphs could not be translated. Retry these paragraphs.",
+    "placeholders": {
+      "value": {
+        "content": "$1"
+      }
+    }
+  },
+  "errFallback": {
+    "message": "The free endpoint failed. A fallback service is in use; keep reading."
+  },
+  "errCancelled": {
+    "message": "Translation cancelled. Translate again when needed."
+  },
+  "errUnknown": {
+    "message": "The operation could not be completed. Retry; if it keeps failing, check Settings."
+  },
+  "errGm": {
+    "message": "The userscript request failed. Check your connection and script manager permissions, then retry."
+  },
+  "errSettings": {
+    "message": "Open Settings"
+  },
+  "errRetry": {
+    "message": "Retry"
+  },
+  "errRetryPartial": {
+    "message": "Retry these paragraphs"
+  },
+  "errDetails": {
+    "message": "Details"
+  },
+  "errNoDetail": {
+    "message": "No additional technical information."
+  },
+  "errRedirect": {
+    "message": "The service address redirected (HTTP 3xx). DualLens did not follow it for safety. Use the final address in Settings."
+  },
+  "errResponseSize": {
+    "message": "The service response exceeded 4 MiB and was stopped. Translate less text or choose another model, then retry."
   }
 }

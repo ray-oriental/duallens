@@ -80,7 +80,7 @@ def run(pw,base,dark):
         click_shadow(page,'.selection-menu>button:nth-child(2)');click_shadow(page,'.services .retry')
         page.wait_for_function("__platformFixture.elements('.dst.err').length===1")
         shot(page,theme+'-error')
-        check(page.evaluate("__platformFixture.elements('.dst.err')[0].textContent.includes('重试')"),'error has no retry')
+        check(page.evaluate("__platformFixture.elements('.dst.err')[0].textContent.includes('打开设置')"),'configuration error has no settings action')
         page.keyboard.press('Escape')
         profile['baseUrl']='https://other.duallens.invalid/v1';profile['model']='test'
         settings(page,{'provider':{'profiles':[profile]}})

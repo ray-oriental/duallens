@@ -42,4 +42,13 @@ export const ERR = Object.freeze({
   PARSE: 'parse_error',
   CANCELLED: 'cancelled',
   CONFIG: 'config_error',
+  TIMEOUT: 'timeout',
+  PERMISSION: 'permission_denied',
+  RESTRICTED: 'restricted_page',
+  INJECTION: 'injection_failed',
+  STORAGE: 'storage_quota',
+  PARTIAL: 'partial_failure',
+  FALLBACK: 'mt_fallback',
+  REDIRECT: 'redirect_blocked',
+  RESPONSE_SIZE: 'response_too_large',
 });

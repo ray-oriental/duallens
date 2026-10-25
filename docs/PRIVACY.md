@@ -25,6 +25,8 @@
 
 设置页中主动点击「获取模型」会向所选服务请求模型列表；「测试连接」发送固定的示例文字，不包含网页内容。显式测试操作本身授权这次测试，不替代网页文字的首次发送确认。
 
+翻译与模型列表请求要求不跟随重定向（`redirect: 'error'`），请直接配置最终服务地址；旧脚本管理器的兼容限制见 [报错体系](ERRORS.md#传输可观察性与兼容限制)。
+
 弹出页只在无法注入当前页（例如内置 PDF 查看器）或网址路径以 `.pdf` 结尾时检查 PDF 类型；`.pdf` 路径无需探测，否则向原站完整 URL 发送匿名 HEAD，必要时 Range GET（最多读取文件头），不跟随重定向。点击打开 PDF 才下载完整文件（上限 64 MiB）；暂存最多 3 份，读取即删，过期项在后台初始化、浏览器启动、扩展安装／更新及下次写入或读取交接缓存时清理；无活动上下文时可能保留到下次清理。选择的本地文件只在内存解析；翻译只发送文本块，不上传 PDF、文件名或 URL。图片也仅下载到本机用于 OCR，不上传像素。
 
 PDF 导出完全在本机生成，不上传 PDF 或页面图像；显式开启扫描页 OCR 后，页面只在本机识别，识别分块仅存本次阅读的内存，只有置信度较高的文字发送给所选翻译服务。缺少 OCR 语言包时先说明来源和体积，经确认才下载与校验。
@@ -61,6 +63,8 @@ Limited Use: user data is used only to provide and improve the single purpose of
 Contact and changes: see the GitHub repository (Issues / Security Advisories). Changes ship with new versions and are listed in the CHANGELOG.
 
 Deliberately clicking Fetch models requests a model list; Test connection sends fixed sample sentences, without webpage content. Such explicit tests authorize that test request and do not acknowledge future webpage translation.
+
+Translation and model-list requests require no redirects (`redirect: 'error'`); configure the final service address directly. See [error handling](ERRORS.md#传输可观察性与兼容限制) for older script-manager limitations.
 
 The popup checks PDF type only if injection fails (such as the built-in PDF viewer) or the URL path ends in .pdf. A .pdf path needs no probe; otherwise an anonymous HEAD, then if needed a Range GET for the header, goes to the original full URL without redirects. Full PDF bytes are fetched only on Open (64 MiB maximum); up to three temporary copies logically expire after five minutes and are deleted immediately when consumed. Expired records are purged on worker initialization, browser startup, extension install/update, or the next handoff write/read; without an active context, bytes may remain until the next cleanup. Selected local files are processed in memory. Only text blocks are translated, without PDF bytes, filename or URL. Images are downloaded for local OCR; pixels are never uploaded.
 
