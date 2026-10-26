@@ -5,7 +5,7 @@ import json
 import uuid
 from playwright.sync_api import sync_playwright
 import run_e2e as e2e
-from run_userscript_e2e import STUB
+from run_userscript_e2e import STUB, click_shadow
 from trusted_input import touch_hold
 
 ROOTS = """(() => {
@@ -329,10 +329,31 @@ def cases(h, calls):
     passed('page_chain_unchanged_no_key_in_page')
     if h.mode == 'userscript':
         p.evaluate("()=>__platformFixture.command('DualLens 设置')")
-        # The controls exist before asynchronous settings hydration finishes.
-        p.wait_for_function("()=>__platformFixture.elements('#save').some(b=>!b.disabled)")
-        h.ui("""f=>{for(const [id,value] of Object.entries({inputMode:'bilingual',inputOrder:'translation-first',inputProfile:'interaction-test',inputModel:'saved-input',hoverProfile:'interaction-test',hoverModel:'saved-hover'})){const el=f.elements('#'+id)[0];el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));}f.elements('#save')[0].click();}""")
-        p.wait_for_function("()=>__platformFixture.data('duallens:local')['settings.core'].input.model==='saved-input'")
+        # Controls exist before asynchronous initialization finishes. These options
+        # now save on change, without submitting the hidden AI-service save button.
+        h.wait_ui("f=>f.elements('#save').some(el=>!el.disabled)")
+        click_shadow(p, '[data-group-link=enhance]')
+        for field, value, path in [
+            ('inputMode', 'bilingual', ['input', 'mode']),
+            ('inputOrder', 'translation-first', ['input', 'order']),
+            ('inputProfile', 'interaction-test', ['input', 'profileId']),
+            ('inputModel', 'saved-input', ['input', 'model']),
+            ('hoverProfile', 'interaction-test', ['hover', 'profileId']),
+            ('hoverModel', 'saved-hover', ['hover', 'model']),
+        ]:
+            meta = p.evaluate("""({field,value})=>{const el=__platformFixture.elements('#'+field)[0];
+              el.scrollIntoView({block:'center'});el.focus();return {select:el.tagName==='SELECT',
+                index:el.options?[...el.options].filter(o=>!o.hidden&&!o.disabled).findIndex(o=>o.value===value):-1};}""", {'field': field, 'value': value})
+            if meta['select']:
+                assert meta['index'] >= 0, 'Missing settings option: ' + field
+                p.keyboard.press('Home')
+                for _ in range(meta['index']):
+                    p.keyboard.press('ArrowDown')
+            else:
+                p.keyboard.press('Control+A'); p.keyboard.insert_text(value)
+            p.keyboard.press('Tab')
+            p.wait_for_function("""({path,value})=>path.reduce((v,k)=>v[k],
+              __platformFixture.data('duallens:local')['settings.core'])===value""", arg={'path': path, 'value': value})
         stored = p.evaluate("()=>__platformFixture.data('duallens:local')['settings.core']")
         assert stored['input']['mode'] == 'bilingual' and stored['input']['order'] == 'translation-first'
         assert stored['hover']['profileId'] == 'interaction-test' and stored['hover']['model'] == 'saved-hover'
@@ -350,7 +371,7 @@ def cases(h, calls):
     if h.session:
         h.session.command('toggle-page')
     else:
-        p.evaluate("()=>__platformFixture.command('翻译 / 恢复当前页面')")
+        p.evaluate("()=>__platformFixture.command('翻译此页 / 显示原文')")
     marker = p.locator('#trusted-retry dl-r')
     marker.wait_for()
     p.wait_for_timeout(500)

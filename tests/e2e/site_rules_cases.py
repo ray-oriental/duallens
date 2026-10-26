@@ -82,7 +82,7 @@ def userscript_case(page, base):
     ready(page, base, 'mail/x/')
     page.evaluate('r => __platformFixture.settings({siteRules:r})', rules())
     page.wait_for_function("!__platformFixture.rect('.ball')")
-    exercise(page, lambda: command(page, '翻译 / 恢复当前页面'), lambda: command(page, '翻译当前输入框'))
+    exercise(page, lambda: command(page, '翻译此页 / 显示原文'), lambda: command(page, '翻译当前输入框'))
     # The same visual editor must save paths and all feature flags on a narrow mobile panel.
     command(page, 'DualLens 设置')
     page.wait_for_function("__platformFixture.elements('#rule-match').length===1")

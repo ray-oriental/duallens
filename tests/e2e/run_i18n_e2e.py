@@ -92,7 +92,7 @@ def userscript(pw,base,locale):
     try:
         context.add_init_script(STUB+'\n{const seed=GM_getValue("duallens:sync",{});Object.assign(seed.settings,'+json.dumps({'uiLanguage':'zh-CN' if locale=='zh-CN' else 'en'})+');GM_setValue("duallens:sync",seed); }\n'+(REPO/'dist/duallens.user.js').read_text(encoding='utf-8'))
         page=context.new_page();page.goto(base+'/article.html?gm='+locale)
-        label='翻译 / 恢复当前页面' if locale=='zh-CN' else 'Translate / Show original page'
+        label='翻译此页 / 显示原文' if locale=='zh-CN' else 'Translate page / Show original'
         page.wait_for_function('label=>__platformFixture.hasCommand(label)',arg=label)
         check(page.evaluate('__platformFixture.resourceReads.length')==0,'startup read settings resource')
         command(page,'DualLens')

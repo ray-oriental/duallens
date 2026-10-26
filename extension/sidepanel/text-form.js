@@ -4,6 +4,8 @@ import { engineDisclosure } from '../ui/components.js';
 import { LANGS, providerChain } from '../shared/settings.js';
 import { SHARED_CSS } from '../ui/theme.js';
 import { withSendConfirmation, confirmationCard } from '../content/confirmation.js';
+import { createFeedback } from '../ui/forms/feedback.js';
+import { CANCELLED, detectedSource, swappedLanguages, untilAborted } from './text-state.js';
 
 export const MEDIA_CSS = SHARED_CSS + `
 .dl-text,.dl-subtitle-settings{color:var(--dl-text);font:400 14px/1.6 var(--dl-font)}
@@ -65,6 +67,10 @@ export async function mountTextForm(root, { platform }) {
   const pair=element('div');pair.className='language-pair';form.append(pair);
   const from = field(pair, message('ma7'), element('select')); from.name = 'text-from';
   const to = field(pair, message('ma8'), element('select')); to.name = 'text-to';
+  const languageActions=element('div');languageActions.className='actions';
+  const swap=element('button',message('uxTextSwap')),clear=element('button',message('uxTextClear'));
+  swap.type=clear.type='button';swap.name='text-swap';clear.name='text-clear';languageActions.append(swap,clear);form.append(languageActions);
+  const swapHint=element('p');swapHint.className='dl-hint';swapHint.id='text-swap-hint';swap.setAttribute('aria-describedby',swapHint.id);form.append(swapHint);
   const choicesPanel=element('details');choicesPanel.className='service-choices';choicesPanel.append(element('summary',message('polishService')));form.append(choicesPanel);
   const profiles = field(choicesPanel, message('ma9'), element('select')); profiles.name = 'text-profile';
   const models = field(choicesPanel, message('maa'), element('select')); models.name = 'text-model';
@@ -72,22 +78,51 @@ export async function mountTextForm(root, { platform }) {
   const configure = element('button', message('mac')); configure.type = 'button'; configure.addEventListener('click', () => platform.openSettings());
   const choices = element('div'); choices.className = 'actions'; choices.append(load, configure); choicesPanel.append(choices);
   const input = field(form, message('mad'), element('textarea')); input.name = 'text-input'; input.maxLength = 20000; input.required = true;
-  const translate = element('button', message('m6v')); translate.type = 'submit'; form.append(translate);
-  const status = element('p'); status.className = 'text-status'; status.setAttribute('role', 'status'); form.append(status);
+  const empty=element('p',message('uxTextEmpty'));empty.className='dl-hint';form.append(empty);
+  const translate = element('button', message('m6v')); translate.type = 'submit';translate.name='text-translate'; form.append(translate);
+  const status = element('p'); status.id='status';status.className = 'text-status'; status.setAttribute('role', 'status'); form.append(status);
   form.append(element('h2', message('m53')));
   const output = element('output'); output.name = 'text-result'; output.setAttribute('aria-live', 'polite'); output.dir = 'auto'; form.append(output);
   const actions = element('div'); actions.className = 'actions';
   const copy = element('button', message('m5g')), speak = element('button', message('m5i'));
+  copy.name='text-copy';
   copy.type = speak.type = 'button'; copy.disabled = speak.disabled = true; actions.append(copy, speak); form.append(actions);
   const disclosure=element('div');form.append(disclosure);root.append(form);
-  let disposed = false, sequence = 0, modelSequence = 0, utterance = null, pending;
+  const feedback=createFeedback(form);
+  let disposed = false, sequence = 0, modelSequence = 0, utterance = null, pending,detected='',detectedText='',initialized=false;
   const stopSpeech = () => { if (utterance) { globalThis.speechSynthesis?.cancel(); utterance = null; } };
-  const showError = (error,retry) => renderError(status,error,{retry,openSettings:group=>platform.openSettings(group)});
-  const reset = () => {
+  const showError = (error,retry) => { status.classList.add('error'); renderError(status,error,{retry,openSettings:group=>platform.openSettings(group)}); };
+  function drawControls() {
+    if(disposed)return;
+    const source=detectedText===input.value?detected:'';
+    swap.disabled=!swappedLanguages(from.value,to.value,source);
+    swapHint.hidden=from.value!=='auto';
+    setText(swapHint,source?message('uxTextDetected',[LANGS.find(lang=>lang.code===source)?.name||source]):message('uxTextSwapUnknown'));
+    empty.hidden=!!input.value.trim();clear.disabled=!input.value&&!output.textContent&&!pending;
+    translate.disabled=!input.value.trim()||feedback.pending.has(translate);
+    copy.disabled=!output.textContent||feedback.pending.has(copy);
+    speak.disabled=!output.textContent||!globalThis.speechSynthesis;
+    setText(translate,message(feedback.pending.has(translate)?'m4x':'m6v'));
+    setText(copy,message(feedback.pending.has(copy)?'actionWorking':'m5g'));
+  }
+  const reset = (forgetDetected=false) => {
     pending?.abort(); pending = null;
-    sequence++; output.textContent = ''; copy.disabled = speak.disabled = true; translate.disabled = false;
-    stopSpeech(); status.textContent = '';
+    sequence++; output.textContent = '';form.removeAttribute('aria-busy');
+    if(forgetDetected){detected='';detectedText='';}
+    stopSpeech();feedback.notice('');drawControls();
   };
+  clear.addEventListener('click',()=>{input.value='';reset(true);feedback.notice(l10n('uxTextCleared'));input.focus();});
+  swap.addEventListener('click',()=>{
+    const next=swappedLanguages(from.value,to.value,detectedText===input.value?detected:'');if(!next)return;
+    const result=output.textContent;reset(true);from.value=next.from;to.value=next.to;
+    if(result)input.value=result;drawControls();
+  });
+  const onEscape=event=>{
+    if(event.key!=='Escape')return;
+    if(!pending){if(platform.kind==='extension')event.preventDefault();return;}
+    event.preventDefault();event.stopImmediatePropagation();reset();feedback.notice(l10n('uxTextCancelled'));
+  };
+  root.ownerDocument.addEventListener('keydown',onEscape,true);
   function drawDisclosure() {
     const profile=settings.provider.profiles.find(p=>p.id===profiles.value);
     const current=profile?{...settings,provider:{...settings.provider,active:profile.id,
@@ -105,10 +140,10 @@ export async function mountTextForm(root, { platform }) {
   }
   profiles.addEventListener('change', () => { reset(); profileModels(); });
   models.addEventListener('change',drawDisclosure);
-  for (const control of [from, to, models, input]) control.addEventListener('input', reset);
+  for (const control of [from, to, models, input]) control.addEventListener('input',()=>reset(control===input));
   load.addEventListener('click', async () => {
     const token = ++modelSequence, profileId = profiles.value;
-    load.disabled = true; status.textContent = l10n('mae');
+    load.disabled = true; feedback.notice(l10n('mae'));
     try {
       const result = await service.listModels(profileId);
       if (disposed || token !== modelSequence || profileId !== profiles.value) return;
@@ -118,36 +153,46 @@ export async function mountTextForm(root, { platform }) {
       for (const model of result.models || []) if (typeof model.id === 'string') values.set(model.id, model.label || model.id);
       selectOptions(models, [...values], value);
       drawDisclosure();
-      status.textContent = l10n('mag', [result.models?.length || 0]);
+      feedback.notice(l10n('mag', [result.models?.length || 0]));
     } catch (error) { if (!disposed && token === modelSequence) showError(error,()=>load.click()); }
     finally { if (!disposed && token === modelSequence) load.disabled = false; }
   });
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!input.value.trim()) return;
+    if (!input.value.trim()||feedback.pending.has(translate)) return;
     reset(); const token = sequence;
-    pending = new AbortController();
-    translate.disabled = true; status.textContent = l10n('m4x');
-    try {
-      const result = await service.translateText({ text: input.value, from: from.value, to: to.value, purpose: 'text', signal:pending.signal,
-        ...(profiles.value ? { profileId: profiles.value, model: models.value } : {}) });
-      if (disposed || token !== sequence) return;
-      if (!result.ok) { showError(result.error,()=>form.requestSubmit()); return; }
-      output.textContent = result.text || ''; copy.disabled = !output.textContent;
-      speak.disabled = !output.textContent || !globalThis.speechSynthesis;
-      status.textContent = l10n('mai');
-    } catch (error) { if (!disposed && token === sequence) showError(error,()=>form.requestSubmit()); }
-    finally { if (!disposed && token === sequence) translate.disabled = false; }
+    const controller=new AbortController(),text=input.value,source=from.value,target=to.value;
+    pending=controller;form.setAttribute('aria-busy','true');
+    await feedback.run(translate,async report=>{
+      report(l10n('m4x'));
+      try {
+        if(source==='auto'&&platform.detectLanguage&&detectedText!==text){
+          const language=await untilAborted(()=>platform.detectLanguage(text),controller.signal).catch(()=>null);
+          if(disposed||token!==sequence||language===CANCELLED)return;
+          detected=detectedSource(language);detectedText=text;drawControls();
+        }
+        const result=await untilAborted(()=>service.translateText({text,from:source,to:target,purpose:'text',signal:controller.signal,
+          ...(profiles.value?{profileId:profiles.value,model:models.value}:{})}),controller.signal);
+        if(disposed||token!==sequence||result===CANCELLED)return;
+        if(!result.ok){showError(result.error,()=>form.requestSubmit());return;}
+        output.textContent=result.text||'';report(l10n('mai'));
+      }catch(error){if(!disposed&&token===sequence)showError(error,()=>form.requestSubmit());}
+      finally{if(token===sequence){pending=null;form.removeAttribute('aria-busy');}}
+    },{busy:l10n('m4x')});
+    drawControls();
   });
   copy.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(output.textContent); status.textContent = l10n('m55'); }
-    catch { status.textContent = l10n('mak'); }
+    const token=sequence,text=output.textContent;
+    await feedback.run(copy,async report=>{
+      try{await navigator.clipboard.writeText(text);if(!disposed&&token===sequence)report(l10n('m55'));}
+      catch{if(!disposed&&token===sequence)report(l10n('mak'),true);}
+    });drawControls();
   });
   speak.addEventListener('click', () => {
     try {
       stopSpeech(); utterance = new SpeechSynthesisUtterance(output.textContent); utterance.lang = to.value;
       globalThis.speechSynthesis.speak(utterance);
-    } catch { status.textContent = l10n('mal'); }
+    } catch { feedback.notice(l10n('mal'),true); }
   });
   let settingsSequence = 0;
   async function reload() {
@@ -156,13 +201,13 @@ export async function mountTextForm(root, { platform }) {
     if (disposed || token !== settingsSequence) return;
     const localeOnly=JSON.stringify({...settings,uiLanguage:null})===JSON.stringify({...next,uiLanguage:null});
     settings = next; setUiLanguage(settings.uiLanguage); localize(form); if(!localeOnly)reset();choicesPanel.hidden=settings.provider.profiles.filter(p=>p.kind!=='mock'&&p.baseUrl&&p.model).length<2;
-    selectOptions(from, [['auto', l10n('m5e')], ...LANGS.map(l => [l.code, l.name])], localeOnly?from.value:settings.sourceLang);
-    selectOptions(to, LANGS.map(l => [l.code, l.name]), localeOnly?to.value:settings.targetLang);
+    selectOptions(from, [['auto', l10n('m5e')], ...LANGS.map(l => [l.code, l.name])], initialized&&localeOnly?from.value:settings.sourceLang);
+    selectOptions(to, LANGS.map(l => [l.code, l.name]), initialized&&localeOnly?to.value:settings.targetLang);
     selectOptions(profiles, [['', l10n('mam')], ...settings.provider.profiles.map(p => [p.id, p.name || p.id])], profiles.value);
-    profileModels();
+    profileModels();initialized=true;drawControls();
   }
-  const off = platform.settingsStore.onChange(() => { void reload().catch(() => { status.textContent = l10n('ma5'); }); });
+  const off = platform.settingsStore.onChange(() => { void reload().catch(() => { feedback.notice(l10n('ma5'),true); }); });
   try { await reload(); }
-  catch { status.textContent = l10n('ma5'); }
-  return { destroy() { disposed = true; pending?.abort(); sequence++; off(); stopSpeech(); service.dispose?.(); form.remove(); style.remove(); } };
+  catch { feedback.notice(l10n('ma5'),true); }
+  return { destroy() { disposed = true; pending?.abort(); sequence++;feedback.destroy();root.ownerDocument.removeEventListener('keydown',onEscape,true);off(); stopSpeech(); service.dispose?.(); form.remove(); style.remove(); } };
 }
