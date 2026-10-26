@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { createFeaturesLoader, FEATURES_RESOURCE_ERROR } from '../../extension/userscript/features-loader.js';
 import { setUiLanguage, t } from '../../extension/shared/i18n.js';
 
-const source = '(function(){return {VideoSubtitles(){},createUserscriptOCR(){},messages:{budgetFixture:["测试","test"]},setUiLanguage(pref){this.pref=pref;}};})();';
+const source = '(function(){return {VideoSubtitles(){},createUserscriptOCR(){},ComicTranslator(){},messages:{budgetFixture:["测试","test"]},setUiLanguage(pref){this.pref=pref;}};})();';
 const specFor = text => ({name:'duallens-features',bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')});
 
 test('feature resource is lazy, verified once, cached and follows current language',async()=>{

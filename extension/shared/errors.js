@@ -88,6 +88,7 @@ const COPY = {
   gm:()=>t('errGm'),
   redirect:()=>t('errRedirect'),
   size:()=>t('errResponseSize'),
+  image:()=>t('errImage'),
 };
 
 export function classify(error, { online = globalThis.navigator?.onLine, count = error?.count } = {}) {
@@ -115,6 +116,7 @@ export function classify(error, { online = globalThis.navigator?.onLine, count =
   const waitMs = Number.isFinite(e.retryAfterMs) && e.retryAfterMs >= 0 ? Math.min(e.retryAfterMs, Number.MAX_SAFE_INTEGER) : undefined;
   const n = Math.max(0, Math.floor(Number(count) || 0));
   let msg = COPY[kind](n);
+  if (kind === 'image' && st) msg = `HTTP ${st} · ${msg}`;
   if (waitMs != null && (kind === 'rate' || kind === 'partial' && st === 429)) {
     const wait = t('errRateWait', [Math.max(1, Math.ceil(waitMs / 1000))]);
     msg = kind === 'rate' ? wait : msg+' '+wait;
@@ -122,7 +124,7 @@ export function classify(error, { online = globalThis.navigator?.onLine, count =
   if (e.noFallback === true) msg += t('m12');
   const retryable = ['network','offline','gm','timeout','rate','server'].includes(kind);
   const action = ['auth','address','model','quota','config','html','storage','redirect'].includes(kind) ? 'settings' :
-    (retryable || ['parse','injection','partial'].includes(kind)) ? 'retry' : 'details';
+    (retryable || ['parse','injection','partial','image'].includes(kind)) ? 'retry' : 'details';
   const group = kind === 'storage' ? 'data' : e.group === 'common' ? 'common' : 'ai';
   const name = SERVICES.includes(e.service) ? e.service : '';
   const detail = [name, st ? `HTTP ${st}` : ''].filter(Boolean).join(' · ') || t('errNoDetail');

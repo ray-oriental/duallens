@@ -17,8 +17,11 @@
 
 ## 共享分类与当前中英文案
 
+集成补充：图片下载的 HTTP 错误使用 `category: image`，保留状态码并说明图片来源权限与重试动作；不会把图片站点的 401/403 误报为翻译服务密钥错误，也不显示服务器正文。
+
 | ERR 调度码 / 分类 | 触发场景 | 中文 | English | 界面 | 动作 |
 | --- | --- | --- | --- | --- | --- |
+| ERR.PROVIDER / image | 图片下载被站点拒绝或返回 HTTP 错误 | HTTP $1 · 图片下载失败，请检查图片来源权限或稍后重试；原图已保留。 | HTTP $1 · Image download failed. Check access to the image source or retry later; the original image is unchanged. | 图片面板；后台传输 | 显式重新识别；不自动重试 |
 | ERR.NETWORK / offline | 网络请求失败且 navigator.onLine 明确为 false | 当前设备已离线，请联网后重试。 | This device is offline. Reconnect and retry. | 页面提示、popup、侧栏、用户脚本；后台传输同分类 | 重试 |
 | ERR.NETWORK / network | 请求无法连接到所选服务；浏览器未提供跳转原因的 fetch 失败 | 无法连接翻译服务（也可能是跳转被拦截）；请检查网络，并在设置中改用最终地址后重试。 | Cannot reach the service; a redirect may be blocked. Check your connection and use the final address in Settings, then retry. | 页面提示、popup、侧栏、用户脚本；后台传输同分类 | 重试 |
 | ERR.NETWORK / ERR.TIMEOUT / timeout | 请求或流式等待超过配置时限 | 翻译服务响应超时，请稍后重试或更换模型。 | The translation service timed out. Retry later or choose another model. | 页面提示、popup、侧栏、用户脚本；后台传输同分类 | 重试 |

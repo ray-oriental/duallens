@@ -21,6 +21,7 @@ for (const language of ['zh-CN','en']) test(`error catalogue, actions and safe d
     [{name:'QuotaExceededError'},'storage','settings'], [{code:ERR.PARTIAL,count:3},'partial','retry'],
     [{code:ERR.FALLBACK},'fallback','details'], [{code:ERR.CANCELLED},'cancelled','details'],
     [{category:'gm'},'gm','retry'], [{message:'untrusted raw JSON sk-test-not-real'},'unknown','details'],
+    [{category:'image'},'image','retry'],
   ]) {
     const info=classify(error,{online:true});
     assert.equal(info.category,category); assert.equal(info.action,action);

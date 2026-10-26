@@ -3123,5 +3123,8 @@
   },
   "errResponseSize": {
     "message": "The service response exceeded 4 MiB and was stopped. Translate less text or choose another model, then retry."
+  },
+  "errImage": {
+    "message": "Image download failed. Check access to the image source or retry later; the original image is unchanged."
   }
 }
