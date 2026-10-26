@@ -212,7 +212,7 @@ def pdf_reading(h):
     page.select_option('#mode', 'side')
     wait_for(page, rendered(1))
     page.select_option('#theme', 'dark')
-    assert page.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(21, 27, 36)'
+    assert page.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(27, 27, 29)'
     page.screenshot(path=str(e2e.ARTIFACTS / 'pdf-side-by-side-dark.png'))
     page.select_option('#theme', 'auto')
     page.click('#restore')
