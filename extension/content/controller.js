@@ -18,6 +18,8 @@ import {uiTranslation} from '../shared/ui-glossary.js';
 import {metadataTranslation} from '../shared/metadata.js';
 import {FrameRoots} from './frames.js';
 import {withSendConfirmation} from './confirmation.js';
+import {classify,partialFailure,autoRetryDelay} from '../shared/errors.js';
+import {errorToast,clearToast} from './overlay.js';
 
 const MAX_REQUEST_ITEMS=50;
 const CHURN_LIMIT=12; // re-translations of one host within a minute before we leave it alone
@@ -34,6 +36,10 @@ export class PageTranslator {
     this.onChange=onChange ||(()=> {});
     this.onActiveChange=onActiveChange ||(()=> {});
     this.units=new Map(); // id -> unit
+    this.retries=new Set();
+    this.retryVisible=()=>this.#retryReady();
+    for(const name of ['online','scroll','resize'])window.addEventListener(name,this.retryVisible,true);
+    document.addEventListener('visibilitychange',this.retryVisible);
     this.registry=new WeakMap(); // first node -> unit (dedupe across rescans)
     this.attributes=new WeakMap();
     this.byHost=new Map(); // host -> Set<unit>
@@ -68,12 +74,14 @@ export class PageTranslator {
       added:doc=>{
         this.watch.start(doc);this.lazy.addDocument(doc);
         doc.addEventListener('click',this.retryHandler,true);doc.addEventListener('keydown',this.retryHandler,true);
+        doc.addEventListener('scroll',this.retryVisible,true);
         this.#prime(doc);
         for(const root of this.#roots(doc))this.#scan(root);
       },
       removed:doc=>{
         this.watch.removeDocument(doc);this.lazy.removeDocument(doc);
         doc.removeEventListener('click',this.retryHandler,true);doc.removeEventListener('keydown',this.retryHandler,true);
+        doc.removeEventListener('scroll',this.retryVisible,true);
         inj.write(()=>{for(const u of [...this.units.values()])if(doc.nodeType===9 ? u.host.ownerDocument===doc : doc.contains(u.first))this.#drop(u);});
       },changed:()=>this.lazy.scroll()});
   }
@@ -119,6 +127,7 @@ export class PageTranslator {
     if(!this.active)return;
     if(was){this.route.start();for(const u of this.units.values())if(u.state==='idle')this.lazy.watch(u);}
     this.lazy.scroll();
+    this.#retryReady();
     if(this.queue.length && !this.flushTimer)this.flushTimer=setTimeout(()=>this.#flush(),this.s.lazy.batchDelayMs);
   }
 
@@ -126,6 +135,7 @@ export class PageTranslator {
     if(this.active) return;
     this.activation = new AbortController();
     this.active=true;
+    this.fallbackShown=false;
     const signal=this.activation.signal;
     void this.platform.confirmSend({purpose:'page'},signal).then(ok=>{
       if(!ok){if(!signal.aborted)this.stop();return;}
@@ -167,6 +177,8 @@ export class PageTranslator {
   stop() {
     const was=this.active;
     this.active=false;
+    for(const u of this.retries)this.#cancelRetry(u);
+    clearTimeout(this.errorTimer);clearToast();
     this.activation?.abort();
     this.slices.cancel();
     clearTimeout(this.flushTimer);
@@ -210,6 +222,8 @@ export class PageTranslator {
     this.client.dispose();
     document.removeEventListener('click',this.retryHandler,true);
     document.removeEventListener('keydown',this.retryHandler,true);
+    for(const name of ['online','scroll','resize'])window.removeEventListener(name,this.retryVisible,true);
+    document.removeEventListener('visibilitychange',this.retryVisible);
   }
 
 
@@ -235,14 +249,14 @@ export class PageTranslator {
     for(const u of this.units.values()) {
       if(u.state==='skip') continue;
       total++;
-      if(u.state==='queued' || u.state==='pending') pending++;
+      if(u.state==='queued' || u.state==='pending' || u.autoRetry) pending++;
       else if(u.state==='error') failed++;
       else if(u.state==='done') {
         done++;
         if(u.stage==='draft') refining++;
       }
     }
-    return {translated:this.active,mode:this.s.displayMode,units:total,pending,failed,done,refining};
+    return {translated:this.active,mode:this.s.displayMode,units:total,pending,failed,done,refining,...(failed?{error:[...this.units.values()].find(u=>u.state==='error'&&!u.autoRetry)?.error}:{})};
   }
 
 
@@ -309,6 +323,7 @@ export class PageTranslator {
   }
 
   #drop(unit) {
+    this.#cancelRetry(unit);
     this.lazy.unwatch(unit);
     this.units.delete(unit.id);
     if(unit.attribute) this.attributes.get(unit.host)?.delete(unit.attribute);
@@ -459,14 +474,58 @@ export class PageTranslator {
         else this.#fail(u,r.error);
       } else this.#apply(u,r.text,r.stage==='draft' ? 'draft':'final',r.engine || 'llm');
     });
-    this.slices.run(results[Symbol.iterator](),(r)=> {apply(r); this.emit();});
+    this.slices.run(results[Symbol.iterator](),(r)=> {apply(r); this.emit();this.#notice();if(r.notice&&!this.platform.frameAgent&&!this.fallbackShown&&!partialFailure(this.units.values()).count){this.fallbackShown=true;errorToast(r.notice);}});
   }
 
   #fail(unit,error) {
     unit.state='error';
-    unit.error=error;
-    inj.markError(unit,error && error.message);
-    if(error?.code!=='CANCELLED'&&(unit.retryCount||0)<2){unit.retryCount=(unit.retryCount||0)+1;setTimeout(()=>{if(!unit.dead&&this.active&&unit.state==='error'){unit.state='idle';this.lazy.watch(unit);}},error?.code===ERR.RATE_LIMITED?60000:16000);}
+    unit.error=classify(error);
+    inj.markError(unit,unit.error.message);
+    const delay=autoRetryDelay(unit.error,unit.retryCount||0);
+    if(delay!==null){
+      unit.autoRetry=true;
+      this.retries.add(unit);
+      unit.retryTimer=setTimeout(()=>{unit.retryDue=true;this.#retryReady();},delay);
+    }
+  }
+
+  #cancelRetry(unit) {
+    clearTimeout(unit.retryTimer);
+    unit.autoRetry=false;unit.retryDue=false;
+    this.retries.delete(unit);
+  }
+
+  #retryReady() {
+    if(!this.active||this.paused||!this.canRequest()||navigator.onLine===false||document.hidden)return;
+    const ready=[];
+    for(const u of this.retries){
+      if(u.dead){this.#cancelRetry(u);continue;}
+      if(!u.retryDue||!this.lazy.isVisible(u))continue;
+      this.#cancelRetry(u);
+      u.retryCount=(u.retryCount||0)+1;
+      u.state='pending';u.priority=PRIORITY.VISIBLE;inj.markPending(u);ready.push(u);
+    }
+    if(ready.length){this.#dispatch(ready);this.emit();this.#notice();}
+  }
+
+  #notice() {
+    if(this.platform.frameAgent)return;
+    clearTimeout(this.errorTimer);
+    this.errorTimer=setTimeout(()=> {
+      if(!this.active)return;
+      const info=partialFailure(this.units.values());
+      if(!info.count)return;
+      const first=[...this.units.values()].find(u=>u.state==='error'&&!u.autoRetry)?.error;
+      errorToast({...info,...first,code:ERR.PARTIAL,count:info.count},{partial:true,retry:()=>this.retryFailed(),openSettings:first?.action==='settings'?()=>this.platform.openSettings(first.group):undefined});
+    },180);
+  }
+
+  retryFailed() {
+    clearToast();
+    const failed=[...this.units.values()].filter(u=>u.state==='error'&&!u.dead&&!u.autoRetry);
+    for(const u of failed){this.#cancelRetry(u);u.retryCount=0;u.state='pending';u.priority=PRIORITY.VISIBLE;inj.markPending(u);}
+    this.#dispatch(failed);
+    this.emit();
   }
 
   // The LLM stage gave up on a unit that already shows its machine-translation draft: the draft stays.
@@ -524,9 +583,11 @@ export class PageTranslator {
   retry(id) {
     const u=this.units.get(id);
     if(!u || u.state !=='error') return;
+    this.#cancelRetry(u);u.retryCount=0;
     u.state='pending';
     u.priority=PRIORITY.VISIBLE;
     inj.markPending(u);
+    clearToast();
     this.#dispatch([u]);
     this.emit();
   }

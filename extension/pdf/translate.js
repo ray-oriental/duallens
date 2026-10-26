@@ -123,6 +123,26 @@ export class PdfTranslations {
   }
 
   get(id) { return this.entries.get(id); }
+  cancelRequests() {
+    for (const handle of this.handles.keys()) { try { handle.cancel(); } catch { /* already finished */ } }
+    this.handles.clear();
+    for (const [id, entry] of this.entries) {
+      if (entry.state === 'pending') this.entries.delete(id);
+      else if (entry.state === 'draft') { entry.state='final';entry.refined=false; }
+    }
+  }
+
+  // Replacing OCR geometry must invalidate callbacks using the previous block ids.
+  forget(ids) {
+    const remove = new Set(ids);
+    for (const [handle, chunk] of this.handles) {
+      if (!chunk.some(entry => remove.has(entry.id))) continue;
+      try { handle.cancel(); } catch { /* already finished */ }
+      this.handles.delete(handle);
+      for (const entry of chunk) if (['pending','draft'].includes(entry.state)) this.entries.delete(entry.id);
+    }
+    for (const id of remove) this.entries.delete(id);
+  }
 
   stats() {
     const out = { total: 0, done: 0, draft: 0, pending: 0, failed: 0, unrefined: 0 };

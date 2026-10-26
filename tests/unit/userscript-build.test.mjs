@@ -114,7 +114,7 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     assert.ok(content.includes('@sandbox      DOM'));
     // Both UI languages must fit without pulling the lazy settings catalogue into startup.
     assert.ok(Buffer.byteLength(content)<=320000,'startup bundle exceeds the v1.1 320 KB target');
-    for (const module of ['content/comics/userscript-ocr.js','offscreen/detector.js','offscreen/language-store.js',
+    for (const module of ['content/comics/controller.js','content/comics/discovery.js','content/comics/order.js','content/comics/userscript-ocr.js','offscreen/detector.js','offscreen/language-store.js',
       'content/subtitles/controller.js','content/subtitles/youtube.js','content/subtitles/html5.js','content/subtitles/json3.js']) {
       assert.ok(!content.includes('"'+module+'"'), `optional feature was bundled into startup: ${module}`);
     }
@@ -136,6 +136,7 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const featureModule = vm.runInNewContext(features,{atob,TextDecoder,Uint8Array});
     assert.equal(typeof featureModule.VideoSubtitles,'function');
     assert.equal(typeof featureModule.createUserscriptOCR,'function');
+    assert.equal(typeof featureModule.ComicTranslator,'function');
     assert.ok(Object.keys(featureModule.messages).length > 0);
     for (const module of ['ui/forms/index.js', 'ui/forms/validation.js', 'ui/validation.js']) assert.ok(panel.includes('"' + module + '"'));
     const vendor=path.resolve('extension/vendor/tesseract');

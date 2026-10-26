@@ -41,7 +41,7 @@ def popup_case(ctx, base, language, bound):
       window.commandCalls=0;window.pdfCalls=0;
       const send=chrome.tabs.sendMessage;
       chrome.tabs.sendMessage=async(id,msg)=>{
-        if(msg.type==='command'){commandCalls++;await new Promise(resolve=>window.finishCommand=resolve);}
+        if(msg.type==='command'){commandCalls++;await new Promise(resolve=>window.finishCommand=resolve);if(window.commandFailure)return {ok:false,error:window.commandFailure};}
         return send(id,msg);
       };
       const runtime=chrome.runtime.sendMessage;
@@ -82,6 +82,24 @@ def popup_case(ctx, base, language, bound):
     page.locator('#site-path').wait_for()
     page.locator('#status').filter(has_text='applied' if language == 'en' else '即时生效').wait_for()
     page.screenshot(path=str(OUT / f'{language}-popup.png'))
+    # Classified errors retain actions and refresh while retries share the async guard.
+    page.evaluate("commandFailure={code:'network_error',message:'fixture server prose'}")
+    page.click('#toggle');page.evaluate('finishCommand()')
+    retry=page.locator('#status').get_by_role('button',name='Retry' if language=='en' else '重试',exact=True)
+    retry.wait_for();revision=page.locator('#status').get_attribute('data-error-revision')
+    assert 'fixture server prose' not in page.locator('#status').inner_text()
+    before=page.evaluate('commandCalls');retry.click()
+    page.evaluate("document.querySelector('#toggle').click()")
+    assert page.evaluate('commandCalls')==before+1
+    page.evaluate("commandFailure={status:401,service:'OpenAI'};finishCommand()")
+    page.locator('#status').get_by_role('button',name='Open Settings' if language=='en' else '打开设置',exact=True).wait_for()
+    assert page.locator('#status').get_attribute('data-error-revision')!=revision
+    page.locator('#status').get_by_role('button',name='Details' if language=='en' else '详情',exact=True).click()
+    assert page.locator('#status small').inner_text()=='OpenAI · HTTP 401'
+    page.evaluate('commandFailure=null');page.click('#toggle');page.evaluate('finishCommand()')
+    page.locator('#toggle:not([disabled])').wait_for()
+    assert page.locator('#status button').count()==0
+    assert page.locator('#toggle').evaluate('el=>document.activeElement===el')
     # A PDF tab uses the same guarded async button.
     page.evaluate("sessionStorage.setItem('pdfCase','true')")
     page.reload()

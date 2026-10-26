@@ -1,3 +1,4 @@
+import { renderError, isCancelled } from '../shared/errors.js';
 import { t as l10n } from '../shared/i18n.js';
 // Selection UI is created on demand, entirely inside one closed shadow root.
 import{lensIcon}from './visual.js';
@@ -116,15 +117,15 @@ export class SelectionUI{
     v.p.value=this.pick.profileId||'';v.m.value=this.pick.model||'';
     v.card.classList.add('show');this.ui.attach();this.#place(rect,keep);
     for(const type of['keydown','pointerdown'])document.addEventListener(type,this.event,true);
-    const res=await this.p.translator().translateText({text:source,to:s.targetLang,from:s.sourceLang||'auto',purpose:'selection',signal:this.abort.signal,...interactionRequest(this.pick)}).catch(()=>({ok:false}));
+    const res=await this.p.translator().translateText({text:source,to:s.targetLang,from:s.sourceLang||'auto',purpose:'selection',signal:this.abort.signal,...interactionRequest(this.pick)}).catch(error=>({ok:false,error}));
     if(token!==this.rev||!this.open)return;
     if(res.ok){
       this.#render(res.text);v.by.textContent=res.by==='mt'?UI.mt:s.provider.profiles.find(p=>p.id===(this.pick.profileId||s.provider.active))?.name||UI.ai;
       v.ai.hidden=!(res.by==='mt'&&['mt+llm','auto'].includes(s.translation?.mode));
     }else{
-      if(res.error?.code==='CANCELLED'){this.closeCard();return;}
-      v.dst.className='dst err';v.dst.textContent=UI.error;
-      const retry=button(UI.retry,()=>this.openCard(source,rect,true));retry.className='retry';const details=button(l10n('polishDetails'),()=>{v.detail.hidden=!v.detail.hidden;});v.detail=node('small','error-details',res.error?.message||UI.error);v.detail.hidden=true;v.dst.append(document.createTextNode(' '),retry,details,v.detail);
+      if(res.error?.code==='CANCELLED'||isCancelled(res.error)){this.closeCard();return;}
+      v.dst.className='dst err';
+      renderError(v.dst,res.error,{retry:()=>this.openCard(source,rect,true),openSettings:group=>this.p.openSettings(group),buttonClass:'tb'});
     }
     this.#place(rect,true);
   }

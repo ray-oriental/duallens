@@ -1,10 +1,12 @@
 import { t as l10n, uiLanguage } from '../shared/i18n.js';
+import { DLError } from '../shared/errors.js';
+import { ERR } from '../shared/protocol.js';
 const MAX_BYTES = 16*1024*1024;
 export async function fetchImage(url, pageUrl, fetchImpl = fetch) {
   const image = new URL(url), page = new URL(pageUrl);
   if (![image,page].every((u) => ['http:','https:'].includes(u.protocol) && !u.username && !u.password)) throw new Error(l10n('m3'));
   const res = await fetchImpl(image.href, { referrer: page.href, credentials: 'omit', redirect: 'error', cache:'no-store', signal: AbortSignal.timeout(20000) });
-  if (!res.ok) throw new Error(l10n('m4', [res.status]));
+  if (!res.ok) throw new DLError(ERR.PROVIDER, l10n('m4', [res.status]), {status:res.status,category:'image'});
   const mime = (res.headers.get('content-type') || '').split(';')[0].toLowerCase();
   if (!['image/png','image/jpeg','image/webp','image/gif','image/bmp'].includes(mime)) throw new Error(l10n('m5'));
   const reader = res.body.getReader(), parts = []; let size = 0;

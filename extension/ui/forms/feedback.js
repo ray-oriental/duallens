@@ -1,3 +1,4 @@
+import { classify, DLError, renderError } from '../../shared/errors.js';
 import { t } from '../../shared/i18n.js';
 
 // Shared async states for settings, popup and explicitly opened tools.
@@ -41,7 +42,13 @@ export function createFeedback(ui) {
     notice('', false, result);
     const report = (message, error = false) => notice(message, error, result);
     try { return await fn(report); }
-    catch (error) { report(error.message || t('maq'), true); }
+    catch (error) {
+      if (error instanceof DLError || classify(error).category === 'storage') {
+        const options = {milliseconds:false, retry:()=>run(button,fn,{busy,inline}),
+          openSettings:group=>ui.querySelector(`nav a[href="#${group}"]`)?.click()};
+        for (const node of [$('status'),result].filter(Boolean)) { node.classList.add('error'); renderError(node,error,options); }
+      } else report(error.message || t('maq'), true);
+    }
     finally {
       pending.delete(button);
       if (!closed) {

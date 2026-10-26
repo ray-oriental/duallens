@@ -13,14 +13,14 @@ SETUP=r"""async language=>{
   const {mountTextForm}=await import('/extension/sidepanel/text-form.js');
   const {t}=await import('/extension/shared/i18n.js');
   const settings=structuredClone(DEFAULT_SETTINGS);settings.uiLanguage=language;settings.targetLang='ja';settings.sourceLang='auto';settings.provider.active='mock';settings.translation.mode='llm';
-  const listeners=new Set(),calls=[],copies=[],detections=[],animations=[],roots=[];
+  const listeners=new Set(),calls=[],copies=[],detections=[],animations=[],roots=[],groups=[];
   const animate=Element.prototype.animate;Element.prototype.animate=function(...args){animations.push(this.id);return animate.apply(this,args);};
   const attach=Element.prototype.attachShadow;Element.prototype.attachShadow=function(options){const root=attach.call(this,options);roots.push(root);return root;};
-  window.textFixture={settings,calls,copies,detections,animations,roots,t,language:{lang:'en-US',reliable:true},deferDetection:false};
+  window.textFixture={settings,calls,copies,detections,animations,roots,groups,t,language:{lang:'en-US',reliable:true},deferDetection:false};
   const area={async get(){return{};},async set(){}};
   const store={async load(){return structuredClone(settings);},onChange(fn){listeners.add(fn);return()=>listeners.delete(fn);}};
   const service={translateText(req){return new Promise((resolve,reject)=>calls.push({req,resolve,reject}));},async listModels(){return{ok:true,models:[]};}};
-  const platform={kind:'extension',settingsStore:store,localArea:area,translator:()=>service,openSettings(){},
+  const platform={kind:'extension',settingsStore:store,localArea:area,translator:()=>service,openSettings:group=>groups.push(group),
     detectLanguage(text){return new Promise(resolve=>{detections.push({text,resolve});if(!textFixture.deferDetection)resolve(textFixture.language);});}};
   Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText(text){return new Promise((resolve,reject)=>copies.push({text,resolve,reject}));}}});
   textFixture.platform=platform;textFixture.reload=async patch=>{Object.assign(settings,patch);for(const fn of listeners)fn();};
@@ -96,11 +96,20 @@ def run(pw,base,language):
         page.wait_for_timeout(40);assert swap.is_disabled() and page.evaluate('textFixture.calls.length')==count
         page.evaluate("textFixture.deferDetection=false;textFixture.language={lang:'en',reliable:false}")
         submit.click();page.wait_for_function('()=>textFixture.calls.length===3')
-        page.evaluate("textFixture.calls[2].resolve({ok:false,error:{message:'fixture provider message'}})")
-        status.filter(has_text='fixture provider message').wait_for();assert swap.is_disabled()
-        submit.click();page.wait_for_function('()=>textFixture.calls.length===4')
-        page.evaluate("textFixture.calls[3].reject(Error('fixture exception'))")
-        status.filter(has_text=page.evaluate("textFixture.t('maj')")).wait_for();passed+=1
+        page.evaluate("textFixture.calls[2].resolve({ok:false,error:{code:'network_error',message:'fixture provider message'}})")
+        status.filter(has_text=page.evaluate("textFixture.t('errNetwork')")).wait_for();assert swap.is_disabled()
+        assert 'fixture provider message' not in status.inner_text()
+        revision=status.get_attribute('data-error-revision')
+        status.get_by_role('button',name=page.evaluate("textFixture.t('errRetry')"),exact=True).click()
+        page.wait_for_function('()=>textFixture.calls.length===4')
+        assert submit.is_disabled() and submit.get_attribute('aria-busy')=='true'
+        page.evaluate("textFixture.calls[3].reject(Object.assign(Error('fixture exception'),{status:401,service:'OpenAI'}))")
+        status.filter(has_text=page.evaluate("textFixture.t('errAuth')")).wait_for()
+        assert status.get_attribute('data-error-revision')!=revision
+        status.get_by_role('button',name=page.evaluate("textFixture.t('errDetails')"),exact=True).click()
+        assert status.locator('small').inner_text()=='OpenAI · HTTP 401'
+        status.get_by_role('button',name=page.evaluate("textFixture.t('errSettings')"),exact=True).click()
+        assert page.evaluate('textFixture.groups')==['ai'];passed+=1
         # Locale changes retain an in-flight input; labels restore in the current locale.
         submit.click();page.wait_for_function('()=>textFixture.calls.length===5')
         other='en' if language=='zh-CN' else 'zh-CN'

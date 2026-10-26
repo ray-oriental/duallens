@@ -3,6 +3,61 @@ Run from the repository root: python -B tests/fixtures/generate_pdf.py
 No third-party PDF or fonts are copied. Bytes and xref offsets are generated here.
 """
 from pathlib import Path
+import zlib
+
+
+def make_scanned_pdf(pages=1):
+    """Original block-letter scan, generated with stdlib only; no text/font objects."""
+    glyphs = {
+        'A':['01110','10001','10001','11111','10001','10001','10001'],
+        'C':['01111','10000','10000','10000','10000','10000','01111'],
+        'D':['11110','10001','10001','10001','10001','10001','11110'],
+        'E':['11111','10000','10000','11110','10000','10000','11111'],
+        'F':['11111','10000','10000','11110','10000','10000','10000'],
+        'G':['01111','10000','10000','10111','10001','10001','01111'],
+        'H':['10001','10001','10001','11111','10001','10001','10001'],
+        'I':['11111','00100','00100','00100','00100','00100','11111'],
+        'L':['10000','10000','10000','10000','10000','10000','11111'],
+        'N':['10001','11001','11001','10101','10011','10011','10001'],
+        'O':['01110','10001','10001','10001','10001','10001','01110'],
+        'Q':['01110','10001','10001','10001','10101','10010','01101'],
+        'R':['11110','10001','10001','11110','10100','10010','10001'],
+        'S':['01111','10000','10000','01110','00001','00001','11110'],
+        'T':['11111','00100','00100','00100','00100','00100','00100'],
+        'U':['10001','10001','10001','10001','10001','10001','01110'],
+        'V':['10001','10001','10001','10001','10001','01010','00100'],
+    }
+    width, height, unit = 1224, 1584, 6
+    pixels = bytearray(b'\xff' * (width * height))
+    for row, text in enumerate(['THE QUIET GARDEN','LEAVES COLLECT RAIN','CAREFUL NOTES GUIDE US']):
+        for col, char in enumerate(text):
+            for y, line in enumerate(glyphs.get(char, [])):
+                for x, bit in enumerate(line):
+                    if bit == '1':
+                        for dy in range(unit):
+                            start = (180 + row * 130 + y * unit + dy) * width + 100 + col * unit * 6 + x * unit
+                            pixels[start:start + unit] = b'\0' * unit
+    image = zlib.compress(pixels)
+    objects = [b'<< /Type /Catalog /Pages 2 0 R >>', b'']
+    kids = []
+    for _ in range(pages):
+        page_id = len(objects) + 1
+        kids.append(f'{page_id} 0 R')
+        content = b'q 612 0 0 792 0 0 cm /Scan Do Q'
+        objects.extend([
+            f'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Scan {page_id+2} 0 R >> >> /Contents {page_id+1} 0 R >>'.encode(),
+            f'<< /Length {len(content)} >>\nstream\n'.encode()+content+b'\nendstream',
+            f'<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {len(image)} >>\nstream\n'.encode()+image+b'\nendstream',
+        ])
+    objects[1] = f'<< /Type /Pages /Count {pages} /Kids [{" ".join(kids)}] >>'.encode()
+    result = bytearray(b'%PDF-1.4\n'); offsets = [0]
+    for number, obj in enumerate(objects, 1):
+        offsets.append(len(result)); result.extend(f'{number} 0 obj\n'.encode()+obj+b'\nendobj\n')
+    start = len(result)
+    result.extend(f'xref\n0 {len(objects)+1}\n0000000000 65535 f \n'.encode())
+    for offset in offsets[1:]: result.extend(f'{offset:010} 00000 n \n'.encode())
+    result.extend(f'trailer\n<< /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{start}\n%%EOF\n'.encode())
+    return bytes(result)
 
 
 def make_pdf(pages=8):

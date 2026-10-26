@@ -3002,5 +3002,227 @@
   },
   "uxTextCancelled": {
     "message": "已取消翻译。"
+  },
+  "pdfExportPDF": {
+    "message": "导出 PDF"
+  },
+  "pdfExportLayout": {
+    "message": "版式"
+  },
+  "pdfExportScope": {
+    "message": "范围"
+  },
+  "pdfExportAll": {
+    "message": "全部页"
+  },
+  "pdfExportRange": {
+    "message": "页码范围"
+  },
+  "pdfExportStart": {
+    "message": "导出"
+  },
+  "pdfExportCancel": {
+    "message": "取消"
+  },
+  "pdfExportHint": {
+    "message": "文件在本机生成；导出件是图像版式，不能搜索或复制文字。尚未翻译的所选页会依次发送文字给当前翻译服务。"
+  },
+  "pdfExportLong": {
+    "message": "超过 50 页，翻译与生成可能需要数分钟，并占用较多内存。继续导出。"
+  },
+  "pdfExportInvalidRange": {
+    "message": "页码无效。请填写 1 到 $arg1$ 之间的页码，例如 1-5, 8；范围不能倒序或留空。",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      }
+    }
+  },
+  "pdfExportProgress": {
+    "message": "正在翻译第 $arg1$ / $arg2$ 页",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      },
+      "arg2": {
+        "content": "$2"
+      }
+    }
+  },
+  "pdfExportGenerating": {
+    "message": "正在生成 PDF"
+  },
+  "pdfExportDone": {
+    "message": "PDF 已生成并交给浏览器下载。"
+  },
+  "pdfExportCancelled": {
+    "message": "已取消，未生成下载文件。"
+  },
+  "pdfExportFailed": {
+    "message": "导出未完成，未生成文件。请重试；也可以缩小页码范围或检查翻译服务。"
+  },
+  "pdfExportScan": {
+    "message": "所选页包含扫描页。请先点「识别文字（本机 OCR）」，再重新导出。"
+  },
+  "pdfOCRTitle": {
+    "message": "识别文字（本机 OCR）"
+  },
+  "pdfOCRLanguage": {
+    "message": "识别语言"
+  },
+  "pdfOCREnglish": {
+    "message": "英语"
+  },
+  "pdfOCRJapanese": {
+    "message": "日语"
+  },
+  "pdfOCRKorean": {
+    "message": "韩语"
+  },
+  "pdfOCRHint": {
+    "message": "此文档可能包含扫描页。开启后，当前及之后按需翻译的扫描页在本机识别；只有置信度较高的文字会发送给翻译服务。自动语言不可用时使用英语，也可手动选择日语或韩语。仅在本次阅读中生效。"
+  },
+  "pdfOCRPack": {
+    "message": "需下载 $arg1$ MB 语言包，来源：$arg2$。按大小与 SHA-256 校验后保存在本机，可在设置中删除。",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      },
+      "arg2": {
+        "content": "$2"
+      }
+    }
+  },
+  "pdfOCRPackReady": {
+    "message": "已安装并校验语言包，无需下载。"
+  },
+  "pdfOCRDownloadConfirm": {
+    "message": "同意下载以上语言包"
+  },
+  "pdfOCRDownloadNeeded": {
+    "message": "请确认语言包下载后重试。"
+  },
+  "pdfOCRProgress": {
+    "message": "正在本机识别第 $arg1$ 页",
+    "placeholders": {
+      "arg1": {
+        "content": "$1"
+      }
+    }
+  },
+  "pdfOCRFailed": {
+    "message": "未能识别足够可靠的文字。请重试或更换识别语言；低置信度内容保留原图。"
+  },
+  "pdfOCRDone": {
+    "message": "已识别。之后按需处理扫描页；更换语言后点此按钮可重新识别当前页。"
+  },
+  "pdfOCRPermission": {
+    "message": "未获准下载语言包。请再次点识别按钮授权，或使用已安装的语言。"
+  },
+  "errOffline": {
+    "message": "当前设备已离线，请联网后重试。"
+  },
+  "errNetwork": {
+    "message": "无法连接翻译服务（也可能是跳转被拦截）；请检查网络，并在设置中改用最终地址后重试。"
+  },
+  "errTimeout": {
+    "message": "翻译服务响应超时，请稍后重试或更换模型。"
+  },
+  "errRate": {
+    "message": "翻译服务请求过多，请稍后重试。"
+  },
+  "errRateWait": {
+    "message": "翻译服务请求过多，请约 $value$ 秒后重试。",
+    "placeholders": {
+      "value": {
+        "content": "$1"
+      }
+    }
+  },
+  "errServer": {
+    "message": "翻译服务暂时不可用，请稍后重试。"
+  },
+  "errAuth": {
+    "message": "密钥无效或没有访问权限，请在设置中检查密钥与服务权限。"
+  },
+  "errAddress": {
+    "message": "找不到服务接口，请在设置中检查服务地址（通常以 /v1 结尾）。"
+  },
+  "errParse": {
+    "message": "翻译服务返回的内容无法解析，请重试或更换模型。"
+  },
+  "errHtml": {
+    "message": "服务返回的是网页，请在设置中检查是否填写了接口地址（通常以 /v1 结尾）。"
+  },
+  "errModel": {
+    "message": "所选模型不存在或暂时不可用，请在设置中重新获取并选择模型。"
+  },
+  "errQuota": {
+    "message": "翻译服务的配额或余额不足，请检查服务账户或更换服务。"
+  },
+  "errRefused": {
+    "message": "翻译服务因内容安全规则拒绝了这段文字，请调整选中文字或更换服务。"
+  },
+  "errConfig": {
+    "message": "翻译服务尚未配置完整，请打开设置检查服务地址、密钥和模型。"
+  },
+  "errConfirmation": {
+    "message": "首次发送前需确认文字去向，请在确认提示中继续或更换服务。"
+  },
+  "errPermission": {
+    "message": "未获得站点权限，功能仍关闭；请重新开启并允许所需权限。"
+  },
+  "errRestricted": {
+    "message": "当前页面受限（内置页、商店或原生 PDF），请打开普通网页或 DualLens PDF 阅读器。"
+  },
+  "errInjection": {
+    "message": "未能连接页面，请刷新页面后重试。"
+  },
+  "errStorage": {
+    "message": "设备存储空间不足，未能保存；请在设置中清理缓存后重试。"
+  },
+  "errPartial": {
+    "message": "$value$ 段没有翻译成功，可重试这些段落。",
+    "placeholders": {
+      "value": {
+        "content": "$1"
+      }
+    }
+  },
+  "errFallback": {
+    "message": "免费机器翻译失效，已切换备用服务，可继续阅读。"
+  },
+  "errCancelled": {
+    "message": "已取消翻译，需要时可重新翻译。"
+  },
+  "errUnknown": {
+    "message": "未能完成操作，请重试；若仍失败，请检查设置。"
+  },
+  "errGm": {
+    "message": "用户脚本请求失败，请检查网络及脚本管理器连接权限后重试。"
+  },
+  "errSettings": {
+    "message": "打开设置"
+  },
+  "errRetry": {
+    "message": "重试"
+  },
+  "errRetryPartial": {
+    "message": "重试这些段落"
+  },
+  "errDetails": {
+    "message": "详情"
+  },
+  "errNoDetail": {
+    "message": "没有更多技术信息。"
+  },
+  "errRedirect": {
+    "message": "服务地址发生了跳转（HTTP 3xx），为安全起见没有跟随。请在设置中改用最终地址。"
+  },
+  "errResponseSize": {
+    "message": "服务返回内容超过 4 MiB，已停止接收。请缩小翻译范围或更换模型后重试。"
+  },
+  "errImage": {
+    "message": "图片下载失败，请检查图片来源权限或稍后重试；原图已保留。"
   }
 }

@@ -1,3 +1,5 @@
+import { renderError } from '../shared/errors.js';
+import { ERR } from '../shared/protocol.js';
 import { t as l10n, uiLanguage, setUiLanguage, localize } from '../shared/i18n.js';
 import {confirmationCard} from '../content/confirmation.js';
 import {destinationNotice} from '../shared/destinations.js';
@@ -5,7 +7,7 @@ import { LANGS,siteRuleFor,setSitePageRule } from '../shared/settings.js';
 import { loadDeviceState,updateDeviceState,acknowledge,mtDestination } from '../shared/device-state.js';
 import { featureNeedsBroad,requestBroad } from '../shared/permissions.js';
 import { pathPattern } from '../shared/site-pattern.js';
-import { FEATURES,TEXT as COMMON,element,segmented,engineDisclosure,featureDescription } from './components.js';
+import { FEATURES,element,segmented,engineDisclosure,featureDescription } from './components.js';
 import { SHARED_CSS } from './theme.js';
 import { POPUP_CSS } from './popup-theme.js';
 import { createFeedback } from './forms/feedback.js';
@@ -17,7 +19,7 @@ const T=Object.freeze({title:'DualLens',get text(){return l10n('ma6');},get sett
 const ROW=Object.freeze({get floatBall(){return l10n('mau');},get selection(){return l10n('polishSelectionShort');},get input(){return l10n('polishInputShort');},get subtitles(){return l10n('polishSubtitlesShort');}});
 const hoverRow=(s,coarse)=>coarse?l10n('lookLongPress'):s.hover.modifier==='none'?l10n('polishHoverShort'):l10n('lookHoverRow',[s.hover.modifier==='Control'?'Ctrl':s.hover.modifier]);
 
-export async function mountPopup(root,{store,platform,localArea=platform.localArea,url='',pageMessage,onSettings=()=>platform.openSettings(),onText=()=>platform.openTextTranslation?.(),commands=[],shortcut='',restricted=false,stale=false,onReload=()=>{},pdfAvailable=false,onPDF}) {
+export async function mountPopup(root,{store,platform,localArea=platform.localArea,url='',pageMessage,onSettings=()=>platform.openSettings(),onText=()=>platform.openTextTranslation?.(),commands=[],shortcut='',restricted=false,stale=false,accessError,onReload=()=>{},pdfAvailable=false,onPDF}) {
   const doc=root.ownerDocument,el=(tag,text,attrs)=>element(doc,tag,text,attrs),box=el('div',null,{class:'dl-theme dl-popup',lang:uiLanguage()}),style=el('style',SHARED_CSS+POPUP_CSS);box.append(style);root.append(box);
   let s=await store.load(),device=await loadDeviceState(localArea),closed=false,step=1,ai=false,state=null,refreshing=false,poll,acting=false,redraw=false;
   const feedback=el('div',null,{id:'status',class:'dl-feedback dl-status',role:'status','aria-live':'polite'}),actions=createFeedback(box);
@@ -25,13 +27,20 @@ export async function mountPopup(root,{store,platform,localArea=platform.localAr
   const revokedText=()=>revoked?.features?.length?EXTRA.revoked:'';
   let host='';try{host=new URL(url).hostname;}catch{/* unavailable tab */}
   const say=message=>actions.notice(message);
-  async function run(fn){try{for(let retry=0;retry<8;retry++){const result=await fn(),error=result?.error;if(error?.code!=='confirmation-required')return result;
+  async function run(fn){try{for(let retry=0;retry<8;retry++){const result=await fn(),error=result?.error;if(error?.code!=='confirmation-required'){if(error)showError(error,event=>perform(event.currentTarget,fn));return result;}
     if(!error.destination||!await confirmationCard({...destinationNotice([error.destination]),platform:{...platform,openSettings:onSettings},root:box,group:error.destination.id.startsWith('llm:')?'ai':'common'}))return;
-    await acknowledge(localArea,error.destination.id);}}catch(error){say(error.message||T.failure);}}
-  const button=(text,fn,attrs={})=>{const b=el('button',text,{type:'button',...attrs});b.addEventListener('click',async()=>{
+    await acknowledge(localArea,error.destination.id);}}catch(error){showError(error,event=>perform(event.currentTarget,fn));}}
+  function showError(error,retry){if(!closed){feedback.classList.add('error');renderError(feedback,error,{retry,openSettings:onSettings});}}
+  async function perform(b,fn){
     if(acting)return;acting=true;
-    try{await actions.run(b,()=>run(fn));}finally{acting=false;if(redraw){redraw=false;draw();}}
-  });return b;};
+    const reporting=b.closest('#status'),focused=box.getRootNode().activeElement===b;
+    try{await actions.run(b,report=>{if(reporting)report(l10n('actionWorking'));return run(fn);});}finally{
+      acting=false;if(redraw){redraw=false;draw();}
+      const active=box.getRootNode().activeElement;
+      if(!closed&&focused&&(!active||active===doc.body||active===b))(b.id?box.querySelector('#'+b.id):b.isConnected?b:null)?.focus();
+    }
+  }
+  const button=(text,fn,attrs={})=>{const b=el('button',text,{type:'button',...attrs});b.addEventListener('click',()=>perform(b,fn));return b;};
   async function persist(patch){s=await store.save(patch);if(!closed)draw();}
   async function finish(skip=false){device=await updateDeviceState(localArea,{onboarded:true,upgradeNoticeSeen:true});if(closed)return;draw();if(ai&&!skip)onSettings('ai');}
   const languages=(value,change,id)=>{const select=el('select',null,{'aria-label':T.target,id});for(const l of LANGS)select.append(el('option',l.name,{value:l.code}));select.value=value;select.addEventListener('change',()=>run(()=>change(select.value)));return select;};
@@ -62,14 +71,14 @@ export async function mountPopup(root,{store,platform,localArea=platform.localAr
     const modeShortcut=shortcutFor(commands,'toggle-translation-only');if(modeShortcut)row.querySelector('fieldset').title=T.shortcut(T.mode,modeShortcut);
     main.append(engineDisclosure(doc,s,group=>run(()=>onSettings(group))));box.append(main);
     const site=el('section',null,{class:'dl-site'}),siteRow=el('div',null,{class:'site-row'}),mode=host?siteRuleFor(s,url).mode||'':'';
-    const apply=async value=>{if(value==='always'&&platform.kind==='extension'&&!await requestBroad(platform.permissionAPI)){draw();say(COMMON.denied);return;}await persist({siteRules:setSitePageRule(s,box.querySelector('#site-path')?.checked?pathPattern(url):host,value)});say(l10n('uxSiteApplied'));};
+    const apply=async value=>{if(value==='always'&&platform.kind==='extension'&&!await requestBroad(platform.permissionAPI)){draw();showError({code:ERR.PERMISSION});return;}await persist({siteRules:setSitePageRule(s,box.querySelector('#site-path')?.checked?pathPattern(url):host,value)});say(l10n('uxSiteApplied'));};
     const pick=el('select',null,{id:'site-mode','aria-label':T.site});for(const [value,name]of[['',T.demand],['always',T.always],['never',T.never]])pick.append(el('option',name,{value}));pick.value=mode;pick.disabled=!host;pick.addEventListener('change',()=>run(()=>apply(pick.value)));
     siteRow.append(el('span',T.site,{class:'site-label'}),el('span',host||'—',{class:'host',title:host}),pick);site.append(siteRow);
     if(mode){const scope=pathPattern(url),path=switchRow(l10n('polishPath',[scope.slice(scope.indexOf('/'))]),'site-path',!!siteRuleFor(s,url).custom?.match?.includes('/'),async input=>{let next={...s,siteRules:setSitePageRule(s,host,'')};next.siteRules=setSitePageRule(next,scope,'');await persist({siteRules:setSitePageRule(next,input.checked?scope:host,mode)});},`${scope} · ${mode==='always'?l10n('polishAlwaysHint'):l10n('polishNeverHint')}`);path.classList.replace('feature-row','path-row');site.append(path);}box.append(site);
     const features=el('section',null,{class:'dl-more','aria-label':T.enhance});features.append(el('h2',T.enhance));
-    for(const [key,name]of FEATURES){const rowName=key==='hover'?hoverRow(s,platform.coarse):ROW[key]||name;const label=switchRow(rowName,`feature-${key}`,s[key].enabled,async input=>{const enabled=input.checked;if(enabled&&platform.kind==='extension'&&featureNeedsBroad(key)&&!await requestBroad(platform.permissionAPI)){input.checked=false;say(COMMON.denied);return;}await persist({[key]:{enabled}});},featureDescription(key,s,platform.coarse));label.querySelector('input').setAttribute('aria-label',name);features.append(label);
+    for(const [key,name]of FEATURES){const rowName=key==='hover'?hoverRow(s,platform.coarse):ROW[key]||name;const label=switchRow(rowName,`feature-${key}`,s[key].enabled,async input=>{const enabled=input.checked;if(enabled&&platform.kind==='extension'&&featureNeedsBroad(key)&&!await requestBroad(platform.permissionAPI)){input.checked=false;showError({code:ERR.PERMISSION});return;}await persist({[key]:{enabled}});},featureDescription(key,s,platform.coarse));label.querySelector('input').setAttribute('aria-label',name);features.append(label);
       if(key==='comics'&&s.comics.enabled&&!restricted)features.append(button(EXTRA.images,async()=>{await pageMessage({type:'command',name:'translate-comics'});await refresh();},{id:'comics',class:'dl-text-button dl-subaction'}));}
-    box.append(features,feedback);if(platform.coarse)box.append(head);
+    box.append(features,feedback);const pageStatus=box.querySelector('#page-status');if(restricted&&!stale)renderError(pageStatus,{code:accessError||ERR.RESTRICTED},{retry:()=>platform.reloadPage?.(),openSettings:onSettings});else if(state?.failed)renderError(pageStatus,{...state.error,code:ERR.PARTIAL,category:'partial',count:state.failed},{partial:true,retry:event=>perform(event.currentTarget,async()=>{await pageMessage({type:'command',name:'retry-failed'});await refresh();}),openSettings:state.error?.action==='settings'?()=>onSettings(state.error.group):undefined});if(platform.coarse)box.append(head);
     const nextFocus=focusId?box.querySelector('#'+focusId):focusName?[...box.querySelectorAll('input')].find(n=>n.name===focusName&&n.value===focusValue):null;nextFocus?.focus();
   }
   function statusText(){if(restricted)return stale?'':T.restricted;if(!state||!state.translated)return '';const done=state.done??Math.max(0,(state.units||0)-(state.pending||0)-(state.failed||0));if(!done&&!state.failed)return l10n('polishTranslating');return T.progress(done,state.pending,state.failed,state.refining);}

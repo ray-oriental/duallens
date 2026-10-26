@@ -1,3 +1,4 @@
+import { renderError } from '../shared/errors.js';
 import { t as l10n, message, setText, localize, setUiLanguage } from '../shared/i18n.js';
 import { engineDisclosure } from '../ui/components.js';
 import { LANGS, providerChain } from '../shared/settings.js';
@@ -90,6 +91,7 @@ export async function mountTextForm(root, { platform }) {
   const feedback=createFeedback(form);
   let disposed = false, sequence = 0, modelSequence = 0, utterance = null, pending,detected='',detectedText='',initialized=false;
   const stopSpeech = () => { if (utterance) { globalThis.speechSynthesis?.cancel(); utterance = null; } };
+  const showError = (error,retry) => { status.classList.add('error'); renderError(status,error,{retry,openSettings:group=>platform.openSettings(group)}); };
   function drawControls() {
     if(disposed)return;
     const source=detectedText===input.value?detected:'';
@@ -145,14 +147,14 @@ export async function mountTextForm(root, { platform }) {
     try {
       const result = await service.listModels(profileId);
       if (disposed || token !== modelSequence || profileId !== profiles.value) return;
-      if (!result.ok) { feedback.notice(result.error?.message || l10n('maf'),true); return; }
+      if (!result.ok) { showError(result.error,()=>load.click()); return; }
       const value = models.value;
       const values = new Map([...models.options].map(o => [o.value, o.textContent]));
       for (const model of result.models || []) if (typeof model.id === 'string') values.set(model.id, model.label || model.id);
       selectOptions(models, [...values], value);
       drawDisclosure();
       feedback.notice(l10n('mag', [result.models?.length || 0]));
-    } catch { if (!disposed && token === modelSequence) feedback.notice(l10n('maf'),true); }
+    } catch (error) { if (!disposed && token === modelSequence) showError(error,()=>load.click()); }
     finally { if (!disposed && token === modelSequence) load.disabled = false; }
   });
   form.addEventListener('submit', async event => {
@@ -172,9 +174,9 @@ export async function mountTextForm(root, { platform }) {
         const result=await untilAborted(()=>service.translateText({text,from:source,to:target,purpose:'text',signal:controller.signal,
           ...(profiles.value?{profileId:profiles.value,model:models.value}:{})}),controller.signal);
         if(disposed||token!==sequence||result===CANCELLED)return;
-        if(!result.ok){report(result.error?.message||l10n('mah'),true);return;}
+        if(!result.ok){showError(result.error,()=>form.requestSubmit());return;}
         output.textContent=result.text||'';report(l10n('mai'));
-      }catch{if(!disposed&&token===sequence)report(l10n('maj'),true);}
+      }catch(error){if(!disposed&&token===sequence)showError(error,()=>form.requestSubmit());}
       finally{if(token===sequence){pending=null;form.removeAttribute('aria-busy');}}
     },{busy:l10n('m4x')});
     drawControls();

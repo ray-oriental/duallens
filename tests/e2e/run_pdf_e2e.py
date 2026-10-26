@@ -10,6 +10,9 @@ import json
 import sys
 import uuid
 import time
+import hashlib
+import base64
+import shutil
 from urllib.parse import quote
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from functools import partial
@@ -355,13 +358,31 @@ def pdf_handoff(h):
     page.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html')
     result=page.evaluate("""async()=>{
       const {createPDFHandoff}=await import('./handoff.js');
+      const {registerPDFHandoffCleanup}=await import('../background/pdf.js');
       let time=1000;const store=createPDFHandoff({now:()=>time});
       const data=new TextEncoder().encode('%PDF-1.4\\nlocal fixture');
+      const keys=async()=>{
+        const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('duallens-pdf-handoff',1);r.onsuccess=()=>resolve(r.result);r.onerror=reject;});
+        try{return await new Promise((resolve,reject)=>{const r=db.transaction('files').objectStore('files').getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=reject;});}
+        finally{db.close();}
+      };
       const token=await store.put(data);
       const pair=await Promise.allSettled([store.take(token),store.take(token)]);
       if(pair.filter(r=>r.status==='fulfilled').length!==1)throw Error('token replay accepted');
       const first=pair.find(r=>r.status==='fulfilled').value;
       if(new TextDecoder().decode(first)!==new TextDecoder().decode(data))throw Error('bytes changed');
+      if((await keys()).includes(token))throw Error('consumed bytes remain after take');
+      const abandoned=await store.put(data);time+=299999;
+      const live=await store.put(data);time++;
+      const events={};registerPDFHandoffCleanup({runtime:{onStartup:{addListener:fn=>events.start=fn},onInstalled:{addListener:fn=>events.install=fn}}},store);
+      await events.start();
+      if((await keys()).includes(abandoned)||!(await keys()).includes(live))throw Error('startup cleanup deleted live data or retained expired bytes');
+      time+=300000;await events.install();
+      if((await keys()).length)throw Error('install cleanup retained expired bytes');
+      const beforePut=await store.put(data);time+=300000;
+      const afterPut=await store.put(data);
+      if((await keys()).includes(beforePut)||!(await keys()).includes(afterPut))throw Error('put did not purge expired bytes');
+      await store.take(afterPut);
       const expired=await store.put(data);time+=300001;
       try{await store.take(expired);throw Error('expiry accepted');}catch(e){if(e.message==='expiry accepted')throw e;}
       const tokens=[];for(let i=0;i<4;i++)tokens.push(await store.put(data));
@@ -371,7 +392,7 @@ def pdf_handoff(h):
       return true;
     }""")
     assert result
-    return 'real extension IndexedDB: exact bytes, concurrent single consumption, replay/expiry/malformed rejection, bounded abandoned entries'
+    return 'real extension IndexedDB: immediate physical deletion after take; startup/install/put expiry purge preserves live bytes; exact bytes, concurrent single consumption, replay/expiry/malformed rejection, bounded abandoned entries'
 
 
 def pdf_origin_prompt(h):
@@ -500,6 +521,180 @@ def pdf_probe(h):
     return 'no webRequest/startup probes; HEAD success/non-PDF; HEAD 405 -> anonymous Range GET; viewer/notice outcomes'
 
 
+def read_export(page, path):
+    info=page.evaluate("""async b64 => {
+      const lib=await import('../vendor/pdfjs/pdf.min.js');
+      const data=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+      const task=lib.getDocument({data,isEvalSupported:false});
+      try {
+        const pdf=await task.promise, pages=[];
+        for(let n=1;n<=pdf.numPages;n++) {
+          const page=await pdf.getPage(n), ops=await page.getOperatorList();
+          const viewport=page.getViewport({scale:.5}),canvas=document.createElement('canvas');
+          canvas.width=viewport.width;canvas.height=viewport.height;
+          const ctx=canvas.getContext('2d',{willReadFrequently:true});
+          await page.render({canvasContext:ctx,viewport}).promise;
+          const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+          let ink=0,difference=0;
+          for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width/2;x++){
+            const i=(y*canvas.width+x)*4,j=(y*canvas.width+x+Math.floor(canvas.width/2))*4;
+            if(pixels[i]<200)ink++;
+            if(Math.abs(pixels[i]-pixels[j])>50)difference++;
+          }
+          pages.push({view:page.view,images:ops.fnArray.filter(op=>op===lib.OPS.paintImageXObject).length,
+            text:(await page.getTextContent()).items.length,ink,difference,preview:n===1?canvas.toDataURL('image/png'):null});
+          canvas.width=canvas.height=0;
+        }
+        return pages;
+      } finally {await task.destroy();}
+    }""", base64.b64encode(path.read_bytes()).decode('ascii'))
+    for result in info:
+        preview=result.pop('preview',None)
+        if preview:path.with_suffix('.png').write_bytes(base64.b64decode(preview.split(',')[1]))
+    return info
+
+
+def pdf_export(h):
+    page, errors = viewer(h,h.base+'/math-notes.pdf','side')
+    page.click('#export-pdf');page.select_option('#export-scope','range')
+    page.fill('#export-range','0, 2-1');page.click('#export-start')
+    assert '页码无效' in page.locator('#export-status').inner_text()
+    page.fill('#export-range','1')
+    with page.expect_download(timeout=60000) as pending:
+        page.click('#export-start')
+    download=pending.value
+    assert download.suggested_filename=='math-notes.bilingual.pdf',download.suggested_filename
+    target=e2e.ARTIFACTS/'export-bilingual.pdf';download.save_as(target)
+    info=read_export(page,target)
+    assert len(info)==1 and info[0]['view']==[0,0,1224,792] and info[0]['images']==2,info
+    assert info[0]['text']==0 and info[0]['ink']>100 and info[0]['difference']>100,info
+    wait_for(page,"()=>!document.querySelector('#export-start').disabled")
+    page.select_option('#export-layout','translated')
+    with page.expect_download(timeout=60000) as pending:
+        page.click('#export-start')
+    download=pending.value
+    assert download.suggested_filename=='math-notes.translated.pdf'
+    target=e2e.ARTIFACTS/'export-translated.pdf';download.save_as(target)
+    info=read_export(page,target)
+    assert len(info)==1 and info[0]['view']==[0,0,612,792] and info[0]['images']==1,info
+    assert not errors,errors
+    assert page.locator('.export-sheet').count()==0
+    return 'real PDF downloads: bilingual 1224x792 / 2 images; translated 612x792 / 1 image; PDF.js render + pixel difference; strict range validation; math original pixels retained'
+
+
+def pdf_export_cancel(h):
+    page,errors=viewer(h,h.base+'/pdf-field-notebook.pdf','side')
+    downloads=[];page.on('download',lambda download:downloads.append(download))
+    page.evaluate("""async()=>{
+      const {PdfTranslations}=await import('./translate.js');const start=PdfTranslations.prototype.start;
+      window.exportCalls=[];PdfTranslations.prototype.start=function(){
+        this.service={translateBatch(req,reply){const call={req,reply,cancelled:false};exportCalls.push(call);
+          let finish;return{done:new Promise(r=>finish=r),cancel(){call.cancelled=true;finish();}};}};
+        start.call(this);
+      };
+    }""")
+    page.click('#export-pdf');page.click('#export-start')
+    wait_for(page,'()=>window.exportCalls.length>0')
+    page.click('#export-cancel');wait_for(page,"()=>!document.querySelector('#export-start').disabled")
+    assert '已取消' in page.locator('#export-status').inner_text()
+    page.evaluate("()=>exportCalls.forEach(c=>c.reply(c.req.items.map(i=>({id:i.id,text:'late text',stage:'final'}))))")
+    page.wait_for_timeout(300)
+    assert not downloads and page.locator('.export-sheet').count()==0
+    assert page.evaluate('()=>exportCalls.every(c=>c.cancelled)')
+    assert not errors,errors
+    return 'cancel while translating closes requests, ignores late replies, releases temporary DOM and produces zero downloads'
+
+
+def pdf_export_consent(h):
+    profile={'id':'export-consent','kind':'openai','name':'Offline export consent fixture','baseUrl':'https://consent.example/v1',
+             'model':'fixture','requiresKey':False,'fallbackModels':[]}
+    h.settings({'provider':{'active':profile['id'],'profiles':[profile],'chain':[]},'translation':{'mode':'llm'}})
+    h.ctx.add_init_script("""(()=>{window.consentRoots=[];const attach=Element.prototype.attachShadow;
+      Element.prototype.attachShadow=function(opts){const root=attach.call(this,opts);consentRoots.push(root);return root;};})();""")
+    page,errors=viewer(h,h.base+'/pdf-field-notebook.pdf','side')
+    downloads=[];page.on('download',lambda item:downloads.append(item))
+    page.evaluate("""async()=>{
+      const {PdfTranslations}=await import('./translate.js'),start=PdfTranslations.prototype.start;
+      window.exportRequests=[];PdfTranslations.prototype.start=function(){
+        this.service={translateBatch(req,reply){exportRequests.push(req);let cancelled=false;
+          const done=new Promise(resolve=>setTimeout(()=>{if(!cancelled)reply(req.items.map(item=>({id:item.id,text:'【译】'+item.text})));resolve();},10));
+          return{done,cancel(){cancelled=true;}};}};start.call(this);};
+    }""")
+    page.click('#export-pdf');page.select_option('#export-scope','range');page.fill('#export-range','8');page.click('#export-start')
+    wait_for(page,"()=>consentRoots.some(r=>r.querySelector('.confirm'))")
+    assert page.evaluate('()=>exportRequests.length')==0 and not downloads
+    page.evaluate("()=>consentRoots.find(r=>r.querySelector('.confirm')).querySelector('.close').click()")
+    wait_for(page,"()=>!document.querySelector('#export-start').disabled")
+    assert page.evaluate('()=>exportRequests.length')==0 and not downloads
+    page.click('#export-start');wait_for(page,"()=>consentRoots.some(r=>r.querySelector('.confirm'))")
+    with page.expect_download(timeout=60000) as pending:
+        page.evaluate("()=>consentRoots.find(r=>r.querySelector('.confirm')).querySelector('.primary').click()")
+    target=e2e.ARTIFACTS/'export-consented.pdf';pending.value.save_as(target)
+    assert len(read_export(page,target))==1
+    assert page.evaluate("()=>exportRequests.every(req=>req.items.every(item=>item.id.startsWith('p8-')))")
+    assert not errors,errors
+    return 'export first-send gate: close sends zero text and downloads nothing; consent exports only selected offscreen page 8'
+
+
+def pdf_ocr_cancel(h):
+    page,errors=viewer(h,h.base+'/scanned-notes.pdf','side')
+    downloads=[];page.on('download',lambda download:downloads.append(download))
+    page.click('#ocr-toggle');wait_for(page,"()=>!document.querySelector('#ocr-start').disabled")
+    page.evaluate("""()=>{
+      const send=chrome.runtime.sendMessage.bind(chrome.runtime);window.ocrCalls=[];window.ocrCancels=[];
+      chrome.runtime.sendMessage=msg=>{
+        if(msg.type==='pdf-ocr')return new Promise(resolve=>ocrCalls.push({msg,resolve}));
+        if(msg.type==='pdf-ocr-cancel'){ocrCancels.push(msg);return Promise.resolve({ok:true});}
+        return send(msg);
+      };
+    }""")
+    page.check('#ocr-download');page.click('#ocr-start');wait_for(page,'()=>ocrCalls.length===1')
+    page.click('#ocr-cancel');wait_for(page,"()=>!document.querySelector('#ocr-start').disabled")
+    assert page.evaluate('()=>ocrCancels.length')==1
+    page.evaluate("""()=>ocrCalls[0].resolve({ok:true,regions:[{text:'Late OCR result',confidence:99,bbox:{x0:.1,y0:.1,x1:.8,y1:.2}}]})""")
+    page.wait_for_timeout(200)
+    assert not downloads and page.locator('.tb,.rf-t').count()==0
+    assert '已取消' in page.locator('#ocr-status').inner_text()
+    assert not errors,errors
+    return 'cancel during OCR returns promptly, sends job cancellation, rejects late recognized text and produces zero downloads/translations'
+
+
+def pdf_scanned(h):
+    manifest=json.loads((PROJECT/'extension/offscreen/languages.json').read_text(encoding='utf-8'))
+    pack=e2e.E2E_ROOT/'comics-data/eng.traineddata'
+    assert pack.stat().st_size==manifest['eng']['bytes']
+    assert hashlib.sha256(pack.read_bytes()).hexdigest()==manifest['eng']['sha256']
+    Handler.requests.clear()
+    downloads=lambda:[r for r in Handler.requests if r['path']=='/eng.traineddata']
+    page,errors=viewer(h,h.base+'/scanned-notes.pdf','side')
+    assert not page.locator('#ocr-panel').is_visible()
+    page.click('#ocr-toggle')
+    page.locator('#ocr-panel').wait_for(state='visible')
+    wait_for(page,"()=>!document.querySelector('#ocr-start').disabled")
+    assert page.locator('.textLayer span').count()==0
+    assert not downloads() and page.locator('.tb').count()==0
+    assert '4.11 MB' in page.locator('#ocr-pack').inner_text()
+    assert '127.0.0.1' in page.locator('#ocr-pack').inner_text()
+    page.click('#ocr-start');assert not downloads()
+    page.check('#ocr-download');page.click('#ocr-start')
+    page.locator('.tb[data-stage=final]').first.wait_for(timeout=60000)
+    texts=page.locator('.tb[data-stage=final]').all_text_contents()
+    assert any('GARDEN' in text or 'LEAVES' in text or 'NOTES' in text for text in texts),texts
+    assert len(downloads())==1,downloads()
+    wait_for(page,"()=>!document.querySelector('#ocr-start').disabled")
+    page.click('#export-pdf')
+    with page.expect_download(timeout=60000) as pending:
+        page.click('#export-start')
+    target=e2e.ARTIFACTS/'export-ocr.pdf';pending.value.save_as(target)
+    info=read_export(page,target)
+    assert len(info)==2 and all(p['images']==2 for p in info),info
+    assert all(p['difference']>100 for p in info),info
+    assert len(downloads())==1,'verified OCR language cache not reused'
+    assert not errors,errors
+    page.screenshot(path=str(e2e.ARTIFACTS/'pdf-ocr.png'))
+    return 'original image-only 2-page fixture; zero pre-confirmation downloads; pinned English pack size+SHA256; real Tesseract OCR + mock translation; sequential OCR export PDF.js readback; pack reused'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--only', action='append', default=[], help='mock case name filter')
@@ -508,6 +703,7 @@ def main():
     fixtures.mkdir(parents=True, exist_ok=True)
     (fixtures / 'pdf-field-notebook.pdf').write_bytes(fixture.make_pdf())
     (fixtures / 'math-notes.pdf').write_bytes(math_fixture.make_pdf())
+    (fixtures / 'scanned-notes.pdf').write_bytes(fixture.make_scanned_pdf(2))
     (fixtures / 'ordinary.html').write_text('<!doctype html><title>PDF probe fixture</title><p>This original page is not a PDF.</p>', encoding='utf-8')
     run = e2e.E2E_ROOT / ('run-pdf-' + uuid.uuid4().hex[:8])
     run.mkdir(parents=True)
@@ -518,8 +714,20 @@ def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(fixtures)))
     Thread(target=server.serve_forever, daemon=True).start()
     base = f'http://127.0.0.1:{server.server_address[1]}'
+    if not args.only or any('scan' in name for name in args.only):
+        comics=load('duallens_pdf_comic_data','tests/e2e/run_comics_e2e.py')
+        comics.runner.E2E_ROOT=e2e.E2E_ROOT
+        comics.ensure_fixture_downloads()
+        pack=e2e.E2E_ROOT/'comics-data/eng.traineddata'
+        spec=json.loads((ext/'offscreen/languages.json').read_text(encoding='utf-8'))
+        assert len(pack.read_bytes())==spec['eng']['bytes'] and hashlib.sha256(pack.read_bytes()).hexdigest()==spec['eng']['sha256']
+        shutil.copyfile(pack,fixtures/'eng.traineddata')
+        # Offscreen targets are not reliably intercepted by Playwright 1.48 routes.
+        # Change only the isolated staging manifest's data URL, preserving size/hash.
+        spec['eng']['url']=base+'/eng.traineddata'
+        (ext/'offscreen/languages.json').write_text(json.dumps(spec),encoding='utf-8')
     results = []
-    cases = [('pdf_consent',pdf_consent), ('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt)]
+    cases = [('pdf_consent',pdf_consent), ('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt), ('pdf_export',pdf_export), ('pdf_export_cancel',pdf_export_cancel), ('pdf_export_consent',pdf_export_consent), ('pdf_ocr_cancel',pdf_ocr_cancel), ('pdf_scanned',pdf_scanned)]
     try:
         with e2e.sync_playwright() as p:
             for name, case in cases:
