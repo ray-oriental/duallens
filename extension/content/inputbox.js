@@ -162,6 +162,15 @@ export class InputBox{
       else if(!e.composedPath().some((n)=>n.localName==='dl-ui'))this.last=null;
     };
     this.key=(e)=>this.#keydown(e);
+    this.escape=e=>{
+      if(!e.isTrusted||e.key!=='Escape')return;
+      const field=this.chip?.node.classList.contains('show')?this.chip.field:this.failureField;
+      if(!this.chip?.node.classList.contains('show')&&!this.failure?.attached)return;
+      e.preventDefault();e.stopImmediatePropagation();
+      this.rev++;this.abort?.abort();
+      this.#closeFailure();this.#hide();this.hits.length=0;
+      if(field?.isConnected)field.focus();
+    };
   }
 
   enable(){
@@ -182,9 +191,10 @@ export class InputBox{
     document.removeEventListener('keydown',this.key,true);
     document.removeEventListener('focusin',this.onFocus,true);
     this.last=null;
-    this.failure?.detach();
+    this.#closeFailure();
     this.chip?.ui.detach();
     this.chip=null;
+    document.removeEventListener('keydown',this.escape,true);
   }
 
   #keydown(e){
@@ -236,11 +246,19 @@ export class InputBox{
       n.append(node('i','spin'),document.createTextNode(UI.s3),close);ui.el.append(n);this.chip={ui,node:n};
     }
     const {ui,node:n}=this.chip,r=el.getBoundingClientRect();ui.attach();
+    this.chip.field=el;
+    document.addEventListener('keydown',this.escape,true);
     n.style.left=Math.max(4,Math.min(innerWidth-100,r.right-90))+'px';n.style.top=Math.max(4,Math.min(innerHeight-30,r.bottom+4))+'px';n.classList.add('show');
   }
 
   #hide(){
     this.chip?.node.classList.remove('show');
+    if(!this.failure?.attached)document.removeEventListener('keydown',this.escape,true);
+  }
+
+  #closeFailure(){
+    this.failure?.detach();this.failure=null;this.failureField=null;
+    if(!this.chip?.node.classList.contains('show'))document.removeEventListener('keydown',this.escape,true);
   }
 
   async run(el,selected){
@@ -272,11 +290,11 @@ export class InputBox{
     for(const type of['input','beforeinput','compositionstart'])el.addEventListener(type,changed,true);
     const valid=()=>!edited&&this.rev===epoch&&(selected||this.on&&this.s().input.enabled)&&
       el.isConnected&&!!editableOf(el)&&!this.ime.has(el);
-    this.abort=new AbortController();
+    const abort=this.abort=new AbortController();
     this.busy.add(el);
     this.#show(el);
     try{
-      const res=await this.p.translator().translateText({text,to:target,from:'auto',purpose:'input',signal:this.abort.signal,...interactionRequest(cfg.input)});
+      const res=await this.p.translator().translateText({text,to:target,from:'auto',purpose:'input',signal:abort.signal,...interactionRequest(cfg.input)});
       if(!valid())return;
       if(res.error?.code==='CANCELLED'||isCancelled(res.error))return;
       if(!res.ok||typeof res.text!=='string'||!res.text.trim()){
@@ -287,20 +305,21 @@ export class InputBox{
       if(observer.takeRecords().length)return;
       observer.disconnect();writing=true;
       const out=inputOutput(text,res.text,cfg.input,el.tagName==='INPUT');
-      if(!await acc.apply(out,valid,value=>{writing=value;})&&valid())this.#fallback(res.text);
+      if(!await acc.apply(out,valid,value=>{writing=value;})&&valid())this.#fallback(res.text,el);
     }catch(error){if(valid()&&error?.name!=='AbortError'&&!isCancelled(error))errorToast(error,{retry:()=>this.run(el,selected),openSettings:group=>this.p.openSettings(group)});}
     finally{
       observer.disconnect();
       for(const type of['input','beforeinput','compositionstart'])el.removeEventListener(type,changed,true);
-      this.busy.delete(el);this.#hide();
+      this.busy.delete(el);if(this.abort===abort)this.#hide();
     }
   }
 
-  #fallback(text){
+  #fallback(text,el){
     this.failure?.detach();const ui=createOverlay('.failure{position:fixed;bottom:calc(16px + var(--safe-bottom));left:calc(16px + var(--safe-left));width:min(360px,calc(100% - 32px - var(--safe-left) - var(--safe-right)));max-height:calc(100% - 32px);overflow:auto;padding:14px 16px}.failure p{margin:0 0 8px}.failure textarea{display:block;width:100%;min-height:72px;margin:0 0 10px;padding:8px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--dl-border-strong);border-radius:6px;resize:vertical}.failure .actions{display:flex;justify-content:flex-end;gap:4px}');
     const box=node('div','failure pop'),value=node('textarea'),actions=node('div','actions'),copy=node('button','pb',UI.s10),close=node('button','tb',UI.s12);
     box.setAttribute('role','alert');value.readOnly=true;value.value=text;value.setAttribute('aria-label',UI.s9);
     copy.onclick=async()=>{try{await navigator.clipboard.writeText(text);copy.textContent=UI.s11;}catch{value.select();}};
-    close.onclick=()=>ui.detach();actions.append(close,copy);box.append(node('p','',UI.s8),value,actions);ui.el.append(box);ui.attach();this.failure=ui;
+    close.onclick=()=>this.#closeFailure();actions.append(close,copy);box.append(node('p','',UI.s8),value,actions);ui.el.append(box);ui.attach();this.failure=ui;this.failureField=el;
+    document.addEventListener('keydown',this.escape,true);
   }
 }

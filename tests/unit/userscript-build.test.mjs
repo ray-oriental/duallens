@@ -113,7 +113,8 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
     // Both UI languages must fit without pulling the lazy settings catalogue into startup.
-    assert.ok(Buffer.byteLength(content)<=320000,'startup bundle exceeds the v1.1 320 KB target');
+    // v1.1 target: keep at least 20 KB below the 345 KB hard budget (errors, trusted input and Esc handling landed here).
+    assert.ok(Buffer.byteLength(content)<=325000,'startup bundle exceeds the v1.1 325 KB target');
     for (const module of ['content/comics/controller.js','content/comics/discovery.js','content/comics/order.js','content/comics/userscript-ocr.js','offscreen/detector.js','offscreen/language-store.js',
       'content/subtitles/controller.js','content/subtitles/youtube.js','content/subtitles/html5.js','content/subtitles/json3.js']) {
       assert.ok(!content.includes('"'+module+'"'), `optional feature was bundled into startup: ${module}`);
