@@ -22,7 +22,7 @@ ASSET_SUFFIXES = {'.js', '.css', '.html', '.json', '.png', '.svg', '.woff', '.wo
 BLOCKED = {'.git', '.cache', '.duallens', 'private', 'runtime', 'reference', 'duallens-ref', 'node_modules', '__pycache__', 'venv', '.venv', 'credentials', 'secrets', 'backups'}
 PUBLIC_FILES = ('README.md', 'LICENSE', 'SECURITY.md', 'AGENTS.md', 'CONTRIBUTING.md', 'requirements-dev.txt', 'package.json', '.gitignore', '.gitattributes', 'CHANGELOG.md')
 # Add user documentation only through an explicit reviewed list; private research is never included.
-PUBLIC_DOCS = ('docs/ARCHITECTURE.md', 'docs/COMICS.md', 'docs/DESIGN.md', 'docs/PDF.md', 'docs/PLATFORMS.md', 'docs/PRIVACY.md', 'docs/PRODUCT.md', 'docs/ROADMAP.md', 'docs/SPEC.md', 'docs/SUBTITLES.md', 'docs/USAGE.md', 'docs/VALIDATION.md', 'docs/releases/v1.0.0.md', 'docs/store/listing.en.md', 'docs/store/listing.zh-CN.md', 'docs/store/permissions.md', 'docs/store/submission-checklist.md')
+PUBLIC_DOCS = ('docs/ARCHITECTURE.md', 'docs/COMICS.md', 'docs/DESIGN.md', 'docs/PDF.md', 'docs/PLATFORMS.md', 'docs/PRIVACY.md', 'docs/PRODUCT.md', 'docs/ROADMAP.md', 'docs/SPEC.md', 'docs/SUBTITLES.md', 'docs/USAGE.md', 'docs/VALIDATION.md', 'docs/releases/v1.0.0.md', 'docs/releases/v1.1.0.md', 'docs/store/listing.en.md', 'docs/store/listing.zh-CN.md', 'docs/store/permissions.md', 'docs/store/submission-checklist.md')
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?['\"]([^'\"]+)['\"]|\bimport\s*\(\s*['\"]([^'\"]+)['\"]")
 RESOURCE_RE = re.compile(r"chrome\.runtime\.getURL\(\s*['\"]([^'\"]+)['\"]\s*\)")
 VERSIONED_ASSET_RE = re.compile(r'duallens-(?:extension|portable|edge-store|chrome-store)-v\d+(?:\.\d+){0,3}\.zip')

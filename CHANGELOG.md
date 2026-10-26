@@ -2,11 +2,13 @@
 
 ## [Unreleased]
 
-- PDF 一次性交接缓存在后台初始化、浏览器启动、扩展安装／更新及读写时清理过期副本；明确区分五分钟逻辑过期与物理删除时机，不新增权限。
-- PDF 阅读器支持在本机导出双栏对照或仅译文 PDF，包含范围选择、逐页翻译进度和取消；导出件为图像版式。
-- 扫描 PDF 可显式开启本机 OCR，复用经大小与 SHA-256 校验的语言包；低置信度文字保留原像素，识别分块仅存阅读会话。
-- 页面内输入框、划词、悬停翻译与原位重试仅接受真实用户输入，忽略网页脚本伪造的触发事件。
-- PDF 阅读器改用 v1.0 单色界面：共用令牌与控件，去掉蓝色按钮、彩色图标与投影；导出与 OCR 面板改为设置页同款字段，进度为纯文字。
+## [1.1.0] - 2026-10-26
+
+- PDF: export a bilingual PDF (side by side or translated pages only, any page range) with progress and cancel; scanned pages can be recognized with on-device OCR and translated; the reader now uses the monochrome design.
+- Errors: every failure says what happened and what to do, with retry, open-settings and details actions; transient failures retry quietly; partial failures offer "retry these paragraphs"; repeated errors visibly refresh.
+- One vocabulary and one async-feedback pattern across popup, settings, side panel, in-page UI and the userscript panel; side-panel clear, swap and Esc cancel; site-rule rename and delete; validated glossary import; Esc closes input-box overlays.
+- Security: in-page features act only on trusted user input; translation requests no longer follow redirects and responses are capped at 4 MiB; expired PDF handoff data is purged.
+- Userscript: subtitles, OCR and comic code load on demand from a second pinned resource, `duallens-features.js`; startup drops from 345 KB to about 320 KB.
 
 ## [1.0.0] - 2026-10-22
 
