@@ -37,6 +37,19 @@ test('v1 inline shadow styles are byte-identical to shared CSS sources',async()=
   const read=async path=>(await readFile(new URL('../../extension/ui/'+path,import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
   assert.equal(SHARED_CSS,await read('tokens.css')+await read('components.css'));assert.equal(POPUP_CSS,await read('popup.css'));
 });
+test('v1 PDF reader links the shared styles and its theme switch mirrors tokens.css exactly',async()=>{
+  const read=async path=>(await readFile(new URL('../../extension/'+path,import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
+  const tokens=await read('ui/tokens.css'),viewer=await read('pdf/viewer.css'),html=await read('pdf/viewer.html');
+  assert.match(html,/href="\.\.\/ui\/tokens\.css">\s*<link rel="stylesheet" href="\.\.\/ui\/components\.css">\s*<link rel="stylesheet" href="viewer\.css">/);
+  const props=text=>Object.fromEntries([...text.matchAll(/(--dl-[\w-]+)\s*:\s*([^;}]+)/g)].map(([,name,value])=>[name,value.replace(/\s+/g,'')]));
+  const darkStart=tokens.indexOf('@media (prefers-color-scheme: dark)');
+  const light=props(tokens.slice(0,darkStart)),dark=props(tokens.slice(darkStart,tokens.indexOf('@media (prefers-reduced-motion')));
+  const forced=theme=>props(viewer.match(new RegExp(`:root\\[data-theme=${theme}\\]\\{([^}]*--dl-bg[^}]*)\\}`))[1]);
+  const pick=(source,names)=>Object.fromEntries(names.map(name=>[name,source[name]]));
+  const names=Object.keys(dark);assert.ok(names.length>=20);
+  assert.deepEqual(pick(forced('dark'),names),pick(dark,names));
+  assert.deepEqual(pick(forced('light'),names),pick(light,names));
+});
 test('v1 data destination includes fallback and every configured AI origin',()=>{
   const s=structuredClone(DEFAULT_SETTINGS);assert.match(engineSummary(s).full,/微软.*谷歌/);
   s.provider.active='openai';s.provider.profiles[0].baseUrl='https://example.com/v1';s.provider.profiles[0].model='fixture';assert.match(engineSummary(s).full,/example.com/);s.translation.mode='llm';assert.doesNotMatch(engineSummary(s).full,/微软/);
