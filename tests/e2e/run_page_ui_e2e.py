@@ -7,6 +7,7 @@ from run_e2e import REPO, E2E_ROOT, start_fixtures, check
 from run_userscript_e2e import STUB, command, click_shadow
 
 OUT=Path(os.environ.get('DUALLENS_PAGE_ARTIFACTS',str(E2E_ROOT/'v1'/'page')))
+LANGUAGE=os.environ.get('DUALLENS_PAGE_LANGUAGE','zh-CN')
 
 def elements(page,selector):
     return page.evaluate('(s)=>__platformFixture.elements(s).length',selector)
@@ -24,10 +25,11 @@ def run(pw,base,dark):
     try:
         ctx.add_init_script(script=STUB+'\n'+(REPO/'dist'/'duallens.user.js').read_text(encoding='utf-8'))
         page=ctx.new_page();page.goto(base+'/article.html')
-        page.wait_for_function("__platformFixture.hasCommand('翻译 / 恢复当前页面')")
+        page.wait_for_function("__platformFixture.hasCommand('翻译此页 / 显示原文')")
         theme='dark' if dark else 'light'
         page.evaluate('(dark)=>{document.body.style.background=dark?"#131316":"white";document.body.style.color=dark?"#ececf1":"#1c1c21";}',dark)
         page.wait_for_function("__platformFixture.elements('.ball').length===1")
+        settings(page,{'uiLanguage':LANGUAGE})
         settings(page,{'floatBall':{'autoHide':False}})
         page.wait_for_timeout(2700)
         check(elements(page,'.ball.tucked')==0,'autoHide=false was not delivered to ball')
@@ -45,7 +47,7 @@ def run(pw,base,dark):
             'maxItems':20,'maxChars':4000,'concurrency':2,'timeoutMs':5000,'fallbackModels':[]}
         settings(page,{'provider':{'active':'remote','chain':[],'profiles':[profile]},'translation':{'mode':'llm','mt':{'engine':'mock'}}})
         original=page.locator('body').inner_html()
-        command(page,'翻译 / 恢复当前页面')
+        command(page,'翻译此页 / 显示原文')
         page.wait_for_function("__platformFixture.elements('.confirm').length===1")
         check(page.evaluate('__platformFixture.calls.length')==0,'text sent before confirmation')
         check(page.evaluate("document.querySelector('dl-ui').shadowRoot===null"),'UI root is open')
@@ -59,10 +61,10 @@ def run(pw,base,dark):
         shot(page,theme+'-ball-busy')
         page.wait_for_function("__platformFixture.elements('.ball.busy').length===0")
         shot(page,theme+'-ball-translated')
-        command(page,'翻译 / 恢复当前页面');page.wait_for_function("!document.querySelector('dl-t')")
-        command(page,'翻译 / 恢复当前页面');page.wait_for_function("document.querySelector('#p-plain dl-t')")
+        command(page,'翻译此页 / 显示原文');page.wait_for_function("!document.querySelector('dl-t')")
+        command(page,'翻译此页 / 显示原文');page.wait_for_function("document.querySelector('#p-plain dl-t')")
         check(elements(page,'.confirm')==0,'same destination prompted twice')
-        command(page,'翻译 / 恢复当前页面');page.wait_for_function("!document.querySelector('dl-t')")
+        command(page,'翻译此页 / 显示原文');page.wait_for_function("!document.querySelector('dl-t')")
         # Selection icon/card and the explicit close-feature path.
         page.evaluate("()=>{const r=document.createRange();r.selectNodeContents(document.querySelector('#p-intro'));const s=getSelection();s.removeAllRanges();s.addRange(r);}")
         page.mouse.up()
@@ -80,12 +82,12 @@ def run(pw,base,dark):
         click_shadow(page,'.selection-menu>button:nth-child(2)');click_shadow(page,'.services .retry')
         page.wait_for_function("__platformFixture.elements('.dst.err').length===1")
         shot(page,theme+'-error')
-        check(page.evaluate("__platformFixture.elements('.dst.err')[0].textContent.includes('打开设置')"),'configuration error has no settings action')
+        check(page.evaluate("value=>__platformFixture.elements('.dst.err')[0].textContent.includes(value)",'打开设置' if LANGUAGE=='zh-CN' else 'Open Settings'),'configuration error has no settings action')
         page.keyboard.press('Escape')
         profile['baseUrl']='https://other.duallens.invalid/v1';profile['model']='test'
         settings(page,{'provider':{'profiles':[profile]}})
         original=page.locator('#p-plain').inner_html()
-        before=page.evaluate('__platformFixture.calls.length');command(page,'翻译 / 恢复当前页面')
+        before=page.evaluate('__platformFixture.calls.length');command(page,'翻译此页 / 显示原文')
         page.wait_for_function("__platformFixture.elements('.confirm').length===1")
         click_shadow(page,'.confirm .close');page.wait_for_timeout(400)
         check(page.evaluate('__platformFixture.calls.length')==before,'close sent a translation')
@@ -94,7 +96,7 @@ def run(pw,base,dark):
         page.wait_for_timeout(16500)
         check(elements(page,'.confirm')==0,'dismissed consent reopened on automatic retry')
         check(page.evaluate('__platformFixture.calls.length')==before,'automatic retry sent cancelled text')
-        command(page,'翻译 / 恢复当前页面')
+        command(page,'翻译此页 / 显示原文')
         page.wait_for_function("__platformFixture.elements('.confirm').length===1")
         click_shadow(page,'.confirm .actions button:not(.primary)')
         page.wait_for_function("__platformFixture.elements('[data-group=ai]').some(e=>!e.hidden)")
@@ -102,7 +104,7 @@ def run(pw,base,dark):
         page.keyboard.press('Escape')
         profile['baseUrl']='http://127.0.0.1:11434/v1'
         settings(page,{'provider':{'profiles':[profile]}})
-        command(page,'翻译 / 恢复当前页面')
+        command(page,'翻译此页 / 显示原文')
         page.wait_for_function("document.querySelector('#p-plain dl-t')?.textContent.includes('【译】')")
         check(elements(page,'.confirm')==0,'loopback service prompted')
         # All animations are disabled in every overlay, including pending status.

@@ -27,7 +27,7 @@ export function engineSummary(s) {
   const name=['microsoft','google'].includes(engine)?l10n('lookFreeMT',[mt]):mt;
   return {name:l10n('mbm', [mt, ['microsoft','google'].includes(engine)?l10n('mbl'):'']),privacy:mtLine,full:mtLine,short:line(name,sentTo([mt],fallback,uiLanguage()!=='zh-CN')),group:'common'};
 }
-export function featureDescription(key,s,coarse=false) {if(key==='hover')return coarse?l10n('mbn'):s.hover.modifier==='none'?l10n('mbo'):l10n('mbp', [s.hover.modifier==='Control'?'Ctrl':s.hover.modifier]);if(key==='input'&&s.input.trigger==='shortcut')return l10n('mbq');return FEATURES.find(f=>f[0]===key)?.[2]||'';}
+export function featureDescription(key,s,coarse=false) {if(key==='hover')return coarse?l10n('mbn'):s.hover.modifier==='none'?l10n('mbo'):l10n('mbp', [s.hover.modifier==='Control'?'Ctrl':s.hover.modifier]);if(key==='input'&&s.input.trigger==='shortcut')return l10n('uxInputShortcut');return FEATURES.find(f=>f[0]===key)?.[2]||'';}
 
 // One quiet line: engine and every recipient; the conditional wording stays in the tooltip.
 export function engineDisclosure(doc,s,onChange) {

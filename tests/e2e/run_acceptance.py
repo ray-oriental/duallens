@@ -174,7 +174,7 @@ GM_STUB = r"""({settings,secrets,acked}) => {
   window.GM_xmlhttpRequest=req=>{let stopped=false;window.__acceptanceHTTP({url:req.url,method:req.method,headers:req.headers,data:req.data,timeout:req.timeout})
     .then(r=>{if(!stopped)req.onload?.(r);}).catch(()=>{if(!stopped)req.onerror?.({status:0});});
     return {abort(){stopped=true;req.onabort?.();}};};
-  window.__acceptanceGM={ready:()=>commands.has('翻译 / 恢复当前页面'),toggle:()=>commands.get('翻译 / 恢复当前页面')(),
+  window.__acceptanceGM={ready:()=>commands.has('翻译此页 / 显示原文'),toggle:()=>commands.get('翻译此页 / 显示原文')(),
     ui:()=>roots.filter(r=>r.host.isConnected).flatMap(r=>[...r.root.querySelectorAll('*')]).filter(e=>{
       const s=getComputedStyle(e),b=e.getBoundingClientRect();return s.display!=='none'&&s.visibility==='visible'&&b.width&&b.height;
     }).filter(e=>e.matches('.toast,.error,[role=alert],.spinner')).map(e=>({type:e.className,text:e.textContent.slice(0,160)}))};

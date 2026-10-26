@@ -49,10 +49,17 @@ export function createSettingsPanel({ store, platform, mountForm, kind='settings
     document.removeEventListener('keydown', onKey, true);
   }
   function onKey(e) {
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    if (e.key === 'Escape') {
+      const confirmation=ui?.root.querySelector('.confirmation');
+      if(confirmation){e.preventDefault();e.stopImmediatePropagation();confirmation.querySelector('button')?.click();return;}
+      if(ui?.root.querySelector('.confirm,.dl-confirmation'))return;
+      if(ui?.root.querySelector('.dl-text[aria-busy=true]'))return;
+      e.preventDefault();close();return;
+    }
     if (e.key !== 'Tab' || !ui) return;
-    const controls = [...ui.root.querySelectorAll('button,input,select,textarea,[tabindex]')]
-      .filter((el) => !el.disabled && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
+    const scope=ui.root.querySelector('.confirmation,.confirm,.dl-confirmation')||ui.root;
+    const controls = [...scope.querySelectorAll('button,input,select,textarea,a[href],summary,[tabindex]')]
+      .filter((el) => !el.disabled && el.tabIndex>=0 && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
     if (!controls.length) return;
     const current = ui.root.activeElement;
     const index = controls.indexOf(current);
