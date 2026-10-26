@@ -172,7 +172,7 @@ USERSCRIPT_ONLY = frozenset({
     'userscript/entry.js', 'userscript/menu.js', 'userscript/panel.js',
     'userscript/settings-resource.js', 'userscript/ui-resource.js',
     'userscript/features-resource.js', 'userscript/features-loader.js',
-    'userscript/lazy-ocr.js', 'userscript/lazy-subtitles.js',
+    'userscript/lazy-ocr.js', 'userscript/lazy-subtitles.js', 'userscript/lazy-comics.js',
 })
 
 def extension_runtime_assets(assets):

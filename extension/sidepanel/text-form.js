@@ -1,3 +1,4 @@
+import { renderError } from '../shared/errors.js';
 import { t as l10n, message, setText, localize, setUiLanguage } from '../shared/i18n.js';
 import { engineDisclosure } from '../ui/components.js';
 import { LANGS, providerChain } from '../shared/settings.js';
@@ -81,6 +82,7 @@ export async function mountTextForm(root, { platform }) {
   const disclosure=element('div');form.append(disclosure);root.append(form);
   let disposed = false, sequence = 0, modelSequence = 0, utterance = null, pending;
   const stopSpeech = () => { if (utterance) { globalThis.speechSynthesis?.cancel(); utterance = null; } };
+  const showError = (error,retry) => renderError(status,error,{retry,openSettings:group=>platform.openSettings(group)});
   const reset = () => {
     pending?.abort(); pending = null;
     sequence++; output.textContent = ''; copy.disabled = speak.disabled = true; translate.disabled = false;
@@ -110,14 +112,14 @@ export async function mountTextForm(root, { platform }) {
     try {
       const result = await service.listModels(profileId);
       if (disposed || token !== modelSequence || profileId !== profiles.value) return;
-      if (!result.ok) { status.textContent = result.error?.message || l10n('maf'); return; }
+      if (!result.ok) { showError(result.error,()=>load.click()); return; }
       const value = models.value;
       const values = new Map([...models.options].map(o => [o.value, o.textContent]));
       for (const model of result.models || []) if (typeof model.id === 'string') values.set(model.id, model.label || model.id);
       selectOptions(models, [...values], value);
       drawDisclosure();
       status.textContent = l10n('mag', [result.models?.length || 0]);
-    } catch { if (!disposed && token === modelSequence) status.textContent = l10n('maf'); }
+    } catch (error) { if (!disposed && token === modelSequence) showError(error,()=>load.click()); }
     finally { if (!disposed && token === modelSequence) load.disabled = false; }
   });
   form.addEventListener('submit', async event => {
@@ -130,11 +132,11 @@ export async function mountTextForm(root, { platform }) {
       const result = await service.translateText({ text: input.value, from: from.value, to: to.value, purpose: 'text', signal:pending.signal,
         ...(profiles.value ? { profileId: profiles.value, model: models.value } : {}) });
       if (disposed || token !== sequence) return;
-      if (!result.ok) { status.textContent = result.error?.message || l10n('mah'); return; }
+      if (!result.ok) { showError(result.error,()=>form.requestSubmit()); return; }
       output.textContent = result.text || ''; copy.disabled = !output.textContent;
       speak.disabled = !output.textContent || !globalThis.speechSynthesis;
       status.textContent = l10n('mai');
-    } catch { if (!disposed && token === sequence) status.textContent = l10n('maj'); }
+    } catch (error) { if (!disposed && token === sequence) showError(error,()=>form.requestSubmit()); }
     finally { if (!disposed && token === sequence) translate.disabled = false; }
   });
   copy.addEventListener('click', async () => {

@@ -1,8 +1,9 @@
+import { readResponseText, redirectError } from '../platform/http.js';
 import { t as l10n } from '../shared/i18n.js';
 // Injected providers resolve local secrets per request; keys never enter logs or errors.
 
 import { ERR } from '../shared/protocol.js';
-import { DLError, cancelledError } from '../shared/errors.js';
+import { DLError, cancelledError, classify, scrub as redact, serviceName } from '../shared/errors.js';
 import { getDefaultSettingsStore } from '../shared/settings.js';
 import { createSSEParser } from '../shared/stream.js';
 import { profileFromPreset } from '../shared/presets.js';
@@ -10,14 +11,8 @@ import { profileFromPreset } from '../shared/presets.js';
 const TEMPERATURE = 0.2;
 const MODEL_TIMEOUT = 15000;
 
-export function parseRetryAfter(value, nowMs = Date.now()) {
-  if (value == null) return undefined;
-  const s = String(value).trim();
-  if (!s) return undefined;
-  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(Number(s) * 1000);
-  const when = Date.parse(s);
-  return Number.isNaN(when) ? undefined : Math.max(0, when - nowMs);
-}
+import { parseRetryAfter } from '../shared/errors.js';
+export { parseRetryAfter };
 
 // Loopback, RFC1918, shared address space, link-local, .local and bare hostnames: places where plain http is acceptable.
 export function isLocalHost(hostname) {
@@ -73,31 +68,15 @@ function headersFor(profile) {
 }
 
 function scrub(text, profile) {
-  let s = String(text ?? '');
   const key = String(profile?.apiKey || '').trim();
-  if (key) s = s.split(key).join('***');
-  return s;
+  return key ? String(text ?? '').split(key).join('***') : String(text ?? '');
 }
 
-function serverMessage(bodyText, profile) {
-  let msg = '';
-  try {
-    const j = JSON.parse(bodyText);
-    const e = j?.error ?? j;
-    msg = typeof e === 'string' ? e : (e && (e.message || e.detail || e.msg)) || '';
-    if (typeof msg !== 'string') msg = JSON.stringify(msg);
-  } catch {
-    msg = String(bodyText ?? '');
-  }
-  return scrub(msg.replace(/\s+/g, ' ').trim(), profile).slice(0, 300);
-}
-
-function hostOf(profile) {
-  try {
-    return new URL(profile.baseUrl).host;
-  } catch {
-    return l10n('m1h');
-  }
+function serverMessage(text, profile) {
+  let json;
+  try { json = JSON.parse(text); } catch { /* Inspect only bounded, scrubbed text. */ }
+  const error = json?.error ?? json;
+  return redact(String(typeof error === 'string' ? error : error?.message || error?.detail || error?.msg || text || ''), [profile?.apiKey || '']).slice(0, 300);
 }
 
 function abortableSleep(ms, signal) {
@@ -182,12 +161,12 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       if (done) return;
       let event;
       try { event = JSON.parse(data); } catch { throw new DLError(ERR.PARSE, l10n('m1i')); }
-      if (event.error) throw new DLError(ERR.PROVIDER, l10n('m1j'), { status: 502 });
+      if (event.error) throw httpError(profile, {status:502,text:JSON.stringify(event),retryAfter:null}, event);
       const delta = event.choices?.[0]?.delta;
+      if (delta?.refusal || event.choices?.[0]?.finish_reason === 'content_filter') throw new DLError(ERR.PROVIDER, l10n('errRefused'), {category:'refused',service:serviceName(profile)});
       if (delta?.content || delta?.reasoning_content) reset(idleMs);
       if (typeof delta?.content === 'string') {
         content += delta.content;
-        if (content.length > 4 * 1024 * 1024) throw new DLError(ERR.PARSE, l10n('m1k'));
         emitDelta(delta.content);
       }
       // Some OpenAI-compatible servers end with finish_reason and never send [DONE].
@@ -212,25 +191,12 @@ export function createProviders({ fetchImpl, getSecret = async id => {
         body,
         signal: ctrl.signal,
         credentials: 'omit',
-        cache: 'no-store',
+        cache: 'no-store', redirect:'error',
         timeoutMs, onText: progress,
       });
-      let text;
-      if (onDelta && res.body?.getReader && /text\/event-stream/i.test(mime(res.headers))) {
-        streamed = true;
-        const reader = res.body.getReader(), decoder = new TextDecoder();
-        try {
-          while (true) {
-            const part = await reader.read();
-            if (part.done) break;
-            parser.push(decoder.decode(part.value, { stream: true }));
-            if (done) { await reader.cancel(); break; }
-          }
-          parser.push(decoder.decode());
-        } catch (error) { await reader.cancel().catch(() => {}); throw error; }
-        finally { reader.releaseLock(); }
-        text = '';
-      } else text = await res.text();
+      const nativeStream = onDelta && res.body?.getReader && res.status >= 200 && res.status < 300 && /text\/event-stream/i.test(mime(res.headers));
+      if (nativeStream) streamed = true;
+      let text = await readResponseText(res, {url, onText:nativeStream ? chunk=>parser.push(chunk) : undefined, stop:nativeStream ? ()=>done : undefined});
       // A transport that buffers the whole body (no reader, no progress callback) still receives the SSE
       // stream we asked for: parse it here instead of mistaking it for a malformed JSON reply.
       if (!streamed && res.status >= 200 && res.status < 300 && (/text\/event-stream/i.test(mime(res.headers)) || /^\s*data:/.test(text))) {
@@ -246,8 +212,10 @@ export function createProviders({ fetchImpl, getSecret = async id => {
     } catch (e) {
       if (signal && signal.aborted) throw cancelledError();
       if (e instanceof DLError) throw e;
-      if (timedOut) throw new DLError(ERR.NETWORK, l10n('m1m', [Math.round(limit / 1000)]));
-      throw new DLError(ERR.NETWORK, l10n('m1n', [hostOf(profile)]));
+      if (timedOut) throw new DLError(ERR.NETWORK, l10n('m1m', [Math.round(limit / 1000)]), {category:'timeout',service:serviceName(profile)});
+      const category = classify(e).category;
+      if (category === 'redirect') throw redirectError();
+      throw new DLError(ERR.NETWORK, l10n('errNetwork'), {category:['gm','timeout'].includes(category) ? category : 'network',service:serviceName(profile)});
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
@@ -255,28 +223,28 @@ export function createProviders({ fetchImpl, getSecret = async id => {
   }
 
   function httpError(profile, res, json) {
-    const detail = serverMessage(res.text, profile);
-    const suffix = detail ? l10n('errorDetail', [detail]) : '';
-    const extra = { status: res.status, serverCode: json?.error?.code, retryAfterMs: parseRetryAfter(res.retryAfter) };
-    if (res.status === 429) {
-      return new DLError(ERR.RATE_LIMITED, l10n('m1o', [suffix]), extra);
-    }
-    if ((res.status === 401 || res.status === 403)) {
-      return new DLError(ERR.CONFIG, l10n('endpointAuth', [res.status]), extra);
-    }
-    if (res.status === 404) return new DLError(ERR.PROVIDER, l10n('endpointNotFound', [res.status]), extra);
-    if (isHtml(res) || json === undefined) return badJSON(profile, res, extra, ERR.PROVIDER);
-    return new DLError(ERR.PROVIDER, l10n('m1q', [res.status, suffix]), extra);
+    // Inspect scrubbed upstream codes/prose locally, then discard them. Only known
+    // scheduler codes and catalogue categories may cross the runtime boundary.
+    const upstream = json?.error;
+    const hint = scrub([upstream?.code, upstream?.type, serverMessage(res.text, profile)].join(' '), profile);
+    const base = {status:res.status, serverCode:hint, retryAfterMs:parseRetryAfter(res.retryAfter), service:serviceName(profile)};
+    let category = classify(base).category;
+    if (isHtml(res) && res.status < 500 && ![401,403,404,429].includes(res.status)) category = 'html';
+    const serverCode = ['model_not_found','unknown_model','service_unavailable','rate_limit_exceeded'].includes(upstream?.code) ? upstream.code : undefined;
+    const code = ['auth','quota'].includes(category) ? ERR.CONFIG : category === 'rate' ? ERR.RATE_LIMITED : ERR.PROVIDER;
+    const info = classify({...base,code,category});
+    const message = category === 'auth' ? l10n('endpointAuth',[res.status]) : category === 'address' ? l10n('endpointNotFound',[res.status]) : info.message;
+    return new DLError(code, message, {status:res.status, category, serverCode, retryAfterMs:base.retryAfterMs,service:base.service});
   }
 
   function badJSON(profile, res, extra = { status: res.status }, code = ERR.PARSE) {
-    return new DLError(code, isHtml(res) ? l10n('endpointHtml') : l10n('endpointParse',
-      [res.status, scrub(res.text, profile).replace(/\s+/g, ' ').trim().slice(0, 80)]), extra);
+    const category = isHtml(res) ? 'html' : 'parse';
+    return new DLError(code, isHtml(res) ? l10n('endpointHtml') : l10n('errParse'), {...extra, category, service:serviceName(profile)});
   }
 
   function readJSON(profile, res) {
     let json;
-    try { json = JSON.parse(res.text); } catch { /* Report the bounded, scrubbed body below. */ }
+    try { json = JSON.parse(res.text); } catch { /* Discard the payload; errors use authored catalogue copy. */ }
     if (res.status < 200 || res.status >= 300) throw httpError(profile, res, json);
     if (isHtml(res) || json === undefined) throw badJSON(profile, res);
     return json;
@@ -344,6 +312,7 @@ export function createProviders({ fetchImpl, getSecret = async id => {
       if (res.status >= 200 && res.status < 300) noStream.add(slot);
     }
     const json = readJSON(profile, res);
+    if (json?.choices?.[0]?.message?.refusal || json?.choices?.[0]?.finish_reason === 'content_filter') throw new DLError(ERR.PROVIDER, l10n('errRefused'), {category:'refused',service:serviceName(profile)});
     const content = assistantText(json);
     if (content == null) throw new DLError(ERR.PARSE, l10n('m1y'));
     if (reply.baseUrl) onBaseUrl?.(reply.baseUrl);

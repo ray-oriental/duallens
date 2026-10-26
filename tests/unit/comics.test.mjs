@@ -11,6 +11,8 @@ import { comicSites,comicSiteMatches,canvasMatches,imageReferer } from '../../ex
 import { createCanvasRegistry,createImageRegistry,imageRefererRules,IMAGE_RULE_BASE } from '../../extension/background/comic-sites.js';
 import { LANGUAGES } from '../../extension/content/comics/languages.js';
 import { ComicTranslator } from '../../extension/content/comics/controller.js';
+import { toErrorInfo } from '../../extension/shared/errors.js';
+import { t, setUiLanguage } from '../../extension/shared/i18n.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const region=(text,x,y,panel)=>({text,confidence:90,bbox:{x0:x,y0:y,x1:x+.15,y1:y+.08},panel});
@@ -101,6 +103,24 @@ test('background image fetch uses sender referrer, no cookies, no redirects, val
   await assert.rejects(fetchImage('https://test/img','https://page/read',async()=>new Response('',{status:403})),/403/);
   await assert.rejects(fetchImage('https://test/img','https://page/read',async()=>new Response('<svg/>',{headers:{'content-type':'image/svg+xml'}})),/格式/);
   await assert.rejects(fetchImage('file:///img','https://page/read',fetcher),/地址/);
+});
+
+for(const language of ['zh-CN','en'])test(`image HTTP errors survive safe serialization without becoming API-key errors: ${language}`,async()=>{
+  setUiLanguage(language);
+  try{
+    for(const status of [401,403,404,503]){
+      let calls=0;
+      await assert.rejects(fetchImage('https://example.com/image.png','https://example.com/read',async()=>{
+        calls++;return new Response('untrusted sk-test-not-real',{status});
+      }),error=>{
+        const info=toErrorInfo(error);
+        assert.equal(info.category,'image');assert.equal(info.status,status);assert.equal(info.retryable,false);
+        assert.ok(info.message.includes(t('errImage')));assert.ok(info.message.includes(`HTTP ${status}`));
+        assert.ok(!info.message.includes(t('errAuth')));assert.doesNotMatch(JSON.stringify(info),/untrusted|sk-test-not-real/);return true;
+      });
+      assert.equal(calls,1);
+    }
+  }finally{setUiLanguage('zh-CN');}
 });
 test('traineddata integrity rejects tampering and unexpected byte length',async()=>{
   const data=new Uint8Array([1,2]).buffer;

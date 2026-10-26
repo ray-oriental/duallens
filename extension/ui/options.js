@@ -1,3 +1,4 @@
+import { createFetchHttp } from '../platform/http.js';
 import { initUiLanguage, localize, t } from '../shared/i18n.js';
 import { getDefaultSettingsStore } from '../shared/settings.js';
 import { mountSettingsForm } from './forms/index.js';
@@ -14,10 +15,7 @@ const platform = {
     languages:lang=>chrome.runtime.sendMessage({type:lang?'comic-languages-delete':'comic-languages-list',lang}),
     syncSites:()=>chrome.runtime.sendMessage({type:'comic-canvas-sites-sync'}),
   },
-  async http({ url, method, headers, body, signal }) {
-    const res = await fetch(url, { method, headers, body, signal, credentials: 'omit', cache: 'no-store' });
-    return { status: res.status, headers: res.headers, text: await res.text() };
-  },
+  http: createFetchHttp((...args)=>fetch(...args)),
   async clearCache() {
     const res = await chrome.runtime.sendMessage({ type: MSG_CACHE_CLEAR });
     if (!res.ok) throw new Error(res.error?.message || t('cacheClearFailed'));
