@@ -2,10 +2,10 @@
 Uses isolated staged profiles and test-only closed-shadow instrumentation; never real services.
 """
 import json
+import subprocess
 import uuid
 from playwright.sync_api import sync_playwright
 import run_e2e as e2e
-from run_userscript_e2e import STUB, click_shadow
 from trusted_input import touch_hold
 
 ROOTS = """(() => {
@@ -111,7 +111,7 @@ def cases(h, calls):
         :type==='pointerup'?new PointerEvent(type,{bubbles:true,pointerType:'touch',isPrimary:true})
         :new MouseEvent(type,{bubbles:true,button:0}));}""")
     p.wait_for_timeout(650)
-    assert not h.ui("f=>f.elements('.card.show,.icon.show').length")
+    assert not h.ui("f=>f.elements('.card.show,.icon.show').length"), h.mode + ': synthetic selection opened UI'
     assert len(calls()) == before
     passed('synthetic_selection_no_icon_no_card_or_request')
     p.mouse.up()
@@ -328,6 +328,7 @@ def cases(h, calls):
     assert 'sk-test-not-real' not in p.content()
     passed('page_chain_unchanged_no_key_in_page')
     if h.mode == 'userscript':
+        from run_userscript_e2e import click_shadow
         p.evaluate("()=>__platformFixture.command('DualLens 设置')")
         # Controls exist before asynchronous initialization finishes. These options
         # now save on change, without submitting the hidden AI-service save button.
@@ -394,6 +395,11 @@ def cases(h, calls):
 
 
 def main():
+    # Exercise the same source revision in both phases, never a stale dist bundle.
+    # STUB snapshots the lazy resources at import time, so build before importing it.
+    subprocess.run(['node', str(e2e.REPO / 'scripts/build_userscript.mjs')], cwd=e2e.REPO, check=True)
+    from run_userscript_e2e import STUB
+
     server, base = e2e.start_fixtures()
     run = e2e.E2E_ROOT / ('run-input-' + uuid.uuid4().hex[:8]); run.mkdir(parents=True)
     ext, missing = e2e.stage_extension(run, e2e.EXT_SRC); assert not missing
