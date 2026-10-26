@@ -264,6 +264,9 @@ class App {
       case 'restore-comics':
         this.comics.restore();
         break;
+      case 'retry-failed':
+        this.translator.retryFailed();
+        break;
       case P.COMMANDS.TOGGLE_PAGE:
         if (this.subtitles.enabled) {
           this.subtitles.disable();

@@ -4,7 +4,8 @@ import { t as l10n } from '../shared/i18n.js';
 // prefix overrides the target language for that one translation.
 
 import{LANGS}from '../shared/settings.js';
-import{createOverlay,toast}from './overlay.js';
+import{createOverlay,toast,errorToast}from './overlay.js';
+import{isCancelled}from '../shared/errors.js';
 import{deepActiveElement,interactionRequest}from './util.js';
 
 const UI={get s0(){return l10n('m4u');},get s1(){return l10n('m4v');},get s2(){return l10n('m4w');},get s3(){return l10n('m4x');},get s4(){return l10n('m4y');},get s5(){return l10n('m4z');},get s6(){return l10n('m50');},get s7(){return l10n('m51');},get s8(){return l10n('m52');},get s9(){return l10n('m53');},get s10(){return l10n('m54');},get s11(){return l10n('m55');},get s12(){return l10n('m44');}};
@@ -295,9 +296,9 @@ export class InputBox{
     try{
       const res=await this.p.translator().translateText({text,to:target,from:'auto',purpose:'input',signal:abort.signal,...interactionRequest(cfg.input)});
       if(!valid())return;
-      if(res.error?.code==='CANCELLED')return;
+      if(res.error?.code==='CANCELLED'||isCancelled(res.error))return;
       if(!res.ok||typeof res.text!=='string'||!res.text.trim()){
-        toast(UI.s6,'error',4000,()=>this.run(el,selected));return;
+        errorToast(res.error,{retry:()=>this.run(el,selected),openSettings:group=>this.p.openSettings(group)});return;
       }
       if(acc.current()!==acc.before){toast(UI.s7,'error',3500);return;}
       // Drain pending mutations before allowing our own writes.
@@ -305,7 +306,7 @@ export class InputBox{
       observer.disconnect();writing=true;
       const out=inputOutput(text,res.text,cfg.input,el.tagName==='INPUT');
       if(!await acc.apply(out,valid,value=>{writing=value;})&&valid())this.#fallback(res.text,el);
-    }catch{if(valid())toast(UI.s6,'error',4000,()=>this.run(el,selected));}
+    }catch(error){if(valid()&&error?.name!=='AbortError'&&!isCancelled(error))errorToast(error,{retry:()=>this.run(el,selected),openSettings:group=>this.p.openSettings(group)});}
     finally{
       observer.disconnect();
       for(const type of['input','beforeinput','compositionstart'])el.removeEventListener(type,changed,true);

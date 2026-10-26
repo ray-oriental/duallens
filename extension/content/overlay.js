@@ -1,4 +1,5 @@
 import { t as l10n, uiLanguage } from '../shared/i18n.js';
+import { renderError } from '../shared/errors.js';
 // Page-level UI (selection icon/card, float ball, toasts) lives in closed shadow roots so page CSS
 // and scripts can neither restyle nor reach into it. Hosts are <dl-ui> elements on <html>, put in
 // the top layer when the browser supports popovers so they stay above modal dialogs.
@@ -100,8 +101,15 @@ export function toast(text,kind='info',ms=2600,retry){
   void n.offsetWidth; // restart the transition
   n.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(clearToast,ms);
+  if(ms>0)toastTimer=setTimeout(clearToast,ms);
   document.addEventListener('keydown',toastEscape,true);
+}
+
+export function errorToast(error, options = {}) {
+  toast('', 'error', error?.code === 'mt_fallback' ? 6000 : 0);
+  const node = toastOverlay.node;
+  renderError(node, error, {...options, buttonClass:'tb'});
+  const close=document.createElement('button');close.className='x';close.textContent='×';close.setAttribute('aria-label',UI.close);close.onclick=clearToast;node.append(close);
 }
 
 function toastEscape(e){if(e.key==='Escape')clearToast();}

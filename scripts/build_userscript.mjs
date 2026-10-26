@@ -395,7 +395,7 @@ export async function buildUserscript({ project = PROJECT, output = path.join(pr
     sha256: createHash('sha256').update(settings).digest('hex'),
     url: `https://github.com/ray-oriental/duallens/releases/download/v${manifest.version}/duallens-settings.js` };
   const features = await buildBundle(path.join(project,'extension/userscript/features-resource.js'), {
-    root: path.join(project,'extension'), entryExports: ['VideoSubtitles','createUserscriptOCR','messages','setUiLanguage'],
+    root: path.join(project,'extension'), entryExports: ['VideoSubtitles','createUserscriptOCR','ComicTranslator','messages','setUiLanguage'],
     onModule: item => modules.features.push(item),
   });
   const featureResource = { name: 'duallens-features', file: 'duallens-features.js', bytes: Buffer.byteLength(features),
@@ -405,6 +405,7 @@ export async function buildUserscript({ project = PROJECT, output = path.join(pr
     root: path.join(project, 'extension'), onModule: item => modules.startup.push(item),
     moduleAliases: {
       'content/comics/userscript-ocr.js': 'userscript/lazy-ocr.js',
+      'content/comics/controller.js': 'userscript/lazy-comics.js',
       'content/subtitles/controller.js': 'userscript/lazy-subtitles.js',
     },
   });

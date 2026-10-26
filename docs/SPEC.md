@@ -69,7 +69,7 @@ v1.1 增加 `userscript/features-resource.js` → `duallens-features.js`，公�
 
 扩展没有静态 `content_scripts`；固定主机权限仅覆盖内置翻译服务，网页访问以 `activeTab` 或可选 `<all_urls>` 为依据。
 扩展自有页面发送 `{type:'tab-ensure',tabId}`，后台返回 `{ok:true,injected:true}`，保证顶层内容控制器已经完成初始化；
-失败返回 `{ok:false,reason:'restricted'|'no-access'}`。网页内容脚本不能通过该消息注入其他标签页。
+失败返回 `{ok:false,reason:'restricted'|'no-access'|'injection-failed'}`。网页内容脚本不能通过该消息注入其他标签页。
 同一标签页并发确保操作合并；loader 在隔离世界以 Promise 防重入。快捷键、右键路由同样先确保注入再发命令。
 
 后台在设置和 permissions.onAdded/onRemoved 后串行重算：拥有 `<all_urls>` 且至少一项常驻功能 / 自动规则开启时，注册
@@ -394,3 +394,14 @@ Translation requests through the background worker fail closed with `{code:'conf
 Official keyed MT engines never fall back to free endpoints; only free engines fall back to one another. The Google free adapter uses `client=gtx`. Incognito is derived from the extension sender, never from caller-supplied flags, and bypasses cache reads/writes. Contexts without an authoritative normal-window flag also bypass caching; the userscript uses the manager flag and disables caching when that flag is unavailable. Before first page consent no scan, translation wrapper or paragraph pending marker is created; closing the card leaves the source DOM intact.
 
 Required translation hosts are the three free-MT hosts; all keyed engines and AI hosts request optional origin access on save/test. Automatic subtitles require the same broad optional host access as other resident features. Web-accessible resources enumerate only the content module graph. Dynamic resource origins are deferred: Chromium 130 rejects those module imports under the isolated-world CSP; the static origin remains required for this supported test browser.
+
+
+## v1.1 报错契约
+
+`shared/errors.js` 的 `classify(error)` 返回 `{code, category, message, action, group, detail, retryable, status?, service?, retryAfterMs?, count?}`。`code` 保留原有调度语义，`category` 区分用户恢复动作；`action` 为 `settings` / `retry` / `details`，`group` 为设置锚点，`retryable` 仅表示网络 / 离线、超时、限流、5xx 等临时错误可自动重试。消息传输保留有限的状态码、已知服务名和重试等待时间，不发送服务器原文、任意机器码、堆栈或密钥。首次发送的 `destination` 契约保持有效。
+
+新增 ERR：TIMEOUT、PERMISSION、RESTRICTED、INJECTION、STORAGE、PARTIAL、FALLBACK、REDIRECT、RESPONSE_SIZE。页面命令 `retry-failed` 仅重试自动重试已结束的失败段落；临时错误先安静自动重试最多两次（16 秒；限流按 Retry-After、上限两分钟，缺失为 60 秒），仅在在线、页面与段落可见且翻译仍开启、未暂停时继续。恢复原文与导航取消计时器、旧结果和提示。MT 结果可带 `notice`（FALLBACK 错误信息形状），表示已经成功使用备用服务。
+
+翻译与模型列表传输必须设置 `redirect: 'error'`；GM 在进度 / 状态变化 / 完成时还拒绝不同源 finalUrl。所有响应（JSON、SSE、模型列表和错误正文）最多 4 MiB，Content-Length 与累计流字节双重检查；GM 超限 abort。具体文案、兼容限制、寿命及盘点见 [ERRORS.md](ERRORS.md)。
+
+`duallens-features.js` 同时导出 `ComicTranslator`、`VideoSubtitles`、`createUserscriptOCR`、`messages`、`setUiLanguage`，读取缓存后先校验字节数、SHA-256 与这些接口，再执行用户请求。用户脚本的漫画调度、发现与排序只在显式图片翻译后加载；恢复、关闭功能、离开页面或等待期间导航会使旧加载失效。CSP 禁止本地识别时，启动包保留首张可见图片的原有失败面板，不读取功能资源或发出 GM 请求。扩展使用原生模块，不经过此适配器。
