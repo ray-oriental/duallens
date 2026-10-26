@@ -1,3 +1,4 @@
+import { readResponseText, redirectError } from '../platform/http.js';
 import { t as l10n } from '../shared/i18n.js';
 // Machine translation (MT): the fast first stage of the double-engine pipeline (SPEC §8.1).
 //
@@ -23,7 +24,7 @@ import { t as l10n } from '../shared/i18n.js';
 // Keys come from the injected getSecret(id) at request time and never appear in errors or logs.
 
 import { ERR } from '../shared/protocol.js';
-import { DLError, cancelledError, isCancelled, toErrorInfo } from '../shared/errors.js';
+import { DLError, cancelledError, isCancelled, toErrorInfo, parseRetryAfter, classify } from '../shared/errors.js';
 import { escapeText, unescapeText, stripMarkup, parseMarkup } from '../shared/markup.js';
 import { splitLongText, joinTranslations } from '../shared/batch.js';
 
@@ -124,19 +125,13 @@ export function chunkItems(items, { firstItems = MT_LIMITS.firstItems, firstChar
   return chunks;
 }
 
-function parseRetryAfter(value) {
-  const s = String(value ?? '').trim();
-  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(Number(s) * 1000);
-  return undefined;
-}
-
 function statusError(status, retryAfter, keyed) {
   if (status === 429) {
     return new DLError(ERR.RATE_LIMITED, l10n('mq'), { status, retryAfterMs: parseRetryAfter(retryAfter) });
   }
   if ((status === 401 || status === 403) && keyed) return new DLError(ERR.CONFIG, l10n('mr'), { status });
   if (status >= 500 || status === 401 || status === 403 || status === 404) {
-    return new DLError(ERR.PROVIDER, l10n('ms', [status]), { status: status === 404 ? 502 : status });
+    return new DLError(ERR.PROVIDER, l10n('ms', [status]), { status });
   }
   return new DLError(ERR.PROVIDER, l10n('mt', [status]), { status });
 }
@@ -204,14 +199,17 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
     try {
       await confirmEngine(job.engine);
       if(job.signal?.aborted)throw cancelledError();
-      const res = await doFetch(url, { method, headers, body, signal: ctrl.signal, credentials: 'omit', cache: 'no-store' });
-      const text = await res.text();
+      const res = await doFetch(url, { method, headers, body, signal: ctrl.signal, credentials: 'omit', cache: 'no-store', redirect:'error' });
+      const text = await readResponseText(res,{url});
       return { status: res.status, text, retryAfter: res.headers?.get?.('retry-after') ?? null };
     } catch (e) {
       if(e?.code===ERR.CONFIRMATION_REQUIRED)throw e;
       if (job.signal?.aborted) throw cancelledError();
-      if (timedOut) throw new DLError(ERR.NETWORK, l10n('mw', [Math.round(timeoutMs / 1000)]));
-      throw new DLError(ERR.NETWORK, l10n('mx'));
+      if (e instanceof DLError && ['redirect','size'].includes(e.category)) throw e;
+      if (timedOut) throw new DLError(ERR.NETWORK, l10n('errTimeout'), {category:'timeout'});
+      const category = classify(e).category;
+      if (category === 'redirect') throw redirectError();
+      throw new DLError(ERR.NETWORK, l10n('errNetwork'), {category:['gm','timeout'].includes(category) ? category : 'network'});
     } finally {
       clearTimeout(timer);
       job.signal?.removeEventListener('abort', onAbort);
@@ -284,7 +282,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
       if (source) payload.source_lang = source;
       if (job.html) payload.tag_handling = 'xml';
       const res = await http(job, { url: `${host}/v2/translate`, headers: { 'Content-Type': 'application/json', Authorization: `DeepL-Auth-Key ${key}` }, body: JSON.stringify(payload) });
-      if (res.status === 456) throw new DLError(ERR.CONFIG, l10n('m10'), { status: 456 });
+      if (res.status === 456) throw new DLError(ERR.CONFIG, l10n('m10'), { status: 456,category:'quota',group:'common' });
       if (res.status !== 200) throw statusError(res.status, res.retryAfter, true);
       return expectCount(parseJson(res.text)?.translations, job.items.length).map(e => e?.text);
     },
@@ -321,7 +319,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
         pending.forEach((it, i) => {
           const out = raw[i];
           if (typeof out !== 'string' || !out.trim()) missing.push(it);
-          else results.set(it.id, { id: it.id, engine, ...finishItem(it.text, out, job.html) });
+          else results.set(it.id, { id: it.id, engine, ...finishItem(it.text, out, job.html), ...(lastError && FREE_ORDER.includes(engine) ? {notice:toErrorInfo(new DLError(ERR.FALLBACK, l10n('errFallback')))} : {}) });
         });
         pending = missing;
         if (!pending.length) { succeeded(engine); return job.items.map(it => results.get(it.id)); }
@@ -333,8 +331,8 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
         failed(engine, e);
       }
     }
-    if(chain.some(id=>['deepl','microsoft-api'].includes(id))&&lastError)lastError.message+=l10n('m12');
-    const error = lastError ? toErrorInfo(lastError) : { code: ERR.NETWORK, get message(){return l10n('m13');} };
+    if(chain.some(id=>['deepl','microsoft-api'].includes(id))&&lastError)lastError.noFallback=true;
+    const error = lastError ? {...toErrorInfo(lastError),group:'common'} : { code: ERR.NETWORK, get message(){return l10n('m13');} };
     return job.items.map(it => results.get(it.id) || { id: it.id, error });
   }
 
@@ -406,7 +404,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
     let result;
     await translate({ items: [{ id: 1, text: 'Hello, world.' }], to, from, chain: [engine], region, signal, onResults: list => { result = list[0]; } });
     cooldowns.delete(engine);
-    if (!result || result.error) throw new DLError(result?.error?.code || ERR.PROVIDER, result?.error?.message || l10n('m15'));
+    if (!result || result.error) throw new DLError(result?.error?.code || ERR.PROVIDER, result?.error?.message || l10n('m15'), result?.error);
     return { engine, latencyMs: Math.max(0, now() - started), sample: stripMarkup(result.text).slice(0, 200) };
   }
 

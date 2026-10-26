@@ -59,6 +59,11 @@ export class LazyObserver {
     set.add(unit);
   }
 
+  isVisible(unit) {
+    const r=this.#rect(unit);
+    return !document.hidden && r.bottom>r.top && r.right>r.left && r.bottom>0 && r.top<innerHeight && r.right>0 && r.left<innerWidth;
+  }
+
   unwatch(unit) {
     const set = this.targets.get(unit.host);
     if (!set) return;

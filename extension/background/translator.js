@@ -373,7 +373,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
       items: misses.map((text, id) => ({ id, text })), to, from, chain: chainIds, region: mtSettings.region || '', signal,priority,
       onResults: (list) => {
         onEach(list.map(r => r.error ? { text: misses[r.id], error: r.error }
-          : { text: misses[r.id], result: { text: r.text, engine: r.engine, ...(r.plain ? { plain: true } : {}) } }));
+          : { text: misses[r.id], result: { text: r.text, engine: r.engine, ...(r.notice ? {notice:r.notice} : {}), ...(r.plain ? { plain: true } : {}) } }));
         if (!cacheOn) return;
         const ok = list.filter(r => !r.error);
         if (ok.length) {
@@ -392,7 +392,7 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     };
   }
 
-  const finalMt = (id, d, extra = {}) => ({ id, text: d.text, stage: 'final', engine: d.engine, ...(d.plain ? { plain: true } : {}), ...extra });
+  const finalMt = (id, d, extra = {}) => ({ id, text: d.text, stage: 'final', engine: d.engine, ...(d.notice ? {notice:d.notice} : {}), ...(d.plain ? { plain: true } : {}), ...extra });
 
   // Mode 'mt': machine translation only. If every engine failed and the mode was only implied by the
   // purpose (selection/hover/input) or by the absence of an LLM, a usable LLM chain takes over.

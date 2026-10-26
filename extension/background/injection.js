@@ -30,7 +30,7 @@ export function createTabInjector(api) {
       await api.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: ['content/loader.js'] });
     }
     const result = await ready(tabId);
-    return result?.ok ? { ok: true, injected: true } : { ok: false, reason: 'restricted' };
+    return result?.ok ? { ok: true, injected: true } : { ok: false, reason: /\.pdf(?:[?#]|$)/i.test(url) ? 'restricted' : 'injection-failed' };
   }
   return { ensure(tabId) {
     if (!Number.isInteger(tabId) || tabId < 0) return Promise.resolve({ ok: false, reason: 'no-access' });

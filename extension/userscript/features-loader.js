@@ -14,7 +14,7 @@ export function configureFeatures(getResourceText) {
 export function syncFeatureLanguage() { activeModule?.setUiLanguage(uiLanguage()); }
 export function createFeaturesLoader(getResourceText, spec = RESOURCE) {
   const read = createResourceLoader(getResourceText, spec, module =>
-    typeof module?.VideoSubtitles === 'function' && typeof module?.createUserscriptOCR === 'function' &&
+    typeof module?.VideoSubtitles === 'function' && typeof module?.createUserscriptOCR === 'function' && typeof module?.ComicTranslator === 'function' &&
     typeof module?.setUiLanguage === 'function' && module?.messages && typeof module.messages === 'object', FEATURES_RESOURCE_ERROR);
   return async () => {
     const module = await read();
