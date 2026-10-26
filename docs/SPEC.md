@@ -170,6 +170,7 @@ siteRules: {
 
 双语 textarea/contenteditable 换行、单行 input 空格分隔，局部选区不改外部文字。
 写回每种策略后等待 32ms 再读回确认，拒绝/回滚时在内容未变条件下尝试下一种；全部失败显示中文复制兜底。
+输入框小条与写回失败面板仅响应可信的 Esc：关闭当前浮层、取消尚未完成的写回并聚焦原输入框，不关闭功能开关；没有浮层时不拦截网页 Esc，显式快捷键在功能关闭时同样可退出浮层。
 组合输入、续写、富文本 DOM 修改与停用使待处理结果失效；不向可执行标记写模型输出。
 完整策略顺序、悬停纯文本适配、备选链语义和可观察性限制见 [PLATFORMS.md](PLATFORMS.md) 的“输入、划词与悬停”。
 专项离线测试：`node --test tests/unit/input-interactions.test.mjs`、`python -B tests/e2e/run_input_e2e.py`，

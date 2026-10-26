@@ -146,3 +146,85 @@ test('all rejected field strategies return failure and retain the original value
   assert.equal(await inputAccessor(el,true).apply('translated',()=>true),false);
   assert.equal(el.value,'LEFT hello RIGHT');
 });
+
+function overlayFixture(t, translateText) {
+  const listeners=new Set();
+  class Node {
+    constructor(){this.children=[];this.style={};this.className='';}
+    get classList(){return {contains:c=>this.className.split(' ').includes(c),
+      add:c=>{this.className+=' '+c;},remove:c=>{this.className=this.className.split(' ').filter(x=>x!==c).join(' ');}};}
+    setAttribute(){}
+    append(...children){this.children.push(...children);}
+    appendChild(child){child.isConnected=true;this.append(child);}
+    attachShadow(){return new Node();}
+    remove(){this.isConnected=false;}
+  }
+  const globals={document:{createElement:()=>new Node(),createTextNode:text=>({textContent:text}),documentElement:new Node(),
+    addEventListener:(type,fn)=>{if(type==='keydown')listeners.add(fn);},
+    removeEventListener:(type,fn)=>{if(type==='keydown')listeners.delete(fn);}},
+    MutationObserver:class {takeRecords(){return [];}disconnect(){}},innerWidth:800,innerHeight:600};
+  for(const [key,value] of Object.entries(globals)){
+    const descriptor=Object.getOwnPropertyDescriptor(globalThis,key);
+    Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
+    t.after(()=>{if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];});
+  }
+  const field=()=>Object.assign(fieldFixture(),{nodeType:1,isConnected:true,focuses:0,
+    focus(){this.focuses++;},addEventListener(){},removeEventListener(){},getBoundingClientRect:()=>({right:100,bottom:100})});
+  // Explicit commands can open overlays even with the passive input feature off.
+  const input=new InputBox({getSettings:()=>({input:{enabled:false,mode:'replace'}}),platform:{
+    translator:()=>({translateText}),settingsStore:{save:()=>assert.fail('Escape must not disable the feature')}}});
+  const key=(isTrusted=true,key='Escape')=>({isTrusted,key,prevented:false,stopped:false,
+    preventDefault(){this.prevented=true;},stopImmediatePropagation(){this.stopped=true;}});
+  return {input,field,key,listeners};
+}
+
+test('only trusted Escape dismisses a command chip, aborts writeback and restores its field',async t=>{
+  let release,signal;
+  const f=overlayFixture(t,req=>{signal=req.signal;return new Promise(r=>{release=r;});});
+  const el=f.field(),pending=f.input.run(el,true);
+  assert.equal(f.listeners.size,1);
+  for(const e of [f.key(false),f.key(true,'Enter')]){
+    f.input.escape(e);assert.equal(e.prevented,false);assert.equal(e.stopped,false);
+    assert.equal(f.input.chip.node.classList.contains('show'),true);assert.equal(signal.aborted,false);
+  }
+  const e=f.key();f.input.escape(e);
+  assert.equal(e.prevented,true);assert.equal(e.stopped,true);assert.equal(signal.aborted,true);
+  assert.equal(el.focuses,1);assert.equal(f.listeners.size,0);
+  release({ok:true,text:'late'});await pending;
+  assert.equal(el.value,'LEFT hello RIGHT');assert.deepEqual(el.events,[]);
+  const idle=f.key();f.input.escape(idle);assert.equal(idle.prevented,false);assert.equal(idle.stopped,false);
+});
+
+test('Escape closes a rejected-write panel and returns focus without modifying the editor',async t=>{
+  const f=overlayFixture(t,async()=>({ok:true,text:'translated'})),el=f.field();
+  el.handle=e=>{if(e.type==='input')el.data='LEFT hello RIGHT';else e.preventDefault();};
+  await f.input.run(el,true);
+  assert.equal(f.input.failure.attached,true);assert.equal(f.listeners.size,1);
+  f.input.escape(f.key(false));assert.equal(f.input.failure.attached,true);
+  const before=el.focuses,e=f.key();f.input.escape(e);
+  assert.equal(e.stopped,true);assert.equal(el.focuses,before+1);assert.equal(f.input.failure,null);
+  assert.equal(f.listeners.size,0);assert.equal(el.value,'LEFT hello RIGHT');
+});
+
+test('settling a cancelled request cannot hide a newer chip; disable cleans up its listener',async t=>{
+  const releases=[];
+  const f=overlayFixture(t,()=>new Promise(r=>releases.push(r))),first=f.field(),second=f.field();
+  const a=f.input.run(first,true);f.input.escape(f.key());
+  const b=f.input.run(second,true);
+  releases[0]({ok:true,text:'late'});await a;
+  assert.equal(f.input.chip.node.classList.contains('show'),true);assert.equal(f.listeners.size,1);
+  second.isConnected=false;f.input.escape(f.key());assert.equal(second.focuses,0);
+  releases[1]({ok:true,text:'late'});await b;
+  assert.equal(f.listeners.size,0);
+  const c=f.input.run(first,true);assert.equal(f.listeners.size,1);
+  f.input.disable();assert.equal(f.listeners.size,0);
+  releases[2]({ok:true,text:'late'});await c;
+  assert.equal(first.value,'LEFT hello RIGHT');
+});
+
+test('successful input writeback removes the overlay Escape listener',async t=>{
+  const f=overlayFixture(t,async()=>({ok:true,text:'translated'})),el=f.field();
+  await f.input.run(el,true);
+  assert.equal(el.value,'LEFT translated RIGHT');assert.equal(f.listeners.size,0);
+  const e=f.key();f.input.escape(e);assert.equal(e.prevented,false);
+});

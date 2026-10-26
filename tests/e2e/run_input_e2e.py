@@ -91,6 +91,9 @@ class Harness:
 def cases(h, calls):
     p = h.page
     count = 0
+    p.evaluate("""()=>{window.__inputEscapes=[];document.addEventListener('keydown',e=>{
+      if(e.isTrusted&&e.key==='Escape')__inputEscapes.push(e.defaultPrevented);
+    });}""")
 
     def passed(name):
         nonlocal count
@@ -156,7 +159,19 @@ def cases(h, calls):
     assert h.ui("f=>f.elements('.failure textarea').some(e=>e.value==='【译】hello')")
     assert h.ui("f=>f.elements('.failure').some(e=>e.textContent.includes('未写回译文'))")
     passed('all_strategies_rejected_explicit_copy_fallback')
-    h.ui("f=>f.elements('.failure button').find(b=>b.textContent==='关闭').click()")
+    h.ui("f=>f.elements('.failure textarea')[0].focus()")
+    p.evaluate("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,composed:true,cancelable:true}))")
+    assert h.ui("f=>f.elements('.failure').length===1")
+    before_escape = p.evaluate('()=>__inputEscapes.length')
+    p.keyboard.press('Escape')
+    h.wait_ui("f=>f.elements('.failure').length===0")
+    assert p.evaluate("()=>document.activeElement.id==='reject'")
+    assert p.locator('#reject').inner_text() == 'LEFT hello RIGHT'
+    assert p.evaluate('()=>__inputEscapes.length') == before_escape
+    p.keyboard.press('Escape')
+    assert p.evaluate('()=>__inputEscapes.slice(-1)[0]') is False
+    assert p.evaluate('()=>__inputEscapes.length') == before_escape + 1
+    passed('trusted_escape_closes_failure_refocuses_editor_and_releases_page_escape')
 
     # A fake OpenAI transport is delayed, and records only model/endpoint identity.
     profile = {'id': 'interaction-test', 'name': 'Interaction fixture', 'kind': 'openai', 'baseUrl': 'https://input.duallens.invalid/v1', 'model': 'base-model', 'fallbackModels': [], 'jsonMode': True, 'maxItems': 20, 'maxChars': 4000, 'concurrency': 2, 'timeoutMs': 5000}
@@ -176,6 +191,41 @@ def cases(h, calls):
     h.field('#single', 'identity input'); h.command(); h.wait_value('#single', '【译】identity input')
     assert any(c['model'] == 'input-model' and c['url'] == 'https://input.duallens.invalid/v1/chat/completions' for c in calls())
     passed('input_service_identity_overrides_mixed_mt')
+
+    # Hold this fake reply until dismissal, including when passive input translation is off.
+    h.settings({'input': {'enabled': False}})
+    h.field('#single', 'escape chip fixture'); h.command()
+    h.wait_ui("f=>f.elements('.chip.show').length===1")
+    for _ in range(60):
+        ready = (h.session.sw_eval("()=>typeof __releaseInputEscape==='function'") if h.session
+                 else p.evaluate("()=>typeof __releaseInputEscape==='function'"))
+        if ready:
+            break
+        p.wait_for_timeout(100)
+    assert ready, 'Fake transport did not reach the held reply'
+    h.ui("f=>f.elements('.chip button')[0].focus()")
+    p.evaluate("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,composed:true,cancelable:true}))")
+    assert h.ui("f=>f.elements('.chip.show').length===1")
+    before_escape = p.evaluate('()=>__inputEscapes.length')
+    p.keyboard.press('Escape')
+    h.wait_ui("f=>f.elements('.chip.show').length===0")
+    assert p.evaluate("()=>document.activeElement.id==='single'")
+    assert p.evaluate('()=>__inputEscapes.length') == before_escape
+    if h.session:
+        h.session.sw_eval('()=>__releaseInputEscape()')
+    else:
+        p.evaluate('()=>__releaseInputEscape()')
+    p.wait_for_timeout(450)
+    assert p.locator('#single').input_value() == 'escape chip fixture'
+    assert not h.ui("f=>f.elements('.failure,.toast.show').length")
+    p.keyboard.press('Escape')
+    assert p.evaluate('()=>__inputEscapes.length') == before_escape + 1
+    assert p.evaluate('()=>__inputEscapes.slice(-1)[0]') is False
+    h.field('#single', 'after escape'); h.command(); h.wait_value('#single', '【译】after escape')
+    input_enabled = (h.session.sw_eval("async()=>(await chrome.storage.local.get('settings.core'))['settings.core'].input.enabled") if h.session
+                     else p.evaluate("()=>__platformFixture.data('duallens:local')['settings.core'].input.enabled"))
+    assert input_enabled is False
+    passed('trusted_escape_cancels_command_chip_refocuses_and_discards_held_reply')
 
     h.settings({'input': {'enabled': True, 'trigger': 'triple-space'}})
     before = len(calls()); h.field('#single', 'synthetic space fixture')
@@ -279,7 +329,8 @@ def cases(h, calls):
     passed('page_chain_unchanged_no_key_in_page')
     if h.mode == 'userscript':
         p.evaluate("()=>__platformFixture.command('DualLens 设置')")
-        p.wait_for_function("()=>__platformFixture.elements('#inputMode').length")
+        # The controls exist before asynchronous settings hydration finishes.
+        p.wait_for_function("()=>__platformFixture.elements('#save').some(b=>!b.disabled)")
         h.ui("""f=>{for(const [id,value] of Object.entries({inputMode:'bilingual',inputOrder:'translation-first',inputProfile:'interaction-test',inputModel:'saved-input',hoverProfile:'interaction-test',hoverModel:'saved-hover'})){const el=f.elements('#'+id)[0];el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));}f.elements('#save')[0].click();}""")
         p.wait_for_function("()=>__platformFixture.data('duallens:local')['settings.core'].input.model==='saved-input'")
         stored = p.evaluate("()=>__platformFixture.data('duallens:local')['settings.core']")
@@ -339,7 +390,8 @@ def main():
                   if(url!=='https://input.duallens.invalid/v1/chat/completions')throw Error('unexpected fixture endpoint');
                   const payload=JSON.parse(init.body);__inputCalls.push({url,model:payload.model});
                   const user=payload.messages.find(m=>m.role==='user').content;const input=JSON.parse(user.slice(user.indexOf('{'),user.lastIndexOf('}')+1)).t;
-                  await new Promise(r=>setTimeout(r,160));
+                  if(input.some(t=>t.includes('escape chip fixture')))await new Promise(r=>globalThis.__releaseInputEscape=r);
+                  else await new Promise(r=>setTimeout(r,160));
                   if(input.some(t=>t.includes('deliberate failure')))return new Response('{"error":{"message":"fixture failure"}}',{status:400});
                   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({t:input.map(t=>'【译】'+t)})}}]}),{status:200,headers:{'Content-Type':'application/json'}});
                 };}""")
@@ -354,7 +406,8 @@ def main():
             ctx = pw.chromium.launch_persistent_context(str(profile), headless=True, locale="zh-CN", viewport={'width': 375, 'height': 812}, is_mobile=True, has_touch=True)
             # Reuse canonical GM mock and add only request identities/delay/failure control.
             stub = STUB.replace("authCorrect:req.headers.Authorization==='Bearer sk-test-not-real'", "authCorrect:req.headers.Authorization==='Bearer sk-test-not-real',model:req.data?JSON.parse(req.data).model:null")
-            stub = stub.replace('},30);', '},160);')
+            stub = stub.replace('const timer=setTimeout(() => {\n      if(stopped)return;', 'const deliver=() => {\n      if(stopped)return;')
+            stub = stub.replace('},30);', "};const held=req.data?.includes('escape chip fixture');const timer=held?null:setTimeout(deliver,160);if(held)globalThis.__releaseInputEscape=deliver;")
             stub = stub.replace('const payload=JSON.parse(req.data);', "const payload=JSON.parse(req.data);if(req.data.includes('deliberate failure')){req.onload({status:400,responseText:'fixture failure',responseHeaders:''});return;}")
             ctx.add_init_script(stub)
             ctx.add_init_script((e2e.REPO / 'dist/duallens.user.js').read_text(encoding='utf-8'))
