@@ -145,6 +145,19 @@ def settings_case(h, language):
     page.fill('#hoverModel','fixture-model');page.locator('#hoverModel').press('Tab')
     wait_readback(page,"async()=> (await chrome.storage.local.get('settings')).settings.hover.model==='fixture-model'")
     assert h.sw_eval("async()=> (await chrome.storage.local.get('settings')).settings.hover.model")=='fixture-model'
+    # Ordinary input options save on change/blur in both UI languages, without
+    # using the AI-service submit button. Wait for each persisted change.
+    page.locator('#inputEnabled').check()
+    page.locator('#details-input').wait_for(state='visible')
+    for field, value, path in [
+        ('inputMode', 'bilingual', 'input.mode'),
+        ('inputOrder', 'translation-first', 'input.order'),
+        ('inputProfile', 'mock', 'input.profileId'),
+    ]:
+        page.select_option('#'+field, value)
+        wait_readback(page,f"async()=> (await chrome.storage.local.get('settings')).settings.{path}==={json.dumps(value)}")
+    page.fill('#inputModel','fixture-input');page.locator('#inputModel').press('Tab')
+    wait_readback(page,"async()=> (await chrome.storage.local.get('settings')).settings.input.model==='fixture-input'")
     page.locator('#comicsEnabled').check();page.locator('#details-comics').wait_for(state='visible');page.fill('#comicsSites','example.com')
     page.click('#save-enhance');wait_readback(page,"async()=> (await chrome.storage.local.get('settings')).settings.comics.canvasSites[0]==='example.com'")
     assert h.sw_eval("async()=> (await chrome.storage.local.get('settings')).settings.comics.canvasSites")==['example.com']
@@ -182,6 +195,7 @@ def tools_and_mobile_case(h, pw, base, language):
           const {createPopupPanel,createSettingsPanel}=await import('/extension/userscript/panel.js');
           uiData['ui.device']={onboarded:true,acked:[],upgradeNoticeSeen:true};
           const area=chrome.storage.local,store=createSettingsStore({localArea:area,syncArea:area});
+          const save=store.save;store.save=async(...args)=>{await new Promise(resolve=>setTimeout(resolve,80));return save(...args);};
           const platform={kind:'userscript',coarse:true,localArea:area,settingsStore:store,
             openSettings(){window.settingsPanel=createSettingsPanel({store,platform,mountForm:mountSettingsForm});void settingsPanel.open();}};
           window.mobilePanel=createPopupPanel({store,platform,loadSettingsForm:async()=>mountSettingsForm,pageMessage:async()=>uiState});
@@ -194,8 +208,21 @@ def tools_and_mobile_case(h, pw, base, language):
         page.evaluate("uiRoots.find(r=>r.querySelector('.dl-settings')).querySelector('nav a').focus()")
         page.keyboard.press('Tab')
         assert page.evaluate("uiRoots.find(r=>r.querySelector('.dl-settings')).activeElement.getAttribute('href')")=='#ai'
+        page.wait_for_function("()=>uiRoots.some(r=>r.querySelector('#save')?.disabled===false)")
+        # Overlapping immediate writes must settle before Escape, without creating
+        # a draft-discard prompt. Delayed storage makes the overlap deterministic.
+        page.evaluate(r"""()=>{const r=uiRoots.find(r=>r.querySelector('.dl-settings'));r.querySelector('a[href="#enhance"]').click();
+          const enabled=r.querySelector('#hoverEnabled');enabled.checked=true;enabled.dispatchEvent(new Event('change',{bubbles:true}));
+          for(const value of ['pending-first','pending-last']){const n=r.querySelector('#hoverModel');n.value=value;n.dispatchEvent(new Event('change',{bubbles:true}));}}""")
+        page.keyboard.press('Escape')
+        page.wait_for_function("()=>!document.querySelector('dl-ui')")
+        assert page.evaluate("uiData.settings.hover.model==='pending-last'&&uiData.settings.hover.enabled===true")
+        page.evaluate("async()=>{await settingsPanel.open();}")
+        page.wait_for_function("()=>uiRoots.some(r=>r.querySelector('#save')?.disabled===false)")
         page.evaluate(r"""()=>{const r=uiRoots.find(r=>r.querySelector('.dl-settings'));r.querySelector('a[href="#glossary"]').click();const n=r.querySelector('#glossary');n.value='kernel → 内核';n.dispatchEvent(new Event('input',{bubbles:true}));}""")
+        page.evaluate(r"""()=>{const n=uiRoots.find(r=>r.querySelector('.dl-settings')).querySelector('#hoverModel');n.value='saved-with-draft';n.dispatchEvent(new Event('change',{bubbles:true}));}""")
         page.keyboard.press('Escape');page.wait_for_function("()=>uiRoots.some(r=>r.querySelector('.confirmation'))")
+        assert page.evaluate("uiData.settings.hover.model==='saved-with-draft'")
         page.keyboard.press('Escape');page.wait_for_function("()=>!uiRoots.some(r=>r.querySelector('.confirmation'))")
         assert page.evaluate("uiRoots.some(r=>r.querySelector('#glossary')?.value==='kernel → 内核')")
         page.keyboard.press('Escape');page.wait_for_function("()=>uiRoots.some(r=>r.querySelector('.confirmation'))")

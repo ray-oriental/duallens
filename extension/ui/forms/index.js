@@ -497,12 +497,12 @@ export async function mountSettingsForm(root, { store, platform }) {
   interactions = installSettingsInteractions(ui,{store,platform,feedback,version:platform.version||mountSettingsForm.version,getSettings:()=>s,setSettings:value=>{s=value;},getDirty:()=>dirty,setDirty:value=>{dirty=value;},getProfile:profile,save,draw,refreshLanguage,captureProfile,onSaved:showSync,notice,bind,simple,nums});
   await draw(); $('save').disabled=false;
   const off = store.onChange?.(async () => {
-    if (saving || closed) return;
-    try { const next=await store.load(); if(closed)return; if(dirty){const changed=s.uiLanguage!==next.uiLanguage;s={...s,uiLanguage:next.uiLanguage};if(changed)refreshLanguage();showSync();return;}s=next;await draw(); } catch { notice(COPY.s56, true); }
+    if (saving || closed || interactions.isSaving()) return;
+    try { const next=await store.load(); if(closed||saving||interactions.isSaving())return; if(dirty){const changed=s.uiLanguage!==next.uiLanguage;s={...s,uiLanguage:next.uiLanguage};if(changed)refreshLanguage();showSync();return;}s=next;await draw(); } catch { notice(COPY.s56, true); }
   });
   return {
     navigateGroup: group => interactions.select(group || 'common'),
-    canClose: () => !dirty || interactions.ask(COMMON.discard),
+    canClose: async () => { await interactions.settle(); return !dirty || interactions.ask(COMMON.discard); },
     refresh: async () => { s = await store.load(); drafts.clear(); edited.clear(); dirty = false; await draw(); },
     destroy() { interactions.destroy(); feedback.destroy(); closed = true; drawToken++; off?.(); unbind.forEach(fn => fn()); ui.remove(); drafts.clear(); edited.clear(); },
   };

@@ -16,6 +16,8 @@ export function installSettingsInteractions(ui,ctx){
   const {store,platform,getSettings,setSettings,getDirty,setDirty,getProfile,save,draw,notice,bind,simple,nums}=ctx;
   const doc=ui.ownerDocument,win=doc.defaultView,$=id=>ui.querySelector('#'+id),el=(tag,text,attrs)=>element(doc,tag,text,attrs),unbind=[];
   let group='',closed=false,savedTimer,confirming=null;
+  const pendingFields=new Set();
+  async function settleFields(){while(pendingFields.size)await Promise.all([...pendingFields]);}
   let commands=[];
   if(platform.kind==='extension')Promise.resolve(globalThis.chrome?.commands?.getAll?.()||[]).then(value=>{commands=value;if(!closed)drawView();}).catch(()=>{});
   const on=(n,type,fn,options)=>{n.addEventListener(type,fn,options);unbind.push(()=>n.removeEventListener(type,fn,options));};
@@ -30,6 +32,7 @@ export function installSettingsInteractions(ui,ctx){
   }
   async function select(next,force=false){
     if(!GROUPS.some(([id])=>id===next))next='common';if(next===group&&!force)return;
+    if(pendingFields.size)await settleFields();if(closed)return;
     if(group&&getDirty()&&!force){if(!await ask(T.discard)){if(platform.kind==='extension')win.history.replaceState(null,'','#'+group);return;}setDirty(false);setSettings(await store.load());await draw();}
     $('saved-toast').classList.remove('show');$('status').textContent='';$('status').classList.remove('error');for(const id of ['result-test','result-load-models','result-mt-test'])$(id)?.remove();if(group&&group!==next){$('backupText').value='';$('backup-qr').hidden=true;if($('backupPassword'))$('backupPassword').value='';}
     group=next;const title=ui.querySelector(`[data-group="${group}"] .group-title`);title.append($('saved-toast'));for(const page of ui.querySelectorAll('[data-group]'))page.hidden=page.dataset.group!==group;
@@ -39,13 +42,18 @@ export function installSettingsInteractions(ui,ctx){
   for(const link of ui.querySelectorAll('[data-group-link]'))on(link,'click',event=>{event.preventDefault();void select(link.dataset.groupLink);});
   if(platform.kind==='extension')on(win,'hashchange',()=>void select(win.location.hash.slice(1)));
   on(win,'beforeunload',event=>{if(getDirty()){event.preventDefault();event.returnValue='';}});
-  async function persistField(n){
+  function persistField(n){
+    const work=saveField(n);pendingFields.add(work);
+    void work.then(()=>pendingFields.delete(work),()=>pendingFields.delete(work));return work;
+  }
+  async function saveField(n){
     const path=fieldPath(n.id);if(!path)return;const before=getSettings(),value=val(n),feature=path.endsWith('.enabled')?path.split('.')[0]:null;
     if(value&&feature&&featureNeedsBroad(feature)&&platform.kind==='extension'&&!await requestBroad(platform.permissionAPI)){n.checked=false;notice(T.denied);drawView();return;}
     if(n.id==='mtEngine'&&platform.kind==='extension'&&!await requestMTOrigin(value,platform.permissionAPI)){n.value=before.translation.mt.engine;notice(T.originDenied);return;}
-    const patch=patchFor(path,value);const previousDirty=getDirty();setDirty(true);
-    try{validateSettings(mergeSettings(before,patch));await store.save(patch);if(closed)return;setSettings(mergeSettings(getSettings(),patch));setDirty(previousDirty);if(n.id==='uiLanguage')ctx.refreshLanguage();n.removeAttribute('aria-invalid');ui.querySelector('#error-'+n.id)?.remove();flash();drawView();}
-    catch(error){setSettings(before);setDirty(previousDirty);if(n.type==='checkbox')n.checked=!value;n.setAttribute('aria-invalid','true');ui.querySelector('#error-'+n.id)?.remove();const help=el('small',error.message||T.failure,{class:'field-error',id:'error-'+n.id});n.parentElement.append(help);notice(error.message||T.failure,true);}
+    // Pending immediate writes are independent of explicit-save drafts.
+    const patch=patchFor(path,value);
+    try{validateSettings(mergeSettings(before,patch));await store.save(patch);if(closed)return;setSettings(mergeSettings(getSettings(),patch));if(n.id==='uiLanguage')ctx.refreshLanguage();n.removeAttribute('aria-invalid');ui.querySelector('#error-'+n.id)?.remove();flash();drawView();}
+    catch(error){if(closed)return;if(n.type==='checkbox')n.checked=!value;n.setAttribute('aria-invalid','true');ui.querySelector('#error-'+n.id)?.remove();const help=el('small',error.message||T.failure,{class:'field-error',id:'error-'+n.id});n.parentElement.append(help);notice(error.message||T.failure,true);}
   }
   for(const radio of ui.querySelectorAll('[name=translation-method]'))on(radio,'change',()=>{if(radio.checked){$('translationMode').value=radio.value;void persistField($('translationMode'));}});
   on($('settings-form'),'change',event=>{const n=event.target;if(immediate(n))void persistField(n);});
@@ -98,5 +106,5 @@ export function installSettingsInteractions(ui,ctx){
   }
   $('freeModels').checked=true;
   void select(platform.settingsGroup|| (platform.kind==='extension'?win.location.hash.slice(1):'common'),true);
-  return {draw:drawView,isImmediate:immediate,select,ask,flash,destroy(){closed=true;clearTimeout(savedTimer);confirming?.(false);for(const off of unbind)off();}};
+  return {draw:drawView,isImmediate:immediate,isSaving:()=>pendingFields.size>0,settle: settleFields,select,ask,flash,destroy(){closed=true;clearTimeout(savedTimer);confirming?.(false);for(const off of unbind)off();}};
 }

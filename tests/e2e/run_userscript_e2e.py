@@ -281,8 +281,8 @@ def features_resource_case(page, base):
         check(page.evaluate('__platformFixture.resourceReads') == ['duallens-features'] * 2, 'failed feature resource did not retry')
         command(page, '启用 / 恢复视频双语字幕')
         page.wait_for_function('!document.querySelector("dl-ui[data-dl-subtitles]")')
-        command(page, '翻译 / 恢复当前页面'); wait_done(page)
-        command(page, '翻译 / 恢复当前页面')
+        command(page, '翻译此页 / 显示原文'); wait_done(page)
+        command(page, '翻译此页 / 显示原文')
         page.wait_for_function('!document.querySelector("dl-t")')
     # Delay a valid cached read, then turn the preference off while verification is pending.
     ready(page, base)
