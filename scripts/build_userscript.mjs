@@ -13,6 +13,42 @@ const identifier = /^[A-Za-z_$][\w$]*$/;
 const operators=/^(?:>>>=|===|!==|\*\*=|&&=|\|\|=|\?\?=|>>>|<<=|>>=|=>|==|!=|<=|>=|\+\+|--|\*\*|&&|\|\||\?\?|\?\.|<<|>>|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|\.\.\.)/;
 const fail = (file, message) => { throw new Error(`${file}: ${message}`); };
 
+// Decode the same string grammar as the old non-strict vm Script, without creating
+// a context or starting a wall-clock watchdog for every literal. Work is bounded
+// by the literal length; Annex B octal/identity escapes remain accepted for parity.
+function decodeStringLiteral(raw, file) {
+  const simple = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v' };
+  let value = '';
+  for (let i = 1; i < raw.length - 1;) {
+    const char = raw[i++];
+    if (char === '\n' || char === '\r') fail(file, 'unescaped newline in string');
+    if (char !== '\\') { value += char; continue; }
+    const escape = raw[i++];
+    if (escape === '\r') { if (raw[i] === '\n') i++; continue; }
+    if (escape === '\n' || escape === '\u2028' || escape === '\u2029') continue;
+    if (escape === 'x' || escape === 'u') {
+      let hex;
+      if (escape === 'u' && raw[i] === '{') {
+        const end = raw.indexOf('}', ++i);
+        if (end < 0) fail(file, 'invalid Unicode escape in string');
+        hex = raw.slice(i, end); i = end + 1;
+        if (!/^[\da-f]+$/i.test(hex) || parseInt(hex, 16) > 0x10ffff) fail(file, 'invalid Unicode escape in string');
+      } else {
+        const length = escape === 'x' ? 2 : 4;
+        hex = raw.slice(i, i + length); i += length;
+        if (hex.length !== length || !/^[\da-f]+$/i.test(hex)) fail(file, 'invalid hexadecimal escape in string');
+      }
+      value += String.fromCodePoint(parseInt(hex, 16));
+    } else if (/[0-7]/.test(escape)) {
+      let octal = escape;
+      const limit = escape <= '3' ? 3 : 2;
+      while (octal.length < limit && /[0-7]/.test(raw[i])) octal += raw[i++];
+      value += String.fromCharCode(parseInt(octal, 8));
+    } else value += simple[escape] ?? escape;
+  }
+  return value;
+}
+
 // Data-only LZW keeps both language variants within the mobile startup budget.
 // The decoder restores JSON, never JavaScript. No evaluator or remote resource is involved.
 export function packLocale(messages) {
@@ -100,7 +136,7 @@ export function tokens(source, file = '<source>') {
     let kind = 'punct', value;
     if (c === '"' || c === "'") {
       kind = 'string'; const raw = quoted(c);
-      value = vm.runInNewContext(raw, Object.create(null), { timeout: 100 });
+      value = decodeStringLiteral(raw, file);
     } else if (c === '`') { kind = 'template'; template(); value = '<template>'; }
     else if (/[A-Za-z_$]/.test(c)) {
       kind = 'word'; i++; while (i < source.length && /[\w$]/.test(source[i])) i++; value = source.slice(start, i);
