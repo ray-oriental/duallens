@@ -6,6 +6,9 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { buildBundle, metadata, buildUserscript, compactSource } from '../../scripts/build_userscript.mjs';
+import { PROVIDER_PRESETS } from '../../extension/shared/presets.js';
+import { LANGUAGES } from '../../extension/content/comics/languages.js';
+import { OCR_RESOURCES } from '../../extension/content/comics/runtime-resources.js';
 
 async function fixture(files, fn) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'duallens-bundle-'));
@@ -112,6 +115,24 @@ test('real bundle is deterministic, contains inline CSS/required grants and pass
     const content = await fs.readFile(a.output, 'utf8'); assert.equal(content, await fs.readFile(b.output, 'utf8'));
     new Function(content); assert.ok(content.includes('dl-s-muted'));
     assert.ok(content.includes('@sandbox      DOM'));
+    const header = content.slice(0, content.indexOf('// ==/UserScript=='));
+    const connects = [...header.matchAll(/^\/\/ @connect\s+(\S+)$/gm)].map(m=>m[1]);
+    const expected = new Set(['edge.microsoft.com','api-edge.cognitive.microsofttranslator.com',
+      'api.cognitive.microsofttranslator.com','clients5.google.com','api-free.deepl.com','api.deepl.com',
+      'openrouter.ai','api.openai.com','api.deepseek.com','localhost','127.0.0.1',
+      'raw.githubusercontent.com','cdn.jsdelivr.net']);
+    // Read runtime descriptors and URL constants, not key-signup/documentation links.
+    for (const spec of [...PROVIDER_PRESETS, ...Object.values(LANGUAGES), ...OCR_RESOURCES]) {
+      const url = spec.baseUrl || spec.url;
+      if (url) expected.add(new URL(url).hostname);
+    }
+    for (const file of ['extension/background/mt.js','extension/background/providers.js','extension/ui/forms/interactions.js']) {
+      const source = await fs.readFile(file, 'utf8');
+      for (const match of source.matchAll(/https?:\/\/([a-z\d.-]+)/gi)) expected.add(match[1]);
+    }
+    for (const host of expected) assert.ok(connects.includes(host), `missing explicit @connect: ${host}`);
+    assert.equal(connects.at(-1), '*');
+    assert.equal(new Set(connects).size, connects.length);
     // Both UI languages must fit without pulling the lazy settings catalogue into startup.
     // v1.1 target: keep at least 20 KB below the 345 KB hard budget (errors, trusted input and Esc handling landed here).
     assert.ok(Buffer.byteLength(content)<=325000,'startup bundle exceeds the v1.1 325 KB target');

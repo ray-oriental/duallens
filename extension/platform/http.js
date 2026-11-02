@@ -65,7 +65,7 @@ export function asFetch(http) {
 }
 
 export function createGMHttp(request) {
-  return ({ url, method = 'GET', headers = {}, body, timeoutMs = 60000, signal, onText }) => new Promise((resolve, reject) => {
+  return ({ url, method = 'GET', headers = {}, body, timeoutMs, signal, onText }) => new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
     let handle;
     let settled = false, offset = 0, abortLate = false;
@@ -100,17 +100,28 @@ export function createGMHttp(request) {
     try {
       const target = new URL(url);
       if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error('Invalid URL');
-      handle = request({ url: target.href, method, headers, data: body, timeout: timeoutMs, redirect:'error',
+      // Tampermonkey 5.5 times out immediately for timeout:0; omit it when the caller owns the deadline.
+      handle = request({ url: target.href, method, headers, data: body, ...(timeoutMs > 0 ? {timeout:timeoutMs} : {}), redirect:'error',
         anonymous: true, responseType: 'text',
         onprogress: progress, onreadystatechange: progress,
         onload: r => { progress(r); if (!settled) finish(resolve, { status: r.status, headers: responseHeaders(r.responseHeaders), text: r.responseText || '' }); },
-        onerror: r => { if (inspect(r || {})) finish(reject, new Error('Network request failed')); },
-        ontimeout: () => finish(reject, new Error('Network request timed out')),
+        onerror: r => { if (inspect(r || {})) finish(reject, gmError(r)); },
+        ontimeout: r => finish(reject, gmError(r, true)),
         onabort: () => finish(reject, new DOMException('Aborted', 'AbortError')),
       });
       if (abortLate) handle?.abort();
       if (signal?.aborted) abort();
     } catch { finish(reject, new Error('Network request failed')); }
+  });
+}
+
+function gmError(response, timeout = false) {
+  // Only catalogue codes cross the wire; manager prose may contain request URLs or secrets.
+  const raw = String(response?.error || '');
+  const serverCode = timeout ? 'gm_timeout' : /denied|not permitted|not allowed|blocked|whitelist|@connect/i.test(raw) ? 'gm_denied' :
+    /ERR_NAME_NOT_RESOLVED|ENOTFOUND/i.test(raw) ? 'gm_dns' : /ERR_CONNECTION_REFUSED|ECONNREFUSED/i.test(raw) ? 'gm_refused' : 'gm_error';
+  return new DLError(ERR.NETWORK, timeout ? 'Network request timed out' : 'Network request failed', {
+    category:timeout ? 'timeout' : 'gm', serverCode, status:response?.status,
   });
 }
 

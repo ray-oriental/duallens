@@ -3224,5 +3224,17 @@
   },
   "errImage": {
     "message": "Image download failed. Check access to the image source or retry later; the original image is unchanged."
+  },
+  "errGmDeniedDetail": {
+    "message": "The script manager denied the cross-origin request. Check this script's connection permissions."
+  },
+  "errGmTimeoutDetail": {
+    "message": "The script manager reported a request timeout."
+  },
+  "errGmDnsDetail": {
+    "message": "The script manager reported a DNS lookup failure."
+  },
+  "errGmRefusedDetail": {
+    "message": "The script manager reported that the connection was refused."
   }
 }

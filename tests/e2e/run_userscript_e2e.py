@@ -27,6 +27,7 @@ STUB = r"""(() => {
   const resourceReads = [];
   const resourceModes = new Map();
   const pendingResources = new Map();
+  let transportFailure = null;
   const resources = '__DUALLENS_RESOURCE_TEXT__';
   window.GM_getResourceText = name => {
     resourceReads.push(name);
@@ -63,6 +64,16 @@ STUB = r"""(() => {
   window.GM_xmlhttpRequest = req => {
     // GM transport mock, never page fetch; exercise the real OpenAI adapter offline.
     calls.push({url:req.url,method:req.method,anonymous:req.anonymous,hasAuth:!!req.headers.Authorization,authCorrect:req.headers.Authorization==='Bearer sk-test-not-real'});
+    // Tampermonkey 5.5 treats an explicit nonpositive timeout as an immediate timeout.
+    if (Object.hasOwn(req,'timeout') && req.timeout<=0) {
+      const timer=setTimeout(()=>req.ontimeout?.({status:0,error:'timeout'}),0);
+      return {abort(){clearTimeout(timer);req.onabort?.();}};
+    }
+    if (transportFailure) {
+      const {event,error}=transportFailure;
+      const timer=setTimeout(()=>req[event]({status:0,error}),20);
+      return {abort(){clearTimeout(timer);req.onabort?.();}};
+    }
     if (req.url.startsWith('https://edge.microsoft.com/translate/translatetext')) {
       // The free Microsoft endpoint: a JSON array of strings in, translations out.
       const texts=JSON.parse(req.data); let gone=false;
@@ -100,6 +111,7 @@ STUB = r"""(() => {
     rect(selector) { const el=this.elements(selector).find(e=>getComputedStyle(e).display!=='none'); if(!el)return null;const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}; },
     data(key) { return structuredClone(data.get(key)); },
     calls, tasks, resourceReads,
+    transportFailure(value) { transportFailure=value; },
     resourceMode(mode, name='duallens-settings') { resourceModes.set(name,mode); },
     releaseResource(name) { pendingResources.get(name)?.(); pendingResources.delete(name); },
   };
@@ -300,6 +312,43 @@ def features_resource_case(page, base):
     page.wait_for_selector('dl-ui[data-dl-subtitles][data-ready]')
     check(page.evaluate('__platformFixture.resourceReads') == ['duallens-features'], 'verified late resource was not cached')
     return 'lazy cached subtitles; missing/same-size tampering/GM error reject execution and retry; disable cancels pending enable; page translation survives'
+
+
+def gm_diagnostics_case(page, base):
+    for event, error, detail in [
+        ('onerror', 'not permitted to access https://example.com/?token=private-test', '脚本管理器拒绝了跨源请求'),
+        ('ontimeout', 'private-test', '脚本管理器报告请求超时'),
+    ]:
+        ready(page, base)
+        page.evaluate("""failure => {
+          __platformFixture.transportFailure(failure);
+          __platformFixture.settings({provider:{active:'',chain:[]},translation:{mode:'mt',mt:{engine:'microsoft',fallback:false}}});
+        }""", {'event': event, 'error': error})
+        page.wait_for_timeout(300)
+        select_text(page)
+        page.wait_for_function("!!__platformFixture.rect('.icon.show')")
+        click_shadow(page, '.icon.show')
+        page.wait_for_function("__platformFixture.elements('.confirm').length===1")
+        click_shadow(page, '.confirm .primary')
+        page.wait_for_function("__platformFixture.elements('.dst small').length===1")
+        page.evaluate("__platformFixture.elements('.dst button').find(b=>b.textContent==='详情').click()")
+        shown = page.evaluate("__platformFixture.elements('.dst small').filter(e=>!e.hidden).map(e=>e.textContent).join(' ')")
+        check(detail in shown and 'HTTP 0' in shown, 'missing GM error detail: ' + shown)
+        check('private-test' not in shown and 'example.com' not in shown, 'manager prose reached error detail')
+        page.keyboard.press('Escape')
+        # Compress only the two quiet retry delays; the MT cooldown still skips new requests.
+        page.evaluate("""() => {
+          const schedule=window.setTimeout;
+          window.setTimeout=(fn,ms,...args)=>schedule(fn,ms===16000?10:ms,...args);
+        }""")
+        command(page, '翻译此页 / 显示原文')
+        page.wait_for_function("__platformFixture.elements('.toast small').length===1")
+        page.evaluate("__platformFixture.elements('.toast button').find(b=>b.textContent==='详情').click()")
+        shown = page.evaluate("__platformFixture.elements('.toast small').filter(e=>!e.hidden).map(e=>e.textContent).join(' ')")
+        check(detail in shown and 'HTTP 0' in shown, 'page summary lost the GM diagnostic during cooldown: ' + shown)
+        command(page, '翻译此页 / 显示原文')
+        page.wait_for_function("!document.querySelector('dl-t')")
+    return 'GM denied/timeout diagnostics reach selection and page summary Details after quiet retries/cooldown; request URLs and tokens are discarded'
 
 
 def machine_first_case(page, base):
@@ -609,6 +658,7 @@ def main():
     bundle = REPO / 'dist' / 'duallens.user.js'
     check(bundle.is_file(), 'build dist/duallens.user.js first')
     cases = [('desktop', 1280, 800, False, desktop_cases), ('settings_resource', 1280, 800, False, settings_resource_case),
+             ('gm_diagnostics', 1280, 800, False, gm_diagnostics_case),
              ('features_resource', 1280, 800, False, features_resource_case), ('secret_transport', 1280, 800, False, secret_transport_case),
              ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
              ('isolated_prompt', 1280, 800, False, isolated_prompt_case),

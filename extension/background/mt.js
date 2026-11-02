@@ -160,6 +160,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
   limits: runtimeLimits = MT_LIMITS } = {}) {
   const doFetch = (...args) => (fetchImpl || globalThis.fetch)(...args);
   const cooldowns = new Map();
+  const gmFailures = new Map();
   const fails = new Map();
   let token = null;
   let active = 0;
@@ -205,7 +206,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
     } catch (e) {
       if(e?.code===ERR.CONFIRMATION_REQUIRED)throw e;
       if (job.signal?.aborted) throw cancelledError();
-      if (e instanceof DLError && ['redirect','size'].includes(e.category)) throw e;
+      if (e instanceof DLError && (['redirect','size'].includes(e.category) || e.serverCode?.startsWith('gm_'))) throw e;
       if (timedOut) throw new DLError(ERR.NETWORK, l10n('errTimeout'), {category:'timeout'});
       const category = classify(e).category;
       if (category === 'redirect') throw redirectError();
@@ -296,6 +297,8 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
   const ready = (engine) => (cooldowns.get(engine) || 0) <= now();
   function failed(engine, error) {
     if(error?.code===ERR.PARSE)return; // one malformed batch must not poison unrelated work
+    if(error?.serverCode?.startsWith('gm_')) gmFailures.set(engine,error);
+    else gmFailures.delete(engine);
     const n = (fails.get(engine) || 0) + 1;
     fails.set(engine, n);
     let wait = Math.min(300000, 15000 * 2 ** (n - 1));
@@ -303,7 +306,7 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
     if (error?.code === ERR.CONFIG) wait = 300000;
     cooldowns.set(engine, now() + wait);
   }
-  const succeeded = (engine) => { fails.delete(engine); cooldowns.delete(engine); };
+  const succeeded = (engine) => { fails.delete(engine); cooldowns.delete(engine); gmFailures.delete(engine); };
 
   async function runChunk(job, chain) {
     let lastError = null;
@@ -311,7 +314,9 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
     const results = new Map();
     for (const engine of chain) {
       if (job.signal?.aborted) throw cancelledError();
-      if (!adapters[engine] || !ready(engine)) continue;
+      if (!adapters[engine]) continue;
+      // A quiet retry during cooldown must retain the manager's original diagnostic.
+      if (!ready(engine)) { lastError = gmFailures.get(engine) || lastError; continue; }
       try {
         const raw = await adapters[engine]({ ...job, items: pending, engine });
         if (job.signal?.aborted) throw cancelledError();
@@ -408,5 +413,5 @@ export function createMT({ fetchImpl, confirmEngine = async () => {}, getSecret 
     return { engine, latencyMs: Math.max(0, now() - started), sample: stripMarkup(result.text).slice(0, 200) };
   }
 
-  return { translate, test, resetCooldowns: () => { cooldowns.clear(); fails.clear(); token = null; } };
+  return { translate, test, resetCooldowns: () => { cooldowns.clear(); fails.clear(); gmFailures.clear(); token = null; } };
 }

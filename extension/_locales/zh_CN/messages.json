@@ -3224,5 +3224,17 @@
   },
   "errImage": {
     "message": "图片下载失败，请检查图片来源权限或稍后重试；原图已保留。"
+  },
+  "errGmDeniedDetail": {
+    "message": "脚本管理器拒绝了跨源请求；请检查该脚本的连接权限。"
+  },
+  "errGmTimeoutDetail": {
+    "message": "脚本管理器报告请求超时。"
+  },
+  "errGmDnsDetail": {
+    "message": "脚本管理器报告域名解析失败。"
+  },
+  "errGmRefusedDetail": {
+    "message": "脚本管理器报告连接被拒绝。"
   }
 }
