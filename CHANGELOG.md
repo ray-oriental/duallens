@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-02
+
+- Userscript: requests no longer time out instantly under Tampermonkey 5.5, which left every paragraph with only a retry mark; the deadline stays with DualLens.
+- Userscript: built-in translation hosts are declared with `@connect`, so Tampermonkey stops opening a cross-origin approval tab for them; user-defined endpoints still ask once.
+- Errors: when the script manager blocks, times out, cannot resolve or is refused a request, the error details say which.
+- Build: the userscript builder decodes string literals directly instead of per-token VM calls that timed out on slow Windows runners.
+
 ## [1.1.0] - 2026-10-26
 
 - PDF: export a bilingual PDF (side by side or translated pages only, any page range) with progress and cancel; scanned pages can be recognized with on-device OCR and translated; the reader now uses the monochrome design.
