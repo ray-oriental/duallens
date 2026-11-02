@@ -115,7 +115,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     drafts.set(id, secret);
     if (dialog) $('mt-key-status').textContent = secret ? COPY.s0 : COPY.s1; else $('mtKey').value = secret;
   }
-  const simple = ['uiLanguage', 'targetLang', 'sourceLang', 'displayMode', 'style', 'minChars', 'inlineMaxChars', 'translateShortText'];
+  const simple = ['uiLanguage', 'targetLang', 'sourceLang', 'displayMode', 'segmentation', 'style', 'minChars', 'inlineMaxChars', 'translateShortText'];
   const nums = new Set(['minChars', 'inlineMaxChars', 'rootMarginPx', 'batchDelayMs', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs', 'maxEntries', 'ttlDays', 'subtitleSize']);
   const bind = {
     rootMarginPx: 'lazy.rootMarginPx', batchDelayMs: 'lazy.batchDelayMs', hoverEnabled: 'hover.enabled', hoverModifier: 'hover.modifier',

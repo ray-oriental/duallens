@@ -3236,5 +3236,20 @@
   },
   "errGmRefusedDetail": {
     "message": "脚本管理器报告连接被拒绝。"
+  },
+  "segLabel": {
+    "message": "对照方式"
+  },
+  "segParagraph": {
+    "message": "按段对照"
+  },
+  "segSentence": {
+    "message": "逐句对照"
+  },
+  "segHint": {
+    "message": "按段对照：分好段的网页整段对照，没分段的长文按行或每几句拆开，译文紧跟原文。逐句对照：所有正文都是一句原文、一句译文。"
+  },
+  "segRetranslate": {
+    "message": "对照方式已保存；已翻译页面将重新翻译。"
   }
 }

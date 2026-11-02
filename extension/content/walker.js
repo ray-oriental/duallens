@@ -141,8 +141,6 @@ function* iterateTextRuns(root,opts={}) {
       if(!known?.(el,el.firstChild)&&el.textContent.trim()) yield {host:el,first:el.firstChild,last:el.lastChild,whole:true,metadata:true};
       return;
     }
-    const textParagraphs=splitParagraphText(el,minChars);
-    if(textParagraphs) {for(const run of textParagraphs) yield run;return;}
     let first=null;
     let last=null;
     let rough=0;
@@ -152,7 +150,8 @@ function* iterateTextRuns(root,opts={}) {
     let beforeBreak=null;
     // Pixiv text-count spans are author-entered lines, not CSS-wrapped visual rows. When there
     // are no explicit blank lines, each is already a paragraph (often one line of dialogue).
-    const paragraphLines=pixivNovelDocument(el.ownerDocument) && el.matches(':has(> span.text-count)') &&
+    const readerSpans=pixivNovelDocument(el.ownerDocument) && el.matches(':has(> span.text-count)');
+    const paragraphLines=readerSpans &&
       ![...el.querySelectorAll(':scope > span.text-count')].some(line=>!line.textContent.trim()) &&
       !el.querySelector(':scope > br + br');
 
@@ -176,6 +175,7 @@ function* iterateTextRuns(root,opts={}) {
         if(n.nodeType !==1) continue;
         const text=n.textContent.trim();
         if(!text) {const run=flush(); if(run) yield run; continue;}
+        if(opts.segmentation==='sentence') {yield* scan(n);continue;}
         if(!first) first=n;
         last=n; rough +=text.length; letters ||=LETTER_RE.test(text);
       }
@@ -199,6 +199,9 @@ function* iterateTextRuns(root,opts={}) {
       }
       if(n.nodeType !==1) continue; // comments etc. neither start nor end a run
 
+      if(readerSpans && opts.segmentation==='sentence' && n.matches('span.text-count')) {
+        const run=flush();if(run)yield run;sawBlock=true;yield* scan(n);continue;
+      }
       const kind=classify(n,exclude);
       if(kind==='hidden') continue;
       if(kind==='inline' || kind==='atom') {
@@ -269,7 +272,7 @@ export function* iterateRuns(root,opts={}) {
     while(run.first!==run.last&&boundary(run.first)) run.first=run.first.nextSibling;
     while(run.last!==run.first&&boundary(run.last)) run.last=run.last.previousSibling;
     if(run.last!==tail) run.tail=tail;
-    yield run;
+    yield* splitParagraphText(run,opts);
   }
   const minChars=opts.minChars ?? 1,exclude=opts.exclude || null;
   // Attributes cannot host dl-t children; their translations are restored independently.

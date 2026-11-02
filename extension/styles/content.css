@@ -26,6 +26,8 @@ dl-t.dl-t.dl-solo{all:unset;display:inline;color:var(--dl-fg,currentColor);}
 dl-t.dl-block.dl-solo{display:block;}
 dl-t.dl-solo[data-dl-presentation="replace"]{display:inline-block;max-inline-size:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:baseline;}
 dl-t.dl-block[data-dl-state="done"] + br{display:none;}
+/* Split lines and sentence groups have no paragraph margin of their own: keep each source/translation pair apart. */
+dl-t.dl-seg.dl-block:not(.dl-solo){margin-block-end:.6em;}
 dl-t.dl-t.dl-solo::before,dl-t.dl-t.dl-solo::after{content:none;}
 @media (pointer:coarse){dl-r{display:inline-flex;align-items:center;}
 }

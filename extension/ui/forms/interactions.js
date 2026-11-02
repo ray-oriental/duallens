@@ -22,7 +22,7 @@ export function installSettingsInteractions(ui,ctx){
   if(platform.kind==='extension')Promise.resolve(globalThis.chrome?.commands?.getAll?.()||[]).then(value=>{commands=value;if(!closed)drawView();}).catch(()=>{});
   const on=(n,type,fn,options)=>{n.addEventListener(type,fn,options);unbind.push(()=>n.removeEventListener(type,fn,options));};
   const fieldPath=id=>simple.includes(id)?id:bind[id]||({translationMode:'translation.mode',mtEngine:'translation.mt.engine',mtFallback:'translation.mt.fallback',mtRegion:'translation.mt.region'})[id];
-  const immediate=n=>n.id==='freeModels'||!!n.closest?.('#display-segments')||!!fieldPath(n.id)&&n.id!=='customPrompt';
+  const immediate=n=>n.id==='freeModels'||!!n.closest?.('#display-segments,#pairing-segments')||!!fieldPath(n.id)&&n.id!=='customPrompt';
   const val=n=>n.type==='checkbox'?n.checked:nums.has(n.id)?Number(n.value):n.value;
   const patchFor=(path,value)=>path.split('.').reverse().reduce((v,key)=>({[key]:v}),value);
   const flash=()=>{const node=$('saved-toast');node.dataset.count=String((Number(node.dataset.count)||0)+1);node.classList.add('show');clearTimeout(savedTimer);savedTimer=setTimeout(()=>node.classList.remove('show'),1600);};
@@ -89,6 +89,7 @@ export function installSettingsInteractions(ui,ctx){
     for(const [key]of FEATURES){$('details-'+key).hidden=!s[key].enabled;const hint=ui.querySelector(`[data-feature="${key}"] small`);if(hint)hint.textContent=featureDescription(key,s,platform.coarse);}
     for(const input of ui.querySelectorAll('#style-tiles input'))input.checked=input.value===s.style;$('style-preview').dataset.style=s.style;$('learn-hint').hidden=s.style!=='blur';
     for(const input of ui.querySelectorAll('#display-segments input'))input.checked=input.value===s.displayMode;
+    for(const input of ui.querySelectorAll('#pairing-segments input'))input.checked=input.value===s.segmentation;
     $('inputOrder').parentElement.hidden=$('inputMode').value!=='bilingual';$('customPrompt').parentElement.hidden=$('preset').value!=='custom';
     $('privacy-current').textContent=summary.full;$('mt-destination').textContent=engineSummary({...s,translation:{...s.translation,mode:'mt'}}).full;
     $('ai-destination').textContent=p?.baseUrl?(isLocalUrl(p.baseUrl)?COMMON.local:l10n('polishAIDestination',[p.name])):'';

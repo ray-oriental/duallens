@@ -194,6 +194,7 @@ export class PageTranslator {
     inj.write(()=> {
       for(const u of this.units.values()) {u.dead=true; inj.restore(u);}
     });
+    inj.write(()=>inj.restoreTextSplits(this));
     this.units.clear();
     this.byHost.clear();
     this.registry=new WeakMap();
@@ -275,7 +276,7 @@ export class PageTranslator {
 
   #scanOne(root,shallow) {
     const opts={minChars:this.s.translateShortText===false ? this.s.minChars:1,exclude:this.#exclude(),known:this.#known,
-      attributeKnown:(el,key)=> this.attributes.get(el)?.has(key),shallow};
+      attributeKnown:(el,key)=> this.attributes.get(el)?.has(key),shallow,segmentation:this.s.segmentation,splitOwner:this};
     this.slices.run(iterateRuns(root,opts),(run)=> {
       if(run && this.active && run.host.isConnected && (run.first.getRootNode()===document || this.frames.entries.has(run.first.getRootNode())) &&(run.attribute ? !this.attributes.get(run.host)?.has(run.attribute):!this.#known(run.host,run.first))) this.#addUnit(run);
     });
@@ -290,6 +291,7 @@ export class PageTranslator {
       tail:run.tail,
       whole:run.whole,
       paragraph:run.paragraph,
+      segmented:run.segmented,
       metadata:run.metadata,
       attribute:run.attribute,
       source:run.source,
@@ -680,7 +682,7 @@ export class PageTranslator {
   #create(el) {
     const container=blockContainerOf(el);
     const runs=runsOf(container,{minChars:this.s.translateShortText===false ? this.s.minChars:1,exclude:this.#exclude(),
-      attributeKnown:(el,key)=> this.attributes.get(el)?.has(key)});
+      attributeKnown:(el,key)=> this.attributes.get(el)?.has(key),segmentation:this.s.segmentation,splitOwner:this});
     if(!runs.length) return null;
     let child=null;
     for(let a=el; a && a !==container; child=a,a=a.parentElement);

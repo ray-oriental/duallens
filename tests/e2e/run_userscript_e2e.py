@@ -333,7 +333,8 @@ def gm_diagnostics_case(page, base):
         page.wait_for_function("__platformFixture.elements('.dst small').length===1")
         page.evaluate("__platformFixture.elements('.dst button').find(b=>b.textContent==='详情').click()")
         shown = page.evaluate("__platformFixture.elements('.dst small').filter(e=>!e.hidden).map(e=>e.textContent).join(' ')")
-        check(detail in shown and 'HTTP 0' in shown, 'missing GM error detail: ' + shown)
+        # Status 0 means no HTTP answer at all; it is kept in the error but not shown.
+        check(detail in shown and 'HTTP 0' not in shown, 'missing GM error detail: ' + shown)
         check('private-test' not in shown and 'example.com' not in shown, 'manager prose reached error detail')
         page.keyboard.press('Escape')
         # Compress only the two quiet retry delays; the MT cooldown still skips new requests.
@@ -345,7 +346,7 @@ def gm_diagnostics_case(page, base):
         page.wait_for_function("__platformFixture.elements('.toast small').length===1")
         page.evaluate("__platformFixture.elements('.toast button').find(b=>b.textContent==='详情').click()")
         shown = page.evaluate("__platformFixture.elements('.toast small').filter(e=>!e.hidden).map(e=>e.textContent).join(' ')")
-        check(detail in shown and 'HTTP 0' in shown, 'page summary lost the GM diagnostic during cooldown: ' + shown)
+        check(detail in shown and 'HTTP 0' not in shown, 'page summary lost the GM diagnostic during cooldown: ' + shown)
         command(page, '翻译此页 / 显示原文')
         page.wait_for_function("!document.querySelector('dl-t')")
     return 'GM denied/timeout diagnostics reach selection and page summary Details after quiet retries/cooldown; request URLs and tokens are discarded'
@@ -650,6 +651,35 @@ def mobile_cases(page, base):
     return metrics
 
 
+def segmentation_case(page, base):
+    ready(page, base, 'unsegmented.html')
+    page.evaluate("__platformFixture.settings({segmentation:'paragraph',lazy:{rootMarginPx:100000}})")
+    before = page.evaluate('document.body.outerHTML')
+    def scan_visible_sources(sentence=False):
+        # Coarse-pointer runtime intentionally caps rootMargin at 400px. Visit each retained
+        # source Text node instead of assuming that distant source ranges translate eagerly.
+        page.wait_for_function(f"document.querySelector('#wall').childNodes.length>{20 if sentence else 1}&&document.querySelector('#prewrap').childNodes.length>1")
+        count=page.evaluate("""() => {window.segmentationSources=[...document.querySelectorAll('#br1,#wall,#prewrap')].flatMap(el=>[...el.childNodes].filter(n=>n.nodeType===3&&n.data.trim()));return segmentationSources.length}""")
+        for i in range(count):
+            page.evaluate("""i=>{const n=segmentationSources[i];if(!n.isConnected)return;const r=document.createRange();r.selectNode(n);window.scrollBy(0,r.getBoundingClientRect().top-innerHeight/2)}""",i)
+            page.wait_for_function("i=>!!segmentationSources[i].parentElement.closest('dl-w')?.querySelector('dl-t[data-dl-state=done]')",arg=i)
+    command(page, '翻译此页 / 显示原文')
+    scan_visible_sources()
+    page.wait_for_function("document.querySelectorAll('#br1 dl-t[data-dl-state=done]').length===13&&document.querySelectorAll('#wall dl-t[data-dl-state=done]').length===8&&document.querySelectorAll('#prewrap dl-t[data-dl-state=done]').length===3")
+    page.evaluate("__platformFixture.settings({segmentation:'sentence'})")
+    scan_visible_sources(True)
+    page.wait_for_function("document.querySelectorAll('#wall dl-t[data-dl-state=done]').length===36&&document.querySelectorAll('#prewrap dl-t[data-dl-state=done]').length===9")
+    command(page, '切换显示方式')
+    page.wait_for_function("[...document.querySelectorAll('#wall dl-t')].every(t=>t.classList.contains('dl-solo'))")
+    command(page, '切换显示方式')
+    page.wait_for_function("[...document.querySelectorAll('#wall dl-t')].every(t=>!t.classList.contains('dl-solo'))")
+    command(page, '翻译此页 / 显示原文')
+    page.wait_for_function("!document.querySelector('dl-t')")
+    check(page.evaluate('document.body.outerHTML') == before, 'segmentation exact restore')
+    check(page.evaluate("__platformFixture.data('duallens:local')['settings.core'].segmentation") == 'sentence', 'segmentation not in GM core')
+    return 'GM core paragraph -> sentence retranslation; 13/8/3 -> 13/36/9; both display modes; exact restore'
+
+
 def main():
     from site_rules_cases import userscript_case
     ap = argparse.ArgumentParser(description=__doc__)
@@ -657,7 +687,8 @@ def main():
     args = ap.parse_args()
     bundle = REPO / 'dist' / 'duallens.user.js'
     check(bundle.is_file(), 'build dist/duallens.user.js first')
-    cases = [('desktop', 1280, 800, False, desktop_cases), ('settings_resource', 1280, 800, False, settings_resource_case),
+    cases = [('segmentation', 1280, 800, False, segmentation_case), ('segmentation_375', 375, 812, True, segmentation_case),
+             ('desktop', 1280, 800, False, desktop_cases), ('settings_resource', 1280, 800, False, settings_resource_case),
              ('gm_diagnostics', 1280, 800, False, gm_diagnostics_case),
              ('features_resource', 1280, 800, False, features_resource_case), ('secret_transport', 1280, 800, False, secret_transport_case),
              ('openrouter_profile', 1280, 800, False, openrouter_profile_case),
