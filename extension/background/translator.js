@@ -578,7 +578,8 @@ export function createTranslator({ provider, cache, queue, getSettings, getSecre
     );
     if (signal && signal.aborted) throw cancelledError();
     if (!result) throw new DLError(ERR.PROVIDER, l10n('m2e'));
-    if (result.error) throw new DLError(result.error.code, result.error.message);
+    if (result.error) throw new DLError(result.error.code, result.error.message,
+      result.error.serverCode?.startsWith('gm_') ? result.error : {});
     return { text: stripMarkup(result.text), by: result.engine ? 'mt' : 'llm', engine: result.engine };
   }
 

@@ -402,6 +402,10 @@ Required translation hosts are the three free-MT hosts; all keyed engines and AI
 
 新增 ERR：TIMEOUT、PERMISSION、RESTRICTED、INJECTION、STORAGE、PARTIAL、FALLBACK、REDIRECT、RESPONSE_SIZE。页面命令 `retry-failed` 仅重试自动重试已结束的失败段落；临时错误先安静自动重试最多两次（16 秒；限流按 Retry-After、上限两分钟，缺失为 60 秒），仅在在线、页面与段落可见且翻译仍开启、未暂停时继续。恢复原文与导航取消计时器、旧结果和提示。MT 结果可带 `notice`（FALLBACK 错误信息形状），表示已经成功使用备用服务。
 
+用户脚本的 GM 请求在 `timeoutMs` 缺省或非正数时省略 `timeout`（兼容 Tampermonkey 5.5），正数照传；`asFetch` 仍由 MT / AI provider 的 AbortSignal 管理期限与取消。OCR 语言包与运行资源独立使用原有 60000 ms GM 期限。内置翻译 / AI 服务、本机地址和 OCR 下载主机在元数据中显式列出 `@connect`，最后保留 `*` 支持自定义服务。
+
+GM 失败的 `r.error` 只映射成目录内的连接权限拒绝、域名解析失败、连接拒绝或通用请求失败，`ontimeout` 映射为脚本管理器超时。错误传输额外保留白名单 `serverCode: 'gm_denied' | 'gm_dns' | 'gm_refused' | 'gm_error' | 'gm_timeout'`；详情按当前界面语言重新生成，可带状态码（GM 无响应时为 0），MT / AI 与段落汇总不丢失此原因。未知管理器原文、网址与凭据不展示或传输。
+
 翻译与模型列表传输必须设置 `redirect: 'error'`；GM 在进度 / 状态变化 / 完成时还拒绝不同源 finalUrl。所有响应（JSON、SSE、模型列表和错误正文）最多 4 MiB，Content-Length 与累计流字节双重检查；GM 超限 abort。具体文案、兼容限制、寿命及盘点见 [ERRORS.md](ERRORS.md)。
 
 `duallens-features.js` 同时导出 `ComicTranslator`、`VideoSubtitles`、`createUserscriptOCR`、`messages`、`setUiLanguage`，读取缓存后先校验字节数、SHA-256 与这些接口，再执行用户请求。用户脚本的漫画调度、发现与排序只在显式图片翻译后加载；恢复、关闭功能、离开页面或等待期间导航会使旧加载失效。CSP 禁止本地识别时，启动包保留首张可见图片的原有失败面板，不读取功能资源或发出 GM 请求。扩展使用原生模块，不经过此适配器。

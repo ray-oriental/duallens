@@ -414,6 +414,19 @@ export function metadata(version, resources = []) {
 // @grant        GM_getResourceText
 ${OCR_RESOURCES.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).join('\n')}
 ${resources.map(r=>`// @resource     ${r.name} ${r.url}#sha256=${r.sha256}`).join('\n')}
+// @connect      edge.microsoft.com
+// @connect      api-edge.cognitive.microsofttranslator.com
+// @connect      api.cognitive.microsofttranslator.com
+// @connect      clients5.google.com
+// @connect      api-free.deepl.com
+// @connect      api.deepl.com
+// @connect      openrouter.ai
+// @connect      api.openai.com
+// @connect      api.deepseek.com
+// @connect      localhost
+// @connect      127.0.0.1
+// @connect      raw.githubusercontent.com
+// @connect      cdn.jsdelivr.net
 // @connect      *
 // @downloadURL  https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js
 // @updateURL    https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js

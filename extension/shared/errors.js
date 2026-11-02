@@ -54,6 +54,7 @@ export function parseRetryAfter(value, nowMs = Date.now()) {
 }
 
 const SERVICES = ['OpenAI','DeepSeek','OpenRouter','Ollama','LM Studio','Microsoft','Google','DeepL'];
+const GM_DETAILS = {gm_denied:()=>t('errGmDeniedDetail'),gm_timeout:()=>t('errGmTimeoutDetail'),gm_dns:()=>t('errGmDnsDetail'),gm_refused:()=>t('errGmRefusedDetail'),gm_error:()=>t('errGm')};
 export function serviceName(profile) {
   try {
     const host = new URL(profile.baseUrl).hostname;
@@ -92,7 +93,8 @@ const COPY = {
 };
 
 export function classify(error, { online = globalThis.navigator?.onLine, count = error?.count } = {}) {
-  const e = error || {}, st = Number.isInteger(e.status) && e.status >= 100 && e.status <= 599 ? e.status : undefined;
+  const e = error || {}, gm = Object.hasOwn(GM_DETAILS,e.serverCode) ? e.serverCode : undefined;
+  const st = Number.isInteger(e.status) && (e.status >= 100 && e.status <= 599 || gm && e.status === 0) ? e.status : undefined;
   const code = Object.hasOwn(CODE_KIND,e.code) ? e.code : ERR.PROVIDER;
   const raw = String(e.serverCode || '').toLowerCase();
   let kind = code === ERR.PARTIAL ? 'partial' : Object.hasOwn(COPY,e.category) ? e.category : '';
@@ -127,8 +129,9 @@ export function classify(error, { online = globalThis.navigator?.onLine, count =
     (retryable || ['parse','injection','partial','image'].includes(kind)) ? 'retry' : 'details';
   const group = kind === 'storage' ? 'data' : e.group === 'common' ? 'common' : 'ai';
   const name = SERVICES.includes(e.service) ? e.service : '';
-  const detail = [name, st ? `HTTP ${st}` : ''].filter(Boolean).join(' · ') || t('errNoDetail');
+  const detail = [name, st > 0 ? `HTTP ${st}` : '', gm ? GM_DETAILS[gm]() : ''].filter(Boolean).join(' · ') || t('errNoDetail');
   return { code, category:kind, message:msg, action, group, detail, retryable, status:st, service:name||undefined,
+    ...(gm ? {serverCode:gm} : {}),
     noFallback:e.noFallback===true||undefined, retryAfterMs:waitMs, count:kind==='partial'?n:undefined };
 }
 
