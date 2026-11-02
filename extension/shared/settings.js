@@ -63,6 +63,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   targetLang: defaultTargetLanguage(),
   sourceLang: 'auto',
   displayMode: 'bilingual', // 'bilingual' | 'translation-only'
+  segmentation: 'paragraph', // 'paragraph' | 'sentence'; shared by extension and GM storage
   style: 'muted',
   minChars: 2,
   translateShortText: true,
@@ -149,6 +150,7 @@ export function migrateSettings(input) {
     for (const feature of ['floatBall', 'selection', 'hover', 'input', 'comics']) s[feature].enabled = false;
   }
   s.version = SETTINGS_VERSION;
+  if(!['paragraph','sentence'].includes(s.segmentation)) s.segmentation='paragraph';
   return s;
 }
 

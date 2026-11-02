@@ -18,6 +18,7 @@ python -B scripts/check_project.py --dist-dir dist
 python -B tests/e2e/run_e2e.py --mock-only
 python -B tests/e2e/run_userscript_e2e.py
 python -B tests/e2e/run_layout_e2e.py --mock-only
+python -B tests/e2e/run_segmentation_e2e.py
 python -B tests/e2e/run_frames_e2e.py
 python -B tests/e2e/run_input_e2e.py
 python -B tests/e2e/run_media_e2e.py
@@ -26,6 +27,10 @@ python -B tests/dom/run_settings_browser.py
 ```
 
 交互回归显式开启所测功能；新安装测试验证默认关闭、不自动联网。迁移覆盖同步、本地回退、GM 存储、旧版加密导入、同 id 密钥保留和幂等性。安全与精确恢复断言不能因默认值变化删除。
+
+分段回归复用 canonical Session 和 mock 引擎，覆盖 walker 的直接文本／行内原子边界、取消扫描和网页改写优先、
+逐句与按段切换、源文行数、译文间距、逐段重试及 `body.outerHTML` 逐字恢复。
+整页截图写入 `DUALLENS_E2E_OUT/segmentation/paragraph.png` 与 `sentence.png`；用户脚本回归另含桌面和 375px 的同一设置路径。
 
 真实网页统一用 run_acceptance.py，需明确授权并与离线结果分开。默认 --llm none 使用真实免费 MT；--llm https://example.com/v1 使用明确提供的 OpenAI 兼容服务，模型从 DUALLENS_MODEL、可选 key 从 DUALLENS_API_KEY 环境变量读取，不读取或启动固定服务。报告不保存 key。
 

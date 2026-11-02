@@ -172,7 +172,7 @@ def main():
                 popup.locator('#toggle:not([disabled])').wait_for()
                 assert popup.evaluate('uiMessages.indexOf("tab-ensure")<uiMessages.indexOf("get-state")')
                 assert popup.locator('#feature-floatBall').is_checked() is False
-                assert popup.locator('.dl-popup').bounding_box()['height'] <= 600
+                height = popup.locator('.dl-popup').bounding_box()['height']; assert height <= 600, f'popup {height}px > 600px'
                 popup.screenshot(path=str(artifact/f'popup-default-{theme}.png'))
                 popup.click('#toggle')
                 popup.locator('#toggle').filter(has_text='显示原文').wait_for()
@@ -192,7 +192,7 @@ def main():
                 assert popup.locator('#feature-subtitles').is_checked()
                 popup.select_option('#site-mode','always')
                 popup.locator('#site-path').wait_for()
-                assert popup.locator('.dl-popup').bounding_box()['height'] <= 600
+                height = popup.locator('.dl-popup').bounding_box()['height']; assert height <= 600, f'popup {height}px > 600px'
                 popup.screenshot(path=str(artifact/f'popup-path-{theme}.png'))
             checks += 1
             print('PASS popup_states: onboarding/default/translated/path, <=600px, tab-ensure ready contract, denied permission remains off')

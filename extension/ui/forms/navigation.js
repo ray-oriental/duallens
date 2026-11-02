@@ -103,7 +103,7 @@ export const SETTINGS_CSS=`
 .dl-settings .field-controls>input{flex:1;min-width:0}
 .dl-settings .field-controls>button{flex:none;white-space:nowrap}
 .dl-settings .field-error{grid-column:1/-1;margin-top:4px;color:var(--dl-danger);font-size:12.5px}
-.dl-settings #display-segments{justify-self:end;width:auto}
+.dl-settings :is(#display-segments,#pairing-segments){justify-self:end;width:auto}
 .dl-settings .style-list,.dl-settings .method-list{display:flex;flex-direction:column;gap:2px;margin:4px -10px 0}
 .dl-settings .style-row{display:grid;grid-template-columns:16px 88px minmax(0,1fr);align-items:center;column-gap:12px;min-height:40px;padding:8px 10px;border-radius:var(--dl-r-sm);cursor:pointer}
 .dl-settings :is(.style-row,.dl-choice):has(input:checked){background:var(--dl-inset)}
@@ -214,9 +214,11 @@ export function organizeLayout(container,form,{field,button}) {
   const move=(dest,ids)=>{for(const id of ids){const n=$(id);if(n)dest.append(n.closest('label')||n);}};
   const grid=dest=>{const n=el('div',null,{class:'grid'});dest.append(n);return n;};
   const advanced=(dest,ids,title=T.advanced)=>{const d=el('details');d.append(el('summary',title));const body=grid(d);move(body,ids);dest.append(d);return body;};
-  const common=card('common'),commonGrid=el('div',null,{class:'common-rows'});common.append(commonGrid);move(commonGrid,['uiLanguage','targetLang','displayMode']);
+  const common=card('common'),commonGrid=el('div',null,{class:'common-rows'});common.append(commonGrid);move(commonGrid,['uiLanguage','targetLang','displayMode','segmentation']);
   const display=$('displayMode');display.parentElement.hidden=true;
-  const displayGroup=segmented(doc,l10n('me1'),[['bilingual',l10n('me2')],['translation-only',l10n('m4f')]],'bilingual',value=>{display.value=value;display.dispatchEvent(new Event('change',{bubbles:true}));});displayGroup.id='display-segments';const displayRow=el('div',null,{class:'frow'});displayRow.append(el('span',l10n('me1'),{class:'field-label'}),displayGroup);commonGrid.append(displayRow);setText($('targetLang').parentElement.firstChild,l10n('polishTranslateInto'));
+  const displayGroup=segmented(doc,l10n('me1'),[['bilingual',l10n('me2')],['translation-only',l10n('m4f')]],'bilingual',value=>{display.value=value;display.dispatchEvent(new Event('change',{bubbles:true}));});displayGroup.id='display-segments';const displayRow=el('div',null,{class:'frow'});displayRow.append(el('span',l10n('me1'),{class:'field-label'}),displayGroup);commonGrid.append(displayRow);
+  const pairing=$('segmentation');pairing.parentElement.hidden=true;
+  const pairGroup=segmented(doc,l10n('segLabel'),[['paragraph',l10n('segParagraph')],['sentence',l10n('segSentence')]],'paragraph',value=>{pairing.value=value;pairing.dispatchEvent(new Event('change',{bubbles:true}));});pairGroup.id='pairing-segments';const pairRow=el('div',null,{class:'frow'});pairRow.append(el('span',l10n('segLabel'),{class:'field-label'}),pairGroup);commonGrid.append(pairRow,el('p',l10n('segHint'),{class:'hint',id:'pairing-hint'}));setText($('targetLang').parentElement.firstChild,l10n('polishTranslateInto'));
   const styles=card('common',COPY.s44);move(styles,['style']);$('style').parentElement.hidden=true;
   const tiles=el('div',null,{class:'style-list',id:'style-tiles',role:'radiogroup','aria-label':COPY.s44});styles.append(tiles);
   const shortStyles=[l10n('polishStyle0'),l10n('polishStyle1'),l10n('polishStyle2'),l10n('polishStyle3'),l10n('polishStyle4'),l10n('polishStyle5')];let styleIndex=0;for(const option of $('style').options){const label=el('label',null,{class:'style-row'}),radio=el('input',null,{type:'radio',name:'style-tile',value:option.value});label.title=option.textContent;radio.setAttribute('aria-label',option.textContent);label.append(radio,el('span',shortStyles[styleIndex++],{class:'style-name'}),el('span',T.preview,{class:'sample-translation style-sample','data-style':option.value}));tiles.append(label);}

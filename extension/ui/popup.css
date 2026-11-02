@@ -1,6 +1,6 @@
 /* Popup and the userscript bottom sheet. 4px grid; 16px inset; 36px rows. */
 body { margin: 0; background: var(--dl-bg); }
-.dl-popup { display: flex; flex-direction: column; width: 360px; padding: 12px 16px 16px; font-size: 13px; line-height: 1.5; }
+.dl-popup { display: flex; flex-direction: column; width: 360px; padding: 12px 16px; font-size: 13px; line-height: 1.5; }
 .dl-popup > * { min-width: 0; }
 /* The extension popup is 360px wide; restate desktop sizes so the narrow-screen touch rules stay out. */
 .dl-popup :where(button) { min-height: 32px; }
@@ -18,15 +18,17 @@ body { margin: 0; background: var(--dl-bg); }
 .dl-popup #pdf-open { margin-bottom: 8px; }
 .dl-popup .page-status { margin: 6px 0 -2px; color: var(--dl-text-3); font-size: 12px; }
 .dl-popup .page-status:empty { display: none; }
-.dl-popup .display-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.dl-popup .display-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; margin-top: 12px; }
 .dl-popup .display-row .dl-segment { flex: none; }
+/* Second display choice wraps to its own line close to the first: both decide how translations look. */
+.dl-popup .pairing-row { display: flex; flex: 1 1 100%; }
 .dl-popup .target-pick { display: flex; align-items: baseline; gap: 2px; min-width: 0; color: var(--dl-text-2); }
 /* Same optical inset as the site select below, so both carets share one right edge. */
 .dl-popup .target-pick select { margin-right: -6px; }
 .dl-popup select { min-height: 28px; max-width: 160px; padding: 2px 22px 2px 6px; background-position: right 12px center, right 8px center; border-color: transparent; border-radius: var(--dl-r-xs); background-color: transparent; color: var(--dl-text); font-size: 13px; field-sizing: content; }
 .dl-popup select:hover:not(:disabled) { background-color: var(--dl-inset); }
 .dl-popup select:disabled { color: var(--dl-text-3); opacity: 1; cursor: default; }
-.dl-popup .engine-disclosure { margin-top: 10px; }
+.dl-popup .engine-disclosure { margin-top: 8px; }
 .dl-popup .engine-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--dl-text-3); font-size: 12px; }
 .dl-popup .engine-line .dl-text-button { flex: none; margin-right: -4px; font-size: 12px; }
 .dl-popup :is(.dl-site, .dl-more) { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--dl-border); }
@@ -34,7 +36,7 @@ body { margin: 0; background: var(--dl-bg); }
 .dl-popup .site-label { flex: none; }
 .dl-popup .host { flex: 1; min-width: 0; overflow: hidden; color: var(--dl-text-3); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .dl-popup .site-row select { flex: none; margin-right: -6px; }
-.dl-popup .dl-more { padding-top: 12px; }
+.dl-popup .dl-more { padding-top: 8px; }
 .dl-popup .dl-more h2 { margin: 0 0 2px; color: var(--dl-text-2); font-size: 12px; font-weight: 500; line-height: 1.5; }
 .dl-popup :is(.feature-row, .path-row) { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; cursor: pointer; }
 .dl-popup .feature-row + .feature-row { border-top: 1px solid var(--dl-border); }
@@ -69,7 +71,10 @@ body { margin: 0; background: var(--dl-bg); }
   .dl-popup .dl-segment span { min-height: 36px; }
   .dl-onboarding select { min-height: 44px; font-size: 16px; }
   .dl-popup .display-row { flex-wrap: wrap; gap: 4px; }
-  .dl-popup .display-row .dl-segment { flex: 1 1 100%; }
+  .dl-popup :is(.display-row, .pairing-row) .dl-segment { flex: 1 1 100%; }
+  /* Full-width rows: keep both display choices together, the target language after them. */
+  .dl-popup .pairing-row { order: 1; }
+  .dl-popup .display-row .target-pick { order: 2; }
   .dl-popup .target-pick { flex: 1 1 100%; justify-content: space-between; min-height: 44px; }
   .dl-popup select { min-height: 44px; font-size: 16px; }
   .dl-popup .target-pick select { flex: 1; max-width: none; margin-right: -6px; text-align-last: right; field-sizing: fixed; }

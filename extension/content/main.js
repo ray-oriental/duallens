@@ -177,6 +177,7 @@ class App {
       prev.targetLang !== next.targetLang ||
       prev.sourceLang !== next.sourceLang ||
       prev.minChars !== next.minChars ||
+      prev.segmentation !== next.segmentation ||
       prev.translateShortText !== next.translateShortText ||
       customChanged ||
       !settingsEqual(prev.translation, next.translation) ||

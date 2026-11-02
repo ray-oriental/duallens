@@ -179,6 +179,7 @@ export function drawLayout(root, { secretDialog = false } = {}) {
   field(r.grid, 'targetLang', COPY.s6, 'select', LANGS);
   field(r.grid, 'sourceLang', COPY.s7, 'select', [{ code: 'auto', name: COPY.s8 }, ...LANGS]);
   field(r.grid, 'displayMode', COPY.s9, 'select', pairs([['bilingual', COPY.s10], ['translation-only', COPY.s11]]));
+  field(r.grid, 'segmentation', l10n('segLabel'), 'select', pairs([['paragraph', l10n('segParagraph')], ['sentence', l10n('segSentence')]]));
   field(r.grid, 'style', COPY.s12, 'select', STYLES);
   for (const [id, title] of [['minChars', COPY.s13], ['inlineMaxChars', COPY.s14], ['rootMarginPx', COPY.s15], ['batchDelayMs', COPY.s16]]) field(r.grid, id, title, 'number');
   field(r.grid, 'translateShortText', COPY.s17, 'checkbox');

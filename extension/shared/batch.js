@@ -208,3 +208,34 @@ export function joinTranslations(parts) {
   }
   return out;
 }
+
+const ABBREV=/(?:\b(?:Mr|Mrs|Ms|Dr|Prof|St|vs|etc)|\b[ei]\.g|\bi\.e|\b(?:[A-Z]\.)*[A-Z])\.$/i;
+
+export function sentenceParts(text,{mergeShort=false}={}) {
+  const s=String(text),out=[];
+  let start=0;
+  for(let i=0;i<s.length;i++) {
+    const c=s[i];
+    if(!/[.!?。！？…]/.test(c)) continue;
+    if(c==='.' && (/\d/.test(s[i-1]||'') && /\d/.test(s[i+1]||'') || ABBREV.test(s.slice(Math.max(0,i-15),i+1)))) continue;
+    let end=i+1;
+    while(/[.!?。！？…]/.test(s[end]||'') && end<s.length) end++;
+    while(end<s.length && CLOSERS.has(s[end])) end++;
+    const next=s.slice(end).match(/^\s*(\S)/)?.[1];
+    // English dialogue attribution and mid-sentence ellipses stay with their sentence.
+    if(/[.!?]/.test(c) && end<s.length && !/\s/.test(s[end])) {i=end-1;continue;}
+    if(next && /[a-z]/.test(next) && (c==='…' || s.slice(i,end).includes('..') || end>i+1 && CLOSERS.has(s[end-1]))) {i=end-1;continue;}
+    while(end<s.length && /\s/.test(s[end])) end++;
+    out.push(s.slice(start,end));start=end;i=end-1;
+  }
+  if(start<s.length) out.push(s.slice(start));
+  if(!out.length) return [s];
+  if(!mergeShort) return out;
+  const parts=[];let pending='';
+  for(const part of out) {
+    pending+=part;
+    if(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(pending) || (pending.match(/\p{L}+(?:['’]\p{L}+)*/gu)||[]).length>=3) {parts.push(pending);pending='';}
+  }
+  if(pending) {if(parts.length)parts[parts.length-1]+=pending;else parts.push(pending);}
+  return parts;
+}

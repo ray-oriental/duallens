@@ -3236,5 +3236,20 @@
   },
   "errGmRefusedDetail": {
     "message": "The script manager reported that the connection was refused."
+  },
+  "segLabel": {
+    "message": "Pairing"
+  },
+  "segParagraph": {
+    "message": "By paragraph"
+  },
+  "segSentence": {
+    "message": "By sentence"
+  },
+  "segHint": {
+    "message": "By paragraph keeps well-formed paragraphs whole and splits unbroken text by line or every few sentences, so each translation stays next to its source. By sentence puts a translation after every sentence."
+  },
+  "segRetranslate": {
+    "message": "Pairing saved. Translated pages will be translated again."
   }
 }
