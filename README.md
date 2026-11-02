@@ -16,7 +16,7 @@
 | 方式 | 说明 |
 | --- | --- |
 | Chrome Web Store | 待上架，审核通过后补链接 |
-| Microsoft Edge Add-ons | 待上架，审核通过后补链接 |
+| Microsoft Edge Add-ons | https://microsoftedge.microsoft.com/addons/detail/koimmjcieppicmampikhoopghibdjpaa |
 | 开发者模式（Chrome / Edge） | 到 [Releases](https://github.com/ray-oriental/duallens/releases) 下载 `duallens-extension-v<版本>.zip` 解压；或直接选择本仓库的 `extension/` 目录。打开 `chrome://extensions` 或 `edge://extensions` → 开启「开发者模式」→「加载已解压的扩展程序」。无需 npm 或构建。 |
 | Android Edge + Tampermonkey | 在 Edge 扩展目录安装 Tampermonkey，打开最新 Release 的 [`duallens.user.js`](https://github.com/ray-oriental/duallens/releases/latest/download/duallens.user.js) 并确认安装。步骤与真机清单见 [使用指南](docs/USAGE.md)。 |
 
