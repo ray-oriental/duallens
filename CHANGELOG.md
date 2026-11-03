@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-03
+
 - Page translation: text that was never split into paragraphs (single line breaks, hard-wrapped text, very long blocks) is paired line by line or every few sentences, so translations no longer pile up after the whole block; restoring the page is still exact.
 - New "By paragraph / By sentence" pairing choice in the popup (and userscript panel) and on the settings page; By sentence puts a translation after every sentence.
 - Layout: preserve author line breaks in pre-wrap, pre-line and break-spaces text when releasing headline clipping.
