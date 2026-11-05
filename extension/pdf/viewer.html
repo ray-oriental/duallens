@@ -14,6 +14,12 @@
 </div>
 <div class="info"><p id="status" role="status" aria-live="polite" data-i18n="pdfOpening"></p><button id="ocr-toggle" class="dl-text-button" hidden aria-expanded="false" aria-controls="ocr-panel" data-i18n="pdfOCRTitle"></button>
 <p class="hint" id="privacy" data-i18n="pdfPrivacy"></p></div>
+<section id="local-notice" class="dl-notice pdf-panel" hidden>
+<p id="local-explanation"></p><p id="local-name-row" class="hint" hidden><span data-i18n="pdfFileLabel"></span> <bdi id="local-name"></bdi></p>
+<div class="actions"><button id="local-choose" class="primary" type="button" data-i18n="pdfChooseLocal"></button>
+<button id="extension-details" class="dl-text-button" data-i18n="pdfExtensionDetails"></button>
+</div>
+</section>
 <section id="export-panel" class="pdf-panel" hidden data-i18n-aria-label="pdfExportPDF">
 <div class="fields"><label><span data-i18n="pdfExportLayout"></span><select id="export-layout"><option value="side" data-i18n="pdfSide"></option><option value="translated" data-i18n="pdfTranslated"></option></select></label>
 <label><span data-i18n="pdfExportScope"></span><select id="export-scope"><option value="all" data-i18n="pdfExportAll"></option><option value="range" data-i18n="pdfExportRange"></option></select></label>

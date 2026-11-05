@@ -1,8 +1,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pdfURL,hasPDFExtension,isPDFType,createPDFEntries,probePDFType } from '../../extension/background/pdf.js';
+import { pdfURL,hasPDFExtension,isPDFType,createPDFEntries,probePDFType,pdfFilename } from '../../extension/background/pdf.js';
 import { readPDFURL,checkPDFBytes,MAX_PDF_BYTES } from '../../extension/pdf/source.js';
 const bytes = new TextEncoder().encode('%PDF-1.4\nfixture');
+test('local PDF without file access opens the chooser before any read, including menu actions', async () => {
+  let allowed=false,tab={id:7,url:'file:///D:/%E6%B5%8B%E8%AF%95%20folder/Thursday%20Work.pdf'};
+  const opened=[];let reads=0,stored=0;
+  const api={runtime:{getURL:p=>'chrome-extension://test/'+p},
+    extension:{isAllowedFileSchemeAccess:async()=>allowed},
+    tabs:{get:async()=>tab,create:async value=>opened.push(value.url)}};
+  const entries=createPDFEntries(api,async()=>{reads++;return new Response(bytes);},
+    {put:async()=>{stored++;return 'fixture-token';}});
+  const sender={url:'chrome-extension://test/ui/popup.html'};
+  const status=()=>entries.handlers['pdf-status']({tabId:7},sender);
+  assert.equal((await status()).requiresFileSelection,true);
+  for(const action of [()=>entries.open(tab),()=>entries.openFromMenu(tab)]) {
+    assert.equal((await action()).ok,true);
+    const url=new URL(opened.at(-1));
+    assert.equal(url.searchParams.get('notice'),'file-access');
+    assert.equal(url.searchParams.get('name'),'Thursday Work.pdf');
+    assert.equal(url.searchParams.has('file'),false);
+  }
+  assert.equal(reads,0);assert.equal(stored,0);
+  allowed=true;
+  assert.equal((await status()).requiresFileSelection,false);
+  assert.equal((await entries.open(tab)).ok,true);
+  assert.ok(opened.at(-1).endsWith('?token=fixture-token'));
+  assert.equal(reads,1);assert.equal(stored,1);
+  allowed=false;tab={id:7};
+  assert.equal((await status()).available,false);
+  assert.equal((await entries.open(tab)).ok,false);
+  assert.equal((await entries.openFromMenu(tab)).ok,true);
+  assert.ok(opened.at(-1).endsWith('?notice=file-access'));
+  assert.equal((await entries.handlers['pdf-open-local']({tabId:7},sender)).ok,true);
+  const count=opened.length;
+  assert.equal((await entries.handlers['pdf-open-local']({tabId:7},{url:'https://example.com/'})).ok,false);
+  assert.equal(opened.length,count);
+  tab={id:7,url:'file:///D:/notes.txt'};
+  assert.equal((await status()).available,false);
+  assert.equal(pdfFilename('file:///D:/%E6%B5%8B%E8%AF%95%20folder/Thursday%20Work.pdf'),'Thursday Work.pdf');
+  assert.equal(pdfFilename('file:///D:/encoded%2Fname.pdf'),'name.pdf');
+});
 test('PDF entry accepts only document protocols, rejects embedded credentials', () => {
   for (const u of ['javascript:alert(1)','data:application/pdf,x','https://u:p@example.org/a.pdf','chrome://settings','not-a-url']) assert.equal(pdfURL(u),'');
   assert.equal(hasPDFExtension('https://example.org/a.PDF?download=1#page=2'),true);

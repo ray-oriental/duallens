@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- PDF: without "Allow access to file URLs" (the default for store installs), a local PDF opens in the reader with an explanation and a file picker instead of failing; when the browser hides a local tab's address, the popup offers "Open a local PDF"; the reader links to the extension details page to turn on one-click opening.
+
 ## [1.2.0] - 2026-11-03
 
 - Page translation: text that was never split into paragraphs (single line breaks, hard-wrapped text, very long blocks) is paired line by line or every few sentences, so translations no longer pile up after the whole block; restoring the page is still exact.

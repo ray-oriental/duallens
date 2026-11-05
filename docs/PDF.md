@@ -6,10 +6,14 @@
 
 1. 打开一个 PDF 标签页，在 DualLens popup 点击“用 DualLens 打开此 PDF”。URL 路径以 `.pdf` 结尾（支持查询参数与 fragment），或者按需探测响应的 `Content-Type` 为 `application/pdf` 时可用。未确认 PDF 时可从阅读页选择本地 PDF。
 2. 宽屏默认“双栏对照”：左侧原页与可选择文本层，右侧同尺寸译文页。译文页复制原页画布，按原文字块坐标采样背景、逐行抹底、拟合字号并覆盖译文。左右页共用缩放和逐页滚动。可切换“仅译文页”“原文页”“重排阅读”；窄于 600 px 的扩展窗口首次打开默认重排。另有恢复原文、页码跳转和浅色/深色/跟随系统。
-3. `file://` 链接需在浏览器扩展详情页开启“允许访问文件网址”。无需该权限也可在阅读页“选择本地 PDF”；选择的字节只在阅读页内存中处理。
+3. 本地 PDF 有两条路：已开启“允许访问文件网址”且浏览器提供当前 PDF 地址时，弹出页一键打开；未开启时，进入阅读器后按“选择本地 PDF”选择同一文件，不必授予权限。说明会显示可取得的文件名，并提供扩展详情页入口，方便以后开启一键打开。选择的字节只在阅读页内存中处理。
 4. 需要登录、带 URL 账号密码、重定向的链接不自动代取。先由用户下载，再选择本地文件。匿名 HTTP(S) 请求不带 cookie，不使用 API key。
 
 自动打开 PDF 是可选增强，本轮未实现，保持浏览器原有行为；不添加 declarativeNetRequest 或重定向规则。
+
+Edge 156 与 Chrome 155 实测：文件访问关闭时，即使点击扩展图标，浏览器也不提供当前标签页的地址和标题；设置页、空白页也可能隐藏相同信息，不能据此断言当前页是 PDF。此时弹出页不显示“此 PDF”按钮；受限说明下直接提供“打开本地 PDF”文字按钮，再在阅读器选择文件即可。右键 PDF 入口在地址隐藏且没有文件权限时同样进入选择器，不报“不是 PDF”。
+
+如需以后一键打开：Chrome 打开 `chrome://extensions`，Edge 打开 `edge://extensions`，找到本次使用的 DualLens → 详情 → 开启“允许访问文件网址”。阅读器的“打开扩展详情页”可直达当前安装的详情页；商店版与开发版是各自独立的安装，需分别设置。不申请 `tabs` 或所有网站权限。
 
 ### 导出 PDF
 
@@ -31,6 +35,7 @@ PDF 识别使用整页自动分割，读取每行文字、归一化坐标及置�
 
 - 交接缓存有逻辑过期与物理清理两个阶段：记录创建五分钟后，即使字节尚在 IndexedDB 中，也拒绝读取。后台每次初始化以及 `runtime.onStartup`、`runtime.onInstalled` 时清理所有过期条目；每次 `put()` 在同一事务内先清理再写入，每次 `take()` / `takeFile()` 也顺带清理全部过期条目。读取成功的目标记录在事务提交后、返回字节前已经删除，不能重放；未过期的其他记录保留（写入时最多三份的容量限制仍生效）。不申请 `alarms` 或其他新权限，不依赖 service worker 定时器；浏览器关闭、扩展禁用或没有活动上下文时，过期字节可能一直保留到下一次上述清理，不能承诺五分钟时严格物理删除。
 - `background/pdf.js` 为 `pdf-status` / `pdf-open` 消息提供处理器。消息只使用实际 `tabId` 对应的 URL，不信任消息中的 PDF URL；只支持 HTTP、HTTPS、file，不接受 URL 用户名/密码。
+- `pdf-status` 对已识别的本地 PDF 另返回 `requiresFileSelection`。缺少文件权限时 `pdf-open` 不读取文件，改开 `?notice=file-access&name=<可选文件名>`；不传递完整本地路径。显式选择器消息 `pdf-open-local` 同样仅接受扩展页面，使用实际标签页的可用文件名。阅读器收到说明后立即清除查询参数；文件名仅以文本显示，选择成功后收起说明。
 - PDF 工具栏入口使用已有 activeTab，不需常驻 `<all_urls>`；其他来源由阅读器按钮按需 requestOrigin。本地文件选择不需主机权限。不使用 `webRequest`、`webRequestBlocking`、响应观察器或 PDF 标签页切换/更新监听，不扫描访问历史，不在启动或普通导航时探测 PDF。
 - 只在 popup 打开时时先检查实际标签页 URL；`.pdf` 后缀无需网络探测。不确定的 HTTP(S) 地址发一次 HEAD；网络/HTTP 失败或没有 Content-Type 时，再发一次带 `Range: bytes=0-1023` 的 GET。每次请求超时 5 秒（两次失败最多约 10 秒），不重试、不跟随重定向、不带 cookie/认证、禁用 HTTP 缓存。读取响应头后立即取消响应体并中止请求，即使服务器忽略 Range 也不读取整份正文。成功的非 PDF HEAD 不触发 GET。不保留探测 URL 或结果缓存。
 - PDF 下载 30 秒超时，流式限制 64 MiB；最多 2000 页。字节检查 PDF 标头。pdf.js 禁用 `isEvalSupported` 与 XFA；不创建注释/表单层、不执行 PDF 文档脚本或自动外链。加密 PDF 暂需先在本地解密。
@@ -70,5 +75,7 @@ python -B -u tests/e2e/run_pdf_e2e.py
 PDF runner 复用 canonical staging / Session / run_case，临时 profile、原创八页英文 PDF、数学 PDF、两页纯图像英文扫描夹具、导出件、状态和截图位于 `DUALLENS_E2E_OUT`。默认仅 mock：验证同尺寸双栏、文字不越界/互叠、公式裁图、四视图、恢复原页 DOM、草稿到终稿的原位替换、恶意标记、迟到回调、缩放竞态、跳转/主题、画布上限、PDF 探测入口与本地选择器；新增真正下载两种 PDF 并用 pdf.js 回读页数、尺寸、图像对象和像素差异，取消零下载，以及真实 Tesseract 英文 OCR 后翻译并导出。交接缓存另用真实 IndexedDB 回读确认启动／安装和写入前清理、未过期条目保留、读取成功立即物理删除。单测另覆盖分块、字号、颜色、翻译状态机、xref 字节偏移、范围解析、低置信度过滤、取消清理及缓存生命周期。无匹配用例退出 2，失败退出 1。
 
 OCR E2E 先按 `run_comics_e2e.py:ensure_fixture_downloads` 准备固定语言包，并另外复核英文包大小与 SHA-256；已准备缓存后可离线运行。Playwright 1.48 不可靠拦截离屏目标，因此只在隔离 staging 中将英文包的数据 URL 改为本机夹具服务器，哈希和大小保持不变；发布源码仍指向固定提交的 GitHub 数据。夹具由 `generate_pdf.py:make_scanned_pdf` 用标准库原创栅格字母生成，没有文本层或外部字体。
+
+本机手动运行 `tests/e2e/run_edge_local_pdf.py`（不进 CI，Edge 不存在时 SKIP）；`--chromium` 使用 Playwright Chromium 对照，`--chrome` 使用独立临时 Chrome。脚本仅加载去掉 manifest key 的源码副本，把仓库夹具复制到中文和空格路径，开关文件权限并核对实际标签页信息、阅读器和详情页。profile 位于专用 E2E 缓存，用后删除；输出把完整夹具路径替换为占位符。Edge 通过 `Extensions.triggerAction` 授予真实 activeTab；headless 模式不暴露工具栏弹出页 target，因此在同一授权下以不激活的标签页加载 popup 文档。Chromium 130 没有该动作协议，快捷键尝试无效时明确跳过真实一键打开对照。PDF runner 另用无额外主机授权的 staging 验证地址隐藏分支，用常规 staging 验证地址可见但文件权限关闭的分支。
 
 真实服务验收统一用 `run_acceptance.py`，见 [E2E README](../tests/e2e/README.md)。需明确授权，结果独立报告。

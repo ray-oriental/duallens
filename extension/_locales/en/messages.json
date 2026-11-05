@@ -3251,5 +3251,26 @@
   },
   "segRetranslate": {
     "message": "Pairing saved. Translated pages will be translated again."
+  },
+  "pdfHiddenPage": {
+    "message": "The browser has not shared this page's address, so it cannot be translated."
+  },
+  "pdfOpenLocal": {
+    "message": "Open a local PDF"
+  },
+  "pdfChooseLocal": {
+    "message": "Choose a local PDF"
+  },
+  "pdfFileAccessNotice": {
+    "message": "The browser has not allowed DualLens to read local files. Choose this PDF here to open it. For one-click opening in future, turn on “Allow access to file URLs” on the extension details page."
+  },
+  "pdfSelectNotice": {
+    "message": "Choose a local PDF to open it in DualLens. The file stays on your device."
+  },
+  "pdfExtensionDetails": {
+    "message": "Open extension details"
+  },
+  "pdfFileLabel": {
+    "message": "File:"
   }
 }

@@ -1126,13 +1126,27 @@ function jump() {
 $('jump').addEventListener('click', jump);
 $('page-number').addEventListener('keydown', e => { if (e.key === 'Enter') jump(); });
 $('settings').addEventListener('click', () => platform.openSettings());
+$('local-choose').addEventListener('click', () => $('local-file').click());
+$('extension-details').addEventListener('click', () => {
+  void chrome.tabs.create({url:'chrome://extensions/?id='+chrome.runtime.id});
+});
+function showLocalSelection(needsAccess, name = '') {
+  $('local-notice').hidden = false;
+  $('local-explanation').dataset.i18n = needsAccess ? 'pdfFileAccessNotice' : 'pdfSelectNotice';
+  $('local-explanation').textContent = l10n($('local-explanation').dataset.i18n);
+  $('local-name').textContent = name.slice(0,255);
+  $('local-name-row').hidden = !name;
+  $('extension-details').hidden = !needsAccess;
+  $('status').removeAttribute('data-i18n');
+  message('');
+}
 $('local-file').addEventListener('change', () => {
   const file = $('local-file').files[0];
   const request = ++sourceRequest;
   if (file) void guarded(async () => {
     if (file.size > MAX_PDF_BYTES) throw new Error('too large');
     const data = new Uint8Array(await file.arrayBuffer());
-    if (request === sourceRequest) { documentName = file.name; await open(data); }
+    if (request === sourceRequest) { documentName = file.name; await open(data); $('local-notice').hidden = true; }
   }, request);
   $('local-file').value = '';
 });
@@ -1189,7 +1203,15 @@ if (token) {
   }, request);
   void (async()=>{
     const {hasOrigin,requestOrigin}=await import('../shared/permissions.js');
-    if(file.startsWith('file:')||await hasOrigin(file))return read();
+    if(file.startsWith('file:')) {
+      if(!await chrome.extension.isAllowedFileSchemeAccess()) {
+        if(request!==sourceRequest)return;
+        let name='';try{name=decodeURIComponent(new URL(file).pathname.split('/').at(-1)||'').split(/[\\/]/).at(-1);}catch{/* display name unavailable */}
+        history.replaceState(null,'',location.pathname);showLocalSelection(true,name);return;
+      }
+      return read();
+    }
+    if(await hasOrigin(file))return read();
     message(l10n('m7g'));
     const allow=el('button');allow.textContent=l10n('m7h');$('status').append(' ',allow);
     allow.addEventListener('click',async()=>{
@@ -1199,6 +1221,10 @@ if (token) {
     });
   })();
 }
-else if (new URL(location.href).searchParams.get('notice') === 'not-pdf') {
+else if (['file-access','local-file'].includes(new URL(location.href).searchParams.get('notice'))) {
+  const params=new URL(location.href).searchParams;
+  history.replaceState(null,'',location.pathname);
+  showLocalSelection(params.get('notice')==='file-access',params.get('name')||'');
+} else if (new URL(location.href).searchParams.get('notice') === 'not-pdf') {
   message(l10n('m7i'), true);
 } else message(l10n('m7j'));

@@ -16,7 +16,9 @@ body { margin: 0; background: var(--dl-bg); }
 .dl-popup .dl-banner { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--dl-border); }
 .dl-popup .dl-banner .dl-text-button { flex: none; margin: -2px -4px 0 0; font-size: 12px; color: var(--dl-text); }
 .dl-popup #pdf-open { margin-bottom: 8px; }
+.dl-popup #pdf-local-open { display: block; padding: 0; border: 0; font: inherit; color: var(--dl-text); text-align: left; }
 .dl-popup .page-status { margin: 6px 0 -2px; color: var(--dl-text-3); font-size: 12px; }
+.dl-popup .page-status:has(#pdf-local-open) { margin-top: 4px; }
 .dl-popup .page-status:empty { display: none; }
 .dl-popup .display-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; margin-top: 12px; }
 .dl-popup .display-row .dl-segment { flex: none; }
