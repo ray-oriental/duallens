@@ -20,7 +20,7 @@
 <button id="extension-details" class="dl-text-button" data-i18n="pdfExtensionDetails"></button>
 </div>
 </section>
-<section id="export-panel" class="pdf-panel" hidden data-i18n-aria-label="pdfExportPDF">
+<section id="export-panel" class="pdf-popover" hidden data-i18n-aria-label="pdfExportPDF">
 <div class="fields"><label><span data-i18n="pdfExportLayout"></span><select id="export-layout"><option value="side" data-i18n="pdfSide"></option><option value="translated" data-i18n="pdfTranslated"></option></select></label>
 <label><span data-i18n="pdfExportScope"></span><select id="export-scope"><option value="all" data-i18n="pdfExportAll"></option><option value="range" data-i18n="pdfExportRange"></option></select></label>
 <label id="export-range-label" hidden><span data-i18n="pdfExportRange"></span><input id="export-range" type="text" placeholder="1-5, 8" autocomplete="off"></label></div>
@@ -28,7 +28,7 @@
 <p class="hint" data-i18n="pdfExportHint"></p>
 <div class="actions"><button id="export-start" data-i18n="pdfExportStart"></button><button id="export-cancel" class="dl-text-button" data-i18n="pdfExportCancel"></button><p id="export-status" class="progress" role="status" aria-live="polite"></p></div>
 </section>
-<section id="ocr-panel" class="pdf-panel" hidden data-i18n-aria-label="pdfOCRTitle">
+<section id="ocr-panel" class="pdf-popover" hidden data-i18n-aria-label="pdfOCRTitle">
 <div class="fields"><label><span data-i18n="pdfOCRLanguage"></span><select id="ocr-language"><option value="eng" data-i18n="pdfOCREnglish"></option><option value="jpn" data-i18n="pdfOCRJapanese"></option><option value="kor" data-i18n="pdfOCRKorean"></option></select></label></div>
 <p class="hint" data-i18n="pdfOCRHint"></p><p id="ocr-pack" class="hint"></p>
 <label id="ocr-download-label" class="check" hidden><input id="ocr-download" type="checkbox"><span data-i18n="pdfOCRDownloadConfirm"></span></label>

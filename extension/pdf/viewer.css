@@ -56,18 +56,21 @@ header button.dl-text-button[aria-expanded=true]:not(:disabled){background:var(-
 :is(#status button,.info #ocr-toggle):hover:not(:disabled){background:transparent;color:var(--dl-text);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
 #privacy{margin-left:auto;color:var(--dl-text-3)}
 
-/* ---- export panel and OCR prompt: settings-page fields under a hairline, no card ---- */
+/* ---- local-file notice: shown before any document is open, so it can sit in the toolbar under a hairline ---- */
 .pdf-panel{padding:12px 0 14px;border-top:1px solid var(--dl-border)}
 .pdf-panel>*{max-width:720px}
-.pdf-panel .fields{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px}
-.pdf-panel .fields label{display:inline-flex;align-items:center;gap:10px;color:var(--dl-text-2);white-space:nowrap}
-.pdf-panel .fields select{min-width:132px;font-size:13px}
-#export-range{width:132px;font-size:13px}
-.pdf-panel .hint{margin-top:10px}
-.pdf-panel .check{display:flex;align-items:flex-start;gap:8px;margin-top:10px;color:var(--dl-text);cursor:pointer}
-.pdf-panel .check input{flex:none;margin-top:2px}
-.pdf-panel .actions{margin-top:12px;column-gap:12px}
-.pdf-panel .progress{flex:1 1 220px;color:var(--dl-text-2);font-size:12px}
+/* ---- export and OCR: dropdowns under their buttons that float over the pages (viewer.js places them), so
+   opening one never grows the sticky toolbar or pushes the document down. Same surface as the send card. ---- */
+.pdf-popover{position:absolute;z-index:30;top:100%;left:16px;width:min(400px,calc(100% - 24px));max-height:calc(100vh - 120px);overflow:auto;overscroll-behavior:contain;padding:14px 16px;border:1px solid var(--dl-border);border-radius:var(--dl-r-md);background:var(--dl-surface);box-shadow:var(--dl-shadow-2);color:var(--dl-text)}
+.pdf-popover .fields{display:grid;gap:8px}
+.pdf-popover .fields label{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--dl-text-2);white-space:nowrap}
+.pdf-popover .fields :is(select,input){width:200px;min-width:0;font-size:13px}
+:is(.pdf-panel,.pdf-popover) .hint{margin-top:10px}
+.pdf-popover .hint+.hint{margin-top:2px}
+.pdf-popover .check{display:flex;align-items:flex-start;gap:8px;margin-top:10px;color:var(--dl-text);cursor:pointer}
+.pdf-popover .check input{flex:none;margin-top:2px}
+:is(.pdf-panel,.pdf-popover) .actions{margin-top:12px;column-gap:12px}
+.pdf-popover .progress{flex:1 1 160px;color:var(--dl-text-2);font-size:12px}
 
 /* ---- pages ---- */
 #pdf-pages{padding:16px 10px 48px;overflow-x:auto}
@@ -109,12 +112,12 @@ body[data-view=reflow] .pdf-page+.pdf-page .page-label{padding-top:16px;border-t
 .page-note{color:var(--dl-text-3);font-size:13px}
 
 /* ---- narrow windows and touch: the header scrolls away, controls grow to 44 px (DESIGN 12.2) ---- */
-@media(max-width:760px){header{position:static;padding:0 12px}.tools{margin-left:0}#privacy{display:none}#pdf-pages{padding:10px 4px 40px}}
+@media(max-width:760px){header{position:relative;padding:0 12px}.tools{margin-left:0}#privacy{display:none}#pdf-pages{padding:10px 4px 40px}}
 @media(max-width:719px),(pointer:coarse){
   header .dl-text-button,.file-button,.pick select,#page-number,.info #ocr-toggle,#status button{min-height:44px}
   .info #ocr-toggle,#status button{padding:0 4px}
-  .pdf-panel .check{min-height:44px;align-items:center}
-  .pdf-panel .check input{margin-top:0}
+  .pdf-popover .check{min-height:44px;align-items:center}
+  .pdf-popover .check input{margin-top:0}
 }
 @media(pointer:coarse){.pick select,#page-number{font-size:16px}}
 .export-sheet{position:fixed;left:-32000px;top:0;display:block!important;visibility:hidden;pointer-events:none;box-shadow:none;contain:strict}
