@@ -12,6 +12,8 @@ DualLens 使用你选择的服务。默认 Microsoft 免费非官方机器翻译
 
 商店审核与发布状态以商店页面为准，商店安装和源码加载可能使用不同扩展 ID。
 
+本地 PDF：已在扩展详情页开启“允许访问文件网址”时，可在 PDF 弹出页一键用 DualLens 打开；未开启也能使用阅读器的“选择本地 PDF”，文件只在本机处理。若浏览器没有提供当前文件地址，点击受限说明下的“打开本地 PDF”文字按钮，再进入选择器。想以后一键打开，可用阅读器的“打开扩展详情页”，或在 `chrome://extensions` / `edge://extensions` 找到当前使用的 DualLens → 详情 → 开启“允许访问文件网址”。商店版和开发版需各自设置。详见 [PDF 使用说明](PDF.md)。
+
 ## Android Edge + Tampermonkey
 
 1. 在支持 Tampermonkey 的 Android Edge 版本中安装并启用它，确认脚本运行在管理器隔离上下文。

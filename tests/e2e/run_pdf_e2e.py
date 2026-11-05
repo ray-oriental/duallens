@@ -337,8 +337,11 @@ def pdf_entries(h):
     page = h.ctx.new_page()
     h.page = page
     page.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html?file=file%3A%2F%2F%2FC%3A%2Fmissing.pdf')
-    page.locator('#status.error').wait_for()
-    assert '允许访问文件网址' in page.locator('#status').inner_text()
+    if page.evaluate('()=>chrome.extension.isAllowedFileSchemeAccess()'):
+        page.locator('#status.error').wait_for()
+    else:
+        page.locator('#local-notice').wait_for()
+        assert '允许访问文件网址' in page.locator('#local-explanation').inner_text()
     page.locator('#local-file').set_input_files(str(e2e.E2E_ROOT / 'pdf-fixture' / 'pdf-field-notebook.pdf'))
     wait_for(page, rendered(1), 30)
     # A slow URL response must not replace a newer local file selection.
@@ -351,6 +354,72 @@ def pdf_entries(h):
     assert page.locator('.pdf-page').count() == 6, 'Late URL response replaced the selected local PDF'
     assert not page.locator('#status.error').count(), 'An old source error replaced the current status'
     return '.pdf / application/pdf entry; file permission/local chooser; latest local selection wins over a slow URL'
+
+
+def pdf_local_no_access(h, hidden=True):
+    manager=h.ctx.new_page()
+    manager.goto('chrome://extensions/')
+    manager.evaluate('id=>chrome.developerPrivate.updateExtensionConfiguration({extensionId:id,fileAccess:false})',h.ext_id)
+    bridge=h.ctx.new_page()
+    bridge.goto(f'chrome-extension://{h.ext_id}/ui/options.html')
+    assert not bridge.evaluate('()=>chrome.extension.isAllowedFileSchemeAccess()')
+    bridge.evaluate("()=>chrome.storage.local.set({'ui.device':{onboarded:true,acked:[],upgradeNoticeSeen:true}})")
+    source=e2e.E2E_ROOT/'pdf-fixture'/'pdf-field-notebook.pdf'
+    local=h.ctx.new_page();local.goto(source.as_uri());local.bring_to_front()
+    tab=bridge.evaluate('async()=>(await chrome.tabs.query({active:true,currentWindow:true}))[0]')
+    popup=h.ctx.new_page()
+    # Chromium 130 has no triggerAction. Model the hidden active tab without
+    # fabricating file access or changing the actual background tab metadata.
+    popup_tab={'id':tab['id']}
+    if not hidden:popup_tab['url']=source.as_uri()
+    popup.add_init_script('if(globalThis.chrome?.tabs)chrome.tabs.query=async()=>['+json.dumps(popup_tab)+'];')
+    popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
+    h.page=popup
+    popup.locator('#onboard-skip,#toggle').first.wait_for(state='attached')
+    if popup.locator('#onboard-skip').count():popup.click('#onboard-skip')
+    if hidden:
+        popup.locator('#pdf-local-open').wait_for()
+        assert popup.locator('#pdf-open').count()==0
+        assert popup.locator('details#pdf-local-help').count()==0
+    else:
+        popup.locator('#pdf-open').wait_for()
+        assert popup.locator('#pdf-local-help').count()==0
+    with h.ctx.expect_page() as pending:
+        popup.click('#pdf-local-open' if hidden else '#pdf-open')
+    page=pending.value;h.page=page
+    page.locator('#local-notice').wait_for()
+    assert '没有允许 DualLens 读取本地文件' in page.locator('#local-explanation').inner_text()
+    assert page.locator('#local-choose').is_visible()
+    assert page.locator('#extension-details').is_visible()
+    assert page.locator('#status').inner_text()==''
+    assert page.locator('#local-choose').get_attribute('class')=='primary'
+    assert page.locator('#local-name').inner_text()==('' if hidden else source.name)
+    assert page.locator('#local-name-row').is_visible()==(not hidden)
+    if not hidden:
+        assert page.locator('#local-name-row').inner_text()=='文件： '+source.name
+        shots=e2e.E2E_ROOT/'review2';shots.mkdir(parents=True,exist_ok=True)
+        for theme in ['light','dark']:
+            page.emulate_media(color_scheme=theme)
+            page.screenshot(path=str(shots/f'reader-{theme}.png'))
+    assert page.locator('.pdf-page').count()==0
+    assert '?' not in page.url
+    with h.ctx.expect_page() as details:
+        page.click('#extension-details')
+    details.value.wait_for_url('chrome://extensions/*')
+    assert h.ext_id in details.value.url
+    details.value.close()
+    with page.expect_file_chooser() as chooser:
+        page.click('#local-choose')
+    chooser.value.set_files(str(source))
+    wait_for(page,rendered(1),30)
+    assert page.locator('.pdf-page').count()==8
+    assert not page.locator('#local-notice').is_visible()
+    assert not page.locator('#status.error').count()
+    return 'real file access OFF; '+('visible local-PDF entry' if hidden else 'known URL + labeled filename')+' -> reader notice + primary chooser; empty status; details tab; fixture selected and rendered without permissions'
+
+
+def pdf_local_known_no_access(h):
+    return pdf_local_no_access(h,hidden=False)
 
 
 def pdf_handoff(h):
@@ -709,6 +778,8 @@ def main():
     run.mkdir(parents=True)
     ext, missing = e2e.stage_extension(run)
     assert not missing, missing
+    local_ext, missing = e2e.stage_extension(run/'local-no-hosts',fixture_hosts=False)
+    assert not missing, missing
     e2e.ARTIFACTS = e2e.E2E_ROOT / 'artifacts' / 'pdf'
     e2e.ARTIFACTS.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(fixtures)))
@@ -727,13 +798,13 @@ def main():
         spec['eng']['url']=base+'/eng.traineddata'
         (ext/'offscreen/languages.json').write_text(json.dumps(spec),encoding='utf-8')
     results = []
-    cases = [('pdf_consent',pdf_consent), ('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt), ('pdf_export',pdf_export), ('pdf_export_cancel',pdf_export_cancel), ('pdf_export_consent',pdf_export_consent), ('pdf_ocr_cancel',pdf_ocr_cancel), ('pdf_scanned',pdf_scanned)]
+    cases = [('pdf_consent',pdf_consent), ('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_local_no_access',pdf_local_no_access), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt), ('pdf_export',pdf_export), ('pdf_export_cancel',pdf_export_cancel), ('pdf_export_consent',pdf_export_consent), ('pdf_ocr_cancel',pdf_ocr_cancel), ('pdf_scanned',pdf_scanned)]
     try:
         with e2e.sync_playwright() as p:
-            for name, case in cases:
+            for name, case in [*cases, ('pdf_local_known_no_access',pdf_local_known_no_access)]:
                 if args.only and not any(o in name for o in args.only):
                     continue
-                result = e2e.run_case(p, name, case, ext, base)
+                result = e2e.run_case(p, name, case, local_ext if name=='pdf_local_no_access' else ext, base)
                 results.append(result)
                 print(result['status'], name + ':', result.get('detail', ''), flush=True)
         (e2e.ARTIFACTS / 'last-run.json').write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')

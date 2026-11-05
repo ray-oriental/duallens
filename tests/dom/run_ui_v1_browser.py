@@ -19,6 +19,7 @@ MOCK = r"""(() => {
  const data={},listeners=new Set(); window.uiData=data;window.uiMessages=[];
  const area={async get(keys){return keys===null?structuredClone(data):Object.fromEntries((Array.isArray(keys)?keys:[keys]).filter(k=>k in data).map(k=>[k,structuredClone(data[k])]))},async set(items){Object.assign(data,structuredClone(items));for(const cb of listeners)cb(Object.fromEntries(Object.keys(items).map(k=>[k,{}])),'local')},async remove(keys){for(const k of keys)delete data[k]}};
  window.chrome={storage:{local:area,sync:area,onChanged:{addListener:cb=>listeners.add(cb),removeListener:cb=>listeners.delete(cb)}},commands:{async getAll(){return[{name:'toggle-page',shortcut:'Alt+A'}]}},tabs:{async query(){return[{id:7,url:'https://docs.example.com/guide/intro'}]},async sendMessage(id,msg){uiMessages.push(msg.type);if(msg.type==='get-state')return window.uiState;if(msg.type==='command'){uiState={...uiState,translated:!uiState.translated};return{ok:true}}},async create(){}},permissions:{async request(){uiMessages.push("permission-request");return window.allowPermission},async contains(){return false}},runtime:{async sendMessage(msg){uiMessages.push(msg.type);return msg.type==='tab-ensure'?{ok:true,injected:true}:{ok:true,available:false}},getURL:p=>'/extension/'+p}};
+ window.chrome.extension={async isAllowedFileSchemeAccess(){return false}};
  window.uiState={translated:false,done:0,pending:0,failed:0};window.allowPermission=false;
 })();"""
 
@@ -196,6 +197,36 @@ def main():
                 popup.screenshot(path=str(artifact/f'popup-path-{theme}.png'))
             checks += 1
             print('PASS popup_states: onboarding/default/translated/path, <=600px, tab-ensure ready contract, denied permission remains off')
+            review=e2e.E2E_ROOT/'review2'
+            review.mkdir(parents=True,exist_ok=True)
+            heights=[]
+            for language in ['zh-CN','en']:
+                hidden=h.ctx.new_page()
+                hidden.set_viewport_size({'width':360,'height':600})
+                hidden.on('pageerror',lambda err:errors.append(str(err)))
+                hidden.add_init_script(MOCK+"\n"+r"""
+                  uiData['ui.device']={onboarded:true,acked:[],upgradeNoticeSeen:true};
+                  chrome.tabs.query=async()=>[{id:7}];
+                """+f"uiData.settings={{version:3,uiLanguage:{json.dumps(language)}}};")
+                for theme in ['light','dark']:
+                    hidden.emulate_media(color_scheme=theme)
+                    hidden.goto(base+'/extension/ui/popup.html')
+                    local=hidden.locator('#pdf-local-open')
+                    local.wait_for()
+                    assert local.inner_text()==('打开本地 PDF' if language=='zh-CN' else 'Open a local PDF')
+                    assert local.get_attribute('class')=='dl-text-button'
+                    assert hidden.locator('#pdf-open,#pdf-local-help').count()==0
+                    assert abs(local.bounding_box()['x']-hidden.locator('#page-status').bounding_box()['x'])<=1
+                    height=hidden.locator('.dl-popup').bounding_box()['height']
+                    heights.append(f'{language}/{theme}={height:g}px')
+                    if language=='zh-CN':
+                        hidden.locator('.dl-popup').screenshot(path=str(review/f'popup-{theme}.png'))
+                    assert height<=600,f'local PDF popup {language}/{theme} {height}px > 600px'
+                    local.click()
+                    assert 'pdf-open-local' in hidden.evaluate('uiMessages')
+                hidden.close()
+            checks+=1
+            print('PASS popup_local_pdf: visible aligned text entry, no disclosure, '+', '.join(heights))
             # An older background (files changed under a developer-mode install) does not answer tab-ensure:
             # the popup asks for one reload instead of claiming the page cannot be translated.
             stale = h.ctx.new_page()

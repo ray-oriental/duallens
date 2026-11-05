@@ -235,7 +235,7 @@ provider 的可选 `onBaseUrl` 回调、保存规范化、错误分类和异步�
   广播 `{type:'frame-state',state:{active,settings,context,confirmedDestinations}}`，携带 `confirmedDestinations:string[]` 字段。顶层忽略广播，仅子 frame 代理接收。
   同源/开放 ShadowRoot 扫描、跨域代理、事件驱动可见性与用户脚本限制见 PLATFORMS.md 的 iframe 增量。
 
-- PDF 的 `pdf-status` / `pdf-open` 仅接受扩展页面，使用实际标签页 URL，仅在显式入口探测；后台在点击时以 activeTab 匿名取回字节，存扩展 IndexedDB，以 `?token=<uuid>` 交给阅读器原子读取并删除（64 MiB / 30 秒 / 五分钟有效，至多三份未读记录）；其他 `?file=` 来源须在阅读器按钮手势申请来源权限；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
+- PDF 的 `pdf-status` / `pdf-open` / `pdf-open-local` 仅接受扩展页面，使用实际标签页 URL，仅在显式入口探测；`pdf-status` 对本地 PDF 返回 `requiresFileSelection`。没有文件权限时 `pdf-open` 直接进入带说明的本地选择器，不取字节；`pdf-open-local` 是用户显式打开选择器的入口，不将隐藏地址当作 PDF 证据。有权限时后台在点击中以 activeTab 匿名取回字节，存扩展 IndexedDB，以 `?token=<uuid>` 交给阅读器原子读取并删除（64 MiB / 30 秒 / 五分钟有效，至多三份未读记录）；其他 `?file=` 来源须在阅读器按钮手势申请来源权限；阅读页不进入用户脚本。限制和数据流见 [PDF.md](PDF.md)。
 - PDF 阅读页默认宽屏同尺寸双栏对照：原页画布复制为译文底图，原坐标抹底覆盖译文并拟合字号；另有仅译文页、原文页、重排阅读。公式/图像/边距标识保留原像素，行内公式用本地裁图替换 `<xN/>`。文本分块在本地 Worker 中完成，翻译限视口与相邻页，经 `TranslatorService.translateBatch` 发送文本与公式占位符，不发送文件、图片、URL 或元数据。PDF 消费端支持可选的 `draft:true,purpose:'pdf'` 和同 id 的 `stage:'draft'/'final'` 回调；无 stage 当终稿，恢复取消并屏蔽旧请求结果。共享引擎/端口阶段传输需另外集成验收。
 - `open-sidepanel` / Alt+S 打开桌面文本侧栏；用户脚本用 `platform.openTextTranslation()` 打开原面板页签。
 - `platform.subtitles = { observe(callback), fetchTrack(url,{signal}) }` 注入受限 YouTube 取轨能力。`subtitle-track` / `subtitle-track-cancel` 只处理当前顶层 YouTube 视频的轨道；见 [SUBTITLES.md](SUBTITLES.md)。
