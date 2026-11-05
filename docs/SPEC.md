@@ -92,6 +92,14 @@ custom 中 page:always 改 default、交互 on 改 off；保留 never、路径�
 
 需要改别人的文件时，联系文件维护者，不要自己改。契约文件改动需要接口维护者复审。
 
+### 本地 PDF 初始设置（仅扩展）
+
+`ui.device` 新增可省略的本机字段 `onboardStep`（整数 1–4，其他值省略）与 `onboardAI`（仅在有效进度下保留 `true`，用于恢复所选 AI 设置入口）。完成或跳过初始设置时同时清除；已完成状态在 normalize 时不保留进度。不进同步、配置导出或用户脚本设置。
+
+扩展入口通过可选 `platform.localPDF` 注入 `allowed(): Promise<boolean>`、`openDetails(): Promise<Tab>`、`title`、`choices(body, enabled, change)` 和 `status(allowed)`。浏览器 API 与文件访问文案组件只由扩展入口导入。扩展未开启时总共四步，其余为三步；跳转前保存 `onboardStep:4`，重新打开时将进度限制在当前总步数，从准备就绪继续。步骤标签使用两个占位符，保留旧 `mj1`。
+
+设置入口由扩展 options 在「数据与隐私」挂载；`focus` / `visibilitychange` 时重查文件访问，卸载移除监听器。只打开当前安装的 `chrome://extensions/?id=<runtime id>`，不代为授权，不增加 manifest 权限或文件主机权限。
+
 ## 3. 设置 v3 与 secrets（`extension/shared/settings.js`）
 
 统一入口 `createSettingsStore({ syncArea, localArea })`，返回 `load()`、`save(patch)`、`getSecret(id)`、

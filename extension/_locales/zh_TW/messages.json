@@ -3272,5 +3272,55 @@
   },
   "pdfFileLabel": {
     "message": "文件："
+  },
+  "uxOnboardStep": {
+    "message": "$p1$/$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "uxLocalPDF": {
+    "message": "本地 PDF"
+  },
+  "uxLocalPDFIntro": {
+    "message": "在浏览器里打开电脑上的 PDF 后，点 DualLens 即可直接打开。只有你在本地 PDF 上点 DualLens 时才会读取那一个文件，文件不会上传。浏览器只允许你在扩展详情页开启文件访问。"
+  },
+  "uxLocalPDFEnable": {
+    "message": "开启"
+  },
+  "uxLocalPDFEnableHint": {
+    "message": "打开扩展详情页，开启「允许访问文件网址」（Edge 中为「允许访问文件 URL」）。"
+  },
+  "uxLocalPDFLater": {
+    "message": "暂不开启"
+  },
+  "uxLocalPDFLaterHint": {
+    "message": "以后打开本地 PDF 时，也可以在 DualLens 阅读器里选择文件；随时可以在设置里开启。"
+  },
+  "uxLocalPDFReadyOn": {
+    "message": "本地 PDF：已开启。"
+  },
+  "uxLocalPDFReadyOff": {
+    "message": "本地 PDF：未开启，可在设置里开启。"
+  },
+  "uxLocalPDFOn": {
+    "message": "已开启"
+  },
+  "uxLocalPDFOff": {
+    "message": "未开启"
+  },
+  "uxLocalPDFUnknown": {
+    "message": "暂时无法读取状态"
+  },
+  "uxLocalPDFSettingsHint": {
+    "message": "在浏览器里打开本地 PDF 后，点 DualLens 即可一键打开；文件仅在本机读取，不会上传。"
+  },
+  "uxLocalPDFDetails": {
+    "message": "打开扩展详情页"
   }
 }
