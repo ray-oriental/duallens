@@ -30,7 +30,12 @@ def extension(pw,ext,base,locale):
         for theme in ['light','dark']:
             popup.emulate_media(color_scheme=theme);shot(popup,f'{locale}-{theme}-onboarding')
             check(popup.locator('#onboard-next').bounding_box()['x']>180,'first Next must be on the right')
-        for _ in range(3):popup.locator('#onboard-next').click()
+        total=int(popup.locator('.dl-step').inner_text().split('/')[-1])
+        check(total in [3,4],'onboarding step count mismatch')
+        for step in range(1,total+1):
+            popup.locator('.dl-step').filter(has_text=f'{step}/{total}').wait_for()
+            check(popup.locator('.dl-step').inner_text()==f'{step}/{total}','onboarding step label mismatch')
+            popup.locator('#onboard-next').click()
         popup.locator('#toggle:not([disabled])').wait_for()
         for theme in ['light','dark']:
             popup.emulate_media(color_scheme=theme)

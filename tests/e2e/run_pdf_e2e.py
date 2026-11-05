@@ -623,8 +623,19 @@ def read_export(page, path):
     return info
 
 
+TOOLBAR_LAYOUT="()=>({header:document.querySelector('header').offsetHeight,pages:Math.round(document.querySelector('#pdf-pages').getBoundingClientRect().top)})"
+
+
 def pdf_export(h):
     page, errors = viewer(h,h.base+'/math-notes.pdf','side')
+    before=page.evaluate(TOOLBAR_LAYOUT)
+    page.click('#export-pdf');page.locator('#export-panel').wait_for(state='visible')
+    assert page.evaluate(TOOLBAR_LAYOUT)==before,'export dropdown must float over the pages, not grow the toolbar'
+    assert page.get_attribute('#export-pdf','aria-expanded')=='true'
+    page.keyboard.press('Escape');assert page.locator('#export-panel').is_hidden()
+    assert page.get_attribute('#export-pdf','aria-expanded')=='false'
+    page.click('#export-pdf');page.click('#pdf-pages',position={'x':8,'y':200})
+    assert page.locator('#export-panel').is_hidden(),'a click on the pages closes the dropdown'
     page.click('#export-pdf');page.select_option('#export-scope','range')
     page.fill('#export-range','0, 2-1');page.click('#export-start')
     assert '页码无效' in page.locator('#export-status').inner_text()
@@ -648,7 +659,7 @@ def pdf_export(h):
     assert len(info)==1 and info[0]['view']==[0,0,612,792] and info[0]['images']==1,info
     assert not errors,errors
     assert page.locator('.export-sheet').count()==0
-    return 'real PDF downloads: bilingual 1224x792 / 2 images; translated 612x792 / 1 image; PDF.js render + pixel difference; strict range validation; math original pixels retained'
+    return 'export dropdown floats (toolbar height unchanged; Escape and page click close it); real PDF downloads: bilingual 1224x792 / 2 images; translated 612x792 / 1 image; PDF.js render + pixel difference; strict range validation; math original pixels retained'
 
 
 def pdf_export_cancel(h):
@@ -737,8 +748,10 @@ def pdf_scanned(h):
     downloads=lambda:[r for r in Handler.requests if r['path']=='/eng.traineddata']
     page,errors=viewer(h,h.base+'/scanned-notes.pdf','side')
     assert not page.locator('#ocr-panel').is_visible()
+    before=page.evaluate(TOOLBAR_LAYOUT)
     page.click('#ocr-toggle')
     page.locator('#ocr-panel').wait_for(state='visible')
+    assert page.evaluate(TOOLBAR_LAYOUT)==before,'OCR dropdown must float over the pages, not grow the toolbar'
     wait_for(page,"()=>!document.querySelector('#ocr-start').disabled")
     assert page.locator('.textLayer span').count()==0
     assert not downloads() and page.locator('.tb').count()==0
@@ -751,6 +764,7 @@ def pdf_scanned(h):
     assert any('GARDEN' in text or 'LEAVES' in text or 'NOTES' in text for text in texts),texts
     assert len(downloads())==1,downloads()
     wait_for(page,"()=>!document.querySelector('#ocr-start').disabled")
+    assert page.locator('#ocr-panel').is_hidden(),'successful OCR closes its dropdown'
     page.click('#export-pdf')
     with page.expect_download(timeout=60000) as pending:
         page.click('#export-start')
@@ -761,7 +775,7 @@ def pdf_scanned(h):
     assert len(downloads())==1,'verified OCR language cache not reused'
     assert not errors,errors
     page.screenshot(path=str(e2e.ARTIFACTS/'pdf-ocr.png'))
-    return 'original image-only 2-page fixture; zero pre-confirmation downloads; pinned English pack size+SHA256; real Tesseract OCR + mock translation; sequential OCR export PDF.js readback; pack reused'
+    return 'OCR dropdown floats and closes after recognition; original image-only 2-page fixture; zero pre-confirmation downloads; pinned English pack size+SHA256; real Tesseract OCR + mock translation; sequential OCR export PDF.js readback; pack reused'
 
 
 def main():

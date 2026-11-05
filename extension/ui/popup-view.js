@@ -14,14 +14,19 @@ import { createFeedback } from './forms/feedback.js';
 import { shortcutFor } from './shortcuts.js';
 const EXTRA = { get revoked(){return l10n('mi4');},
   get pdf(){return l10n('m18');}, get images(){return l10n('mi5');} };
-const T=Object.freeze({title:'DualLens',get text(){return l10n('ma6');},get settings(){return l10n('m4n');},get translate(){return l10n('m4c');},get original(){return l10n('m4d');},get restricted(){return l10n('mi7');},get stale(){return l10n('popupStale');},get reload(){return l10n('popupReload');},get mode(){return l10n('me1');},get bilingual(){return l10n('me2');},get translation(){return l10n('m4f');},get target(){return l10n('mi9');},get to(){return l10n('mia');},get site(){return l10n('m4g');},get demand(){return l10n('m4h');},get always(){return l10n('m4i');},get never(){return l10n('m4j');},get enhance(){return l10n('mh4');},get skip(){return l10n('mig');},get next(){return l10n('mih');},get back(){return l10n('mii');},get start(){return l10n('mij');},get languageTitle(){return l10n('mik');},get languageHint(){return l10n('mil');},get browser(){return l10n('mim');},get engineTitle(){return l10n('min');},get engineHint(){return l10n('mio');},get free(){return l10n('mip');},get freeHint(){return l10n('miq');},get ai(){return l10n('mir');},get aiHint(){return l10n('mis');},get ready(){return l10n('mit');},get tips(){return [l10n('miu'),l10n('miv'),l10n('miw')];},get mobile(){return l10n('mix');},get upgrade(){return l10n('miy');},get understood(){return l10n('miz');},get failure(){return l10n('mj0');},step:n=>l10n('mj1', [n]),shortcut:(label,key)=>l10n('lookShortcut',[label,key]),progress:(done,pending,failed,refining)=>l10n('mj5', [done, refining?l10n('mj2', [refining]):'', pending?l10n('mj3', [pending]):'', failed?l10n('mj4', [failed]):''])});
+const T=Object.freeze({title:'DualLens',get text(){return l10n('ma6');},get settings(){return l10n('m4n');},get translate(){return l10n('m4c');},get original(){return l10n('m4d');},get restricted(){return l10n('mi7');},get stale(){return l10n('popupStale');},get reload(){return l10n('popupReload');},get mode(){return l10n('me1');},get bilingual(){return l10n('me2');},get translation(){return l10n('m4f');},get target(){return l10n('mi9');},get to(){return l10n('mia');},get site(){return l10n('m4g');},get demand(){return l10n('m4h');},get always(){return l10n('m4i');},get never(){return l10n('m4j');},get enhance(){return l10n('mh4');},get skip(){return l10n('mig');},get next(){return l10n('mih');},get back(){return l10n('mii');},get start(){return l10n('mij');},get languageTitle(){return l10n('mik');},get languageHint(){return l10n('mil');},get browser(){return l10n('mim');},get engineTitle(){return l10n('min');},get engineHint(){return l10n('mio');},get free(){return l10n('mip');},get freeHint(){return l10n('miq');},get ai(){return l10n('mir');},get aiHint(){return l10n('mis');},get ready(){return l10n('mit');},get tips(){return [l10n('miu'),l10n('miv'),l10n('miw')];},get mobile(){return l10n('mix');},get upgrade(){return l10n('miy');},get understood(){return l10n('miz');},get failure(){return l10n('mj0');},step:(n,total)=>l10n('uxOnboardStep', [n,total]),shortcut:(label,key)=>l10n('lookShortcut',[label,key]),progress:(done,pending,failed,refining)=>l10n('mj5', [done, refining?l10n('mj2', [refining]):'', pending?l10n('mj3', [pending]):'', failed?l10n('mj4', [failed]):''])});
 // Popup rows use the shortest unambiguous names; Settings keeps the full ones with descriptions.
 const ROW=Object.freeze({get floatBall(){return l10n('mau');},get selection(){return l10n('polishSelectionShort');},get input(){return l10n('polishInputShort');},get subtitles(){return l10n('polishSubtitlesShort');}});
 const hoverRow=(s,coarse)=>coarse?l10n('lookLongPress'):s.hover.modifier==='none'?l10n('polishHoverShort'):l10n('lookHoverRow',[s.hover.modifier==='Control'?'Ctrl':s.hover.modifier]);
 
+export const onboardingStepCount=(kind,fileAccess)=>kind==='extension'&&!fileAccess?4:3;
+
 export async function mountPopup(root,{store,platform,localArea=platform.localArea,url='',pageMessage,onSettings=()=>platform.openSettings(),onText=()=>platform.openTextTranslation?.(),commands=[],shortcut='',restricted=false,stale=false,accessError,onReload=()=>{},pdfAvailable=false,onPDF,pdfLocalHelp=false,onPDFLocal}) {
   const doc=root.ownerDocument,el=(tag,text,attrs)=>element(doc,tag,text,attrs),box=el('div',null,{class:'dl-theme dl-popup',lang:uiLanguage()}),style=el('style',SHARED_CSS+POPUP_CSS);box.append(style);root.append(box);
   let s=await store.load(),device=await loadDeviceState(localArea),closed=false,step=1,ai=false,state=null,refreshing=false,poll,acting=false,redraw=false;
+  const localPDF=platform.kind==='extension'?platform.localPDF:null;
+  const fileAccess=localPDF?await localPDF.allowed().catch(()=>false):true,total=onboardingStepCount(platform.kind,fileAccess);
+  step=Math.min(device.onboardStep||1,total);ai=device.onboardAI===true;let enableFile=false;
   const feedback=el('div',null,{id:'status',class:'dl-feedback dl-status',role:'status','aria-live':'polite'}),actions=createFeedback(box);
   const revoked=(await localArea.get('ui.permissionsRevoked'))['ui.permissionsRevoked'];
   const revokedText=()=>revoked?.features?.length?EXTRA.revoked:'';
@@ -42,19 +47,24 @@ export async function mountPopup(root,{store,platform,localArea=platform.localAr
   }
   const button=(text,fn,attrs={})=>{const b=el('button',text,{type:'button',...attrs});b.addEventListener('click',()=>perform(b,fn));return b;};
   async function persist(patch){s=await store.save(patch);if(!closed)draw();}
-  async function finish(skip=false){device=await updateDeviceState(localArea,{onboarded:true,upgradeNoticeSeen:true});if(closed)return;draw();if(ai&&!skip)onSettings('ai');}
+  async function finish(skip=false){device=await updateDeviceState(localArea,{onboarded:true,upgradeNoticeSeen:true,onboardStep:undefined,onboardAI:undefined});if(closed)return;draw();if(ai&&!skip)onSettings('ai');}
   const languages=(value,change,id)=>{const select=el('select',null,{'aria-label':T.target,id});for(const l of LANGS)select.append(el('option',l.name,{value:l.code}));select.value=value;select.addEventListener('change',()=>run(()=>change(select.value)));return select;};
   const switchRow=(name,id,checked,onChange,hint='')=>{const row=el('label',null,{class:'feature-row'}),input=el('input',null,{type:'checkbox',role:'switch',id});input.checked=checked;if(hint)row.title=hint;input.addEventListener('change',()=>run(()=>onChange(input)));row.append(el('span',name),input);return row;};
   function onboarding(){
     box.classList.add('dl-onboarding');
-    const head=el('header',null,{class:'dl-head'});head.append(el('span',T.step(step),{class:'dl-step'}),button(T.skip,()=>finish(true),{class:'dl-text-button',id:'onboard-skip'}));
-    const body=el('div',null,{class:'dl-onboard-body'});body.append(el('h2',step===1?T.languageTitle:step===2?T.engineTitle:T.ready));box.append(head,body);
+    const head=el('header',null,{class:'dl-head'});head.append(el('span',T.step(step,total),{class:'dl-step'}),button(T.skip,()=>finish(true),{class:'dl-text-button',id:'onboard-skip'}));
+    const body=el('div',null,{class:'dl-onboard-body'});body.append(el('h2',step===1?T.languageTitle:step===2?T.engineTitle:step<total?localPDF.title:T.ready));box.append(head,body);
     if(step===1)body.append(el('p',T.languageHint),languages(s.targetLang,async value=>{s=await store.save({targetLang:value});},'onboard-language'),el('p',T.browser,{class:'dl-hint'}));
     if(step===2){body.append(el('p',T.engineHint));const list=el('div',null,{class:'dl-choices',role:'radiogroup','aria-label':T.engineTitle});for(const [value,title,hint]of[['mt',T.free,T.freeHint],['ai',T.ai,T.aiHint]]){const row=el('label',null,{class:'dl-choice'}),input=el('input',null,{type:'radio',name:'onboard-engine',value});input.checked=(value==='ai')===ai;input.addEventListener('change',()=>{ai=value==='ai';});const content=el('span',title);content.append(el('small',hint));row.append(input,content);list.append(row);}body.append(list);}
-    if(step===3){const tips=el('ul',null,{class:'dl-tips'}),start=shortcut?l10n('uxStartShortcut',[shortcut]):l10n('uxStartButton');for(const tip of [start,...T.tips.slice(1),...platform.kind!=='extension'?[T.mobile]:[]])tips.append(el('li',tip));body.append(tips);}
-    const actions=el('div',null,{class:'dl-actions'});if(step>1)actions.append(button(T.back,()=>{step--;draw();},{class:'dl-text-button',id:'onboard-back'}));actions.append(button(step===3?T.start:T.next,async()=>{
+    if(step===3&&total===4)localPDF.choices(body,enableFile,value=>{enableFile=value;});
+    if(step===total){const tips=el('ul',null,{class:'dl-tips'}),start=shortcut?l10n('uxStartShortcut',[shortcut]):l10n('uxStartButton');for(const tip of [start,...T.tips.slice(1),...platform.kind!=='extension'?[T.mobile]:[]])tips.append(el('li',tip));if(localPDF)tips.append(el('li',localPDF.status(fileAccess)));body.append(tips);}
+    const actions=el('div',null,{class:'dl-actions'});if(step>1)actions.append(button(T.back,()=>{step--;draw();},{class:'dl-text-button',id:'onboard-back'}));actions.append(button(step===total?T.start:T.next,async()=>{
       if(step===2&&!ai){s=await store.save({translation:{mode:'mt+llm',mt:{engine:'microsoft',fallback:true}},provider:{active:'',chain:[]}});await acknowledge(localArea,mtDestination('microsoft'));await acknowledge(localArea,mtDestination('google'));}
-      if(step===3)await finish();else{step++;draw();}
+      if(step===3&&total===4&&enableFile){
+        device=await updateDeviceState(localArea,{onboardStep:4,onboardAI:ai});
+        await localPDF.openDetails();
+      }
+      if(step===total)await finish();else{step++;draw();}
     },{class:'primary',id:'onboard-next'}));box.append(actions);queueMicrotask(()=>box.querySelector('#onboard-next')?.focus());
   }
   function draw(){if(closed)return;if(acting){redraw=true;return;}setUiLanguage(s.uiLanguage);localize(root);

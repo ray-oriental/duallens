@@ -55,8 +55,9 @@ def shot(page, name, header=False):
         }""")
         assert all(item['ratio'] >= 4.5 for item in contrast), contrast
     if header:
-        box = page.locator('header').bounding_box()
-        page.screenshot(path=str(OUT / (name + '.png')), clip={'x': 0, 'y': 0, 'width': page.viewport_size['width'], 'height': box['height'] + 24})
+        # An open export / OCR dropdown floats below the toolbar; keep it in the clip.
+        bottom = page.evaluate("()=>Math.max(...[...document.querySelectorAll('header, .pdf-popover:not([hidden])')].map(e=>e.getBoundingClientRect().bottom))")
+        page.screenshot(path=str(OUT / (name + '.png')), clip={'x': 0, 'y': 0, 'width': page.viewport_size['width'], 'height': min(bottom + 24, page.viewport_size['height'])})
     else:
         page.screenshot(path=str(OUT / (name + '.png')))
     print('shot', name, flush=True)
@@ -114,7 +115,7 @@ def run(p, ext, base):
         page.click('#export-pdf')
         if not args.before:
             assert page.locator('button.primary:visible').count() == 1
-            assert page.locator('#export-panel').evaluate("e=>getComputedStyle(e).boxShadow") == 'none'
+            assert page.locator('#export-panel').evaluate("e=>getComputedStyle(e).position") == 'absolute'
         shot(page, '04-export-open')
         page.select_option('#export-scope', 'range')
         page.fill('#export-range', '1-3')

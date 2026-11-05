@@ -58,9 +58,9 @@ def popup_case(ctx, base, language, bound):
     page.add_init_script(init)
     page.goto(base + '/extension/ui/popup.html')
     page.locator('#onboard-next').wait_for()
-    for step in range(1, 4):
+    for step in range(1, 5):
         page.screenshot(path=str(OUT / f'{language}-onboard-{step}.png'))
-        if step == 3:
+        if step == 4:
             tips = page.locator('.dl-tips').inner_text()
             assert ('Ctrl+Shift+Y' in tips) == bool(bound)
             assert 'Alt+A' not in tips

@@ -3272,5 +3272,55 @@
   },
   "pdfFileLabel": {
     "message": "File:"
+  },
+  "uxOnboardStep": {
+    "message": "$p1$/$p2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "uxLocalPDF": {
+    "message": "Local PDFs"
+  },
+  "uxLocalPDFIntro": {
+    "message": "Open a PDF on your computer in the browser, then click DualLens to open it directly. DualLens reads only that file when you click it on a local PDF; the file is never uploaded. Only you can enable file URL access on the extension details page."
+  },
+  "uxLocalPDFEnable": {
+    "message": "Enable"
+  },
+  "uxLocalPDFEnableHint": {
+    "message": "Open extension details and turn on “Allow access to file URLs”."
+  },
+  "uxLocalPDFLater": {
+    "message": "Not now"
+  },
+  "uxLocalPDFLaterHint": {
+    "message": "You can still choose a file in the DualLens reader when opening local PDFs, or enable access later in Settings."
+  },
+  "uxLocalPDFReadyOn": {
+    "message": "Local PDFs: enabled."
+  },
+  "uxLocalPDFReadyOff": {
+    "message": "Local PDFs: not enabled; enable in Settings anytime."
+  },
+  "uxLocalPDFOn": {
+    "message": "Enabled"
+  },
+  "uxLocalPDFOff": {
+    "message": "Not enabled"
+  },
+  "uxLocalPDFUnknown": {
+    "message": "Status unavailable"
+  },
+  "uxLocalPDFSettingsHint": {
+    "message": "Open local PDFs directly by clicking DualLens in the browser; files are read on your device and never uploaded."
+  },
+  "uxLocalPDFDetails": {
+    "message": "Open extension details"
   }
 }

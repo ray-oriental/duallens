@@ -4,6 +4,7 @@ import { t as l10n } from '../shared/i18n.js';
 import { getDefaultSettingsStore } from '../shared/settings.js';
 import { chromeStorageArea } from '../shared/storage-areas.js';
 import { mountPopup } from './popup-view.js';
+import { localPDFAccess } from './local-pdf-access.js';
 import { pdfPopupState } from './pdf-entry.js';
 const TEXT={get failed(){return l10n('mj6');}};
 try {
@@ -24,7 +25,7 @@ try {
   if(pdf?.available)accessError=ERR.RESTRICTED;
   const commands=await chrome.commands?.getAll?.()||[];
   const localArea=chromeStorageArea(chrome.storage.local,'local',chrome.storage.onChanged);
-  const view=await mountPopup(document.body,{store:getDefaultSettingsStore(),localArea,platform:{kind:'extension',localArea,reloadPage:()=>chrome.tabs.reload(tab.id)},url:tab?.url,restricted,stale,accessError,onReload:()=>chrome.runtime.reload(),
+  const view=await mountPopup(document.body,{store:getDefaultSettingsStore(),localArea,platform:{kind:'extension',localArea,localPDF:localPDFAccess(chrome),reloadPage:()=>chrome.tabs.reload(tab.id)},url:tab?.url,restricted,stale,accessError,onReload:()=>chrome.runtime.reload(),
     pdfLocalHelp:entry.localHelp,onPDFLocal:async()=>{
       const result=await chrome.runtime.sendMessage({type:'pdf-open-local',tabId:tab.id});
       if(!result?.ok)throw new Error(result?.error?.message||TEXT.failed);

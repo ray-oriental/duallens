@@ -19,9 +19,120 @@ MOCK = r"""(() => {
  const data={},listeners=new Set(); window.uiData=data;window.uiMessages=[];
  const area={async get(keys){return keys===null?structuredClone(data):Object.fromEntries((Array.isArray(keys)?keys:[keys]).filter(k=>k in data).map(k=>[k,structuredClone(data[k])]))},async set(items){Object.assign(data,structuredClone(items));for(const cb of listeners)cb(Object.fromEntries(Object.keys(items).map(k=>[k,{}])),'local')},async remove(keys){for(const k of keys)delete data[k]}};
  window.chrome={storage:{local:area,sync:area,onChanged:{addListener:cb=>listeners.add(cb),removeListener:cb=>listeners.delete(cb)}},commands:{async getAll(){return[{name:'toggle-page',shortcut:'Alt+A'}]}},tabs:{async query(){return[{id:7,url:'https://docs.example.com/guide/intro'}]},async sendMessage(id,msg){uiMessages.push(msg.type);if(msg.type==='get-state')return window.uiState;if(msg.type==='command'){uiState={...uiState,translated:!uiState.translated};return{ok:true}}},async create(){}},permissions:{async request(){uiMessages.push("permission-request");return window.allowPermission},async contains(){return false}},runtime:{async sendMessage(msg){uiMessages.push(msg.type);return msg.type==='tab-ensure'?{ok:true,injected:true}:{ok:true,available:false}},getURL:p=>'/extension/'+p}};
- window.chrome.extension={async isAllowedFileSchemeAccess(){return false}};
+  window.chrome.extension={async isAllowedFileSchemeAccess(){return false}};
+  window.chrome.runtime.id='fixture-extension';
+  window.chrome.runtime.getManifest=()=>({version:'1.2.0'});
  window.uiState={translated:false,done:0,pending:0,failed:0};window.allowPermission=false;
 })();"""
+
+
+def local_pdf_onboarding_cases(ctx, base):
+    review = e2e.E2E_ROOT.parent / 'onboard-file' / 'review'
+    review.mkdir(parents=True, exist_ok=True)
+    heights = []
+    for language in ['zh-CN', 'en']:
+        for theme in ['light', 'dark']:
+            page = ctx.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            page.set_viewport_size({'width': 360, 'height': 600})
+            page.emulate_media(color_scheme=theme)
+            page.add_init_script(MOCK + f"\nuiData.settings={{version:3,uiLanguage:{json.dumps(language)}}};")
+            page.goto(base + '/extension/ui/popup.html')
+            page.locator('#onboard-next').wait_for()
+            assert page.locator('.dl-step').inner_text() == '1/4'
+            page.click('#onboard-next'); page.click('#onboard-next')
+            page.locator('input[name="onboard-file-access"][value="off"]').wait_for()
+            assert page.locator('input[name="onboard-file-access"][value="off"]').is_checked()
+            assert page.locator('.dl-step').inner_text() == '3/4'
+            height = page.locator('.dl-popup').bounding_box()['height']
+            heights.append(f'{language}/{theme}={height:g}px')
+            assert height <= 600, heights[-1]
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            if language == 'zh-CN':
+                page.locator('.dl-popup').screenshot(path=str(review / f'onboard-local-pdf-{theme}.png'))
+            page.click('#onboard-next')
+            assert page.locator('.dl-step').inner_text() == '4/4'
+            assert ('未开启' if language == 'zh-CN' else 'not enabled') in page.locator('.dl-tips').inner_text()
+            if language == 'zh-CN':
+                page.locator('.dl-popup').screenshot(path=str(review / f'onboard-ready-{theme}.png'))
+            page.click('#onboard-next')
+            page.locator('#toggle').wait_for()
+            assert 'onboardStep' not in page.evaluate("uiData['ui.device']")
+            assert not errors, errors
+            page.close()
+    # A new popup reloads only the snapshot captured BEFORE tabs.create.
+    for allowed in [False, True]:
+        page = ctx.new_page()
+        page.add_init_script(MOCK + r"""
+          Object.assign(uiData,JSON.parse(sessionStorage.getItem('onboardSnapshot')||'{}'));
+          chrome.extension.isAllowedFileSchemeAccess=async()=>sessionStorage.getItem('fileAllowed')==='true';
+          chrome.tabs.create=async options=>{
+            window.openedDetails=options;
+            window.savedBeforeOpen=structuredClone(uiData['ui.device']);
+            sessionStorage.setItem('onboardSnapshot',JSON.stringify(uiData));
+          };
+        """)
+        page.goto(base + '/extension/ui/popup.html')
+        page.click('#onboard-next')
+        page.locator('input[name="onboard-engine"][value="ai"]').check()
+        page.click('#onboard-next')
+        page.locator('input[name="onboard-file-access"][value="on"]').check()
+        page.click('#onboard-next')
+        assert page.evaluate('openedDetails.url') == 'chrome://extensions/?id=fixture-extension'
+        assert page.evaluate('savedBeforeOpen.onboardStep') == 4
+        assert page.evaluate('savedBeforeOpen.onboardAI') is True
+        assert not page.evaluate('savedBeforeOpen.onboarded')
+        page.evaluate('v=>sessionStorage.setItem("fileAllowed",v)', str(allowed).lower())
+        page.reload()
+        page.locator('.dl-tips').wait_for()
+        assert page.locator('.dl-step').inner_text() == ('3/3' if allowed else '4/4')
+        assert ('本地 PDF：已开启' if allowed else '本地 PDF：未开启') in page.locator('.dl-tips').inner_text()
+        if allowed:
+            page.click('#onboard-next')
+            page.wait_for_function("openedDetails.url.endsWith('ui/options.html#ai')")
+        else:
+            page.click('#onboard-skip'); page.locator('#toggle').wait_for()
+        assert 'onboardStep' not in page.evaluate("uiData['ui.device']")
+        assert 'onboardAI' not in page.evaluate("uiData['ui.device']")
+        page.close()
+    page = ctx.new_page()
+    page.add_init_script(MOCK + '\nchrome.extension.isAllowedFileSchemeAccess=async()=>true;')
+    page.goto(base + '/extension/ui/popup.html')
+    for step in range(1, 4):
+        assert page.locator('.dl-step').inner_text() == f'{step}/3'
+        assert page.locator('input[name="onboard-file-access"]').count() == 0
+        page.click('#onboard-next')
+    page.locator('#toggle').wait_for(); page.close()
+    # Extension-only options entry refreshes after either return event.
+    page = ctx.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.add_init_script(MOCK + r"""
+      window.fileAllowed=false;
+      chrome.extension.isAllowedFileSchemeAccess=async()=>fileAllowed;
+      chrome.tabs.create=async options=>window.openedDetails=options;
+      const send=chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage=async msg=>msg.type==='comic-languages-list'?{ok:true,languages:[]}:send(msg);
+    """)
+    page.goto(base + '/extension/ui/options.html#data')
+    page.locator('#local-pdf-status').filter(has_text='未开启').wait_for()
+    for theme in ['light', 'dark']:
+        page.emulate_media(color_scheme=theme)
+        page.locator('[data-group="data"]').screenshot(path=str(review / f'settings-local-pdf-{theme}.png'))
+    page.click('#local-pdf-details')
+    assert page.evaluate('openedDetails.url') == 'chrome://extensions/?id=fixture-extension'
+    page.evaluate("fileAllowed=true;window.dispatchEvent(new Event('focus'))")
+    page.wait_for_function("document.querySelector('#local-pdf-status').textContent==='已开启'")
+    page.evaluate("fileAllowed=false;document.dispatchEvent(new Event('visibilitychange'))")
+    page.wait_for_function("document.querySelector('#local-pdf-status').textContent==='未开启'")
+    page.click('nav a[href="#common"]'); page.select_option('#uiLanguage', 'en')
+    page.click('nav a[href="#data"]')
+    page.locator('#local-pdf-details').filter(has_text='Open extension details').wait_for()
+    assert page.locator('#local-pdf-status').inner_text() == 'Not enabled'
+    assert not errors, errors
+    page.close()
+    print('PASS local_pdf_onboarding: four/three steps, default off, persisted before details, resume ready, AI intent, completion/skip cleanup, settings refresh; ' + ', '.join(heights))
 
 def main():
     artifact = Path(os.environ.get('DUALLENS_UI_ARTIFACTS', str(e2e.E2E_ROOT / 'v1' / 'ui')))
@@ -40,6 +151,8 @@ def main():
         try:
             h.start()
             h.sw_eval('async()=>{await chrome.storage.local.clear();await chrome.storage.sync.clear()}')
+            local_pdf_onboarding_cases(h.ctx, base)
+            checks += 1
             page = h.ctx.new_page()
             h.page = page
             page.set_viewport_size({'width': 1100, 'height': 900})
@@ -169,6 +282,8 @@ def main():
                 popup.screenshot(path=str(artifact/f'popup-onboarding-engine-{theme}.png'))
                 popup.click('#onboard-next')
                 assert 'mt:microsoft' in popup.evaluate("uiData['ui.device'].acked")
+                popup.click('#onboard-next')
+                assert popup.locator('.dl-step').inner_text() == '4/4'
                 popup.click('#onboard-next')
                 popup.locator('#toggle:not([disabled])').wait_for()
                 assert popup.evaluate('uiMessages.indexOf("tab-ensure")<uiMessages.indexOf("get-state")')
