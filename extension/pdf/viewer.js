@@ -848,9 +848,8 @@ function watchPages() {
 async function open(data) {
   exportJob?.abort(); ocrAction?.abort(); readerAbort.abort(); readerAbort = new AbortController();
   ocrEnabled = ocrPrompted = ocrReady = false; pdfLanguage=''; downloadAllowed.clear();
-  $('ocr-panel').hidden = true; $('ocr-status').textContent = ''; $('ocr-download').checked = false;
-  $('ocr-toggle').hidden=true;$('ocr-toggle').setAttribute('aria-expanded','false');
-  $('export-panel').hidden=true;$('export-pdf').setAttribute('aria-expanded','false');
+  setDropdown('ocr-panel', false); setDropdown('export-panel', false);
+  $('ocr-status').textContent = ''; $('ocr-download').checked = false; $('ocr-toggle').hidden = true;
   $('export-status').textContent='';$('export-scope').value='all';$('export-range').value='';$('export-long-confirm').checked=false;
   $('ocr-language').value = ocrLanguage(settings.sourceLang);
   const generation = ++epoch;
@@ -903,6 +902,37 @@ async function guarded(fn, request = sourceRequest) {
     if (request === sourceRequest) message(l10n('m7f'), true);
   }
 }
+
+// ---- export and OCR dropdowns --------------------------------------------------------------
+// Each floats over the pages under its own button (viewer.css .pdf-popover), so opening one never grows
+// the sticky toolbar. One at a time. Escape or the button closes it; a click on the toolbar or the pages
+// does too, except while its job runs, so progress stays in view.
+function dropdownAnchor(id) { return $(id === 'export-panel' ? 'export-pdf' : 'ocr-toggle'); }
+function openDropdown() { return ['export-panel', 'ocr-panel'].find(id => !$(id).hidden); }
+function dropdownBusy(id) { return id === 'export-panel' ? !!exportJob : !!ocrAction; }
+function placeDropdown(panel) {
+  const header = panel.closest('header'), box = header.getBoundingClientRect();
+  const anchor = dropdownAnchor(panel.id).getBoundingClientRect(), top = anchor.bottom - box.top + 4;
+  panel.style.top = top + 'px';
+  panel.style.left = Math.max(12, Math.min(anchor.left - box.left, header.clientWidth - panel.offsetWidth - 12)) + 'px';
+  panel.style.maxHeight = Math.max(160, innerHeight - Math.max(0, box.top + top) - 12) + 'px';
+}
+function setDropdown(id, open) {
+  if (open) for (const other of ['export-panel', 'ocr-panel']) if (other !== id) setDropdown(other, false);
+  $(id).hidden = !open; dropdownAnchor(id).setAttribute('aria-expanded', String(open));
+  if (open) placeDropdown($(id));
+}
+document.addEventListener('pointerdown', event => {
+  const id = openDropdown(), target = event.target;
+  if (!id || dropdownBusy(id) || $(id).contains(target) || dropdownAnchor(id).contains(target)) return;
+  if (target.closest?.('header,#pdf-pages')) setDropdown(id, false);
+});
+document.addEventListener('keydown', event => {
+  const id = openDropdown();
+  if (event.key !== 'Escape' || !id || event.defaultPrevented) return;
+  setDropdown(id, false); dropdownAnchor(id).focus();
+});
+window.addEventListener('resize', () => { const id = openDropdown(); if (id) placeDropdown($(id)); });
 
 // ---- local PDF OCR -------------------------------------------------------------------------
 function showOCR() {
@@ -981,10 +1011,7 @@ async function recognizePage(page, proxy, signal) {
   return page.ocrPending;
 }
 
-$('ocr-toggle').addEventListener('click',()=>{
-  $('ocr-panel').hidden=!$('ocr-panel').hidden;
-  $('ocr-toggle').setAttribute('aria-expanded',String(!$('ocr-panel').hidden));
-});
+$('ocr-toggle').addEventListener('click',()=>setDropdown('ocr-panel',$('ocr-panel').hidden));
 $('ocr-language').addEventListener('change',()=>{
   ocrEnabled=false;
   for(const page of pages)if(page.scan){page.ocrDone=false;page.ocrFailed=false;}
@@ -1006,7 +1033,8 @@ $('ocr-start').addEventListener('click',async()=>{
     const page=pages[currentPage()-1], proxy=await pdf.getPage(page.number);
     ocrEnabled=true;page.ocrDone=false;page.ocrFailed=false;
     await recognizePage(page,proxy,ctrl.signal);
-    if(!ctrl.signal.aborted){ await activate(); void pump(); }
+    // Recognized: the translated scan is the feedback, so the dropdown gets out of the way.
+    if(!ctrl.signal.aborted){ await activate(); void pump(); setDropdown('ocr-panel',false); }
   } catch { if(ctrl.signal.aborted){ocrEnabled=false;$('ocr-status').textContent=l10n('pdfExportCancelled');} }
   finally {
     if(ocrAction===ctrl)ocrAction=null;
@@ -1055,14 +1083,11 @@ function updateExportRange() {
   try { $('export-long').hidden=exportSelection().length<=50; }
   catch { $('export-long').hidden=true; }
 }
-$('export-pdf').addEventListener('click',()=>{
-  $('export-panel').hidden=!$('export-panel').hidden;
-  $('export-pdf').setAttribute('aria-expanded',String(!$('export-panel').hidden));updateExportRange();
-});
+$('export-pdf').addEventListener('click',()=>{updateExportRange();setDropdown('export-panel',$('export-panel').hidden);});
 $('export-scope').addEventListener('change',updateExportRange);
 $('export-range').addEventListener('input',updateExportRange);
 $('export-cancel').addEventListener('click',()=>{
-  if(exportJob)exportJob.abort();else{$('export-panel').hidden=true;$('export-pdf').setAttribute('aria-expanded','false');}
+  if(exportJob)exportJob.abort();else setDropdown('export-panel',false);
 });
 $('export-start').addEventListener('click',async()=>{
   if(!pdf || exportJob || ocrAction)return;
