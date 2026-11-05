@@ -1,3 +1,4 @@
+import { localPDFAccess, mountLocalPDFSettings } from './local-pdf-access.js';
 import { createFetchHttp } from '../platform/http.js';
 import { initUiLanguage, localize, t } from '../shared/i18n.js';
 import { getDefaultSettingsStore } from '../shared/settings.js';
@@ -24,7 +25,10 @@ const platform = {
 try {
   const offLanguage=await initUiLanguage(getDefaultSettingsStore(),document);
   window.addEventListener('pagehide',offLanguage,{once:true});
-  await mountSettingsForm(document.getElementById('settings-root'), { store: getDefaultSettingsStore(), platform });
+  const root = document.getElementById('settings-root');
+  await mountSettingsForm(root, { store: getDefaultSettingsStore(), platform });
+  const offPDF = mountLocalPDFSettings(root, localPDFAccess(chrome));
+  window.addEventListener('pagehide', offPDF, { once: true });
 } catch {
   document.getElementById('startup-status').hidden = false;
 }

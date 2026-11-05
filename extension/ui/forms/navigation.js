@@ -199,7 +199,7 @@ export const SETTINGS_CSS=`
 .dl-settings #provider-card{margin:4px 0 16px}
 .dl-settings .feature-details{margin-left:12px}
 .dl-settings .privacy-table :is(th,td){padding-right:8px}
-.dl-settings :is(.rule-row,.chain-row) button{min-height:44px}
+.dl-settings :is(.rule-row,.chain-row) button,.dl-settings #local-pdf-details{min-height:44px}
 }
 `;
 

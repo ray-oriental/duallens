@@ -8,6 +8,31 @@ function memoryArea() {
   return { data, get: async (k) => (k in data ? { [k]: data[k] } : {}), set: async (o) => { Object.assign(data, o); } };
 }
 
+test('onboarding progress accepts bounded integers, omits invalid fields and clears on completion', async () => {
+  const area = memoryArea();
+  for (const onboardStep of [1, 2, 3, 4]) {
+    area.data[DEVICE_STATE_KEY] = { onboardStep, onboardAI: true };
+    assert.equal((await loadDeviceState(area)).onboardStep, onboardStep);
+    assert.equal((await loadDeviceState(area)).onboardAI, true);
+  }
+  for (const onboardStep of [undefined, null, 0, -1, 5, 3.5, '4', true, NaN, Infinity, {}, []]) {
+    area.data[DEVICE_STATE_KEY] = { onboardStep, onboardAI: true };
+    assert.equal('onboardStep' in await loadDeviceState(area), false);
+    assert.equal('onboardAI' in await loadDeviceState(area), false);
+  }
+  for (const onboardAI of [false, 'true', 1, null, undefined]) {
+    area.data[DEVICE_STATE_KEY] = { onboardStep: 4, onboardAI };
+    assert.equal('onboardAI' in await loadDeviceState(area), false);
+  }
+  await updateDeviceState(area, { onboardStep: 4, onboardAI: true });
+  assert.equal((await loadDeviceState(area)).onboardStep, 4);
+  assert.equal('onboardStep' in await updateDeviceState(area, { onboardStep: undefined }), false);
+  await updateDeviceState(area, { onboardStep: 4, onboardAI: true });
+  const finished = await updateDeviceState(area, { onboarded: true });
+  assert.equal('onboardStep' in finished, false);
+  assert.equal('onboardAI' in finished, false);
+});
+
 test('device state defaults, normalizes and acknowledges each destination once', async () => {
   const area = memoryArea();
   assert.deepEqual(await loadDeviceState(area), { onboarded: false, acked: [], upgradeNoticeSeen: false });

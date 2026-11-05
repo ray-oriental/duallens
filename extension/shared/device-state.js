@@ -8,6 +8,7 @@ function normalize(raw) {
   const v = raw && typeof raw === 'object' ? raw : {};
   return {
     onboarded: v.onboarded === true,
+    ...(v.onboarded !== true && Number.isInteger(v.onboardStep) && v.onboardStep > 0 && v.onboardStep <= 4 ? { onboardStep: v.onboardStep, ...(v.onboardAI === true ? { onboardAI: true } : {}) } : {}),
     acked: Array.isArray(v.acked) ? [...new Set(v.acked.filter((x) => typeof x === 'string' && x.length <= 300))] : [],
     upgradeNoticeSeen: v.upgradeNoticeSeen === true,
   };
