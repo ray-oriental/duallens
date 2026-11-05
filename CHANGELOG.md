@@ -2,11 +2,11 @@
 
 ## [Unreleased]
 
-- PDF reader: "Export PDF" and "Recognize text (local OCR)" open as dropdowns that float over the pages instead of growing the sticky toolbar; Escape or a click on the toolbar or pages closes them (not while a job runs), and OCR closes its dropdown after recognizing the page.
-
-- Add an optional local PDF file-access choice during extension setup, resume after opening extension details, and show current access in Settings.
+## [1.2.1] - 2026-11-05
 
 - PDF: without "Allow access to file URLs" (the default for store installs), a local PDF opens in the reader with an explanation and a file picker instead of failing; when the browser hides a local tab's address, the popup offers "Open a local PDF"; the reader links to the extension details page to turn on one-click opening.
+- Add an optional local PDF file-access choice during extension setup, resume after opening extension details, and show current access in Settings.
+- PDF reader: "Export PDF" and "Recognize text (local OCR)" open as dropdowns that float over the pages instead of growing the sticky toolbar; Escape closes them, as does a click on the toolbar or pages unless a job is running, and OCR closes its dropdown after recognizing the page.
 
 ## [1.2.0] - 2026-11-03
 
