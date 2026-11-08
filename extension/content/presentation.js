@@ -1,5 +1,6 @@
 // Pure presentation policy; computed style is sampled separately in the controller's read phase.
 import { STYLES } from '../shared/settings.js';
+import { TRANSLATION_COLORS, normalizeTranslationColor } from '../shared/translation-color.js';
 
 // Resolve both global and per-site legacy preferences without rewriting unrelated settings.
 export function normalizeStyle(id) {
@@ -29,8 +30,23 @@ export function contrastRatio(a,b) {
   const x=luminance(a),y=luminance(b);
   return(Math.max(x,y) + .05) /(Math.min(x,y) + .05);
 }
-export function translationColor(fg,bg,{moreContrast=false,supportsMix=false}={}) {
+export function translationColor(fg,bg,{moreContrast=false,supportsMix=false,translationColor='auto'}={}) {
   const rgb=c=>`rgb(${c.join(',')})`;
+  const choice=normalizeTranslationColor(translationColor);
+  if(!moreContrast && choice!=='auto') {
+    // Presets pick the tier for the composited background; any ink, preset or custom, that still
+    // falls below 3:1 (mid-tone backgrounds, custom picks) is pulled towards the readable end.
+    const hex=Object.hasOwn(TRANSLATION_COLORS,choice) ? TRANSLATION_COLORS[choice][luminance(bg)<.179 ? 1:0]:choice;
+    const ink=hex.match(/[\da-f]{2}/g).map(v=>parseInt(v,16));
+    if(contrastRatio(ink,bg)>=3) return hex;
+    // Mixing sRGB channels with an achromatic endpoint preserves HSL hue.
+    // Keep a small margin for decimal serialization at the 3:1 boundary.
+    const end=contrastRatio([0,0,0],bg)>contrastRatio([255,255,255],bg)?0:255;
+    const mix=t=>ink.map(v=>+(v+(end-v)*t).toFixed(4));
+    let lo=0,hi=1;
+    for(let i=0;i<20;i++) {const mid=(lo+hi)/2;if(contrastRatio(mix(mid),bg)>=3.001)hi=mid;else lo=mid;}
+    return rgb(mix(hi));
+  }
   const raw=fg.map((v,i)=>v*.78+bg[i]*.22),muted=raw.map(Math.round);
   // The original page may itself use illegible metadata colours. Preserve the
   // source colour only when it is readable; otherwise use the safer endpoint.
@@ -53,7 +69,7 @@ function parseColor(value) {
   if(colorCache.size >=128) colorCache.clear();
   colorCache.set(value,rgba); return rgba;
 }
-export function measureColor(host) {
+export function measureColor(host,choice='auto') {
   const parse=parseColor;
   const fg=parse(getComputedStyle(host).color);
   if(!fg || fg.length < 3) return null;
@@ -68,7 +84,7 @@ export function measureColor(host) {
   let bg=doc.defaultView.matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(doc.documentElement).colorScheme.includes('dark') ? [18,18,18]:[255,255,255];
   for(const c of backgrounds) bg=bg.map((v,i)=> c[i] *(c[3] ?? 1) + v *(1 -(c[3] ?? 1)));
   const color=fg.slice(0,3).map((v,i)=> v *(fg[3] ?? 1) + bg[i] *(1 -(fg[3] ?? 1)));
-  return translationColor(color,bg,{moreContrast:doc.defaultView.matchMedia('(prefers-contrast: more)').matches,supportsMix:doc.defaultView.CSS?.supports('color','color-mix(in srgb,black 78%,white)')});
+  return translationColor(color,bg,{translationColor:choice,moreContrast:doc.defaultView.matchMedia('(prefers-contrast: more)').matches,supportsMix:doc.defaultView.CSS?.supports('color','color-mix(in srgb,black 78%,white)')});
 }
 
 export function presentationFacts(unit) {

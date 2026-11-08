@@ -3322,5 +3322,32 @@
   },
   "uxLocalPDFDetails": {
     "message": "打开扩展详情页"
+  },
+  "uxTranslationColor": {
+    "message": "译文颜色"
+  },
+  "uxColorAuto": {
+    "message": "自动"
+  },
+  "uxColorBlue": {
+    "message": "蓝"
+  },
+  "uxColorGreen": {
+    "message": "绿"
+  },
+  "uxColorOrange": {
+    "message": "橙"
+  },
+  "uxColorPurple": {
+    "message": "紫"
+  },
+  "uxColorGray": {
+    "message": "灰"
+  },
+  "uxColorCustom": {
+    "message": "自定义"
+  },
+  "uxTranslationColorHint": {
+    "message": "自动会根据网页配色弱化原文颜色；选定颜色在深色网页上会自动换成更亮的一档。"
   }
 }

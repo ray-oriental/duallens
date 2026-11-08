@@ -26,11 +26,13 @@ export function startFrameAgent(platform) {
   };
   const receive=next=>{
     if(disposed)return;
-    const modeOnly=snapshot?.settings && next?.settings && settingsEqual({...snapshot.settings,uiLanguage:next.settings.uiLanguage,displayMode:next.settings.displayMode},next.settings) && settingsEqual(snapshot.context,next.context);
+    const colorChanged=snapshot?.settings?.translationColor!==next?.settings?.translationColor;
+    const modeOnly=snapshot?.settings && next?.settings && settingsEqual({...snapshot.settings,uiLanguage:next.settings.uiLanguage,displayMode:next.settings.displayMode,translationColor:next.settings.translationColor},next.settings) && settingsEqual(snapshot.context,next.context);
     const changed=snapshot && !modeOnly && (!settingsEqual(snapshot.settings,next?.settings)||!settingsEqual(snapshot.context,next?.context));
     if(changed)stop();
     snapshot=next;setUiLanguage(next?.settings?.uiLanguage);
     if(modeOnly)translator?.setDisplayMode(next.settings.displayMode);
+    if(modeOnly && colorChanged)translator?.refreshColors();
     reconcile();
   };
   const io=new IntersectionObserver(entries=>{

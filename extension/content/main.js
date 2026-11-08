@@ -173,6 +173,7 @@ class App {
     if (prev.displayMode !== next.displayMode) t.setDisplayMode(next.displayMode);
     const customChanged = !settingsEqual(prev.siteRules.custom, next.siteRules.custom);
     if (prev.style !== next.style || customChanged) t.setStyle(t.style);
+    if (prev.translationColor !== next.translationColor) t.refreshColors();
     if (
       prev.targetLang !== next.targetLang ||
       prev.sourceLang !== next.sourceLang ||

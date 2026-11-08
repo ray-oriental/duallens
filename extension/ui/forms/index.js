@@ -115,7 +115,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     drafts.set(id, secret);
     if (dialog) $('mt-key-status').textContent = secret ? COPY.s0 : COPY.s1; else $('mtKey').value = secret;
   }
-  const simple = ['uiLanguage', 'targetLang', 'sourceLang', 'displayMode', 'segmentation', 'style', 'minChars', 'inlineMaxChars', 'translateShortText'];
+  const simple = ['uiLanguage', 'targetLang', 'sourceLang', 'displayMode', 'segmentation', 'style', 'translationColor', 'minChars', 'inlineMaxChars', 'translateShortText'];
   const nums = new Set(['minChars', 'inlineMaxChars', 'rootMarginPx', 'batchDelayMs', 'maxItems', 'maxChars', 'concurrency', 'timeoutMs', 'maxEntries', 'ttlDays', 'subtitleSize']);
   const bind = {
     rootMarginPx: 'lazy.rootMarginPx', batchDelayMs: 'lazy.batchDelayMs', hoverEnabled: 'hover.enabled', hoverModifier: 'hover.modifier',
@@ -272,7 +272,7 @@ export async function mountSettingsForm(root, { store, platform }) {
     return s;
   }
   on('settings-form', 'input', event => {
-    if (['style-tile','translation-method'].includes(event.target.name) || interactions?.isImmediate(event.target) || ['backupText','backupPassword'].includes(event.target.id)) return;
+    if (['style-tile','translation-method','translation-color'].includes(event.target.name) || event.target.id==='customTranslationColor' || interactions?.isImmediate(event.target) || ['backupText','backupPassword'].includes(event.target.id)) return;
     dirty = true;
     if (event.target === $('backupText')) $('backup-qr').hidden = true;
     if (event.target === $('apiKey') && pid) edited.add(pid);

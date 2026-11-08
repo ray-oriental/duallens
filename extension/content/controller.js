@@ -241,6 +241,10 @@ export class PageTranslator {
     });
   }
 
+  refreshColors() {
+    for(const u of this.units.values()) this.#refreshColor(u);
+  }
+
   getState() {
     let pending=0;
     let failed=0;
@@ -385,7 +389,7 @@ export class PageTranslator {
       }
       u.flexHost=/flex|grid/.test(getComputedStyle(u.host).display);
       u.presentation=u.attribute ? 'replace':measurePresentation(u,s.inlineMaxChars);
-      u.translationColor=u.attribute ? null:measureColor(u.host);
+      u.translationColor=u.attribute ? null:measureColor(u.host,s.translationColor);
       ready.push(u);
     }
 
@@ -578,8 +582,8 @@ export class PageTranslator {
   #refreshColor(unit) {
     if(unit.attribute || !unit.tEl)return;
     // Themes can change while waiting; layout adaptation can also change inherited table colours.
-    const color=measureColor(unit.host);
-    if(color)inj.write(()=>{unit.translationColor=color;unit.tEl.style.setProperty('--dl-fg',color);});
+    const color=measureColor(unit.host,this.s.translationColor),explicit=this.s.translationColor!=='auto' && !!this.s.translationColor;
+    if(color)inj.write(()=>{unit.translationColor=color;unit.tEl.style.setProperty('--dl-fg',color);unit.tEl.toggleAttribute('data-dl-color',explicit);});
   }
 
   retry(id) {

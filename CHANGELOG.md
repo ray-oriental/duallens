@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add optional preset and custom page translation colors in Settings, with dark-page shades, a readability adjustment when a color is too faint on the page background, and instant updates to existing translations in the extension and userscript.
+
 ## [1.2.1] - 2026-11-05
 
 - PDF: without "Allow access to file URLs" (the default for store installs), a local PDF opens in the reader with an explanation and a file picker instead of failing; when the browser hides a local tab's address, the popup offers "Open a local PDF"; the reader links to the extension details page to turn on one-click opening.

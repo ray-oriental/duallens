@@ -78,6 +78,7 @@
         "shared/site-adapters.js",
         "shared/site-pattern.js",
         "shared/storage-areas.js",
+        "shared/translation-color.js",
         "shared/ui-glossary.js",
         "styles/content.css",
         "shared/destinations.js",
