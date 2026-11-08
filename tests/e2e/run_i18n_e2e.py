@@ -143,7 +143,7 @@ def chinese_alias(pw,base,ext):
         page.locator('nav a').first.wait_for()
         result=page.evaluate('''()=>({locale:chrome.i18n.getUILanguage(),name:chrome.runtime.getManifest().name,
             heading:document.querySelector('.settings-heading').textContent,lang:document.documentElement.lang})''')
-        check(result=={'locale':'zh-TW','name':'DualLens 双语对照翻译','heading':'DualLens 设置','lang':'zh-CN'},f'Chinese alias mismatch: {result}')
+        check(result=={'locale':'zh-TW','name':'DualLens 双语对照翻译 · 沉浸式阅读','heading':'DualLens 设置','lang':'zh-CN'},f'Chinese alias mismatch: {result}')
         print('PASS Chinese locale alias zh-TW',flush=True)
     finally:h.close()
 
