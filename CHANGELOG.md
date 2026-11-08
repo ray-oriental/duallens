@@ -2,7 +2,10 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-08
+
 - Add optional preset and custom page translation colors in Settings, with dark-page shades, a readability adjustment when a color is too faint on the page background, and instant updates to existing translations in the extension and userscript.
+- Rename the Chinese extension name to "DualLens 双语对照翻译 · 沉浸式阅读".
 
 ## [1.2.1] - 2026-11-05
 
