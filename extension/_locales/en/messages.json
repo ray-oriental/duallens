@@ -3322,5 +3322,32 @@
   },
   "uxLocalPDFDetails": {
     "message": "Open extension details"
+  },
+  "uxTranslationColor": {
+    "message": "Translation color"
+  },
+  "uxColorAuto": {
+    "message": "Automatic"
+  },
+  "uxColorBlue": {
+    "message": "Blue"
+  },
+  "uxColorGreen": {
+    "message": "Green"
+  },
+  "uxColorOrange": {
+    "message": "Orange"
+  },
+  "uxColorPurple": {
+    "message": "Purple"
+  },
+  "uxColorGray": {
+    "message": "Gray"
+  },
+  "uxColorCustom": {
+    "message": "Custom"
+  },
+  "uxTranslationColorHint": {
+    "message": "Automatic softens the original text color to suit the page. Preset colors use a lighter shade on dark pages."
   }
 }

@@ -2,6 +2,7 @@ import { t as l10n } from '../shared/i18n.js';
 import { DEFAULT_SETTINGS, LANGS, STYLES, PROMPT_PRESETS, TRANSLATION_MODES, mergeSettings, publicSettings, SETTINGS_VERSION, migrateSettings, validateSiteRules, validateInteractionSettings } from '../shared/settings.js';
 import { isMtEngine } from '../background/mt.js';
 import { comicSites } from '../content/comics/sites.js';
+import { normalizeTranslationColor } from '../shared/translation-color.js';
 
 // Localized copy shared by the extension and lazy userscript UI.
 const COPY=Object.freeze({get s0(){return l10n('mj7');},get s1(){return l10n('mj8');},get s2(){return l10n('mj9');},get s3(){return l10n('mja');},get s4(){return l10n('mjb');},get s5(){return l10n('mjc');},get s6(){return l10n('mjd');},get s7(){return l10n('mje');},get s8(){return l10n('mjf');},get s9(){return l10n('mjg');},get s10(){return l10n('mjh');},get s11(){return l10n('mji');},get s12(){return l10n('mjj');},get s13(){return l10n('mjk');},get s14(){return l10n('mjl');},get s15(){return l10n('mjm');},get s16(){return l10n('mjn');},get s17(){return l10n('mjo');},get s18(){return l10n('mjp');},get s19(){return l10n('mjq');},get s20(){return l10n('mjr');},get s21(){return l10n('mjs');},get s22(){return l10n('mjt');},get s23(){return l10n('mju');},get s24(){return l10n('mjv');},get s25(){return l10n('mjw');},get s26(){return l10n('mjx');},get s27(){return l10n('mjy');},get s28(){return l10n('mjz');},get s29(){return l10n('mk0');},get s30(){return l10n('mk1');},get s31(){return l10n('mk2');},get s32(){return l10n('mk3');},get s33(){return l10n('mey');},get s34(){return l10n('mk4');},get s35(){return l10n('mk5');},get s36(){return l10n('mk6');},get s37(){return l10n('mk7');}});
@@ -19,6 +20,7 @@ export function terms(text) {
   });
 }
 export function validateSettings(s) {
+  s.translationColor=normalizeTranslationColor(s.translationColor);
   requireThat(['zh-CN','en','auto'].includes(s.uiLanguage), l10n('uiLanguageInvalid'));
   validateInteractionSettings(s);
   requireThat(typeof s.comics?.enabled==='boolean' && ['jpn','jpn_vert','kor','eng'].includes(s.comics.language),COPY.s1);

@@ -9,6 +9,7 @@ import { isLocalUrl } from '../../shared/device-state.js';
 import { GROUPS } from './navigation.js';
 import { validateSettings } from '../validation.js';
 import { shortcutSummary } from '../shortcuts.js';
+import { measureColor } from '../../content/presentation.js';
 
 const T=Object.freeze({get saved(){return l10n('mda');},get save(){return l10n('mdb');},get cancel(){return l10n('mdc');},get confirm(){return l10n('mdd');},get discard(){return l10n('mat');},get denied(){return COMMON.denied;},get originDenied(){return l10n('mde');},get reset(){return l10n('mdf');},get delete(){return l10n('mdg');},get clear(){return l10n('mdh');},get up(){return l10n('m38');},get down(){return l10n('mdi');},get remove(){return l10n('mdj');},get model(){return l10n('mdk');},get unconfigured(){return l10n('mdl');},get local(){return l10n('mdm');},destination:host=>l10n('mdn', [host]),get version(){return l10n('mdo');},get copied(){return l10n('mdp');},get copyFallback(){return l10n('mdq');},get free(){return l10n('mdr');},get missing(){return l10n('mds');},get failure(){return l10n('mdt');}});
 
@@ -58,6 +59,10 @@ export function installSettingsInteractions(ui,ctx){
   for(const radio of ui.querySelectorAll('[name=translation-method]'))on(radio,'change',()=>{if(radio.checked){$('translationMode').value=radio.value;void persistField($('translationMode'));}});
   on($('settings-form'),'change',event=>{const n=event.target;if(immediate(n))void persistField(n);});
   for(const b of ui.querySelectorAll('#style-tiles input'))on(b,'change',()=>{if(b.checked){$('style').value=b.value;void persistField($('style'));}});
+  for(const radio of ui.querySelectorAll('[name=translation-color]'))on(radio,'change',()=>{if(radio.checked){$('translationColor').value=radio.value==='custom'?$('customTranslationColor').value:radio.value;drawColor();void persistField($('translationColor'));}});
+  on($('customTranslationColor'),'input',()=>{$('translationColor').value=$('customTranslationColor').value;drawColor();});
+  on($('customTranslationColor'),'change',()=>{void persistField($('translationColor'));});
+  const theme=win.matchMedia('(prefers-color-scheme: dark)');on(theme,'change',()=>drawColor());
   for(const b of ui.querySelectorAll('[data-preset]'))on(b,'click',()=>{$('providerPreset').value=b.dataset.preset;$('add-profile').click();});
   on($('localOnly'),'change',()=>{$('translationMode').value=$('localOnly').checked?'llm':'mt+llm';setSettings(mergeSettings(getSettings(),{translation:{mode:$('translationMode').value}}));setDirty(true);drawView();});
   on($('localEngine'),'change',()=>{const p=getProfile();if(!p)return;p.preset=$('localEngine').value;p.baseUrl=p.preset==='ollama'?'http://127.0.0.1:11434/v1':'http://127.0.0.1:1234/v1';$('baseUrl').value=p.baseUrl;setDirty(true);drawView();});
@@ -76,6 +81,15 @@ export function installSettingsInteractions(ui,ctx){
   for(const id of ['clear-key','mt-clear-key'])if($(id))on($(id),'click',event=>{if($(id).dataset.confirmed){delete $(id).dataset.confirmed;return;}event.stopImmediatePropagation();void ask(T.clear).then(yes=>{if(yes){$(id).dataset.confirmed='true';$(id).click();}});},true);
   on($('preset'),'change',()=>{$('customPrompt').parentElement.hidden=$('preset').value!=='custom';});
   on($('inputMode'),'change',()=>{$('inputOrder').parentElement.hidden=$('inputMode').value!=='bilingual';});
+  function drawColor(){
+    const choice=$('translationColor').value||'auto',custom=choice.startsWith('#');
+    for(const radio of ui.querySelectorAll('[name=translation-color]'))radio.checked=radio.value===(custom?'custom':choice);
+    $('customTranslationColor').hidden=!custom;if(custom)$('customTranslationColor').value=choice;
+    // The style samples and the preview show the chosen ink, so every row reads as it will on the page.
+    const preview=$('style-preview'),ink=choice==='auto'?'':measureColor(preview.parentElement,choice)||'';
+    for(const sample of [preview,...ui.querySelectorAll('.style-sample')]){sample.toggleAttribute('data-color',!!ink);sample.style.color=ink;}
+    const customSwatch=ui.querySelector('[name=translation-color][value=custom]');if(custom)customSwatch.style.setProperty('--swatch',choice);else customSwatch.style.removeProperty('--swatch');
+  }
   function drawView(){
     const s=getSettings(),p=getProfile(),summary=engineSummary(s);
     $('shortcut-hint').textContent=[shortcutSummary(commands),l10n(platform.kind==='extension'?'uxShortcutSettings':'uxShortcutMobile')].filter(Boolean).join(' ');
@@ -88,6 +102,7 @@ export function installSettingsInteractions(ui,ctx){
 
     for(const [key]of FEATURES){$('details-'+key).hidden=!s[key].enabled;const hint=ui.querySelector(`[data-feature="${key}"] small`);if(hint)hint.textContent=featureDescription(key,s,platform.coarse);}
     for(const input of ui.querySelectorAll('#style-tiles input'))input.checked=input.value===s.style;$('style-preview').dataset.style=s.style;$('learn-hint').hidden=s.style!=='blur';
+    $('translationColor').value=s.translationColor||'auto';drawColor();
     for(const input of ui.querySelectorAll('#display-segments input'))input.checked=input.value===s.displayMode;
     for(const input of ui.querySelectorAll('#pairing-segments input'))input.checked=input.value===s.segmentation;
     $('inputOrder').parentElement.hidden=$('inputMode').value!=='bilingual';$('customPrompt').parentElement.hidden=$('preset').value!=='custom';

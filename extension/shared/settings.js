@@ -4,6 +4,7 @@ import { t as l10n } from './i18n.js';
 import { chromeStorageArea } from './storage-areas.js';
 import { sha256Hex } from './hash.js';
 import { parsePattern, patternMatches, comparePatterns } from './site-pattern.js';
+import { normalizeTranslationColor } from './translation-color.js';
 
 export const SETTINGS_KEY = 'settings';
 export const SETTINGS_VERSION = 3;
@@ -65,6 +66,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   displayMode: 'bilingual', // 'bilingual' | 'translation-only'
   segmentation: 'paragraph', // 'paragraph' | 'sentence'; shared by extension and GM storage
   style: 'muted',
+  translationColor: 'auto',
   minChars: 2,
   translateShortText: true,
   inlineMaxChars: 24, // units shorter than this get the inline layout
@@ -151,6 +153,7 @@ export function migrateSettings(input) {
   }
   s.version = SETTINGS_VERSION;
   if(!['paragraph','sentence'].includes(s.segmentation)) s.segmentation='paragraph';
+  s.translationColor=normalizeTranslationColor(s.translationColor);
   return s;
 }
 
@@ -161,7 +164,7 @@ export function publicSettings(value) {
   const out = {};
   for (const [key, val] of Object.entries(value)) {
     if (/^(ui(?:\..*)?|secrets|apiKey|api_key|pairingToken|remote_token|token|password|authorization|proxy_token|__proto__|constructor|prototype)$/i.test(key)) continue;
-    out[key] = publicSettings(val);
+    out[key] = key==='translationColor' ? normalizeTranslationColor(val) : publicSettings(val);
   }
   return out;
 }

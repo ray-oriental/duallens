@@ -6,6 +6,7 @@ dl-t.dl-inline{display:inline;margin-inline-start:.35em;font-size:.92em;}
 /* --dl-fg is measured at 78% and falls back to source color below 4.5:1. */
 dl-t.dl-s-muted{color:var(--dl-fg,currentColor);}
 dl-t.dl-s-plain{color:inherit;}
+dl-t.dl-s-plain[data-dl-color]{color:var(--dl-fg);}
 dl-t.dl-s-dashed{text-decoration-line:underline;text-decoration-style:dashed;text-decoration-color:var(--dl-line);text-underline-offset:.22em;text-decoration-thickness:1px;}
 dl-t.dl-s-highlight{background:var(--dl-hl);box-decoration-break:clone;-webkit-box-decoration-break:clone;}
 dl-t.dl-s-quote{border-inline-start:1px solid var(--dl-line);padding-inline-start:.6em;}

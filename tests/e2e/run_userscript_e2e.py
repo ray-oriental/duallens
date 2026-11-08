@@ -690,6 +690,25 @@ def segmentation_case(page, base):
     return 'GM core paragraph -> sentence retranslation; 13/8/3 -> 13/36/9; both display modes; exact restore'
 
 
+def translation_color_case(page, base):
+    ready(page, base)
+    command(page, '翻译此页 / 显示原文'); wait_done(page)
+    page.evaluate("window.colorNode=document.querySelector('#p-plain dl-t')")
+    command(page, 'DualLens 设置')
+    page.wait_for_function("__platformFixture.elements('[name=translation-color]').length===7")
+    calls = page.evaluate('__platformFixture.calls.length')
+    click_shadow(page, '[name=translation-color][value=blue]')
+    page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].translationColor==='blue'")
+    page.wait_for_function("getComputedStyle(colorNode).color==='rgb(52, 106, 172)'")
+    click_shadow(page, '[name=translation-color][value=custom]')
+    page.evaluate("""()=>{const n=__platformFixture.elements('#customTranslationColor')[0];n.value='#a8500a';n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));}""")
+    page.wait_for_function("__platformFixture.data('duallens:local')['settings.core'].translationColor==='#a8500a'")
+    page.wait_for_function("getComputedStyle(colorNode).color==='rgb(168, 80, 10)'")
+    check(page.evaluate("colorNode===document.querySelector('#p-plain dl-t')"), 'GM color update replaced translation')
+    check(page.evaluate('__platformFixture.calls.length') == calls, 'color choice sent a translation request')
+    return 'built lazy settings resource: preset/custom persist to GM storage; existing ink updates without translation requests'
+
+
 def main():
     from site_rules_cases import userscript_case
     ap = argparse.ArgumentParser(description=__doc__)
@@ -697,7 +716,8 @@ def main():
     args = ap.parse_args()
     bundle = REPO / 'dist' / 'duallens.user.js'
     check(bundle.is_file(), 'build dist/duallens.user.js first')
-    cases = [('segmentation', 1280, 800, False, segmentation_case), ('segmentation_375', 375, 812, True, segmentation_case),
+    cases = [('translation_color', 1280, 800, False, translation_color_case), ('translation_color_375', 375, 812, True, translation_color_case),
+             ('segmentation', 1280, 800, False, segmentation_case), ('segmentation_375', 375, 812, True, segmentation_case),
              ('desktop', 1280, 800, False, desktop_cases), ('settings_resource', 1280, 800, False, settings_resource_case),
              ('gm_diagnostics', 1280, 800, False, gm_diagnostics_case),
              ('features_resource', 1280, 800, False, features_resource_case), ('secret_transport', 1280, 800, False, secret_transport_case),

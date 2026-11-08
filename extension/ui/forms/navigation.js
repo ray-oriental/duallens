@@ -1,5 +1,6 @@
 import { message as l10n, setText } from '../../shared/i18n.js';
 import { element,FEATURES,segmented,TEXT as COMMON } from '../components.js';
+import { TRANSLATION_COLORS } from '../../shared/translation-color.js';
 
 // Localized copy shared by the extension and lazy userscript UI.
 const COPY=Object.freeze({
@@ -111,6 +112,22 @@ export const SETTINGS_CSS=`
 .dl-settings .style-sample{color:var(--dl-text);font-size:13px;line-height:1.5;justify-self:start}
 .dl-settings .style-preview{margin-top:12px;padding:14px 16px;border:1px solid var(--dl-border);border-radius:var(--dl-r-sm);font-size:14px;line-height:1.6}
 .dl-settings .style-preview .sample-translation{display:block;width:fit-content;margin-top:4px}
+.dl-settings .color-row{display:grid;grid-template-columns:116px minmax(0,1fr);align-items:center;column-gap:12px;margin-top:10px}
+.dl-settings .color-label{color:var(--dl-text)}
+.dl-settings .color-options{display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-inline-start:-6px}
+.dl-settings .color-choice{display:flex;align-items:center;justify-content:center;min-width:32px;min-height:40px;cursor:pointer}
+.dl-settings .color-choice input{appearance:none;box-sizing:border-box;width:20px;height:20px;margin:0;padding:0;border:0;border-radius:50%;background:var(--swatch);box-shadow:inset 0 0 0 1px var(--dl-border);cursor:pointer}
+.dl-settings .color-choice input:checked{outline:2px solid var(--dl-text);outline-offset:2px}
+.dl-settings .color-choice input:focus-visible{outline:2px solid var(--dl-text);outline-offset:4px}
+.dl-settings .color-choice input[value=auto]{background:linear-gradient(135deg,var(--dl-text-3) 50%,transparent 50%);box-shadow:inset 0 0 0 1px var(--dl-border-strong)}
+.dl-settings .color-choice input[value=custom]{background:var(--swatch,transparent);box-shadow:inset 0 0 0 1px var(--dl-text-3)}
+.dl-settings .color-choice input[value=custom]:not(:checked){background:transparent;box-shadow:none;border:1px dashed var(--dl-text-3)}
+.dl-settings #customTranslationColor{box-sizing:border-box;width:36px;height:24px;margin-inline-start:6px;padding:1px 2px;border:1px solid var(--dl-border-strong);border-radius:var(--dl-r-xs);background:transparent;cursor:pointer}
+.dl-settings .color-row .hint{grid-column:2;margin-top:0}
+.dl-settings .sample-translation[data-color]{opacity:1}
+@media(prefers-color-scheme:dark){.dl-settings .color-choice input{background:var(--swatch-dark,var(--swatch))}}
+@media(max-width:719px){.dl-settings .color-row{grid-template-columns:minmax(0,1fr);row-gap:2px}.dl-settings .color-row .hint{grid-column:1}}
+@media(max-width:719px),(pointer:coarse){.dl-settings .color-choice{min-width:44px;min-height:44px}.dl-settings .color-options{margin-inline-start:-12px}.dl-settings #customTranslationColor{height:32px}}
 .sample-translation[data-style=muted]{opacity:.72}
 .sample-translation[data-style=dashed]{text-decoration:underline dashed;text-decoration-color:color-mix(in srgb,currentColor 48%,transparent);text-underline-offset:4px}
 .sample-translation[data-style=highlight]{background:color-mix(in srgb,currentColor 9%,transparent)}
@@ -223,6 +240,16 @@ export function organizeLayout(container,form,{field,button}) {
   const tiles=el('div',null,{class:'style-list',id:'style-tiles',role:'radiogroup','aria-label':COPY.s44});styles.append(tiles);
   const shortStyles=[l10n('polishStyle0'),l10n('polishStyle1'),l10n('polishStyle2'),l10n('polishStyle3'),l10n('polishStyle4'),l10n('polishStyle5')];let styleIndex=0;for(const option of $('style').options){const label=el('label',null,{class:'style-row'}),radio=el('input',null,{type:'radio',name:'style-tile',value:option.value});label.title=option.textContent;radio.setAttribute('aria-label',option.textContent);label.append(radio,el('span',shortStyles[styleIndex++],{class:'style-name'}),el('span',T.preview,{class:'sample-translation style-sample','data-style':option.value}));tiles.append(label);}
   const preview=el('div',T.source,{class:'style-preview'});preview.append(el('span',T.preview,{id:'style-preview',class:'sample-translation',tabindex:'0'}));styles.append(preview,el('p',T.learn,{class:'hint',id:'learn-hint'}));
+  // Swatches line up with the style samples above (radio 16 + gap 12 + name 88 = 116px); the hint sits under them.
+  const colorRow=el('div',null,{class:'color-row',id:'translation-color-row'}),colorOptions=el('div',null,{class:'color-options',role:'radiogroup','aria-label':l10n('uxTranslationColor'),'aria-describedby':'translation-color-hint'});
+  colorRow.append(el('span',l10n('uxTranslationColor'),{class:'color-label'}),colorOptions,el('input',null,{id:'translationColor',type:'hidden',value:'auto'}));
+  for(const [id,name] of [['auto',l10n('uxColorAuto')],['blue',l10n('uxColorBlue')],['purple',l10n('uxColorPurple')],['orange',l10n('uxColorOrange')],['green',l10n('uxColorGreen')],['gray',l10n('uxColorGray')],['custom',l10n('uxColorCustom')]]) {
+    const label=el('label',null,{class:'color-choice',title:name}),radio=el('input',null,{type:'radio',name:'translation-color',value:id,'aria-label':name});
+    if(TRANSLATION_COLORS[id]) {radio.style.setProperty('--swatch',TRANSLATION_COLORS[id][0]);radio.style.setProperty('--swatch-dark',TRANSLATION_COLORS[id][1]);}
+    label.append(radio);colorOptions.append(label);
+  }
+  colorOptions.append(el('input',null,{id:'customTranslationColor',type:'color',value:TRANSLATION_COLORS.blue[0],hidden:'','aria-label':l10n('uxColorCustom')}));
+  colorRow.append(el('p',l10n('uxTranslationColorHint'),{class:'hint',id:'translation-color-hint'}));preview.before(colorRow);
   const translate=card('common',l10n('me9'));move(translate,['translationMode']);$('translationMode').parentElement.hidden=true;
   const methods=el('div',null,{id:'translation-methods',class:'method-list',role:'radiogroup','aria-label':l10n('me9')});for(const [value,title,hint]of[['mt+llm',l10n('polishAutomatic'),l10n('polishAutomaticHint')],['mt',l10n('polishMT'),l10n('polishMTHint')],['llm',l10n('polishAI'),l10n('polishAIHint')]]){const row=el('label',null,{class:'dl-choice'}),input=el('input',null,{type:'radio',name:'translation-method',value}),copy=el('span',title);copy.append(el('small',hint));row.append(input,copy);methods.append(row);}translate.append(methods);
   const mtFields=el('div',null,{class:'mt-fields'});translate.append(mtFields);move(mtFields,['mtEngine','mtFallback','mt-key-row','mt-test']);translate.append(el('p',l10n('polishUnofficial'),{class:'hint',id:'mt-unofficial'}));
