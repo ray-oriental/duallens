@@ -46,7 +46,7 @@ def popup_case(ctx, base, language, bound):
       };
       const runtime=chrome.runtime.sendMessage;
       chrome.runtime.sendMessage=async msg=>{
-        if(msg.type==='pdf-status')return {ok:true,available:true};
+        if(msg.type==='pdf-status')return {ok:true,available:!!sessionStorage.getItem('pdfCase')};
         if(msg.type==='pdf-open'){pdfCalls++;await new Promise(resolve=>window.finishPDF=resolve);return {ok:true};}
         return runtime(msg);
       };
@@ -104,6 +104,8 @@ def popup_case(ctx, base, language, bound):
     page.evaluate("sessionStorage.setItem('pdfCase','true')")
     page.reload()
     page.locator('#pdf-open').wait_for()
+    assert page.locator('#toggle').count()==0
+    assert 'tab-ensure' not in page.evaluate('uiMessages')
     page.click('#pdf-open')
     assert page.locator('#pdf-open').is_disabled()
     page.evaluate("document.querySelector('#pdf-open').click()")

@@ -13,16 +13,16 @@ try {
   const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
   const fileAccess=await chrome.extension.isAllowedFileSchemeAccess().catch(()=>false);
   const entry=pdfPopupState(tab,chrome.runtime.getURL('pdf/viewer.html'),fileAccess),{reader}=entry;
+  // Inspect the top document before considering the webpage controller.
+  const pdf=!reader&&tab?.id?await chrome.runtime.sendMessage({type:'pdf-status',tabId:tab.id,probe:false}).catch(()=>null):null;
   let {restricted}=entry,stale=false,accessError;
-  if(!restricted&&!reader)try{
+  if(!restricted&&!reader&&!pdf?.available)try{
     const r=await chrome.runtime.sendMessage({type:'tab-ensure',tabId:tab.id});
     restricted=r?.ok!==true;accessError=r?.reason==='no-access'?ERR.PERMISSION:r?.reason==='injection-failed'?ERR.INJECTION:ERR.RESTRICTED;
     // A real refusal carries a reason. No answer, or one without a reason, comes from an older background
     // still running after the extension's files changed (developer-mode installs): it needs one reload.
     stale=restricted&&!r?.reason;
   }catch{restricted=true;stale=true;}
-  const pdf=!reader&&tab?.id&&(entry.check||restricted)?await chrome.runtime.sendMessage({type:'pdf-status',tabId:tab.id}).catch(()=>null):null;
-  if(pdf?.available)accessError=ERR.RESTRICTED;
   const commands=await chrome.commands?.getAll?.()||[];
   const localArea=chromeStorageArea(chrome.storage.local,'local',chrome.storage.onChanged);
   const view=await mountPopup(document.body,{store:getDefaultSettingsStore(),localArea,platform:{kind:'extension',localArea,localPDF:localPDFAccess(chrome),reloadPage:()=>chrome.tabs.reload(tab.id)},url:tab?.url,restricted,stale,accessError,onReload:()=>chrome.runtime.reload(),

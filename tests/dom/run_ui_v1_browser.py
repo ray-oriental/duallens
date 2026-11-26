@@ -297,7 +297,7 @@ def main():
                 assert not popup.locator('#feature-selection').is_checked()
                 assert '权限' in popup.locator('#status').inner_text()
                 assert not popup.evaluate("uiData.settings?.selection?.enabled||false")
-                assert 'pdf-status' not in popup.evaluate('uiMessages'), 'normal pages must not be probed'
+                assert popup.evaluate('uiMessages.indexOf("pdf-status")<uiMessages.indexOf("tab-ensure")'), 'top document type must be inspected before injecting the webpage controller'
                 popup.locator('#feature-subtitles').click()
                 assert not popup.locator('#feature-subtitles').is_checked()
                 assert popup.evaluate("uiMessages.includes('permission-request')")

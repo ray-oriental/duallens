@@ -3,18 +3,18 @@ import assert from 'node:assert/strict';
 import { pdfURL,hasPDFExtension,isPDFType,createPDFEntries,probePDFType,pdfFilename } from '../../extension/background/pdf.js';
 import { readPDFURL,checkPDFBytes,MAX_PDF_BYTES } from '../../extension/pdf/source.js';
 const bytes = new TextEncoder().encode('%PDF-1.4\nfixture');
-test('local PDF without file access opens the chooser before any read, including menu actions', async () => {
+test('local PDF without file access opens the chooser before any read, with in-place navigation', async () => {
   let allowed=false,tab={id:7,url:'file:///D:/%E6%B5%8B%E8%AF%95%20folder/Thursday%20Work.pdf'};
   const opened=[];let reads=0,stored=0;
   const api={runtime:{getURL:p=>'chrome-extension://test/'+p},
     extension:{isAllowedFileSchemeAccess:async()=>allowed},
-    tabs:{get:async()=>tab,create:async value=>opened.push(value.url)}};
+    tabs:{get:async()=>tab,update:async (id,value)=>{assert.equal(id,7);opened.push(value.url);}}};
   const entries=createPDFEntries(api,async()=>{reads++;return new Response(bytes);},
     {put:async()=>{stored++;return 'fixture-token';}});
   const sender={url:'chrome-extension://test/ui/popup.html'};
   const status=()=>entries.handlers['pdf-status']({tabId:7},sender);
   assert.equal((await status()).requiresFileSelection,true);
-  for(const action of [()=>entries.open(tab),()=>entries.openFromMenu(tab)]) {
+  for(const action of [()=>entries.open(tab),()=>entries.openLocal(tab)]) {
     assert.equal((await action()).ok,true);
     const url=new URL(opened.at(-1));
     assert.equal(url.searchParams.get('notice'),'file-access');
@@ -30,7 +30,7 @@ test('local PDF without file access opens the chooser before any read, including
   allowed=false;tab={id:7};
   assert.equal((await status()).available,false);
   assert.equal((await entries.open(tab)).ok,false);
-  assert.equal((await entries.openFromMenu(tab)).ok,true);
+  assert.equal((await entries.openLocal(tab)).ok,true);
   assert.ok(opened.at(-1).endsWith('?notice=file-access'));
   assert.equal((await entries.handlers['pdf-open-local']({tabId:7},sender)).ok,true);
   const count=opened.length;
@@ -68,7 +68,7 @@ test('PDF streamed data stops at the size limit', async () => {
 test('PDF explicit probes and opens validate the actual tab, not supplied document URL', async () => {
   const noop={addListener(){}}; const opened=[]; const updates=[];
   let tab={id:7,url:'https://example.org/a.pdf'};
-  const api={runtime:{getURL:p=>'chrome-extension://test/'+p},tabs:{get:async()=>tab,query:async()=>[tab],create:async x=>opened.push(x),onRemoved:noop,onActivated:noop,onUpdated:noop},contextMenus:{update:async(...x)=>updates.push(x)}};
+  const api={runtime:{getURL:p=>'chrome-extension://test/'+p},tabs:{get:async()=>tab,query:async()=>[tab],update:async (id,x)=>{assert.equal(id,7);opened.push(x);},onRemoved:noop,onActivated:noop,onUpdated:noop},contextMenus:{update:async(...x)=>updates.push(x)}};
   let count=0, stored;
   const sender={url:'chrome-extension://test/ui/popup.html'};
   const entries=createPDFEntries(api,async(u,o)=>{
@@ -82,8 +82,10 @@ test('PDF explicit probes and opens validate the actual tab, not supplied docume
   assert.equal(opened[0].url,'chrome-extension://test/pdf/viewer.html?token=test-token');
   assert.equal((await entries.handlers['pdf-open']({tabId:7},{url:'https://page.example/'})).ok,false);
   tab={id:7,url:'https://example.org/download'};
-  assert.ok((await entries.handlers['pdf-status']({tabId:7},sender)).available); assert.equal(count,1);
-  assert.ok((await entries.handlers['pdf-status']({tabId:7},sender)).available); assert.equal(count,2);
+  // The popup asks without a network probe; only an explicit probe request may send HEAD.
+  assert.equal((await entries.handlers['pdf-status']({tabId:7},sender)).available,false); assert.equal(count,0);
+  assert.ok((await entries.handlers['pdf-status']({tabId:7,probe:true},sender)).available); assert.equal(count,1);
+  assert.ok((await entries.handlers['pdf-status']({tabId:7,probe:true},sender)).available); assert.equal(count,2);
   tab={id:7,url:'chrome://settings/'};
   assert.equal((await entries.handlers['pdf-open']({tabId:7},sender)).ok,false);
 });
@@ -91,13 +93,13 @@ test('PDF entry installs no observation listeners and creates no startup request
   let calls=0; const opened=[];
   const forbidden=new Proxy({}, {get(){throw new Error('Background observation forbidden');}});
   const api={webRequest:forbidden,contextMenus:forbidden,
-    tabs:{get:async()=>({id:1,url:'https://example.org/page'}),create:async x=>opened.push(x)},
+    tabs:{get:async()=>({id:1,url:'https://example.org/page'}),update:async (id,x)=>{assert.equal(id,7);opened.push(x);}},
     runtime:{getURL:path=>'chrome-extension://test/'+path}};
   const entries=createPDFEntries(api,async()=>{calls++;return new Response('',{headers:{'Content-Type':'text/html'}});});
-  assert.equal(calls,0); assert.notEqual(entries.menu.enabled,false);
-  assert.equal((await entries.openFromMenu({id:1,url:'https://example.org/page'})).ok,false);
+  assert.equal(calls,0); assert.equal(entries.menu,undefined);assert.equal(entries.openFromMenu,undefined);
+  assert.equal((await entries.open({id:1,url:'https://example.org/page'})).ok,false);
   assert.equal(calls,1);
-  assert.equal(opened[0].url,'chrome-extension://test/pdf/viewer.html?notice=not-pdf');
+  assert.equal(opened.length,0);
 });
 test('PDF HEAD success uses only headers and declines non-PDF without GET', async () => {
   for(const [type,expected] of [['application/pdf',true],['text/html',false]]){

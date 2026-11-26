@@ -153,7 +153,7 @@
     "message": "No translation was returned"
   },
   "m16": {
-    "message": "Could not read this PDF. Allow its source, or download it and select the local file in the reader."
+    "message": "DualLens could not read this PDF. Download it, then choose the local file in the reader."
   },
   "m17": {
     "message": "This page is not confirmed as a PDF. Open a PDF file first."
@@ -788,7 +788,7 @@
     "message": "Enable “Allow access to file URLs” in extension details, or choose a local PDF above."
   },
   "m6o": {
-    "message": "Could not read the PDF. Download documents requiring sign-in or redirects, then select the local file."
+    "message": "Unable to read this PDF. The website may require sign-in, or the link may have expired."
   },
   "m6p": {
     "message": "No complete translation received"
@@ -917,7 +917,7 @@
     }
   },
   "m7f": {
-    "message": "Could not open this PDF. It may be invalid, too large, encrypted, or require sign-in or redirects. Download it and select the local file. file:// requires file URL access."
+    "message": "Could not open this PDF. It may be invalid, too large or encrypted. Choose another PDF file."
   },
   "m7g": {
     "message": "Reading this PDF needs access to its source. You can also select a downloaded local file."
@@ -929,7 +929,7 @@
     "message": "This page is not confirmed as a PDF, or the anonymous check failed. Open a PDF and retry, or select a local PDF."
   },
   "m7j": {
-    "message": "Choose a local PDF, or open one from the DualLens popup or context menu on a PDF tab."
+    "message": "Choose a local PDF, or open a PDF tab and click Open this PDF in DualLens."
   },
   "m7k": {
     "message": "The background service did not respond"
@@ -3349,5 +3349,18 @@
   },
   "uxTranslationColorHint": {
     "message": "Automatic softens the original text color to suit the page. Preset colors use a lighter shade on dark pages."
-  }
+  },
+  "pdfSwitchStatus": {
+    "message": "This PDF is open in your browser’s built-in viewer. Open it in DualLens for bilingual reading."
+  },
+  "pdfSwitchReadFailed": {
+    "message": "DualLens could not read this PDF. The website may require you to sign in again, or the link may have expired. Download it to your computer, then choose the local file."
+  },
+  "pdfSwitchSessionUnavailable": {
+    "message": "The PDF is open, but could not be saved locally for refresh. Choose the file again if you reload this page."
+  },
+  "pdfSwitchSessionExpired": {
+    "message": "This reading session has expired or was cleared. Choose the local PDF to continue."
+  },
+  "pdfSwitchPrivateRefresh": {"message": "PDFs opened from private windows are not saved on this device. Please reopen the PDF after refreshing."}
 }

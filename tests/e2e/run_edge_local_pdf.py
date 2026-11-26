@@ -133,15 +133,13 @@ def run(p, root, chromium, chrome=False):
             popup = pending.value
             if allowed:
                 popup.locator('#pdf-open').wait_for()
-                with ctx.expect_page() as pending:
-                    popup.click('#pdf-open')
+                popup.click('#pdf-open')
             else:
                 popup.locator('#pdf-local-open').wait_for()
                 assert popup.locator('#pdf-open').count() == 0
                 assert popup.locator('#pdf-local-help').count() == 0
-                with ctx.expect_page() as pending:
-                    popup.click('#pdf-local-open')
-            reader = pending.value
+                popup.click('#pdf-local-open')
+            reader = page
             reader.wait_for_url(f'chrome-extension://{extension_id}/pdf/viewer.html*')
             reader.wait_for_load_state('domcontentloaded')
             if not allowed:
@@ -162,9 +160,11 @@ def run(p, root, chromium, chrome=False):
             wait(reader, '()=>document.querySelector(".pdf-page")?.dataset.rendered==="true"')
             assert reader.locator('.pdf-page').count() == 8
             assert '?' not in reader.url
+            reader.reload(wait_until='domcontentloaded')
+            wait(reader, '()=>document.querySelector(".pdf-page")?.dataset.rendered==="true"')
+            assert reader.locator('.pdf-page').count() == 8
             print('PASS file-access', 'ON one-click' if allowed else 'OFF visible entry -> notice -> primary fixture picker', flush=True)
             passed += 1
-            reader.close()
             popup.close()
             for restricted_url in ['chrome://settings/', 'chrome://newtab/', 'about:blank']:
                 page.goto(restricted_url)

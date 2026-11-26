@@ -23,13 +23,14 @@ export class ExtensionTranslateClient {
   valid() { return !!this.api.runtime?.id; }
 
   // handlers: { onResults(results[]), onDone() }. Returns the reqId.
-  request({ items, priority, to, from = 'auto', context, draft, purpose, mode }, handlers) {
+  request({ items, priority, to, from = 'auto', context, draft, purpose, mode, incognito }, handlers) {
     const reqId = `${this.tag}-${++this.seq}`;
     const msg = { type: MSG_TRANSLATE, reqId, to, from, priority, context, items };
     // Optional engine hints: `draft` asks for machine-translation drafts before the LLM result.
     if (draft === true) msg.draft = true;
     if (typeof purpose === 'string') msg.purpose = purpose;
     if (typeof mode === 'string') msg.mode = mode;
+    if (incognito === true) msg.incognito = true;
     this.reqs.set(reqId, {
       msg,
       remaining: new Set(items.map((i) => i.id)),

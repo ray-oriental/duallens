@@ -32,6 +32,7 @@ import { createSubtitleHandlers } from './subtitles.js';
 import { createFrameHandlers } from './frames.js';
 import { createTabInjector } from './injection.js';
 import { createPermissionRegistry } from './permissions.js';
+import { createTabCommandHandler } from './tab-command.js';
 
 const uiReady=initUiLanguage(getDefaultSettingsStore());
 const queue = createQueue();
@@ -134,7 +135,7 @@ chrome.runtime.onConnect.addListener((port) => {
     retain();
     uiReady.then(()=>translator
       .translate(
-        { ...msg, incognito:port.sender?.tab?.incognito!==false, items, priority, reqId: `${portId}:${reqId}` },
+        { ...msg, incognito:port.sender?.tab?.incognito!==false || msg.incognito===true, items, priority, reqId: `${portId}:${reqId}` },
         {
           signal: ctrl.signal,
           onPartial: (results) => {
@@ -190,11 +191,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // ---- tab messaging, shortcuts, context menu ------------------------------------------------
 
-async function sendToTab(tabId, message) {
-  if (tabId == null) return Promise.resolve(null);
-  if (!(await tabInjector.ensure(tabId)).ok) return null;
-  return chrome.tabs.sendMessage(tabId, message, { frameId: 0 }).catch(() => null);
-}
+export const handleTabCommand = createTabCommandHandler(chrome, tabInjector, pdfEntries);
+const sendToTab = handleTabCommand;
 
 async function activeTabId() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

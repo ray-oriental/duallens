@@ -3,7 +3,8 @@ import { pdfURL } from '../shared/pdf-url.js';
 
 export const MAX_PDF_BYTES = 64 * 1024 * 1024;
 export function checkPDFBytes(data) {
-  if (!data.byteLength || data.byteLength > MAX_PDF_BYTES) throw new Error(l10n('m6k'));
+  if (data.byteLength > MAX_PDF_BYTES) throw Object.assign(new Error(l10n('m6k')), {code:'pdf_too_large'});
+  if (!data.byteLength) throw new Error(l10n('m6k'));
   const header = new TextDecoder('latin1').decode(data.subarray(0, 1024));
   if (!header.includes('%PDF-')) throw new Error(l10n('m6l'));
   return data;
@@ -20,7 +21,7 @@ export async function readPDFURL(value, { fetchImpl = fetch, fileAccess = async 
   try {
     const r = await fetchImpl(url, { credentials: 'omit', redirect: 'error', signal: ctrl.signal });
     if (!r.ok) throw new Error(l10n('m6o'));
-    if (Number(r.headers.get('content-length')) > MAX_PDF_BYTES) throw new Error(l10n('m6k'));
+    if (Number(r.headers.get('content-length')) > MAX_PDF_BYTES) throw Object.assign(new Error(l10n('m6k')), {code:'pdf_too_large'});
     if (!r.body) return checkPDFBytes(new Uint8Array(await r.arrayBuffer()));
     reader = r.body.getReader();
     const chunks = [];
@@ -29,7 +30,7 @@ export async function readPDFURL(value, { fetchImpl = fetch, fileAccess = async 
       const { done, value: chunk } = await reader.read();
       if (done) break;
       size += chunk.byteLength;
-      if (size > MAX_PDF_BYTES) throw new Error(l10n('m6k'));
+      if (size > MAX_PDF_BYTES) throw Object.assign(new Error(l10n('m6k')), {code:'pdf_too_large'});
       chunks.push(chunk);
     }
     const data = new Uint8Array(size);
