@@ -89,7 +89,9 @@ export function measureColor(host,choice='auto') {
 
 export function presentationFacts(unit) {
   const h=unit.host,text=unit.plain||h.textContent.trim();
-  const control=h.closest('button,select,option,[role="button"],[role="tab"],[role="menuitem"],nav a,header a,[role="navigation"] a');
+  // Breadcrumb trails are navigation even when a site marks them up as a plain <p> or <div>.
+  const control=h.closest('button,select,option,[role="button"],[role="tab"],[role="menuitem"],nav a,header a,[role="navigation"] a,' +
+    'a[class*="breadcrumb" i],[class*="breadcrumb" i] a,[aria-label*="breadcrumb" i] a');
   const menu=denseLinkMenu(h.parentElement)||denseLinkMenu(h.parentElement?.parentElement);
   const title=!control&&!h.closest('.mw-editsection')&&(!!h.closest('h1,h2,h3,h4,h5,h6,[class*="title" i],[class*="headline" i],[class*="heading" i]') ||(h.localName==='a'&&!menu&&!h.closest('.subtext,.comhead')));
   return {tag:h.localName,role:h.getAttribute('role')||'',textLength:text.length,words:text.split(/\s+/).length,title,

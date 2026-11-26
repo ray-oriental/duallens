@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Classic forum topic</title>
+<!-- Classic table-based forum chrome (issue #33): breadcrumb links, nowrap pagination cells
+     beside a width=100% spacer, and a separated action bar. Markup is generic, not copied from a site. -->
+<style>
+body{margin:0;padding:12px;background:#0b0b0b;color:#d6d6d6;font:12px Verdana,Arial,sans-serif}
+a{color:#e0e0e0;text-decoration:none}
+table{border-collapse:collapse}
+td{padding:3px 4px}
+.breadcrumbs{font-weight:bold;margin:4px 0}
+.searchbar{overflow:hidden;margin:0 0 4px}
+.titles{font-size:18px;margin:8px 0}
+.nav{font-weight:bold}
+.cat{background:#1c1c1c}
+.post{background:#141414;font-size:13px;line-height:1.5}
+</style>
+</head>
+<body>
+<p class="searchbar"><span style="float:left"><a id="unanswered" href="#">View unanswered posts</a> | <a href="#">View active topics</a></span></p>
+<table width="100%" cellspacing="0"><tr><td class="row5" id="crumb-cell">
+  <p class="breadcrumbs" id="crumbs"><a class="breadcrumbs" href="#">Board index</a> » <a class="breadcrumbs" href="#">English Forums</a> » <a class="breadcrumbs" href="#">Main Forum</a></p>
+</td></tr></table>
+<h2 class="titles"><a href="#">[Info] Example topic about a classic game</a></h2>
+<p class="gensmall"><b><a href="#" title="Click to jump to page">Go to page</a> <strong>1</strong><span class="page-sep">, </span><a href="#">2</a><span class="page-sep">, </span><a href="#">3</a><span class="page-dots"> ... </span><a href="#">23</a> &nbsp;<a href="#">Next</a></b></p>
+<table width="100%" cellspacing="1" id="pager"><tr>
+  <td align="left" valign="middle" nowrap="nowrap"><a href="#"><img width="118" height="24" alt="Reply to topic" title="Reply to topic" style="background:#555;border-radius:12px"></a></td>
+  <td class="nav" id="page-cell" valign="middle" nowrap="nowrap">&nbsp;Page <strong>1</strong> of <strong>23</strong><br></td>
+  <td class="gensmall" id="count-cell" nowrap="nowrap">&nbsp;[ 337 posts ]&nbsp;</td>
+  <td class="gensmall" width="100%" align="right" nowrap="nowrap"></td>
+</tr></table>
+<table width="100%" cellspacing="1" id="actions"><tr class="cat">
+  <td class="nav" nowrap="nowrap" id="action-cell"><a href="#">Subscribe topic</a> | <a href="#">Bookmark topic</a> | <a href="#">Print view</a> | <a href="#">E-mail friend</a></td>
+  <td class="nav" align="right" nowrap="nowrap"><a href="#">Previous topic</a> | <a href="#">Next topic</a>&nbsp;</td>
+</tr></table>
+<table width="100%" cellspacing="1"><tr>
+  <td id="layout-cell"><h3 id="clipped" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:220px;margin:4px 0">A long clipped headline inside an ordinary table layout cell</h3></td>
+</tr><tr>
+  <td class="post" id="post">The repack was tested on two machines. Extract the archive, run the launcher once and the settings file will be created next to the executable. Report crashes with your system details.</td>
+</tr></table>
+</body>
+</html>

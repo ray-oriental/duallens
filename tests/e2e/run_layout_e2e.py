@@ -450,5 +450,55 @@ def auto_source_hint(h):
     assert h.js('()=>document.body.outerHTML')==before
     return 'co browser misclassification stays auto; Japanese hint/target filtering/explicit source retained; exact restore'
 
+@e.case('forum_table', 'Classic table forum: breadcrumb links stay on one line; nowrap pager cells keep their width; exact restore')
+def forum_table(h):
+    h.open('forum-table.html')
+    before=h.js('() => document.body.outerHTML')
+    zh={'Board index':'论坛首页','English Forums':'英语论坛','Main Forum':'主论坛','[ 337 posts ]':'[ 337 篇帖子 ]'}
+    h.js("""async ([ext,zh])=>{
+      const {PageTranslator}=await import(ext+'/content/controller.js');const {DEFAULT_SETTINGS}=await import(ext+'/shared/settings.js');
+      window.forumMode='bilingual';
+      window.forumCtl=new PageTranslator({getSettings:()=>({...DEFAULT_SETTINGS,displayMode:forumMode,sourceLang:'en',translation:{mode:'llm'},provider:{...DEFAULT_SETTINGS.provider,active:'mock'}}),
+        platform:{detectLanguage:async()=>({reliable:true,lang:'en',percentage:100}),translator:()=>({translateBatch(req,cb){
+          cb(req.items.map(it=>({id:it.id,text:zh[it.text.trim()]||'译文：'+it.text.replace(/^Page 1 of 23/,'第 1 页，共 23 页')})));return{cancel(){}};
+        }})}});forumCtl.start();
+    }""",[f'chrome-extension://{h.ext_id}',zh])
+    h.wait_js("() => ['#crumbs a','#page-cell','#count-cell','#post','#clipped'].every(s=>[...document.querySelectorAll(s)].every(el=>el.querySelector('dl-t[data-dl-state=done]')))")
+    h.wait_quiet()
+    geometry="""() => {
+      const line=el=>parseFloat(getComputedStyle(el).lineHeight)||parseFloat(getComputedStyle(el).fontSize)*1.3;
+      const cells=['page-cell','count-cell'].map(id=>{const el=document.getElementById(id),t=el.querySelector('dl-t');
+        const r=document.createRange();r.setStart(el,0);r.setEndBefore(t);const text=r.getBoundingClientRect();
+        return {id,cell:el.getBoundingClientRect().width,source:text.width,sourceRows:Math.round(text.height/line(el)),rows:Math.round(t.getBoundingClientRect().height/line(t)),translation:t.getBoundingClientRect().width};});
+      const crumbs=document.getElementById('crumbs');
+      return {cells,crumbRows:Math.round(crumbs.getBoundingClientRect().height/line(crumbs)),
+        crumbPresentation:[...crumbs.querySelectorAll('dl-t')].map(t=>t.dataset.dlPresentation),
+        crumbBlocks:[...crumbs.querySelectorAll('dl-t')].filter(t=>getComputedStyle(t).display==='block').length};
+    }"""
+    desktop=h.js(geometry)
+    for c in desktop['cells']:
+        assert c['sourceRows']==1 and c['rows']==1, f'nowrap cell keeps one line per language: {c}'
+        assert c['cell']>=max(c['source'],c['translation']), f'cell wide enough for both languages: {c}'
+    assert desktop['crumbRows']==1 and desktop['crumbBlocks']==0, f'breadcrumb trail stays one inline row: {desktop}'
+    assert h.js("() => document.getElementById('post').querySelector('dl-t').classList.contains('dl-block')"), 'post body keeps a block translation'
+    assert h.js("() => {const el=document.getElementById('clipped');return !!el.querySelector('dl-t')&&getComputedStyle(el).whiteSpace==='normal'&&getComputedStyle(el).overflowX==='visible'}"), 'clipped headline in a non-nowrap layout cell is still released'
+    out=e.E2E_ROOT/'v1'/'type'/'layout';out.mkdir(parents=True,exist_ok=True)
+    h.page.screenshot(path=str(out/'forum-table-desktop.png'),full_page=True)
+    h.page.set_viewport_size({'width':375,'height':812})
+    h.js("""async ext=>{const inj=await import(ext+'/content/injector.js');inj.write(()=>{for(const u of forumCtl.units.values())inj.refit(u,'bilingual')})}""",f'chrome-extension://{h.ext_id}')
+    phone=h.js(geometry)
+    for c in phone['cells']:
+        assert c['cell']>=c['source'] and c['sourceRows']==1, f'phone: pager cell never collapses below its source text: {c}'
+    assert phone['crumbBlocks']==0, f'phone: no breadcrumb link becomes a stacked block: {phone}'
+    h.page.screenshot(path=str(out/'forum-table-phone.png'),full_page=True)
+    h.page.set_viewport_size({'width':900,'height':800})
+    h.js("() => {forumMode='translation-only';forumCtl.setDisplayMode('translation-only')}")
+    solo=h.js("""() => ['page-cell','count-cell'].map(id=>{const el=document.getElementById(id),t=el.querySelector('dl-t');
+      return {solo:t.classList.contains('dl-solo'),rows:Math.round(t.getBoundingClientRect().height/(parseFloat(getComputedStyle(t).lineHeight)||16)),cell:el.getBoundingClientRect().width,translation:t.getBoundingClientRect().width}})""")
+    assert all(c['solo'] and c['rows']==1 and c['cell']>=c['translation'] for c in solo), f'translation-only cells keep one line: {solo}'
+    h.js('() => forumCtl.stop()')
+    assert h.js('() => document.body.outerHTML')==before, 'exact DOM restore'
+    return f"pager cells {[round(c['cell']) for c in desktop['cells']]}px, one line each; breadcrumbs {desktop['crumbPresentation']}; phone cells {[round(c['cell']) for c in phone['cells']]}px; exact restore"
+
 if __name__=='__main__':
     raise SystemExit(e.main(['--mock-only','--artifacts-dir',str(e.E2E_ROOT/'layout'/'offline'),*sys.argv[1:]]))
