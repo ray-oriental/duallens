@@ -3,9 +3,10 @@ import { t as l10n } from '../shared/i18n.js';
 import { pdfURL } from '../shared/pdf-url.js';
 import { readPDFURL } from '../pdf/source.js';
 import { createPDFHandoff } from '../pdf/handoff.js';
+import { createPDFSessions } from '../pdf/session.js';
+import { inspectPDFTab, readPDFTab } from './pdf-tab-read.js';
 import { uiLanguage } from '../shared/i18n.js';
 export { pdfURL };
-const TEXT = { get permission(){return l10n('m16');} };
 export function hasPDFExtension(value) {
   try { return /\.pdf$/i.test(new URL(value).pathname); } catch { return false; }
 }
@@ -48,9 +49,11 @@ export async function probePDFType(url, fetchImpl = globalThis.fetch, timeoutMs 
   return false;
 }
 
-export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = createPDFHandoff()) {
-  registerPDFHandoffCleanup(api, handoff);
-  const menuId = 'dl-open-pdf';
+export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = createPDFHandoff(), sessions = createPDFSessions()) {
+  registerPDFHandoffCleanup(api, { prune: () => Promise.allSettled([
+    Promise.resolve().then(() => handoff.prune()), Promise.resolve().then(() => sessions.prune()),
+  ]) });
+  api.tabs?.onRemoved?.addListener(tabId => Promise.resolve().then(() => sessions.removeTab(tabId)).catch(() => {}));
   let creatingOCR;
   const ocrJobs = new Map();
   async function pdfOCR(msg, sender) {
@@ -81,55 +84,70 @@ export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = cr
         base64:msg.base64,mime:'image/png',lang:msg.lang,jobId:msg.jobId,allowDownload:msg.allowDownload === true,uiLanguage:uiLanguage() });
     } finally { ocrJobs.delete(msg.jobId); }
   }
-  async function status(tab) {
+  async function status(tab, { probe = true } = {}) {
+    const identity = await inspectPDFTab(api, tab?.id);
+    if (identity) return { ok: true, available: identity.contentType === 'application/pdf',
+      url: pdfURL(identity.href), identity,
+      ...(identity.href.startsWith('file:') && identity.contentType === 'application/pdf' ?
+        { requiresFileSelection: !await fileAccess() } : {}) };
     const url = pdfURL(tab?.url);
     if (!url) return { ok: true, available: false };
     if (hasPDFExtension(url)) return { ok: true, available: true, url,
       ...(url.startsWith('file:') ? { requiresFileSelection: !await fileAccess() } : {}) };
     if (new URL(url).protocol === 'file:') return { ok: true, available: false };
-    return { ok: true, available: await probePDFType(url, fetchImpl), url };
+    return { ok: true, available: probe ? await probePDFType(url, fetchImpl) : false, url };
   }
   async function fileAccess() {
     try { return !!await api.extension?.isAllowedFileSchemeAccess?.(); } catch { return false; }
   }
-  async function openLocal(tab) {
+  async function navigate(tab, query) {
+    const url = api.runtime.getURL('pdf/viewer.html?' + query + (tab.incognito === true ? '&private=1' : ''));
+    // Spanning extension documents are blocked inside incognito tabs. Keep the source intact.
+    if (tab.incognito === true) await api.tabs.create({ url });
+    else await api.tabs.update(tab.id, { url });
+  }
+  // A failed read keeps the original tab: one-time links and POST results may not load again.
+  async function notice(tab, query) {
+    await api.tabs.create({ url: api.runtime.getURL('pdf/viewer.html?' + query + (tab.incognito === true ? '&private=1' : '')) });
+  }
+  async function openLocal(tab, { translate = false } = {}) {
     const needsAccess = !await fileAccess();
     const url = pdfURL(tab?.url), name = url.startsWith('file:') && hasPDFExtension(url) ? pdfFilename(url) : '';
-    await api.tabs.create({ url: api.runtime.getURL('pdf/viewer.html?notice=' +
-      (needsAccess ? 'file-access' : 'local-file') + (name ? '&name=' + encodeURIComponent(name) : '')) });
+    await navigate(tab, 'notice=' + (needsAccess ? 'file-access' : 'local-file') +
+      (name ? '&name=' + encodeURIComponent(name) : '') + (translate ? '&translate=1' : ''));
     return { ok: true };
   }
-  async function open(tab) {
-    const r = await status(tab);
+  async function open(tab, { translate = false, knownStatus } = {}) {
+    const r = knownStatus || await status(tab);
     if (!r.available) return { ok: false, error: { get message(){return l10n('m17');} } };
-    if (r.requiresFileSelection) return openLocal(tab);
+    if (r.requiresFileSelection) return openLocal(tab, { translate });
     let token;
     try {
       // Fetch while the explicitly operated tab still has activeTab access.
-      const data = await readPDFURL(r.url, {fetchImpl,
-        fileAccess:()=>api.extension?.isAllowedFileSchemeAccess?.() || Promise.resolve(false)});
+      let data;
+      try { data = await readPDFTab(api, tab.id, r.identity); }
+      catch (error) {
+        if (error.code === 'pdf_too_large') throw error;
+        data = await readPDFURL(r.url, {fetchImpl,
+          fileAccess:()=>api.extension?.isAllowedFileSchemeAccess?.() || Promise.resolve(false)});
+      }
       token = await handoff.put(data, pdfFilename(r.url));
-      await api.tabs.create({ url: api.runtime.getURL('pdf/viewer.html?token=' + encodeURIComponent(token)) });
+      await navigate(tab, 'token=' + encodeURIComponent(token) + (translate ? '&translate=1' : ''));
       return { ok: true };
-    } catch {
-      if(token)await handoff.remove(token);
-      return {ok:false,error:{code:'pdf_source',message:TEXT.permission}};
+    } catch (error) {
+      if(token)await handoff.remove(token).catch(() => {});
+      const name = pdfFilename(r.url);
+      if (error.code === 'pdf_too_large') {
+        // Native PDF tabs cannot display a content-script error for shortcut/menu actions.
+        await notice(tab, 'notice=too-large' + (name ? '&name=' + encodeURIComponent(name) : ''));
+        return {ok:false,error:{code:error.code,message:l10n('m6k')}};
+      }
+      await notice(tab, 'notice=read-failed' + (name ? '&name=' + encodeURIComponent(name) : '') + (translate ? '&translate=1' : ''));
+      return {ok:false,error:{code:'pdf_source',message:l10n('pdfSwitchReadFailed')}};
     }
-  }
-  async function openFromMenu(tab) {
-    // A menu click explicitly asks for PDF reading, even when Edge hides the URL.
-    if (!tab?.url && !await fileAccess()) return openLocal(tab);
-    const result = await open(tab);
-    if (!result.ok) {
-      // An extension-owned notice works on pages where content injection is
-      // forbidden, and needs no notifications permission or document mutation.
-      await api.tabs.create({ url: api.runtime.getURL('pdf/viewer.html?notice=not-pdf') });
-    }
-    return result;
   }
   return {
-    menu: { id: menuId, get title(){return l10n('m18');}, contexts: ['page'] },
-    open, openFromMenu,
+    open, openLocal, status, fileAccess,
     handlers: {
       'pdf-ocr': pdfOCR,
       'pdf-ocr-cancel': async (msg,sender) => {
@@ -139,7 +157,12 @@ export function createPDFEntries(api, fetchImpl = globalThis.fetch, handoff = cr
         job.cancelled = true;
         return api.runtime.sendMessage({target:'comics-offscreen',type:'pdf-ocr-cancel',jobId:msg.jobId}).catch(()=>({ok:true}));
       },
-      'pdf-status': async (msg,sender) => trusted(sender) ? status(await api.tabs.get(msg.tabId)) : {ok:false},
+      'pdf-status': async (msg,sender) => {
+        if (!trusted(sender)) return {ok:false};
+        // The popup never probes the network: an uninspectable http(s) page is simply not offered as a PDF.
+        const { identity, ...result } = await status(await api.tabs.get(msg.tabId), { probe: msg.probe === true });
+        return result;
+      },
       'pdf-open': async (msg,sender) => trusted(sender) ? open(await api.tabs.get(msg.tabId)) : {ok:false},
       'pdf-open-local': async (msg,sender) => trusted(sender) ? openLocal(await api.tabs.get(msg.tabId)) : {ok:false},
     },

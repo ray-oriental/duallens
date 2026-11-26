@@ -153,7 +153,7 @@
     "message": "机器翻译没有返回结果"
   },
   "m16": {
-    "message": "无法读取此 PDF。请允许该来源，或下载后在阅读页选择本地文件。"
+    "message": "DualLens 没能读取这个 PDF。可以先下载，再到阅读器选择本地文件。"
   },
   "m17": {
     "message": "当前页面未确认是 PDF，请先打开 PDF 文件。"
@@ -788,7 +788,7 @@
     "message": "请在扩展详情页开启“允许访问文件网址”，或用上方“选择本地 PDF”。"
   },
   "m6o": {
-    "message": "无法读取 PDF；需要登录或重定向的文档请先下载，再选择本地文件。"
+    "message": "无法读取这个 PDF，网站可能要求登录，或链接已经失效。"
   },
   "m6p": {
     "message": "没有收到完整译文"
@@ -917,7 +917,7 @@
     }
   },
   "m7f": {
-    "message": "无法打开 PDF：文件无效、过大、加密，或链接需要登录/重定向。请先下载后选择本地文件；file:// 需允许访问文件网址。"
+    "message": "无法打开 PDF：文件可能无效、过大或已加密。请换一个 PDF 文件。"
   },
   "m7g": {
     "message": "读取此 PDF 需要你允许访问该来源。也可以选择已下载的本地文件。"
@@ -929,7 +929,7 @@
     "message": "当前页面未确认是 PDF（或匿名探测失败）。请打开 PDF 文件后重试，也可选择已下载的本地 PDF。"
   },
   "m7j": {
-    "message": "请选择本地 PDF，或从 PDF 标签页的 DualLens 弹出页/右键菜单打开。"
+    "message": "请选择本地 PDF，或在 PDF 标签页点击「用 DualLens 打开此 PDF」。"
   },
   "m7k": {
     "message": "后台没有响应"
@@ -3349,5 +3349,18 @@
   },
   "uxTranslationColorHint": {
     "message": "自动会根据网页配色弱化原文颜色；选定颜色在深色网页上会自动换成更亮的一档。"
-  }
+  },
+  "pdfSwitchStatus": {
+    "message": "这个 PDF 在浏览器自带的阅读器里打开。换到 DualLens 阅读器即可双语对照。"
+  },
+  "pdfSwitchReadFailed": {
+    "message": "DualLens 没能读取这个 PDF（网站可能要求重新登录，或链接已经失效）。可以先把它下载到电脑，再选择本地文件。"
+  },
+  "pdfSwitchSessionUnavailable": {
+    "message": "PDF 已打开，但没能保存本机阅读会话。刷新后可能需要重新选择文件。"
+  },
+  "pdfSwitchSessionExpired": {
+    "message": "阅读会话已过期或被清理，请选择本地 PDF 继续阅读。"
+  },
+  "pdfSwitchPrivateRefresh": {"message": "无痕窗口里的 PDF 不保存在本机，刷新后请重新打开。"}
 }

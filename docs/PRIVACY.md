@@ -13,11 +13,11 @@
 - 以上请求都不带 cookie（`credentials: omit`）；服务商能看到你的 IP 地址、浏览器 User-Agent 与请求来源标识。这些免费端点不是微软/谷歌面向第三方的正式服务，可能随时变动或失效，其对文字的处理由各自条款决定；DualLens 与这两家公司没有隶属关系。
 - 首次向某个服务发送前，上手、设置或当前翻译工具会先说明去向并由你确认；尚未确认时，页面卡片需点"继续翻译"后才发送。仅发往本机回环地址（`localhost`/`127.0.0.1`/`::1`）的本地模型不需要确认。
 
-**保存在本机什么**：设置、术语表、站点规则（可由浏览器同步，不含密钥）；API key（扩展用 chrome.storage.local，用户脚本用脚本管理器存储；仅本机，**未加密**保存，不同步、不进明文导出）；译文缓存（默认 30 天、最多 50000 条，可一键清除；隐身/InPrivate 请求不读写缓存；侧栏等无法确认窗口状态的上下文也停用缓存；用户脚本以管理器提供的隐身标志判断，未知时同样停用；译文可能来自你浏览的私密页面）；已下载的 OCR 语言包；打开网页 PDF 时用于交接的临时副本（五分钟后逻辑过期并拒绝读取，读取成功即删除；后台初始化、浏览器启动、扩展安装／更新及下次写入或读取交接缓存时清理过期副本，无严格定时物理删除保证）。
+**保存在本机什么**：设置、术语表、站点规则（可由浏览器同步，不含密钥）；API key（扩展用 chrome.storage.local，用户脚本用脚本管理器存储；仅本机，**未加密**保存，不同步、不进明文导出）；译文缓存（默认 30 天、最多 50000 条，可一键清除；隐身/InPrivate 请求不读写缓存；侧栏等无法确认窗口状态的上下文也停用缓存；用户脚本以管理器提供的隐身标志判断，未知时同样停用；译文可能来自你浏览的私密页面）；已下载的 OCR 语言包；用于刷新恢复的本机 PDF 阅读会话（每条 ≤64 MiB、最多三份、24 小时逻辑过期；关标签页按 tabId 尽力删除；无活动上下文时可能保留至下次清理）；打开网页 PDF 时用于交接的临时副本（五分钟后逻辑过期并拒绝读取，读取成功即删除；后台初始化、浏览器启动、扩展安装／更新及下次写入或读取交接缓存时清理过期副本，无严格定时物理删除保证）。
 
 **浏览器同步**：设置、术语表、站点规则、自定义提示、服务地址与模型名会通过你浏览器自带的同步服务在你的设备间同步（由浏览器厂商运营，不经过 DualLens）。API key 与"已确认的去向"不同步。
 
-**其他网络请求**：①你打开 PDF 或图片文字时，会匿名下载对应文件；②首次使用图片文字时，从 GitHub（`raw.githubusercontent.com`，固定提交与 SHA-256）下载 OCR 语言包，GitHub 可看到你的 IP；③用户脚本版由 Tampermonkey 向 GitHub、jsDelivr 获取并校验固定版本资源。
+**其他网络请求**：①你点击打开 PDF 时，用该标签页自己的登录状态再读一次正在看的 PDF，优先使用浏览器缓存；失败才尝试匿名读取。图片文字使用匿名下载；②首次使用图片文字时，从 GitHub（`raw.githubusercontent.com`，固定提交与 SHA-256）下载 OCR 语言包，GitHub 可看到你的 IP；③用户脚本版由 Tampermonkey 向 GitHub、jsDelivr 获取并校验固定版本资源。
 
 **Limited Use**：DualLens 对用户数据的使用仅限于提供和改进"翻译你正在查看的内容"这一单一用途；不出售、不用于广告、不用于与该用途无关的目的，也不用于判断资信或放贷。
 
@@ -27,7 +27,9 @@
 
 翻译与模型列表请求要求不跟随重定向（`redirect: 'error'`），请直接配置最终服务地址；旧脚本管理器的兼容限制见 [报错体系](ERRORS.md#传输可观察性与兼容限制)。
 
-弹出页只在无法注入当前页（例如内置 PDF 查看器）或网址路径以 `.pdf` 结尾时检查 PDF 类型；`.pdf` 路径无需探测，否则向原站完整 URL 发送匿名 HEAD，必要时 Range GET（最多读取文件头），不跟随重定向。点击打开 PDF 才下载完整文件（上限 64 MiB）；暂存最多 3 份，读取即删，过期项在后台初始化、浏览器启动、扩展安装／更新及下次写入或读取交接缓存时清理；无活动上下文时可能保留到下次清理。选择的本地文件只在内存解析；翻译只发送文本块，不上传 PDF、文件名或 URL。图片也仅下载到本机用于 OCR，不上传像素。
+弹出页在你点击扩展图标后，只读识别当前顶层文档类型。点击打开后，用该标签页自己的登录状态读取当前 PDF，优先使用浏览器缓存，不读取其他页面或页面内链接；弹出页、快捷键和菜单不发网络探测，注入失败时只按后缀判断。完整读取上限 64 MiB，字节经一次性交接缓存进入阅读器，并保存在扩展来源 IndexedDB 阅读会话（最多三条、每条 64 MiB、24 小时逻辑过期），支持刷新与后退再前进。启动、安装和写入时清理过期记录，关闭标签页按 tabId 尽力删除；浏览器退出或扩展停用时不保证即时物理删除。字节、URL 和文件名留在本机，不发给翻译服务。手选本地文件遵循同样会话限制。
+
+无痕／InPrivate 来源的 PDF 不读写上述阅读会话，也不读写译文缓存；刷新后须重新打开。默认 spanning 模式下，浏览器将另开的阅读器放在普通窗口，来源标志仍使本次文档保持私密处理；手选文件也沿用此状态。标签页只保存一个布尔隐私标志，若 sessionStorage 不可用则保留 `private=1`。原有五分钟一次性交接缓存保持不变，消费即删；这不是从未落盘或立即物理删除的保证。
 
 PDF 导出完全在本机生成，不上传 PDF 或页面图像；显式开启扫描页 OCR 后，页面只在本机识别，识别分块仅存本次阅读的内存，只有置信度较高的文字发送给所选翻译服务。缺少 OCR 语言包时先说明来源和体积，经确认才下载与校验。
 
@@ -52,11 +54,11 @@ In-page input-box, selection, hover translation and in-place retry respond only 
 - Requests carry no cookies. Providers can see your IP address, User-Agent and the extension origin. The free endpoints are not official third-party services of Microsoft or Google, may change or stop at any time, and are governed by those companies' terms. DualLens is not affiliated with either.
 - Before text is first sent to a service, setup, Settings or the current translation tool explains the destination and asks you to confirm. An unacknowledged destination shows a card and text goes out only after Continue. Local models on a loopback address (localhost, 127.0.0.1, ::1) need no confirmation.
 
-Stored on your device: settings, glossary, site rules (synced by your browser, no keys); API keys (device only in chrome.storage.local or userscript-manager storage, stored unencrypted, never synced or in plaintext exports); translation cache (30 days and up to 50,000 entries by default, disabled for incognito/InPrivate requests and contexts without an authoritative normal-window flag (including unknown userscript-manager state), may contain translations of private pages, clearable); downloaded OCR language data; a temporary copy of a web PDF while the reader tab opens (logically expires after five minutes and cannot then be read; consumed bytes are deleted immediately, while expired copies are purged on worker initialization, browser startup, extension install/update, or the next handoff write/read; no exact physical-deletion timer is guaranteed).
+Stored on your device: settings, glossary, site rules (synced by your browser, no keys); API keys (device only in chrome.storage.local or userscript-manager storage, stored unencrypted, never synced or in plaintext exports); translation cache (30 days and up to 50,000 entries by default, disabled for incognito/InPrivate requests and contexts without an authoritative normal-window flag (including unknown userscript-manager state), may contain translations of private pages, clearable); downloaded OCR language data; a temporary copy of a web PDF while the reader tab opens (logically expires after five minutes and cannot then be read; consumed bytes are deleted immediately, while expired copies are purged on worker initialization, browser startup, extension install/update, or the next handoff write/read; no exact physical-deletion timer is guaranteed). PDF reading sessions also retain bytes and filenames locally (64 MiB each, at most three, 24-hour logical expiry). Tab closure deletes matching records on a best-effort basis; inactive or terminated browsers may retain bytes until later cleanup.
 
 Browser sync carries settings, glossary, site rules, custom prompt, service URLs and model names via your browser vendor's sync service, not DualLens. Keys and "confirmed destinations" never sync.
 
-Other requests: PDFs and images you ask to translate are downloaded anonymously; OCR language data is fetched once from GitHub (raw.githubusercontent.com, pinned commit, SHA-256 verified), so GitHub sees your IP; the userscript edition fetches pinned resources from GitHub and jsDelivr through Tampermonkey.
+Other requests: after your explicit PDF action, the current tab rereads its PDF with its own sign-in state and prefers the browser cache. Anonymous reading is a fallback. Images are downloaded anonymously. OCR language data is fetched from pinned, verified GitHub resources; Tampermonkey fetches pinned userscript resources from GitHub and jsDelivr.
 
 Limited Use: user data is used only to provide and improve the single purpose of translating content you are viewing. It is not sold, used for advertising, used for unrelated purposes, or used to determine creditworthiness.
 
@@ -66,7 +68,9 @@ Deliberately clicking Fetch models requests a model list; Test connection sends 
 
 Translation and model-list requests require no redirects (`redirect: 'error'`); configure the final service address directly. See [error handling](ERRORS.md#传输可观察性与兼容限制) for older script-manager limitations.
 
-The popup checks PDF type only if injection fails (such as the built-in PDF viewer) or the URL path ends in .pdf. A .pdf path needs no probe; otherwise an anonymous HEAD, then if needed a Range GET for the header, goes to the original full URL without redirects. Full PDF bytes are fetched only on Open (64 MiB maximum); up to three temporary copies logically expire after five minutes and are deleted immediately when consumed. Expired records are purged on worker initialization, browser startup, extension install/update, or the next handoff write/read; without an active context, bytes may remain until the next cleanup. Selected local files are processed in memory. Only text blocks are translated, without PDF bytes, filename or URL. Images are downloaded for local OCR; pixels are never uploaded.
+After an explicit action, the popup inspects only the top document type. PDF bytes are read in that tab’s isolated world using its own sign-in state, preferring browser cache, then transferred locally in bounded chunks. The popup, shortcut and menu send no network probe; if injection fails, only the URL suffix is checked. The one-use handoff is consumed and deleted; local reading sessions restore refresh/history without another site request (at most three records, 64 MiB each, 24-hour logical expiry). Startup, installation and writes prune expiry; closing a tab deletes its sessions on a best-effort basis, without exact physical-deletion guarantees. Local selections follow the same limits. No PDF bytes, filenames or URLs are sent to translation providers.
+
+PDFs opened from incognito/InPrivate sources neither read nor write reading sessions or translation caches, including when the spanning reader opens in a normal window. Refresh requires reopening the PDF; locally selected files retain this private-source state. A tab-local boolean preserves privacy after URL cleanup, or `private=1` remains if sessionStorage is unavailable. The existing five-minute, one-use handoff is unchanged and deleted on consumption; this does not guarantee that the handoff never touches disk or immediate physical deletion.
 
 PDF export is generated entirely on this device, without uploading PDFs or page images. After you explicitly enable scanned-page OCR, images are recognized on this device and recognition blocks stay in reading-session memory; only high-confidence text is sent to your selected translation service. Missing language packs disclose their source and size and are downloaded and verified only after confirmation.
 

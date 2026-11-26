@@ -293,7 +293,7 @@ def pdf_math(h):
     popup = h.ctx.new_page()
     popup.add_init_script('if(globalThis.chrome?.tabs)chrome.tabs.query=async()=>[{id:' + str(h.tab_id) + ',url:' + json.dumps(page.url) + '}];')
     popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
-    popup.locator('#onboard-skip,#toggle').first.wait_for(state='attached')
+    popup.locator('#onboard-skip,#toggle,#pdf-open').first.wait_for(state='attached')
     if popup.locator('#onboard-skip').count():popup.locator('#onboard-skip').click()
     popup.locator('#toggle:enabled').wait_for()
     popup.click('#toggle')
@@ -323,10 +323,9 @@ def pdf_entries(h):
         popup.add_init_script('if(globalThis.chrome?.tabs)chrome.tabs.query=async()=>[{id:'+str(tab['id'])+',url:'+json.dumps(h.base+suffix)+'}];')
         popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
         popup.locator('#pdf-open').wait_for()
-        with h.ctx.expect_page() as new_page:
-            popup.locator('#pdf-open').click()
+        pdf_page = next(page for page in h.ctx.pages if page.url == h.base + suffix)
+        popup.locator('#pdf-open').click()
         popup.close()
-        pdf_page = new_page.value
         h.page = pdf_page
         pdf_page.wait_for_url(f'chrome-extension://{h.ext_id}/pdf/viewer.html*')
         wait_for(pdf_page, rendered(1), 30)
@@ -375,7 +374,7 @@ def pdf_local_no_access(h, hidden=True):
     popup.add_init_script('if(globalThis.chrome?.tabs)chrome.tabs.query=async()=>['+json.dumps(popup_tab)+'];')
     popup.goto(f'chrome-extension://{h.ext_id}/ui/popup.html')
     h.page=popup
-    popup.locator('#onboard-skip,#toggle').first.wait_for(state='attached')
+    popup.locator('#onboard-skip,#toggle,#pdf-open').first.wait_for(state='attached')
     if popup.locator('#onboard-skip').count():popup.click('#onboard-skip')
     if hidden:
         popup.locator('#pdf-local-open').wait_for()
@@ -384,9 +383,10 @@ def pdf_local_no_access(h, hidden=True):
     else:
         popup.locator('#pdf-open').wait_for()
         assert popup.locator('#pdf-local-help').count()==0
-    with h.ctx.expect_page() as pending:
-        popup.click('#pdf-local-open' if hidden else '#pdf-open')
-    page=pending.value;h.page=page
+    popup.click('#pdf-local-open' if hidden else '#pdf-open')
+    page=local;h.page=page
+    page.wait_for_url(f'chrome-extension://{h.ext_id}/pdf/viewer.html*')
+    page.bring_to_front()
     page.locator('#local-notice').wait_for()
     assert '没有允许 DualLens 读取本地文件' in page.locator('#local-explanation').inner_text()
     assert page.locator('#local-choose').is_visible()
@@ -402,7 +402,7 @@ def pdf_local_no_access(h, hidden=True):
             page.emulate_media(color_scheme=theme)
             page.screenshot(path=str(shots/f'reader-{theme}.png'))
     assert page.locator('.pdf-page').count()==0
-    assert '?' not in page.url
+    assert 'notice=file-access' in page.url
     with h.ctx.expect_page() as details:
         page.click('#extension-details')
     details.value.wait_for_url('chrome://extensions/*')
@@ -479,6 +479,51 @@ def pdf_origin_prompt(h):
     assert page.evaluate('()=>window.originRequest')=={'origins':['https://files.example/*']}
     assert not calls and page.locator('.pdf-page').count()==0
     return 'other reader source: button invokes scoped requestOrigin; denied permission sends no request'
+
+
+def pdf_sessions(h):
+    page, errors = viewer(h, h.base + '/pdf-field-notebook.pdf')
+    session_id = page.evaluate("sessionStorage.getItem('duallens.pdf.session')")
+    assert session_id and '?' not in page.url
+    page.reload(wait_until='domcontentloaded')
+    wait_for(page, rendered(1))
+    assert page.locator('.pdf-page').count() == 8
+    assert page.evaluate("sessionStorage.getItem('duallens.pdf.session')") == session_id
+    page.locator('#local-file').set_input_files(str(e2e.E2E_ROOT / 'pdf-fixture' / 'math-notes.pdf'))
+    wait_for(page, "()=>document.querySelectorAll('.pdf-page').length===6 && document.querySelector('.pdf-page')?.dataset.rendered==='true'")
+    assert page.evaluate("sessionStorage.getItem('duallens.pdf.session')") == session_id
+    page.reload(wait_until='domcontentloaded')
+    wait_for(page, rendered(1))
+    assert page.locator('.pdf-page').count() == 6
+    bridge = h.ctx.new_page()
+    bridge.goto(f'chrome-extension://{h.ext_id}/pdf/viewer.html?notice=too-large')
+    bridge.locator('#local-choose').wait_for()
+    assert '64 MiB' in bridge.locator('#local-explanation').inner_text()
+    h.page = bridge
+    page.close()
+    bridge.evaluate('id=>window.closedSession=id', session_id)
+    wait_for(bridge, """async()=>{const {createPDFSessions}=await import('./session.js');
+      return (await createPDFSessions().get(window.closedSession))===null;}""")
+    assert bridge.evaluate("""async()=>{
+      const {createPDFSessions}=await import('./session.js');
+      let time=1000;const store=createPDFSessions({now:()=>time});
+      const bytes=new TextEncoder().encode('%PDF-1.4\\nlocal session fixture');
+      const first=await store.put(bytes,'first',{tabId:70});time++;
+      const second=await store.put(bytes,'second',{tabId:71});time++;
+      await store.put(bytes,'third',{tabId:72});time++;
+      await store.put(bytes,'fourth',{tabId:73});
+      if(await store.get(first)!==null||!(await store.get(second)))throw Error('capacity');
+      await store.removeTab(71);if(await store.get(second)!==null)throw Error('tab cleanup');
+      time+=24*60*60*1000;
+      const fresh=await store.put(bytes,'fresh');
+      const db=await new Promise((ok,fail)=>{const r=indexedDB.open('duallens-pdf-sessions',1);r.onsuccess=()=>ok(r.result);r.onerror=()=>fail(r.error);});
+      const count=await new Promise(ok=>{const r=db.transaction('files').objectStore('files').count();r.onsuccess=()=>ok(r.result);});db.close();
+      if(count!==1||(await store.get(fresh)).name!=='fresh')throw Error('expiry on write');
+      time+=24*60*60*1000;if(await store.get(fresh)!==null)throw Error('logical expiry');
+      return true;
+    }""")
+    assert not errors, errors
+    return '?file= refresh restores; local replacement reuses session id and refreshes; real tabs.onRemoved deletes bytes; real IndexedDB capacity/expiry/write cleanup'
 
 
 def pdf_stages(h):
@@ -559,7 +604,11 @@ def pdf_probe(h):
         before = [r for r in Handler.requests if r['path'] == path]
         assert not any(r['method'] == 'HEAD' for r in before), 'Background HEAD observation'
         Handler.requests.clear()
-        status = bridge.evaluate('async id=>await chrome.runtime.sendMessage({type:"pdf-status",tabId:id})', tab['id'])
+        status = bridge.evaluate('''async id=>{
+          const {createPDFEntries}=await import('../background/pdf.js');
+          const api={...chrome,scripting:{executeScript:async()=>{throw Error('test denied injection');}}};
+          return createPDFEntries(api).status(await chrome.tabs.get(id));
+        }''', tab['id'])
         probes = [r for r in Handler.requests if r['path'] == path]
         expected = ['HEAD'] if path == '/ordinary.html' else ['HEAD', 'GET']
         assert [r['method'] for r in probes] == expected, probes
@@ -569,24 +618,16 @@ def pdf_probe(h):
         assert status['available'] == (path == '/range-download')
         Handler.requests.clear()
         if path == '/range-download':
-            with h.ctx.expect_page() as opened:
-                result = bridge.evaluate('async id=>await chrome.runtime.sendMessage({type:"pdf-open",tabId:id})', tab['id'])
+            page = next(page for page in h.ctx.pages if page.url == h.base + path)
+            result = bridge.evaluate('async id=>await chrome.runtime.sendMessage({type:"pdf-open",tabId:id})', tab['id'])
             assert result['ok']
-            page = opened.value
             h.page = page
+            page.wait_for_url(f'chrome-extension://{h.ext_id}/pdf/viewer.html*')
             wait_for(page, rendered(1), 30)
         elif path == '/ordinary.html':
-            with h.ctx.expect_page() as opened:
-                result = bridge.evaluate('''async id=>{
-                    const {createPDFEntries}=await import('../background/pdf.js');
-                    return createPDFEntries(chrome).openFromMenu(await chrome.tabs.get(id));
-                }''', tab['id'])
+            result = bridge.evaluate('async id=>await chrome.runtime.sendMessage({type:"pdf-open",tabId:id})', tab['id'])
             assert not result['ok']
-            page = opened.value
-            h.page = page
-            page.locator('#status.error').wait_for()
-            assert '当前页面未确认是 PDF' in page.locator('#status').inner_text()
-            assert page.locator('.pdf-page').count() == 0
+            assert next(page for page in h.ctx.pages if page.url == h.base + path).url.endswith('/ordinary.html')
     return 'no webRequest/startup probes; HEAD success/non-PDF; HEAD 405 -> anonymous Range GET; viewer/notice outcomes'
 
 
@@ -812,7 +853,7 @@ def main():
         spec['eng']['url']=base+'/eng.traineddata'
         (ext/'offscreen/languages.json').write_text(json.dumps(spec),encoding='utf-8')
     results = []
-    cases = [('pdf_consent',pdf_consent), ('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_local_no_access',pdf_local_no_access), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_origin_prompt', pdf_origin_prompt), ('pdf_export',pdf_export), ('pdf_export_cancel',pdf_export_cancel), ('pdf_export_consent',pdf_export_consent), ('pdf_ocr_cancel',pdf_ocr_cancel), ('pdf_scanned',pdf_scanned)]
+    cases = [('pdf_consent',pdf_consent), ('pdf_reading', pdf_reading), ('pdf_math', pdf_math), ('pdf_stages', pdf_stages), ('pdf_reflow_start', pdf_reflow_start), ('pdf_entries', pdf_entries), ('pdf_local_no_access',pdf_local_no_access), ('pdf_probe', pdf_probe), ('pdf_handoff', pdf_handoff), ('pdf_sessions',pdf_sessions), ('pdf_origin_prompt', pdf_origin_prompt), ('pdf_export',pdf_export), ('pdf_export_cancel',pdf_export_cancel), ('pdf_export_consent',pdf_export_consent), ('pdf_ocr_cancel',pdf_ocr_cancel), ('pdf_scanned',pdf_scanned)]
     try:
         with e2e.sync_playwright() as p:
             for name, case in [*cases, ('pdf_local_known_no_access',pdf_local_known_no_access)]:

@@ -77,15 +77,16 @@ test('extension-owned PDF viewer is already a controller; other extension pages 
   url='chrome-extension://own/ui/options.html';
   assert.deepEqual(await injector.ensure(1),{ok:false,reason:'restricted'});
 });
-test('PDF toolbar fetch uses activeTab despite absent permanent origin access, and failed reads never open', async () => {
+test('PDF toolbar fetch uses activeTab despite absent permanent origin access, and failed reads open an actionable notice', async () => {
   let reads=0,opened=0;
   const api={runtime:{getURL:p=>'chrome-extension://test/'+p},permissions:{contains:async()=>false},
-    tabs:{get:async()=>({id:7,url:'https://files.example/a.pdf'}),create:async()=>{opened++;}}};
+    tabs:{get:async()=>({id:7,url:'https://files.example/a.pdf'}),update:async()=>{throw new Error('the PDF tab must stay');},
+      create:async value=>{assert.ok(value.url.includes("notice=read-failed"));opened++;}}};
   const sender={url:'chrome-extension://test/ui/popup.html'};
   const handlers=createPDFEntries(api,async()=>{reads++;throw new Error('no activeTab');}).handlers;
   assert.equal((await handlers['pdf-status']({tabId:7},sender)).available,true);
   const result=await handlers['pdf-open']({tabId:7},sender);
-  assert.equal(result.ok,false);assert.equal(reads,1);assert.equal(opened,0);
+  assert.equal(result.ok,false);assert.equal(reads,1);assert.equal(opened,1);
 });
 
 test('cross-host captions fail with an actionable permission error before any network call', async () => {

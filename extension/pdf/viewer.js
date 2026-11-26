@@ -16,6 +16,8 @@ import { blockSource } from './segments.js';
 import { planBlock, sampleColors, cssColor, inkBounds } from './layout.js';
 import { PdfTranslations } from './translate.js';
 import { checkPDFBytes, readPDFURL, MAX_PDF_BYTES } from './source.js';
+import { createPDFSessions } from './session.js';
+import { pdfPrivacy } from './privacy.js';
 import { withSendConfirmation } from '../content/confirmation.js';
 import { engineSummary } from '../ui/components.js';
 import { createOverlay } from '../content/overlay.js';
@@ -33,6 +35,15 @@ const platform = withSendConfirmation(rawPlatform,()=>settings);
 const $ = id => document.getElementById(id);
 const VIEWS = ['side', 'translated', 'original', 'reflow'];
 const VIEW_KEY = 'duallens.pdf.view';
+const SESSION_KEY = 'duallens.pdf.session';
+const sourceParams = new URL(location.href).searchParams;
+const readerTab = await chrome.tabs.getCurrent().catch(() => undefined);
+const privacy = pdfPrivacy({ params: sourceParams, inIncognitoContext: chrome.extension.inIncognitoContext,
+  tab: readerTab, storage: sessionStorage, sessions: createPDFSessions() });
+const readingSessions = privacy.sessions;
+let autoTranslate = sourceParams.get('translate') === '1';
+let readingSessionId = privacy.privateSource ? null : sessionStorage.getItem(SESSION_KEY);
+const readerTabId = readerTab?.id;
 const MAX_PIXELS = 4_000_000; // per canvas, independent of zoom and device pixel ratio
 const MAX_RESIDENT = 5; // pages holding canvases
 let settings = await platform.settingsStore.load();
@@ -72,7 +83,7 @@ globalThis.__duallensPdfBlocks = number => {
 };
 
 const session = new PdfTranslations({
-  service: platform.translator(),
+  service: privacy.translator(platform.translator()),
   getSettings: () => settings,
   // Only the requested block text is sent: no PDF URL, file name or metadata (docs/PRIVACY.md).
   getContext: () => ({}),
@@ -845,14 +856,22 @@ function watchPages() {
 }
 
 // ---- open ----------------------------------------------------------------------------------
-async function open(data) {
+async function open(data, { persist = true } = {}) {
+  checkPDFBytes(data);
+  const generation = ++epoch, request = sourceRequest;
+  // PDF.js transfers the buffer to its worker. Persist before that detaches it.
+  let cacheFailed = false;
+  if (persist && !privacy.privateSource) try {
+    readingSessionId = await readingSessions.put(data, documentName, { id: readingSessionId, tabId: readerTabId });
+    sessionStorage.setItem(SESSION_KEY, readingSessionId);
+  } catch { cacheFailed = true; }
+  if (generation !== epoch || request !== sourceRequest) return;
   exportJob?.abort(); ocrAction?.abort(); readerAbort.abort(); readerAbort = new AbortController();
   ocrEnabled = ocrPrompted = ocrReady = false; pdfLanguage=''; downloadAllowed.clear();
   setDropdown('ocr-panel', false); setDropdown('export-panel', false);
   $('ocr-status').textContent = ''; $('ocr-download').checked = false; $('ocr-toggle').hidden = true;
   $('export-status').textContent='';$('export-scope').value='all';$('export-range').value='';$('export-long-confirm').checked=false;
   $('ocr-language').value = ocrLanguage(settings.sourceLang);
-  const generation = ++epoch;
   revision++;
   metrics.opened = performance.now(); metrics.firstPage = 0;
   nearObserver?.disconnect(); visibleObserver?.disconnect();
@@ -896,6 +915,8 @@ async function open(data) {
   $('translate').disabled = false; $('export-pdf').disabled = false; ball.disabled = false;
   stateChanged();
   message(l10n('m7e', [pdf.numPages]));
+  if (cacheFailed) message(l10n('pdfSwitchSessionUnavailable'), true);
+  if (autoTranslate) { autoTranslate = false; void activate(); }
 }
 async function guarded(fn, request = sourceRequest) {
   try { await fn(); } catch {
@@ -1155,9 +1176,9 @@ $('local-choose').addEventListener('click', () => $('local-file').click());
 $('extension-details').addEventListener('click', () => {
   void chrome.tabs.create({url:'chrome://extensions/?id='+chrome.runtime.id});
 });
-function showLocalSelection(needsAccess, name = '') {
+function showLocalSelection(needsAccess, name = '', reason = '') {
   $('local-notice').hidden = false;
-  $('local-explanation').dataset.i18n = needsAccess ? 'pdfFileAccessNotice' : 'pdfSelectNotice';
+  $('local-explanation').dataset.i18n = reason === 'too-large' ? 'm6k' : reason === 'read-failed' ? 'pdfSwitchReadFailed' : needsAccess ? 'pdfFileAccessNotice' : 'pdfSelectNotice';
   $('local-explanation').textContent = l10n($('local-explanation').dataset.i18n);
   $('local-name').textContent = name.slice(0,255);
   $('local-name-row').hidden = !name;
@@ -1171,7 +1192,8 @@ $('local-file').addEventListener('change', () => {
   if (file) void guarded(async () => {
     if (file.size > MAX_PDF_BYTES) throw new Error('too large');
     const data = new Uint8Array(await file.arrayBuffer());
-    if (request === sourceRequest) { documentName = file.name; await open(data); $('local-notice').hidden = true; }
+    if (request === sourceRequest) { documentName = file.name; await open(data); $('local-notice').hidden = true;
+      history.replaceState(null,'',privacy.cleanURL(location.pathname)); }
   }, request);
   $('local-file').value = '';
 });
@@ -1210,21 +1232,25 @@ window.addEventListener('pagehide', () => {
   for (const page of pages) { page.renderTask?.cancel(); evict(page); }
   void task?.destroy();
 }, { once: true });
+// A cached history entry has already run pagehide cleanup; restore from local bytes.
+window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 const file = new URL(location.href).searchParams.get('file');
 const token = new URL(location.href).searchParams.get('token');
 if (token) {
   const request = ++sourceRequest;
-  history.replaceState(null,'',location.pathname);
   void guarded(async()=>{
     const {createPDFHandoff}=await import('./handoff.js');
     const data=await createPDFHandoff().takeFile(token);
+    // The token is spent: a refresh from here on restores the reading session instead.
+    history.replaceState(null,'',privacy.cleanURL(location.pathname));
     if(request===sourceRequest){documentName=data.name;await open(data.bytes);}
   },request);
 } else if (file) {
   const request = ++sourceRequest;
   const read = () => guarded(async () => {
     const data = await readPDFURL(file, { fileAccess: () => chrome.extension.isAllowedFileSchemeAccess() });
-    if (request === sourceRequest) { try { documentName=decodeURIComponent(new URL(file).pathname.split('/').at(-1)); } catch { documentName=''; } await open(data); }
+    if (request === sourceRequest) { try { documentName=decodeURIComponent(new URL(file).pathname.split('/').at(-1)); } catch { documentName=''; } await open(data);
+      history.replaceState(null,'',privacy.cleanURL(location.pathname)); }
   }, request);
   void (async()=>{
     const {hasOrigin,requestOrigin}=await import('../shared/permissions.js');
@@ -1232,7 +1258,7 @@ if (token) {
       if(!await chrome.extension.isAllowedFileSchemeAccess()) {
         if(request!==sourceRequest)return;
         let name='';try{name=decodeURIComponent(new URL(file).pathname.split('/').at(-1)||'').split(/[\\/]/).at(-1);}catch{/* display name unavailable */}
-        history.replaceState(null,'',location.pathname);showLocalSelection(true,name);return;
+        history.replaceState(null,'',privacy.cleanURL(location.pathname));showLocalSelection(true,name);return;
       }
       return read();
     }
@@ -1246,10 +1272,22 @@ if (token) {
     });
   })();
 }
-else if (['file-access','local-file'].includes(new URL(location.href).searchParams.get('notice'))) {
+else if (['file-access','local-file','read-failed','too-large'].includes(new URL(location.href).searchParams.get('notice'))) {
   const params=new URL(location.href).searchParams;
-  history.replaceState(null,'',location.pathname);
-  showLocalSelection(params.get('notice')==='file-access',params.get('name')||'');
+  showLocalSelection(params.get('notice')==='file-access',params.get('name')||'',params.get('notice'));
 } else if (new URL(location.href).searchParams.get('notice') === 'not-pdf') {
   message(l10n('m7i'), true);
+} else if (privacy.privateSource) {
+  message(l10n('pdfSwitchPrivateRefresh'));
+} else if (readingSessionId) {
+  const request = ++sourceRequest;
+  void guarded(async () => {
+    const cached = await readingSessions.get(readingSessionId);
+    if (request !== sourceRequest) return;
+    if (!cached) { sessionStorage.removeItem(SESSION_KEY); readingSessionId=null; message(l10n('pdfSwitchSessionExpired')); return; }
+    // Duplicated tabs can inherit sessionStorage; give their next write its own identity.
+    const duplicate = cached.tabId !== readerTabId;
+    if (duplicate) readingSessionId = null;
+    documentName=cached.name; await open(cached.bytes, { persist: duplicate });
+  }, request);
 } else message(l10n('m7j'));

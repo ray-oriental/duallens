@@ -52,15 +52,17 @@ test('extension port: drafts keep ids pending, hints travel with the request and
     ports.push(port); return port;
   } } };
   const client = new ExtensionTranslateClient(api); const received = []; let done = 0;
-  const id = client.request({ items: [{ id: 'a', text: 'one' }, { id: 'b', text: 'two' }], to: 'zh-CN', draft: true, purpose: 'page', mode: 'mt+llm' },
+  const id = client.request({ items: [{ id: 'a', text: 'one' }, { id: 'b', text: 'two' }], to: 'zh-CN', draft: true, purpose: 'page', mode: 'mt+llm', incognito: true },
     { onResults: (r) => received.push(...r.map(x => `${x.id}:${x.stage || 'final'}`)), onDone: () => done++ });
   assert.deepEqual([ports[0].sent[0].draft, ports[0].sent[0].purpose, ports[0].sent[0].mode], [true, 'page', 'mt+llm']);
+  assert.equal(ports[0].sent[0].incognito, true);
   ports[0].onMessage.emit({ type: 'partial', reqId: id, results: [{ id: 'a', text: 'A', stage: 'draft' }, { id: 'b', text: 'B', stage: 'draft' }] });
   ports[0].onMessage.emit({ type: 'partial', reqId: id, results: [{ id: 'a', text: 'A2', stage: 'final' }] });
   ports[0].onDisconnect.emit();
   await new Promise((resolve) => setTimeout(resolve, 230));
   assert.deepEqual(ports[1].sent[0].items, [{ id: 'b', text: 'two' }], 'b has only a draft, so it is asked for again');
   assert.equal(ports[1].sent[0].draft, true);
+  assert.equal(ports[1].sent[0].incognito, true, 'reconnecting cannot lose the private-source flag');
   ports[1].onMessage.emit({ type: 'partial', reqId: id, results: [{ id: 'b', text: 'B2', stage: 'final' }] });
   ports[1].onMessage.emit({ type: 'done', reqId: id });
   assert.deepEqual(received, ['a:draft', 'b:draft', 'a:final', 'b:final']);
