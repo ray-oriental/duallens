@@ -332,6 +332,9 @@ select/option/input/textarea 仍不插入子节点；通过独立属性单元处
 同时进入队列、源语言及优先级相同的相邻单元按原文顺序进入既有批请求，模型可见邻接文本；
 懒加载、优先级或批量字符／项数上限仍可能拆成多批，不为分段更改请求协议，也不提前发送远处正文。
 标题解除裁剪仍可释放 `nowrap`；不得把上述三种保留换行的原文强制改为 `white-space:normal`。
+表格单元格（`td`/`th` 及其内部）随内容伸展，不释放其 `nowrap`、不使用 `overflow-wrap:anywhere`（改用 `break-word`），
+`nowrap` 单元格内的译文同样单行；否则单元格最小宽度会降到一个字符，被 `width=100%` 的相邻格挤成竖排（经典论坛分页栏）。
+面包屑（`a[class*=breadcrumb]`、`[class*=breadcrumb] a`、`[aria-label*=breadcrumb] a`）与导航链接同属控件，短译文行内显示，不按标题换行。
 
 ### 译文样式
 

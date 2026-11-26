@@ -6,6 +6,8 @@
 - PDF: Alt+A (and, in Chrome, the page menu "Translate page / Show original") on a PDF in the browser's built-in viewer switches to the reader and starts translating; previously nothing happened. Tabs whose address the browser hides are left untouched.
 - PDF: refreshing the reader, or going Back and Forward, keeps the document (local reading sessions: up to three, 64 MiB each, 24 hours, removed when the tab closes).
 - PDF: when a PDF cannot be read, a new tab explains why and offers the local file picker; the original PDF tab is kept. The popup shows a single "Open this PDF in DualLens" action on PDFs instead of a restricted-page error, and no longer sends network probes.
+- Page translation: on classic table-based forums (phpBB and similar), `nowrap` table cells such as "Page 1 of 23" and "[ 337 posts ]" keep their width instead of collapsing into a one-character vertical column, and their translations stay on one line (#33).
+- Page translation: breadcrumb links ("Board index » English Forums » Main Forum") keep their translations inline on the same row instead of stacking each link on its own line (#33).
 
 ## [1.3.0] - 2026-11-08
 

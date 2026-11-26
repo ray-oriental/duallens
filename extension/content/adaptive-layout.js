@@ -8,6 +8,14 @@ export function prepareLayout(u) {
   let map=groups.get(p);if(!map) groups.set(p,map=new Map());
   let g=map.get(key);if(!g) map.set(key,g=new Set());g.add(u);u.layoutGroup=g;u.layoutMap=map;u.layoutKey=key;
 }
+// True when el's nowrap comes from (or sits inside) a nowrap table cell, as opposed to a clipped
+// headline that merely lives in a table-based page layout.
+function nowrapCell(el,cs) {
+  if(cs.whiteSpace!=='nowrap') return false;
+  if(cs.display==='table-cell') return true;
+  const cell=el.closest('td,th');
+  return !!cell&&getComputedStyle(cell).whiteSpace==='nowrap';
+}
 function free(el,u) {
   const existing=styles.get(el);
   if(existing) {
@@ -16,17 +24,21 @@ function free(el,u) {
     for(const [k,v]of existing.props)el.style.setProperty(k,v,'important');existing.written=el.getAttribute('style');return;
   }
   const cs=getComputedStyle(el),props={},full=!u.layoutFacts?.interactive||u.layoutFacts.title;
+  // Table cells grow with their content, so a cell's nowrap is the author's layout, not clipping.
+  // Releasing it, or letting words break anywhere, drops the cell's min-content width to one
+  // character and a width=100% sibling squeezes it into a vertical column (classic forum pagers).
+  const cell=cs.display==='table-cell'||!!el.closest('td,th'),keep=cell&&nowrapCell(el,cs);
   if(full&&cs.minWidth==='auto') props['min-width']='0';
-  if(full&&el===u.host) props['overflow-wrap']='anywhere';
+  if(full&&el===u.host) props['overflow-wrap']=cell?'break-word':'anywhere';
   // Preserve author line breaks even when a reader shares the headline layout policy.
-  if(full&&u.layoutFacts?.title&&!['pre-wrap','pre-line','break-spaces'].includes(cs.whiteSpace)) props['white-space']='normal';
+  if(full&&!keep&&u.layoutFacts?.title&&!['pre-wrap','pre-line','break-spaces'].includes(cs.whiteSpace)) props['white-space']='normal';
   if(full&&(/hidden|clip/.test(cs.overflowX)||/hidden|clip/.test(cs.overflowY))) {props.overflow='visible';props['overflow-x']='visible';props['overflow-y']='visible';}
   if(cs.webkitLineClamp&&cs.webkitLineClamp!=='none') props['-webkit-line-clamp']='unset';
   if(cs.display.includes('webkit')) props.display='block';
   const height=el.computedStyleMap?.().get('height')?.toString()||el.style.height;
   if(height&&height!=='auto') props.height='auto';
   if(cs.maxHeight!=='none') props['max-height']='none';
-  if(full&&cs.whiteSpace==='nowrap') props['white-space']='normal';
+  if(full&&!keep&&cs.whiteSpace==='nowrap') props['white-space']='normal';
   if(!Object.keys(props).length) return;
   let r=styles.get(el);if(!r) styles.set(el,r={original:el.getAttribute('style'),owners:new Set(),props:Object.entries(props).map(([k,v])=>[k,v,el.style.getPropertyValue(k),el.style.getPropertyPriority(k)])});
   r.owners.add(u);(u.layoutStyles||=new Set()).add(el);
@@ -49,6 +61,8 @@ export function fitLayout(u,apply) {
       for(const x of u.layoutGroup) {x.presentation='replace';if(x.tEl) {x.tEl.dataset.dlPresentation='replace';apply(x);}}
     }
   } else {
+    // A nowrap table cell sizes itself to one line; give the translation that line too.
+    if(u.tEl) u.tEl.style.whiteSpace=nowrapCell(u.host,getComputedStyle(u.host))?'nowrap':'';
     // Headlines and prose keep both languages. Release clipping locally and in enclosing cards.
     for(let el=u.host,n=0;el&&el!==document.body&&n<8;el=el.parentElement,n++) {
       if(el!==u.host&&el.matches('main,article,nav,header,[role="navigation"]')) break;
