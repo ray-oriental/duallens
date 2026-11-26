@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-26
+
 - PDF: "Open this PDF in DualLens" rereads the open PDF inside its own tab, with that tab's sign-in state and the browser cache, so PDFs behind a login, without a .pdf suffix or after a redirect open reliably; the same tab switches to the reader and Back returns to the browser's viewer. InPrivate/incognito sources open a separate reader without reading-session persistence or translation caching and must be reopened after refresh.
 - PDF: Alt+A (and, in Chrome, the page menu "Translate page / Show original") on a PDF in the browser's built-in viewer switches to the reader and starts translating; previously nothing happened. Tabs whose address the browser hides are left untouched.
 - PDF: refreshing the reader, or going Back and Forward, keeps the document (local reading sessions: up to three, 64 MiB each, 24 hours, removed when the tab closes).
